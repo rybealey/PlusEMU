@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Attributes;
+﻿using Microsoft.Extensions.Logging;
+using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Outgoing.BuildersClub;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Inventory.Achievements;
@@ -37,6 +38,7 @@ public class SsoTicketEvent : IPacketEvent
     private readonly ILanguageManager _languageManager;
     private readonly ISettingsManager _settingsManager;
     private readonly IRewardManager _rewardManager;
+    private readonly ILogger _logger;
 
     public SsoTicketEvent(IAuthenticator authenticate,
         IBadgeManager badgeManager,
@@ -48,7 +50,8 @@ public class SsoTicketEvent : IPacketEvent
         IFigureDataManager figureManager,
         ILanguageManager languageManager,
         ISettingsManager settingsManager,
-        IRewardManager rewardManager)
+        IRewardManager rewardManager,
+        ILogger<SsoTicketEvent> logger)
     {
         _authenticate = authenticate;
         _badgeManager = badgeManager;
@@ -61,6 +64,7 @@ public class SsoTicketEvent : IPacketEvent
         _languageManager = languageManager;
         _settingsManager = settingsManager;
         _rewardManager = rewardManager;
+        _logger = logger;
     }
 
     public async Task Parse(GameClient session, IIncomingPacket packet)
@@ -118,6 +122,22 @@ public class SsoTicketEvent : IPacketEvent
             if (_settingsManager.TryGetValue("user.login.message.enabled") == "1")
                 session.Send(new MotdNotificationComposer(_languageManager.TryGetValue("user.login.message")));
             await _rewardManager.CheckRewards(session);
+        }
+        else
+        {
+            // Previously: nothing happened here at all. The client sends its SSO
+            // ticket and, on any failure (bad/expired/reused ticket, account not
+            // found, login prohibited), the server sent no response whatsoever -
+            // no error, no disconnect. The client then waits forever for a
+            // handshake reply that will never arrive, which looks from the
+            // outside exactly like a silent hang (loading screen stuck, no
+            // console error, no network activity), as opposed to the clear
+            // "Handshake Failed" the client shows when the *connection* itself
+            // is closed (see ClientHelloEvent's unknown-revision path, which
+            // this mirrors). Disconnecting here gives the same clear failure
+            // signal instead of an indefinite silent wait.
+            _logger.LogWarning("SSO authentication failed ({error}); disconnecting session.", error);
+            session.Disconnect();
         }
     }
 }
