@@ -574,6 +574,49 @@ public class RoomUserManager
             ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
             user.LastInstantStep = DateTime.Now;
             SerializeStatusUpdates();                          // push the "mv" status now
+            if (user.IsWalking && !user.SelfPaced)
+            {
+                user.SelfPaced = true;
+                _ = SelfPaceWalk(user);   // fire-and-forget beat; coordinates via _cycleLock
+            }
+        }
+    }
+
+    // pixelrp self-paced walk: after an instant first step, drive THIS unit's
+    // remaining steps on its own 500ms beat so they are evenly spaced from the
+    // instant step instead of snapping to the shared room-tick phase. The
+    // global tick skips a SelfPaced unit's movement (see OnCycle), so the two
+    // never double-step; both take _cycleLock. Ends when the unit stops,
+    // arrives, or leaves — handing movement back to the global tick.
+    private async Task SelfPaceWalk(RoomUser user)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(500);
+                lock (_cycleLock)
+                {
+                    if (user == null || !IsValid(user) || !user.SelfPaced || !user.IsWalking)
+                    {
+                        if (user != null) user.SelfPaced = false;
+                        return;
+                    }
+                    var removed = false;
+                    ProcessUserMovement(user, new List<RoomUser>(), out removed);
+                    SerializeStatusUpdates();
+                    if (removed || !user.IsWalking)
+                    {
+                        user.SelfPaced = false;
+                        return;
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            try { user.SelfPaced = false; } catch { }
+            ExceptionLogger.LogException(e);
         }
     }
 
@@ -618,8 +661,11 @@ public class RoomUserManager
                     if (_room.GotFreeze())
                         _room.GetFreeze().CycleUser(user);
                     var removed = false;
-                    updated = ProcessUserMovement(user, toRemove, out removed);
-                    if (removed) continue;
+                    if (!user.SelfPaced)
+                    {
+                        updated = ProcessUserMovement(user, toRemove, out removed);
+                        if (removed) continue;
+                    }
                     if (user.RidingHorse)
                         user.ApplyEffect(77);
                     if (user.IsBot && user.BotAi != null)

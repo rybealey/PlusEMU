@@ -61,6 +61,11 @@ public class RoomUser
     // tile per 500ms (matching the tick's own cadence).
     public DateTime LastInstantStep = DateTime.MinValue;
 
+    // pixelrp self-paced walk: true while this unit's steps 2+ are being driven
+    // by its own SelfPaceWalk beat instead of the shared room tick. Reset when
+    // the unit stops, arrives, or leaves, handing movement back to the tick.
+    public bool SelfPaced;
+
     public int LlPartner = 0;
     public int LockedTilesCount;
     public bool MoonwalkEnabled = false;
