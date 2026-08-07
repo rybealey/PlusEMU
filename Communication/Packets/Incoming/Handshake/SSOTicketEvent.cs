@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Dapper;
+using Microsoft.Extensions.Logging;
 using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Outgoing.BuildersClub;
 using Plus.Communication.Packets.Outgoing.Handshake;
@@ -7,6 +8,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Notifications;
+using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Communication.Packets.Outgoing.Sound;
 using Plus.Core.FigureData;
 using Plus.Core.Language;
@@ -19,6 +21,7 @@ using Plus.HabboHotel.Moderation;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Rewards;
 using Plus.HabboHotel.Subscriptions;
+using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Authentication;
 using Plus.HabboHotel.Users.Messenger.FriendBar;
 
@@ -122,6 +125,21 @@ public class SsoTicketEvent : IPacketEvent
             if (_settingsManager.TryGetValue("user.login.message.enabled") == "1")
                 session.Send(new MotdNotificationComposer(_languageManager.TryGetValue("user.login.message")));
             await _rewardManager.CheckRewards(session);
+
+            // pixelrp last-position restore: forward the user into the room they were
+            // last in. Entry validation still runs server-side; on denial the client
+            // simply stays on hotel view. Spawn position is applied in AddAvatarToRoom.
+            using (var dbClient = PlusEnvironment.DatabaseManager.Connection())
+            {
+                var last = dbClient.QuerySingleOrDefault<(uint RoomId, int X, int Y, int Rot)>(
+                    "SELECT `last_room_id`, `last_x`, `last_y`, `last_rot` FROM `users` WHERE `id` = @userId LIMIT 1",
+                    new { userId = session.GetHabbo().Id });
+                if (last.RoomId > 0)
+                {
+                    session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot);
+                    session.Send(new RoomForwardComposer(last.RoomId));
+                }
+            }
         }
         else
         {

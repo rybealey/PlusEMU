@@ -81,6 +81,10 @@ public class Habbo
 
     public uint HomeRoom { get; set; }
 
+    // pixelrp last-position restore: set once at login when the user is
+    // forwarded to their last room; consumed (and cleared) by AddAvatarToRoom.
+    public PendingRoomRestore PendingRestore { get; set; }
+
     public double LastOnline { get; set; }
 
     public double AccountCreated { get; set; }

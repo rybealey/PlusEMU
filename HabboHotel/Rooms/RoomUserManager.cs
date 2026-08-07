@@ -153,8 +153,25 @@ public class RoomUserManager
                 model.DoorY = square.Y;
                 model.DoorZ = (int)_room.GetGameMap().GetHeightForSquareFromData(square);
             }
-            user.SetPos(model.DoorX, model.DoorY, model.DoorZ);
-            user.SetRot(model.DoorOrientation, false);
+            // pixelrp last-position restore: if this entry is the login forward to the
+            // user's last room, spawn on the saved tile/rotation instead of the door.
+            // Blocked/occupied tiles are allowed (exact continuity); a tile outside the
+            // current model (room remodeled) falls back to the door. The marker is
+            // single-use: cleared below on ANY room entry.
+            var restore = session.GetHabbo().PendingRestore;
+            if (restore != null && restore.IsFresh && restore.RoomId == _room.RoomId
+                && restore.X >= 0 && restore.X < model.MapSizeX
+                && restore.Y >= 0 && restore.Y < model.MapSizeY)
+            {
+                user.SetPos(restore.X, restore.Y, _room.GetGameMap().SqAbsoluteHeight(restore.X, restore.Y));
+                user.SetRot(restore.Rot, false);
+            }
+            else
+            {
+                user.SetPos(model.DoorX, model.DoorY, model.DoorZ);
+                user.SetRot(model.DoorOrientation, false);
+            }
+            session.GetHabbo().PendingRestore = null;
         }
         else if (!user.IsBot && (user.GetClient().GetHabbo().IsTeleporting || user.GetClient().GetHabbo().IsHopping))
         {
@@ -192,6 +209,10 @@ public class RoomUserManager
                 user.SetPos(model.DoorX, model.DoorY, model.DoorZ - 1);
                 user.SetRot(model.DoorOrientation, false);
             }
+            // pixelrp last-position restore: a user who logs out inside a teleporter
+            // re-enters via teleport, not the door branch above; the marker must
+            // still be consumed here so it can't leak into a later manual entry.
+            session.GetHabbo().PendingRestore = null;
         }
         _room.SendPacket(new UsersComposer(user));
         if (_room.CheckRights(session, true))
