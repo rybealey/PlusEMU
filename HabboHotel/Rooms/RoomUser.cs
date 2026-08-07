@@ -56,6 +56,11 @@ public class RoomUser
     public double LastInteraction;
     public Item LastItem = null;
 
+    // pixelrp instant-first-step: last time TryInstantFirstStep emitted a step for
+    // this user, used as a rate cap so a click can never produce more than one
+    // tile per 500ms (matching the tick's own cadence).
+    public DateTime LastInstantStep = DateTime.MinValue;
+
     public int LlPartner = 0;
     public int LockedTilesCount;
     public bool MoonwalkEnabled = false;
@@ -443,6 +448,10 @@ public class RoomUser
         GoalY = pY;
         PathRecalcNeeded = true;
         FreezeInteracting = false;
+        // pixelrp instant-first-step: emit the first walk step now instead of waiting
+        // up to 500ms for the next room tick. Walk speed is unaffected; only the
+        // first step is fast-pathed, subsequent steps stay on the tick.
+        GetRoom()?.GetRoomUserManager()?.TryInstantFirstStep(this);
     }
 
     public void MoveTo(int pX, int pY)

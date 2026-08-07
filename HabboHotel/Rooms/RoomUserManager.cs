@@ -27,6 +27,9 @@ public class RoomUserManager
     private int _secondaryPrivateUserId;
     private ConcurrentDictionary<int, RoomUser> _users;
 
+    // pixelrp instant-first-step: serializes TryInstantFirstStep against OnCycle's tick.
+    private readonly object _cycleLock = new();
+
     public int UserCount;
 
 
@@ -551,46 +554,106 @@ public class RoomUserManager
         return true;
     }
 
+    // pixelrp instant-first-step: emit a standing unit's first walk step the
+    // instant the click arrives instead of waiting up to 500ms for the next
+    // room tick. Subsequent steps stay on the tick, so walk SPEED is unchanged.
+    // Serialized against the tick via _cycleLock. Kill switch: server_settings
+    // key `pathfinder.instant.first.step.disabled` = 1. Cooldown guarantees a
+    // click can never produce more than one tile per 500ms.
+    public void TryInstantFirstStep(RoomUser user)
+    {
+        if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.instant.first.step.disabled") == "1") return;
+        if (user == null || user.IsBot) return;
+        lock (_cycleLock)
+        {
+            if (!IsValid(user)) return;
+            if (user.IsWalking || user.SetStep) return;      // already moving: tick owns it
+            if (!user.PathRecalcNeeded) return;              // no pending request
+            if ((DateTime.Now - user.LastInstantStep).TotalMilliseconds < 450) return; // rate cap
+            var throwaway = new List<RoomUser>();
+            ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
+            user.LastInstantStep = DateTime.Now;
+            SerializeStatusUpdates();                          // push the "mv" status now
+        }
+    }
+
     public void OnCycle()
     {
         var userCounter = 0;
         try
         {
-            var toRemove = new List<RoomUser>();
-            foreach (var user in GetUserList().ToList())
+            lock (_cycleLock)
             {
-                if (user == null)
-                    continue;
-                if (!IsValid(user))
+                var toRemove = new List<RoomUser>();
+                foreach (var user in GetUserList().ToList())
                 {
-                    if (user.GetClient() != null)
-                        RemoveUserFromRoom(user.GetClient(), false);
+                    if (user == null)
+                        continue;
+                    if (!IsValid(user))
+                    {
+                        if (user.GetClient() != null)
+                            RemoveUserFromRoom(user.GetClient(), false);
+                        else
+                            RemoveRoomUser(user);
+                    }
+                    if (user.NeedsAutokick && !toRemove.Contains(user))
+                    {
+                        toRemove.Add(user);
+                        continue;
+                    }
+                    var updated = false;
+                    user.IdleTime++;
+                    user.HandleSpamTicks();
+                    if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
+                    {
+                        user.IsAsleep = true;
+                        _room.SendPacket(new SleepComposer(user, true));
+                    }
+                    if (user.CarryItemId > 0)
+                    {
+                        user.CarryTimer--;
+                        if (user.CarryTimer <= 0)
+                            user.CarryItem(0);
+                    }
+                    if (_room.GotFreeze())
+                        _room.GetFreeze().CycleUser(user);
+                    var removed = false;
+                    updated = ProcessUserMovement(user, toRemove, out removed);
+                    if (removed) continue;
+                    if (user.RidingHorse)
+                        user.ApplyEffect(77);
+                    if (user.IsBot && user.BotAi != null)
+                        user.BotAi.OnTimerTick();
                     else
-                        RemoveRoomUser(user);
+                        userCounter++;
+                    if (!updated) UpdateUserEffect(user, user.X, user.Y);
                 }
-                if (user.NeedsAutokick && !toRemove.Contains(user))
+                foreach (var userToRemove in toRemove.ToList())
                 {
-                    toRemove.Add(user);
-                    continue;
+                    var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userToRemove.HabboId);
+                    if (client != null)
+                        RemoveUserFromRoom(client, true);
+                    else
+                        RemoveRoomUser(userToRemove);
                 }
-                var updated = false;
-                user.IdleTime++;
-                user.HandleSpamTicks();
-                if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
-                {
-                    user.IsAsleep = true;
-                    _room.SendPacket(new SleepComposer(user, true));
-                }
-                if (user.CarryItemId > 0)
-                {
-                    user.CarryTimer--;
-                    if (user.CarryTimer <= 0)
-                        user.CarryItem(0);
-                }
-                if (_room.GotFreeze())
-                    _room.GetFreeze().CycleUser(user);
-                var invalidStep = false;
-                if (user.IsRolling)
+                if (UserCount != userCounter)
+                    UpdateUserCount(userCounter);
+            }
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogCriticalException(e);
+        }
+    }
+
+    // pixelrp instant-first-step: extracted movement region (unchanged logic) so it can
+    // be invoked both from the 500ms tick (OnCycle) and from the instant-first-step path.
+    private bool ProcessUserMovement(RoomUser user, List<RoomUser> toRemove, out bool removed)
+    {
+        removed = false;
+        var updated = false;
+        var invalidStep = false;
+        if (user.IsRolling)
                 {
                     if (user.RollerDelay <= 0)
                     {
@@ -632,7 +695,8 @@ public class RoomUserManager
                         if (user.X == _room.GetGameMap().Model.DoorX && user.Y == _room.GetGameMap().Model.DoorY && !toRemove.Contains(user) && !user.IsBot)
                         {
                             toRemove.Add(user);
-                            continue;
+                            removed = true;
+                            return updated;
                         }
                         var items = _room.GetGameMap().GetCoordinatedItems(new(user.X, user.Y));
                         foreach (var item in items.ToList()) item.UserWalksOnFurni(user);
@@ -817,29 +881,7 @@ public class RoomUserManager
                         }
                     }
                 }
-                if (user.RidingHorse)
-                    user.ApplyEffect(77);
-                if (user.IsBot && user.BotAi != null)
-                    user.BotAi.OnTimerTick();
-                else
-                    userCounter++;
-                if (!updated) UpdateUserEffect(user, user.X, user.Y);
-            }
-            foreach (var userToRemove in toRemove.ToList())
-            {
-                var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userToRemove.HabboId);
-                if (client != null)
-                    RemoveUserFromRoom(client, true);
-                else
-                    RemoveRoomUser(userToRemove);
-            }
-            if (UserCount != userCounter)
-                UpdateUserCount(userCounter);
-        }
-        catch (Exception e)
-        {
-            ExceptionLogger.LogCriticalException(e);
-        }
+        return updated;
     }
 
     public void UpdateUserStatus(RoomUser user, bool cyclegameitems)
