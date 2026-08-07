@@ -244,6 +244,11 @@ public class RoomUserManager
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
+                // pixelrp last-position restore: capture where the user stood before the
+                // room state is torn down; persisted below alongside the roomvisit update.
+                var lastX = user.X;
+                var lastY = user.Y;
+                var lastRot = user.RotBody;
                 if (user.RidingHorse)
                 {
                     user.RidingHorse = false;
@@ -295,6 +300,17 @@ public class RoomUserManager
                         {
                             usersNow = _room.UsersNow,
                             roomId = _room.RoomId
+                        });
+
+                    dbClient.Execute(
+                        "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot WHERE `id` = @userId LIMIT 1",
+                        new
+                        {
+                            userId = session.GetHabbo().Id,
+                            roomId = _room.RoomId,
+                            x = lastX,
+                            y = lastY,
+                            rot = lastRot
                         });
                 }
                 if (user != null)
