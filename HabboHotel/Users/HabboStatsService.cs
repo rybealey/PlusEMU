@@ -13,15 +13,43 @@ public class HabboStatsService : IHabboStatsService
     {
         using var connection = _database.Connection();
 
-        var statRow = await connection.QueryFirstOrDefaultAsync<HabboStats>(
-            @"SELECT RoomVisits, OnlineTime, Respect, RespectGiven, GiftsGiven, GiftsReceived, 
-              DailyRespectPoints, DailyPetRespectPoints, `AchievementScore` AS AchievementPoints, 
-              quest_id AS QuestId, quest_progress AS QuestProgress, groupid AS FavouriteGroupId, 
-              respectsTimestamp AS RespectsTimestamp, forum_posts AS ForumPosts 
+        // Queried as `dynamic` (not `Query<HabboStats>`) on purpose: Dapper maps a
+        // generic Query<T> straight onto T's constructor and requires an exact
+        // parameter-type match per column (e.g. `quest_id` is `int unsigned` in the
+        // Plus schema, which MySqlConnector/Dapper surfaces as UInt32 or, when cast,
+        // Int64 - neither matches the `int questId` constructor parameter, and a
+        // mismatch on *any* column makes Dapper fall back to requiring a
+        // parameterless constructor, which HabboStats doesn't have, throwing on
+        // every login). Reading as dynamic and converting explicitly sidesteps that.
+        var statRow = await connection.QueryFirstOrDefaultAsync(
+            @"SELECT RoomVisits, OnlineTime, Respect, RespectGiven, GiftsGiven, GiftsReceived,
+              DailyRespectPoints, DailyPetRespectPoints, `AchievementScore` AS AchievementPoints,
+              quest_id AS QuestId, quest_progress AS QuestProgress, groupid AS FavouriteGroupId,
+              respectsTimestamp AS RespectsTimestamp, forum_posts AS ForumPosts
               FROM `user_statistics` WHERE `id` = @id LIMIT 1",
             new { id = userId });
 
-        if (statRow != null) return statRow;
+        if (statRow != null)
+        {
+            IDictionary<string, object> row = statRow;
+
+            return new HabboStats(
+                Convert.ToInt32(row["RoomVisits"]),
+                Convert.ToInt32(row["OnlineTime"]),
+                Convert.ToInt32(row["Respect"]),
+                Convert.ToInt32(row["RespectGiven"]),
+                Convert.ToInt32(row["GiftsGiven"]),
+                Convert.ToInt32(row["GiftsReceived"]),
+                Convert.ToInt32(row["DailyRespectPoints"]),
+                Convert.ToInt32(row["DailyPetRespectPoints"]),
+                Convert.ToInt32(row["AchievementPoints"]),
+                Convert.ToInt32(row["QuestId"]),
+                Convert.ToInt32(row["QuestProgress"]),
+                Convert.ToInt32(row["FavouriteGroupId"]),
+                row["RespectsTimestamp"]?.ToString() ?? "",
+                Convert.ToInt32(row["ForumPosts"]));
+        }
+
         await connection.ExecuteAsync(
             "INSERT INTO `user_statistics` (`id`) VALUES (@id) ON DUPLICATE KEY UPDATE `id` = VALUES(`id`)",
             new { id = userId });

@@ -2,7 +2,7 @@
 
 public class HabboStats
 {
-    public HabboStats(int roomVisits, double onlineTime, int respect, int respectGiven, int giftsGiven, int giftsReceived, int dailyRespectPoints, int dailyPetRespectPoints, int achievementPoints,
+    public HabboStats(int roomVisits, int onlineTime, int respect, int respectGiven, int giftsGiven, int giftsReceived, int dailyRespectPoints, int dailyPetRespectPoints, int achievementPoints,
         int questId, int questProgress, int groupId, string respectsTimestamp, int forumPosts)
     {
         RoomVisits = roomVisits;
@@ -22,7 +22,7 @@ public class HabboStats
     }
 
     public int RoomVisits { get; set; }
-    public double OnlineTime { get; set; }
+    public int OnlineTime { get; set; }
     public int Respect { get; set; }
     public int RespectGiven { get; set; }
     public int GiftsGiven { get; set; }
