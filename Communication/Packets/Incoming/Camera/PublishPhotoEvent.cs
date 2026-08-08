@@ -25,10 +25,17 @@ internal class PublishPhotoEvent : IPacketEvent
             return;
         }
 
-        using var connection = _database.Connection();
-        await connection.ExecuteAsync(
-            "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 1)",
-            new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
+        // Idempotency: TryMarkPublished flips the pending photo's Published
+        // flag at most once, so a repeated Publish (double-click/retry) skips
+        // the INSERT — avoiding a duplicate public camera_web row — but still
+        // replies success with the same URL so the client's UI doesn't hang.
+        if (_cameraPhotoManager.TryMarkPublished(session.GetHabbo().Id))
+        {
+            using var connection = _database.Connection();
+            await connection.ExecuteAsync(
+                "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 1)",
+                new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
+        }
 
         session.Send(new CameraPublishStatusMessageComposer(true, pending.Url));
     }

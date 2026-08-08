@@ -25,8 +25,22 @@ internal class PurchasePhotoEvent : IPacketEvent
         // Protocol note: CameraPurchaseOK has no failure variant, so a missing
         // pending photo cannot send a "failed" reply — silent return + the
         // packet-exception logging is the agreed behavior (spec deviation, ok'd).
-        if (!_cameraPhotoManager.TryGetPending(session.GetHabbo().Id, out var pending))
+        //
+        // Idempotency: TryConsumePurchase flips the pending photo's Purchased
+        // flag at most once. A false return with `pending` still populated
+        // means this photo was already purchased (double-click/retry) — the
+        // client's UI is still waiting on a reply, so we resend the same OK
+        // without creating a second inventory item. A false return with
+        // `pending` null means no photo was ever rendered, preserving the
+        // original silent-return behavior.
+        if (!_cameraPhotoManager.TryConsumePurchase(session.GetHabbo().Id, out var pending))
+        {
+            if (pending == null)
+                return Task.CompletedTask;
+
+            session.Send(new CameraPurchaseOkComposer());
             return Task.CompletedTask;
+        }
 
         if (!_itemDataManager.Items.TryGetValue(CameraPhotoItem.BaseItemId, out var definition))
             return Task.CompletedTask;
