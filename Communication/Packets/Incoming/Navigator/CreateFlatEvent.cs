@@ -35,7 +35,7 @@ internal class CreateFlatEvent : IPacketEvent
         var tradeSettings = packet.ReadInt(); //2 = All can trade, 1 = owner only, 0 = no trading.
         if (name.Length < 3)
             return Task.CompletedTask;
-        if (name.Length > 25)
+        if (name.Length > 60)
             return Task.CompletedTask;
         if (!_roomManager.TryGetModel(modelName, out var model))
             return Task.CompletedTask;
