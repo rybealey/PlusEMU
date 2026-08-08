@@ -20,6 +20,14 @@ public interface ICameraPhotoManager
     bool TryConsumePurchase(int userId, out PendingPhoto pending);
 
     /// <summary>
+    ///     Rolls back a purchase reservation made by
+    ///     <see cref="TryConsumePurchase" /> when the caller could not actually
+    ///     create the inventory item, so a later retry can genuinely re-attempt
+    ///     instead of hitting the "already purchased" short-circuit.
+    /// </summary>
+    void ResetPurchase(int userId);
+
+    /// <summary>
     ///     Marks the user's pending photo as published. Returns true only the
     ///     first time (caller should insert the camera_web row); returns
     ///     false if there is no pending photo, or if it was already published

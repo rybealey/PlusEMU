@@ -71,6 +71,15 @@ public class CameraPhotoManager : ICameraPhotoManager
         }
     }
 
+    public void ResetPurchase(int userId)
+    {
+        if (!_pendingPhotos.TryGetValue(userId, out var pending))
+            return;
+
+        lock (pending)
+            pending.Purchased = false;
+    }
+
     public bool TryMarkPublished(int userId)
     {
         if (!_pendingPhotos.TryGetValue(userId, out var pending))

@@ -42,8 +42,14 @@ internal class PurchasePhotoEvent : IPacketEvent
             return Task.CompletedTask;
         }
 
+        // From here the photo is reserved as purchased. If we cannot actually
+        // create the item, roll the reservation back so a retry re-attempts
+        // rather than getting a false "already purchased" OK with no item.
         if (!_itemDataManager.Items.TryGetValue(CameraPhotoItem.BaseItemId, out var definition))
+        {
+            _cameraPhotoManager.ResetPurchase(session.GetHabbo().Id);
             return Task.CompletedTask;
+        }
 
         var extradata = JsonSerializer.Serialize(new
         {
@@ -55,13 +61,16 @@ internal class PurchasePhotoEvent : IPacketEvent
         });
 
         var item = _itemFactory.CreateSingleItemNullable(definition, session.GetHabbo(), extradata, "");
-        if (item != null)
+        if (item == null)
         {
-            if (session.GetHabbo().Inventory.Furniture.AddItem(item.ToInventoryItem()))
-                session.Send(new FurniListNotificationComposer(item.Id, 1));
-            session.Send(new FurniListUpdateComposer());
-            session.Send(new CameraPurchaseOkComposer());
+            _cameraPhotoManager.ResetPurchase(session.GetHabbo().Id);
+            return Task.CompletedTask;
         }
+
+        if (session.GetHabbo().Inventory.Furniture.AddItem(item.ToInventoryItem()))
+            session.Send(new FurniListNotificationComposer(item.Id, 1));
+        session.Send(new FurniListUpdateComposer());
+        session.Send(new CameraPurchaseOkComposer());
         return Task.CompletedTask;
     }
 }
