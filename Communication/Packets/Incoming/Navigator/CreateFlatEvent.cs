@@ -1,4 +1,5 @@
 ﻿using Plus.Communication.Packets.Outgoing.Navigator;
+using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Navigator;
 using Plus.HabboHotel.Rooms;
@@ -33,24 +34,40 @@ internal class CreateFlatEvent : IPacketEvent
         var category = packet.ReadInt();
         var maxVisitors = packet.ReadInt(); //10 = min, 25 = max.
         var tradeSettings = packet.ReadInt(); //2 = All can trade, 1 = owner only, 0 = no trading.
-        if (name.Length < 3)
+        if (name.Length < 3 || name.Length > 60)
+        {
+            SendCreationError(session, "Room names must be between 3 and 60 characters.");
             return Task.CompletedTask;
-        if (name.Length > 60)
-            return Task.CompletedTask;
+        }
         if (!_roomManager.TryGetModel(modelName, out var model))
+        {
+            SendCreationError(session, "Your room could not be created: the selected room layout does not exist.");
             return Task.CompletedTask;
-        if (!_navigatorManager.TryGetSearchResultList(category, out var searchResultList))
-            category = 36;
-        if (searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank)
+        }
+        if (!_navigatorManager.TryGetSearchResultList(category, out var searchResultList) ||
+            searchResultList.CategoryType != NavigatorCategoryType.Category ||
+            searchResultList.RequiredRank > session.GetHabbo().Rank)
             category = 36;
         if (maxVisitors < 10 || maxVisitors > 25)
             maxVisitors = 10;
         if (tradeSettings < 0 || tradeSettings > 2)
             tradeSettings = 0;
         var newRoom = _roomManager.CreateRoom(session, name, description, category, maxVisitors, tradeSettings, model);
-        if (newRoom != null) session.Send(new FlatCreatedComposer(newRoom.Id, name));
+        if (newRoom != null)
+            session.Send(new FlatCreatedComposer(newRoom.Id, name));
+        else
+            SendCreationError(session, "Something went wrong while creating your room. Please try again.");
 
         session.GetHabbo().Messenger.NotifyChangesToFriends();
         return Task.CompletedTask;
+    }
+
+    private static void SendCreationError(GameClient session, string message)
+    {
+        session.Send(new RoomNotificationComposer("room.creation_error", new Dictionary<string, string>
+        {
+            { "title", "Room Creation" },
+            { "message", message }
+        }));
     }
 }
