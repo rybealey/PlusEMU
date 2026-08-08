@@ -174,13 +174,26 @@ internal static class NavigatorHandler
             {
                 var roomIds = new List<uint>();
                 if (session == null || session.GetHabbo() == null || session.GetHabbo().Messenger == null)
-                    return;
-                foreach (var buddy in session.GetHabbo().Messenger.Friends.Values.Where(p => p.InRoom))
                 {
-                    if (buddy == null || !buddy.InRoom || buddy.Id == session.GetHabbo().Id)
+                    // A bare return here truncated the packet mid-write (the category
+                    // header is already written); the client can't parse the reply and
+                    // the navigator hangs on its loading overlay. Write an empty list.
+                    packet.WriteInteger(0);
+                    break;
+                }
+                // Snapshot: enumerating the live dictionary throws if a friend
+                // logs in/out mid-enumeration, killing the whole reply.
+                foreach (var buddy in session.GetHabbo().Messenger.Friends.Values.ToList().Where(p => p.InRoom))
+                {
+                    if (buddy == null || buddy.Id == session.GetHabbo().Id)
                         continue;
-                    if (!roomIds.Contains(buddy.CurrentRoom.Id))
-                        roomIds.Add(buddy.CurrentRoom.Id);
+                    // re-read once: CurrentRoom can go null between the InRoom check
+                    // and the dereference when the friend leaves their room
+                    var buddyRoom = buddy.CurrentRoom;
+                    if (buddyRoom == null)
+                        continue;
+                    if (!roomIds.Contains(buddyRoom.Id))
+                        roomIds.Add(buddyRoom.Id);
                 }
                 var myFriendsRooms = PlusEnvironment.Game.RoomManager.GetRoomsByIds(roomIds.ToList());
                 packet.WriteInteger(myFriendsRooms.Count);
