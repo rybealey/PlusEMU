@@ -47,8 +47,13 @@ public class CameraPhotoManager : ICameraPhotoManager
         Directory.CreateDirectory(StoragePath);
         var photoId = Guid.NewGuid().ToString("N");
         File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}.png"), bytes);
-        if (_pendingThumbnails.TryRemove(userId, out var thumb))
-            File.WriteAllBytes(Path.Combine(StoragePath, $"thumb_{photoId}.png"), thumb);
+        // The in-room furni visualization loads its texture from the "_small"
+        // variant of the photo URL (FurnitureExternalImageVisualization replaces
+        // ".png" with "_small.png"); without this file the wall item renders as a
+        // black rectangle. Use the captured thumbnail when we have it, else the
+        // full image, so the small variant always exists.
+        var smallBytes = _pendingThumbnails.TryRemove(userId, out var thumb) ? thumb : bytes;
+        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}_small.png"), smallBytes);
         var url = $"{urlBase}/photo_{photoId}.png";
         var pending = new PendingPhoto(photoId, roomId, url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         _pendingPhotos[userId] = pending;
