@@ -311,4 +311,11 @@ public static class ServerPacketHeader
     public const uint MessengerInitComposer = 1329; //391
     public const uint PollContentsComposer = 3826;
     public const uint PollOfferComposer = 1074;
+
+    //Camera
+    public const uint InitCameraMessageComposer = 4101;
+    public const uint ThumbnailStatusMessageComposer = 4102;
+    public const uint CameraStorageUrlMessageComposer = 4103;
+    public const uint CameraPurchaseOkComposer = 4104;
+    public const uint CameraPublishStatusMessageComposer = 4105;
 }
