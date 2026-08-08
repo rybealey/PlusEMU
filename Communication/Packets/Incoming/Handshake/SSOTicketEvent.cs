@@ -10,6 +10,7 @@ using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Communication.Packets.Outgoing.Sound;
+using Plus.Core;
 using Plus.Core.FigureData;
 using Plus.Core.Language;
 using Plus.Core.Settings;
@@ -129,16 +130,26 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp last-position restore: forward the user into the room they were
             // last in. Entry validation still runs server-side; on denial the client
             // simply stays on hotel view. Spawn position is applied in AddAvatarToRoom.
-            using (var dbClient = PlusEnvironment.DatabaseManager.Connection())
+            // Any DB failure here must degrade to a normal hotel-view login rather than
+            // taking down the freshly-authenticated session - PacketManager's fault
+            // handler disconnects on any uncaught handler exception.
+            try
             {
-                var last = dbClient.QuerySingleOrDefault<(uint RoomId, int X, int Y, int Rot)>(
-                    "SELECT `last_room_id`, `last_x`, `last_y`, `last_rot` FROM `users` WHERE `id` = @userId LIMIT 1",
-                    new { userId = session.GetHabbo().Id });
-                if (last.RoomId > 0)
+                using (var dbClient = PlusEnvironment.DatabaseManager.Connection())
                 {
-                    session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot);
-                    session.Send(new RoomForwardComposer(last.RoomId));
+                    var last = dbClient.QuerySingleOrDefault<(uint RoomId, int X, int Y, int Rot)>(
+                        "SELECT `last_room_id`, `last_x`, `last_y`, `last_rot` FROM `users` WHERE `id` = @userId LIMIT 1",
+                        new { userId = session.GetHabbo().Id });
+                    if (last.RoomId > 0)
+                    {
+                        session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot);
+                        session.Send(new RoomForwardComposer(last.RoomId));
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
             }
         }
         else

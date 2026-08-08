@@ -20,8 +20,8 @@ public sealed class PendingRoomRestore
         X = x;
         Y = y;
         Rot = rot;
-        SetAt = DateTime.Now;
+        SetAt = DateTime.UtcNow;
     }
 
-    public bool IsFresh => (DateTime.Now - SetAt).TotalSeconds <= 30;
+    public bool IsFresh => (DateTime.UtcNow - SetAt).TotalSeconds <= 30;
 }

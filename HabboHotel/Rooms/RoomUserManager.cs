@@ -155,16 +155,23 @@ public class RoomUserManager
             }
             // pixelrp last-position restore: if this entry is the login forward to the
             // user's last room, spawn on the saved tile/rotation instead of the door.
-            // Blocked/occupied tiles are allowed (exact continuity); a tile outside the
-            // current model (room remodeled) falls back to the door. The marker is
-            // single-use: cleared below on ANY room entry.
+            // Furni-blocked/occupied Open squares are allowed (exact continuity); a tile
+            // outside the current model, or a Blocked map square (room remodeled into a
+            // wall), falls back to the door. The marker is single-use: cleared below on
+            // ANY room entry.
             var restore = session.GetHabbo().PendingRestore;
             if (restore != null && restore.IsFresh && restore.RoomId == _room.RoomId
                 && restore.X >= 0 && restore.X < model.MapSizeX
-                && restore.Y >= 0 && restore.Y < model.MapSizeY)
+                && restore.Y >= 0 && restore.Y < model.MapSizeY
+                && model.SqState[restore.X, restore.Y] != SquareState.Blocked)
             {
                 user.SetPos(restore.X, restore.Y, _room.GetGameMap().SqAbsoluteHeight(restore.X, restore.Y));
-                user.SetRot(restore.Rot, false);
+                // Bypass SetRot's sit/head-turn heuristic (it can leave RotBody at 0 for
+                // some diffs, e.g. rotation 1) - assign body/head rotation directly,
+                // clamped since last_rot is an unbounded signed int in the schema.
+                var rot = ((restore.Rot % 8) + 8) % 8;
+                user.RotBody = rot;
+                user.RotHead = rot;
             }
             else
             {
