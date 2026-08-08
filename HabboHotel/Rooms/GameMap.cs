@@ -54,13 +54,21 @@ public class Gamemap
     {
         if (item == null || user == null)
             return;
-        GameMap[user.X, user.Y] = user.SqState;
+        // Same rule as movement/leave: with global tile-overlap (RoomBlockingEnabled
+        // always true) users never write occupancy into the pathfinding map, so skip
+        // the restore-at-origin (stale SqState would stamp 0/"blocked") and the
+        // stamp-1-at-destination (would clobber seat/door state).
+        if (!_room.RoomBlockingEnabled)
+            GameMap[user.X, user.Y] = user.SqState;
         UpdateUserMovement(new(user.Coordinate.X, user.Coordinate.Y), new(item.Coordinate.X, item.Coordinate.Y), user);
         user.X = item.GetX;
         user.Y = item.GetY;
         user.Z = item.GetZ;
-        user.SqState = GameMap[item.GetX, item.GetY];
-        GameMap[user.X, user.Y] = 1;
+        if (!_room.RoomBlockingEnabled)
+        {
+            user.SqState = GameMap[item.GetX, item.GetY];
+            GameMap[user.X, user.Y] = 1;
+        }
         user.RotBody = item.Rotation;
         user.RotHead = item.Rotation;
         user.GoalX = user.X;

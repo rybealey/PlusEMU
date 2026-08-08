@@ -446,7 +446,12 @@ public class RoomUser
             UpdateNeeded = true;
             return;
         }
-        if (GetRoom().GetGameMap().SquareHasUsers(pX, pY) && !pOverride || Frozen)
+        // With pixelrp's global tile-overlap (RoomBlockingEnabled always true), a
+        // walk whose destination already has users must NOT be dropped - this
+        // pre-pathfinder early-return was silently swallowing every click on an
+        // occupied tile (the pathfinder/IsValidStep gates alone never ran), which is
+        // why standing on another player's tile "did nothing" for real players.
+        if (GetRoom().GetGameMap().SquareHasUsers(pX, pY) && !pOverride && !GetRoom().RoomBlockingEnabled || Frozen)
             return;
         UnIdle();
         GoalX = pX;

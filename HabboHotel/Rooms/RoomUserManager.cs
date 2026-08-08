@@ -415,10 +415,20 @@ public class RoomUserManager
 
     private void RemoveRoomUser(RoomUser user)
     {
-        if (user.SetStep)
-            _room.GetGameMap().GameMap[user.SetX, user.SetY] = user.SqState;
-        else
-            _room.GetGameMap().GameMap[user.X, user.Y] = user.SqState;
+        // Only restore tile state on leave when room blocking is on. With pixelrp's
+        // global tile-overlap (RoomBlockingEnabled always true) users never write
+        // occupancy into the pathfinding map, so there is nothing to restore - and
+        // SqState is no longer backed up during movement, meaning this write would
+        // stamp a stale/default 0 ("blocked") onto the tile. That was the corruption
+        // that permanently blocked tiles after users left, making same-tile standing
+        // stop working some time after each restart.
+        if (!_room.RoomBlockingEnabled)
+        {
+            if (user.SetStep)
+                _room.GetGameMap().GameMap[user.SetX, user.SetY] = user.SqState;
+            else
+                _room.GetGameMap().GameMap[user.X, user.Y] = user.SqState;
+        }
         _room.GetGameMap().RemoveUserFromMap(user, new(user.X, user.Y));
         _room.SendPacket(new UserRemoveComposer(user.VirtualId));
         RoomUser toRemove = null;
