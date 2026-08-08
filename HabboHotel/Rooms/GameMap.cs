@@ -838,8 +838,12 @@ public class Gamemap
             return false;
 
         //Check this last, because ya.
+        // Respect the room's walk-through flag (RoomBlockingEnabled) here too: when
+        // walk-through is on (always, per pixelrp's global tile-overlap change),
+        // ending your path on a stationary user's tile is allowed so multiple
+        // players can stand/sit on the same tile.
         var userx = _room.GetRoomUserManager().GetUserForSquare(to.X, to.Y);
-        if (userx != null)
+        if (userx != null && !_room.RoomBlockingEnabled)
         {
             if (!userx.IsWalking && endOfPath)
                 return false;

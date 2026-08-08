@@ -130,7 +130,12 @@ public class RoomData
     public string Landscape { get; set; }
     public bool AllowPets { get; set; }
     public bool AllowPetsEating { get; set; }
-    public bool RoomBlockingEnabled { get; set; }
+    // pixelrp global tile overlap: force "walk-through" on for every room so
+    // multiple players can stand/sit on the same tile. This reuses PlusEMU's
+    // existing walk-through paths in the pathfinder and tile-state marking; the
+    // per-room room_blocking_disabled setting is intentionally ignored (the
+    // setter is a no-op so SaveRoomSettings still assigns harmlessly).
+    public bool RoomBlockingEnabled { get => true; set { } }
     public bool Hidewall { get; set; }
     public int WallThickness { get; set; }
     public int FloorThickness { get; set; }
