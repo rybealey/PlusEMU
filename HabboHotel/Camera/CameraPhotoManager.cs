@@ -15,16 +15,15 @@ public class CameraPhotoManager : ICameraPhotoManager
         _settingsManager = settingsManager;
     }
 
-    private string StoragePath
-    {
-        get
-        {
-            var path = _settingsManager.TryGetValue("camera.storage.path");
-            return string.IsNullOrEmpty(path) ? DefaultStoragePath : path;
-        }
-    }
+    private string StoragePath => GetSettingOrDefault("camera.storage.path", DefaultStoragePath);
 
-    private string UrlBase => _settingsManager.TryGetValue("camera.url.base") ?? "";
+    private string UrlBase => GetSettingOrDefault("camera.url.base", "");
+
+    private string GetSettingOrDefault(string key, string fallback)
+    {
+        var value = _settingsManager.TryGetValue(key);
+        return string.IsNullOrEmpty(value) || value == "0" ? fallback : value;
+    }
 
     public void StoreThumbnail(int userId, byte[] bytes) => _pendingThumbnails[userId] = bytes;
 
