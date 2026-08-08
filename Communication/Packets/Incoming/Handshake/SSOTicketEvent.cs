@@ -145,6 +145,14 @@ public class SsoTicketEvent : IPacketEvent
                         session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot);
                         session.Send(new RoomForwardComposer(last.RoomId));
                     }
+                    else
+                    {
+                        // No saved position (e.g. a brand-new user): spawn into the
+                        // default room (id 1) at the door. No PendingRestore, so normal
+                        // door placement applies. Entry validation still runs; on denial
+                        // the client stays on hotel view.
+                        session.Send(new RoomForwardComposer(1));
+                    }
                 }
             }
             catch (Exception e)
