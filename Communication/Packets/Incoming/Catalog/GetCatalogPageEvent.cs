@@ -15,10 +15,6 @@ public class GetCatalogPageEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        // Staff-only feature (mirrors the client toolbar gate); ignore for others.
-        if (session.GetHabbo() == null || !session.GetHabbo().IsStaff)
-            return Task.CompletedTask;
-
         var pageId = packet.ReadInt();
         packet.ReadInt();
         var cataMode = packet.ReadString();
