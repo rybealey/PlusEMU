@@ -81,7 +81,10 @@ public abstract class GameClient
             }
             catch (Exception e)
             {
-                // TODO @80O: Add logging when ILogger interface has been implemented
+                // Without this, any exception inside a packet handler is silently
+                // swallowed and the client waits forever for a reply (e.g. the
+                // navigator graying out) with nothing in the logs.
+                Log.Error(e, $"Unhandled exception while handling incoming packet {messageId}");
             }
             memory = memory.Slice(headerLength + length);
             _incompleteStream?.Advance(headerLength + length);
