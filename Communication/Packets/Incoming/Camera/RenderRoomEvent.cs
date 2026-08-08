@@ -33,8 +33,15 @@ internal class RenderRoomEvent : IPacketEvent
         if (room == null)
             return Task.CompletedTask;
 
-        var url = _cameraPhotoManager.StorePhoto(session.GetHabbo().Id, room.RoomId, bytes);
-        session.Send(new CameraStorageUrlMessageComposer(url));
+        _cameraPhotoManager.StorePhoto(session.GetHabbo().Id, room.RoomId, bytes);
+
+        // CameraStorageUrl replies with the filename only, not the absolute
+        // URL — the client builds its checkout preview by concatenating the
+        // ui-config "camera.url" base with this value. PendingPhoto.Url
+        // stays absolute; PurchasePhoto's extradata "w" and PublishPhoto's
+        // camera_web insert both need the absolute form and are unaffected.
+        if (_cameraPhotoManager.TryGetPending(session.GetHabbo().Id, out var pending))
+            session.Send(new CameraStorageUrlMessageComposer($"photo_{pending.PhotoId}.png"));
         return Task.CompletedTask;
     }
 }
