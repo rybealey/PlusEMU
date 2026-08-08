@@ -73,7 +73,14 @@ public class CatalogPageComposer : IServerPacket
                         packet.WriteString("b");
                         packet.WriteString(item.Badge);
                     }
-                    packet.WriteString(item.Definition.Type.ToCharCode().ToLower());
+                    // Bots ship as product type "r" (robot); the client renders the
+                    // avatar from the figure sent in extraParam. Detect a bot via its
+                    // catalog_bot_presets entry (keyed by item_id), not the furniture
+                    // interaction_type - the seeded data has that as "default", so
+                    // ToCharCode() would emit "i" and the client would draw a blank
+                    // wall item instead of the bot.
+                    var isBot = PlusEnvironment.Game.Catalog.TryGetBot(item.ItemId, out var catalogBot);
+                    packet.WriteString(isBot ? "r" : item.Definition.Type.ToCharCode().ToLower());
                     if (item.Definition.Type.ToString().ToLower() == "b")
                     {
                         //This is just a badge, append the name.
@@ -84,14 +91,8 @@ public class CatalogPageComposer : IServerPacket
                         packet.WriteInteger(item.Definition.SpriteId);
                         if (item.Definition.InteractionType == InteractionType.Wallpaper || item.Definition.InteractionType == InteractionType.Floor || item.Definition.InteractionType == InteractionType.Landscape)
                             packet.WriteString(item.CatalogName.Split('_')[2]);
-                        else if (item.Definition.InteractionType == InteractionType.Bot) //Bots
-                        {
-                            CatalogBot catalogBot = null;
-                            if (!PlusEnvironment.Game.Catalog.TryGetBot(item.ItemId, out catalogBot))
-                                packet.WriteString("hd-180-7.ea-1406-62.ch-210-1321.hr-831-49.ca-1813-62.sh-295-1321.lg-285-92");
-                            else
-                                packet.WriteString(catalogBot.Figure);
-                        }
+                        else if (isBot) //Bots: figure from the preset -> client renders the avatar
+                            packet.WriteString(catalogBot.Figure);
                         else if (item.ExtraData != null) packet.WriteString(item.ExtraData != null ? item.ExtraData : string.Empty);
                         packet.WriteInteger(item.Amount);
                         packet.WriteBoolean(item.IsLimited); // IsLimited
