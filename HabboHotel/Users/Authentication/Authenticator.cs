@@ -52,8 +52,18 @@ internal class Authenticator : IAuthenticator
         // TODO @80O: Remove after splitting up
         habbo.Init(session);
         _gameClientManager.RegisterClient(session, habbo.Id, habbo.Username);
+        // Nothing ever set this flag on login (only the disconnect/boot paths
+        // clear it), so users.online — and everything built on it, like the
+        // CMS online counter — read 0 regardless of live connections.
+        await MarkOnline(habbo.Id);
         await RaiseHabboLoggedIn(habbo);
         return null;
+    }
+
+    private async Task MarkOnline(int userId)
+    {
+        using var connection = _database.Connection();
+        await connection.ExecuteAsync("UPDATE users SET online = true WHERE id = @userId", new { userId });
     }
 
     private async Task<int> GetUserIdFromSso(string sso)
