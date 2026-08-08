@@ -4,6 +4,14 @@ namespace Plus.HabboHotel.Rooms;
 
 public static class RoomFactory
 {
+    // Rooms imported from the previous stack can carry MySQL's invalid-enum
+    // marker (an empty string) or NULL in numeric columns; Convert.ToInt32
+    // throws on both, which killed every packet handler that loads a user's
+    // rooms (room creation, My World search). Fall back instead of throwing.
+    private static int ToInt(object value, int fallback = 0) =>
+        int.TryParse(Convert.ToString(value), out var parsed) ? parsed : fallback;
+
+
     public static List<RoomData> GetRoomsDataByOwnerSortByName(int ownerId)
     {
         var data = new List<RoomData>();
@@ -21,20 +29,20 @@ public static class RoomFactory
                 {
                     if (!PlusEnvironment.Game.RoomManager.TryGetModel(Convert.ToString(row["model_name"]), out var model)) continue;
                     data.Add(new(Convert.ToUInt32(row["id"]), Convert.ToString(row["caption"]), Convert.ToString(row["model_name"]), Convert.ToString(row["username"]),
-                        Convert.ToInt32(row["owner"]),
-                        Convert.ToString(row["password"]), Convert.ToInt32(row["score"]), Convert.ToString(row["roomtype"]), Convert.ToString(row["state"]), Convert.ToInt32(row["users_now"]),
-                        Convert.ToInt32(row["users_max"]), Convert.ToInt32(row["category"]), Convert.ToString(row["description"]), Convert.ToString(row["tags"]), Convert.ToString(row["floor"]),
+                        ToInt(row["owner"]),
+                        Convert.ToString(row["password"]), ToInt(row["score"]), Convert.ToString(row["roomtype"]), Convert.ToString(row["state"]), ToInt(row["users_now"]),
+                        ToInt(row["users_max"]), ToInt(row["category"]), Convert.ToString(row["description"]), Convert.ToString(row["tags"]), Convert.ToString(row["floor"]),
                         Convert.ToString(row["landscape"]), Convert.ToString(row["allow_pets"]) == "1", Convert.ToString(row["allow_pets_eat"]) == "1", Convert.ToString(row["room_blocking_disabled"]) == "1",
                         Convert.ToString(row["allow_hidewall"]) == "1",
-                        Convert.ToInt32(row["wallthick"]), Convert.ToInt32(row["floorthick"]), Convert.ToString(row["wallpaper"]), Convert.ToInt32(row["mute_settings"]),
-                        Convert.ToInt32(row["ban_settings"]),
-                        Convert.ToInt32(row["kick_settings"]), Convert.ToInt32(row["chat_mode"]), Convert.ToInt32(row["chat_size"]), Convert.ToInt32(row["chat_speed"]),
-                        Convert.ToInt32(row["chat_extra_flood"]),
-                        Convert.ToInt32(row["chat_hearing_distance"]), Convert.ToInt32(row["trade_settings"]), Convert.ToString(row["push_enabled"]) == "1",
+                        ToInt(row["wallthick"]), ToInt(row["floorthick"]), Convert.ToString(row["wallpaper"]), ToInt(row["mute_settings"], 1),
+                        ToInt(row["ban_settings"], 1),
+                        ToInt(row["kick_settings"], 1), ToInt(row["chat_mode"]), ToInt(row["chat_size"]), ToInt(row["chat_speed"]),
+                        ToInt(row["chat_extra_flood"]),
+                        ToInt(row["chat_hearing_distance"], 100), ToInt(row["trade_settings"]), Convert.ToString(row["push_enabled"]) == "1",
                         Convert.ToString(row["pull_enabled"]) == "1",
                         Convert.ToString(row["spush_enabled"]) == "1", Convert.ToString(row["spull_enabled"]) == "1", Convert.ToString(row["enables_enabled"]) == "1",
                         Convert.ToString(row["respect_notifications_enabled"]) == "1",
-                        Convert.ToString(row["pet_morphs_allowed"]) == "1", Convert.ToInt32(row["group_id"]), Convert.ToInt32(row["sale_price"]), Convert.ToString(row["lay_enabled"]) == "1", model));
+                        Convert.ToString(row["pet_morphs_allowed"]) == "1", ToInt(row["group_id"]), ToInt(row["sale_price"]), Convert.ToString(row["lay_enabled"]) == "1", model));
                 }
             }
         }
@@ -63,19 +71,19 @@ public static class RoomFactory
                 }
                 
                 var username = !string.IsNullOrEmpty(Convert.ToString(row["username"])) ? Convert.ToString(row["username"]) : "Habboon";
-                data = new(Convert.ToUInt32(row["id"]), Convert.ToString(row["caption"]), Convert.ToString(row["model_name"]), username, Convert.ToInt32(row["owner"]),
-                    Convert.ToString(row["password"]), Convert.ToInt32(row["score"]), Convert.ToString(row["roomtype"]), Convert.ToString(row["state"]), Convert.ToInt32(row["users_now"]),
-                    Convert.ToInt32(row["users_max"]), Convert.ToInt32(row["category"]), Convert.ToString(row["description"]), Convert.ToString(row["tags"]), Convert.ToString(row["floor"]),
+                data = new(Convert.ToUInt32(row["id"]), Convert.ToString(row["caption"]), Convert.ToString(row["model_name"]), username, ToInt(row["owner"]),
+                    Convert.ToString(row["password"]), ToInt(row["score"]), Convert.ToString(row["roomtype"]), Convert.ToString(row["state"]), ToInt(row["users_now"]),
+                    ToInt(row["users_max"]), ToInt(row["category"]), Convert.ToString(row["description"]), Convert.ToString(row["tags"]), Convert.ToString(row["floor"]),
                     Convert.ToString(row["landscape"]), Convert.ToString(row["allow_pets"]) == "1", Convert.ToString(row["allow_pets_eat"]) == "1", Convert.ToString(row["room_blocking_disabled"]) == "1",
                     Convert.ToString(row["allow_hidewall"]) == "1",
-                    Convert.ToInt32(row["wallthick"]), Convert.ToInt32(row["floorthick"]), Convert.ToString(row["wallpaper"]), Convert.ToInt32(row["mute_settings"]),
-                    Convert.ToInt32(row["ban_settings"]),
-                    Convert.ToInt32(row["kick_settings"]), Convert.ToInt32(row["chat_mode"]), Convert.ToInt32(row["chat_size"]), Convert.ToInt32(row["chat_speed"]),
-                    Convert.ToInt32(row["chat_extra_flood"]),
-                    Convert.ToInt32(row["chat_hearing_distance"]), Convert.ToInt32(row["trade_settings"]), Convert.ToString(row["push_enabled"]) == "1", Convert.ToString(row["pull_enabled"]) == "1",
+                    ToInt(row["wallthick"]), ToInt(row["floorthick"]), Convert.ToString(row["wallpaper"]), ToInt(row["mute_settings"], 1),
+                    ToInt(row["ban_settings"], 1),
+                    ToInt(row["kick_settings"], 1), ToInt(row["chat_mode"]), ToInt(row["chat_size"]), ToInt(row["chat_speed"]),
+                    ToInt(row["chat_extra_flood"]),
+                    ToInt(row["chat_hearing_distance"], 100), ToInt(row["trade_settings"]), Convert.ToString(row["push_enabled"]) == "1", Convert.ToString(row["pull_enabled"]) == "1",
                     Convert.ToString(row["spush_enabled"]) == "1", Convert.ToString(row["spull_enabled"]) == "1", Convert.ToString(row["enables_enabled"]) == "1",
                     Convert.ToString(row["respect_notifications_enabled"]) == "1",
-                    Convert.ToString(row["pet_morphs_allowed"]) == "1", Convert.ToInt32(row["group_id"]), Convert.ToInt32(row["sale_price"]), Convert.ToString(row["lay_enabled"]) == "1", model);
+                    Convert.ToString(row["pet_morphs_allowed"]) == "1", ToInt(row["group_id"]), ToInt(row["sale_price"]), Convert.ToString(row["lay_enabled"]) == "1", model);
                 return true;
             }
         }
