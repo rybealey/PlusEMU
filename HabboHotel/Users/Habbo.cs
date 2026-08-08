@@ -63,6 +63,10 @@ public class Habbo
 
     public int Rank { get; set; }
 
+    // Staff cutoff mirrors the Nitro client's SecurityLevel.MODERATOR (isModerator),
+    // which the UI already uses to gate the rooms/catalog/inventory/camera icons.
+    public bool IsStaff => Rank >= 5;
+
     public bool IsAmbassador { get; set; }
 
     public string Motto { get; set; } = string.Empty;

@@ -15,6 +15,12 @@ internal class InitializeNewNavigatorEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // Navigator browsing is staff-only (mirrors the client toolbar gate). Room
+        // ENTRY (GetGuestRoom) is intentionally NOT gated, so login restore, doors
+        // and teleports still work for everyone.
+        if (session.GetHabbo() == null || !session.GetHabbo().IsStaff)
+            return Task.CompletedTask;
+
         var topLevelItems = _navigatorManager.TopLevelItems;
         session.Send(new NavigatorMetaDataParserComposer(topLevelItems));
         session.Send(new NavigatorLiftedRoomsComposer());

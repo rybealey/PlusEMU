@@ -15,6 +15,11 @@ internal class NavigatorSearchEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // Navigator browsing is staff-only (mirrors the client toolbar gate); room
+        // entry stays open for everyone. Ignore searches from non-staff.
+        if (session.GetHabbo() == null || !session.GetHabbo().IsStaff)
+            return Task.CompletedTask;
+
         var category = packet.ReadString();
         var search = packet.ReadString();
         ICollection<SearchResultList> categories = new List<SearchResultList>();

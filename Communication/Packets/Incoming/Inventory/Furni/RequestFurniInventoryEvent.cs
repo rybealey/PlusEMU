@@ -8,6 +8,10 @@ internal class RequestFurniInventoryEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // Staff-only feature (mirrors the client toolbar gate); ignore for others.
+        if (session.GetHabbo() == null || !session.GetHabbo().IsStaff)
+            return Task.CompletedTask;
+
         var items = session.GetHabbo().Inventory.Furniture.AllItems.ToList();
         var page = 0;
         var pages = (items.Count - 1) / 700 + 1;

@@ -16,6 +16,10 @@ public class GetCatalogIndexEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // Staff-only feature (mirrors the client toolbar gate); ignore for others.
+        if (session.GetHabbo() == null || !session.GetHabbo().IsStaff)
+            return Task.CompletedTask;
+
         session.Send(new CatalogIndexComposer(session, _catalogManager.Pages));
         session.Send(new CatalogItemDiscountComposer());
         session.Send(new BcBorrowedItemsComposer());
