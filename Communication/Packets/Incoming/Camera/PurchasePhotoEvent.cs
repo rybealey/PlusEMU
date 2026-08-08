@@ -53,7 +53,10 @@ internal class PurchasePhotoEvent : IPacketEvent
 
         var extradata = JsonSerializer.Serialize(new
         {
-            t = pending.TakenUnixMs,
+            // seconds, not millis: the client renders this as
+            // `new Date(t * 1000)` (CameraWidgetShowPhotoView), so a millis
+            // value here lands ~58000 years in the future.
+            t = pending.TakenUnixMs / 1000,
             u = pending.PhotoId,
             n = session.GetHabbo().Username,
             s = session.GetHabbo().Id,
