@@ -267,7 +267,13 @@
     "UpdateForumSettingsEvent": 2214,
     "GetRoomRightsEvent": 3385,
     "SendMsgEvent": 3567,
-    "CloseTicketEvent": 2067
+    "CloseTicketEvent": 2067,
+    "InitCameraEvent": 796,
+    "PhotoCompetitionEvent": 3959,
+    "PublishPhotoEvent": 2068,
+    "PurchasePhotoEvent": 2408,
+    "RenderRoomEvent": 3226,
+    "RenderRoomThumbnailEvent": 1982
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -530,6 +536,11 @@
     "NavigatorSettingsComposer": 2875,
     "MessengerInitComposer": 1605,
     "PollContentsComposer": 3826,
-    "PollOfferComposer": 1074
+    "PollOfferComposer": 1074,
+    "InitCameraMessageComposer": 3878,
+    "ThumbnailStatusMessageComposer": 3595,
+    "CameraStorageUrlMessageComposer": 3696,
+    "CameraPurchaseOkComposer": 2783,
+    "CameraPublishStatusMessageComposer": 2057
   }
 }

@@ -318,12 +318,12 @@ public static class ClientPacketHeader
     //NotImplemented
 
     //Camera
-    //public const uint InitCameraEvent =;
-    //public const uint PhotoCompetitionEvent =;
-    //public const uint PublishPhotoEvent =;
-    //public const uint PurchasePhotoEvent =;
-    //public const uint RenderRoomEvent =;
-    //public const uint RenderRoomThumbnailEvent =;
+    public const uint InitCameraEvent = 4101;
+    public const uint PhotoCompetitionEvent = 4102;
+    public const uint PublishPhotoEvent = 4103;
+    public const uint PurchasePhotoEvent = 4104;
+    public const uint RenderRoomEvent = 4105;
+    public const uint RenderRoomThumbnailEvent = 4106;
 
     //campaign
     //public const uint OpenCampaignCalendarDoorAsStaffEvent =;
