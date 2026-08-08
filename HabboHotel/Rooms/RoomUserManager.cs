@@ -939,16 +939,21 @@ public class RoomUserManager
                                     horse.SetZ = nextZ;
                                 }
                             }
-                            _room.GetGameMap().GameMap[user.X, user.Y] = user.SqState; // REstore the old one
-                            user.SqState = _room.GetGameMap().GameMap[user.SetX, user.SetY]; //Backup the new one
+                            // Only mutate the pathfinding map for user occupancy when room
+                            // blocking is on. With pixelrp's global tile-overlap
+                            // (RoomBlockingEnabled always true) we leave the map untouched so
+                            // it reflects only walls/furni - the per-step SqState
+                            // backup/restore dance could otherwise corrupt an occupied tile
+                            // to "blocked" over time, which is what made standing on the same
+                            // tile stop working after a while.
                             if (!_room.RoomBlockingEnabled)
                             {
+                                _room.GetGameMap().GameMap[user.X, user.Y] = user.SqState; // REstore the old one
+                                user.SqState = _room.GetGameMap().GameMap[user.SetX, user.SetY]; //Backup the new one
                                 var users = _room.GetRoomUserManager().GetUserForSquare(nextX, nextY);
                                 if (users != null)
                                     _room.GetGameMap().GameMap[nextX, nextY] = 0;
                             }
-                            else
-                                _room.GetGameMap().GameMap[nextX, nextY] = 1;
                         }
                     }
                     if (!user.RidingHorse)
