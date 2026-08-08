@@ -330,8 +330,12 @@ public class RoomUserManager
                             roomId = _room.RoomId
                         });
 
+                    // Keep the home room in sync with the last room the user was in, so
+                    // the "Home" button and the login restore always agree (they are
+                    // otherwise independent). New users - who have never left a room -
+                    // keep home_room = 0 and default-spawn into room 1 (Moody's Pointe).
                     dbClient.Execute(
-                        "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot WHERE `id` = @userId LIMIT 1",
+                        "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot, `home_room` = @roomId WHERE `id` = @userId LIMIT 1",
                         new
                         {
                             userId = session.GetHabbo().Id,
@@ -341,6 +345,9 @@ public class RoomUserManager
                             rot = lastRot
                         });
                 }
+                // Mirror it in memory so the logout save (which writes HomeRoom) does not
+                // clobber it with the stale value.
+                session.GetHabbo().HomeRoom = _room.RoomId;
                 if (user != null)
                     user.Dispose();
             }
