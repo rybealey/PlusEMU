@@ -1,4 +1,4 @@
-﻿using Plus.Communication.Packets.Outgoing.Moderation;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
@@ -11,7 +11,7 @@ internal class HotelAlertCommand : IChatCommand
 
     public string Parameters => "%message%";
 
-    public string Description => "Send a message to the entire hotel.";
+    public string Description => "Send a bubble notification to the entire hotel.";
 
     public HotelAlertCommand(IGameClientManager gameClientManager)
     {
@@ -26,6 +26,9 @@ internal class HotelAlertCommand : IChatCommand
             return;
         }
         var message = CommandManager.MergeParams(parameters);
-        _gameClientManager.SendPacket(new BroadcastMessageAlertComposer($"{message}\r\n- {session.GetHabbo().Username}"));
+        // pixelrp: hotel alerts render as the client's INFO notification bubble
+        // (display=BUBBLE path in useNotification), not the modal popup.
+        _gameClientManager.SendPacket(new RoomNotificationComposer("hotel.alert",
+            new Dictionary<string, string> { { "display", "BUBBLE" }, { "message", message } }));
     }
 }
