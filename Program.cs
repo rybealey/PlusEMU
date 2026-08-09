@@ -12,12 +12,17 @@ using Plus.Database;
 using Plus.Plugins;
 using Plus.Utilities.DependencyInjection;
 using Scrutor;
+using System.Runtime.InteropServices;
 
 namespace Plus;
 
 public static class Program
 {
     private static Dictionary<ServiceLifetime, IEnumerable<Type>> _defaultTypes = new();
+
+    // PosixSignalRegistration is disposed when collected — the references
+    // must outlive Main's loop for the handlers to keep firing.
+    private static readonly List<PosixSignalRegistration> _signalRegistrations = new();
 
     public static async Task Main(string[] args)
     {
@@ -67,6 +72,18 @@ public static class Program
         Console.ForegroundColor = ConsoleColor.White;
         Console.CursorVisible = false;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
+        // `docker compose stop` delivers SIGTERM; without these hooks the
+        // process dies before it can broadcast, save inventories or reset
+        // server_status.
+        foreach (var signal in new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT })
+        {
+            _signalRegistrations.Add(PosixSignalRegistration.Create(signal, context =>
+            {
+                context.Cancel = true;
+                PlusEnvironment.PerformShutDown();
+            }));
+        }
 
         // Start
         var environment = serviceProvider.GetRequiredService<IPlusEnvironment>();

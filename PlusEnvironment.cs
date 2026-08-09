@@ -45,6 +45,8 @@ public class PlusEnvironment : IPlusEnvironment
 
     public static DateTime ServerStarted;
 
+    private static int _shuttingDown;
+
     private static readonly List<char> Allowedchars = new(new[]
     {
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -298,6 +300,10 @@ public class PlusEnvironment : IPlusEnvironment
 
     public static void PerformShutDown()
     {
+        // Reachable from the console command, the crash handler and the
+        // SIGTERM/SIGINT hooks — only the first caller may run it.
+        if (Interlocked.Exchange(ref _shuttingDown, 1) == 1)
+            return;
         Console.Clear();
         Log.Info("Server shutting down...");
         Console.Title = "PLUS EMULATOR: SHUTTING DOWN!";
