@@ -146,7 +146,9 @@ public class GameClientManager : IGameClientManager
 
     public void SendPacket(IServerPacket packet, string fuse = "")
     {
-        foreach (var client in _clients.Values.ToList())
+        // pixelrp: _clients is never populated in this fork (the connection layer
+        // tracks sessions itself) — hotel-wide sends must use the login register.
+        foreach (var client in _userIdRegister.Values.ToList())
         {
             if (client == null || client.GetHabbo() == null)
                 continue;
