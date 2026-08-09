@@ -1,4 +1,4 @@
-﻿using Plus.Communication.Packets.Outgoing.Moderation;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Moderation;
@@ -14,11 +14,12 @@ internal class ModeratorActionEvent : IPacketEvent
         var currentRoom = session.GetHabbo().CurrentRoom;
         if (currentRoom == null)
             return Task.CompletedTask;
-        var alertMode = packet.ReadInt();
+        packet.ReadInt(); // alert mode (caution/message) — same toast either way
         var alertMessage = packet.ReadString();
-        var isCaution = alertMode != 3;
-        alertMessage = isCaution ? $"Caution from Moderator:\n\n{alertMessage}" : $"Message from Moderator:\n\n{alertMessage}";
-        session.GetHabbo().CurrentRoom.SendPacket(new BroadcastMessageAlertComposer(alertMessage));
+        // pixelrp: room alerts render as the blue Information toast for everyone
+        // in the room; the badge replaces the old "from Moderator" prefixes.
+        currentRoom.SendPacket(new RoomNotificationComposer("room.alert",
+            new Dictionary<string, string> { { "display", "BUBBLE" }, { "message", alertMessage } }));
         return Task.CompletedTask;
     }
 }

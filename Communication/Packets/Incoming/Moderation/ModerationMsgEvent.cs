@@ -20,7 +20,7 @@ internal class ModerationMsgEvent : IPacketEvent
         var client = _clientManager.GetClientByUserId(userId);
         if (client == null)
             return Task.CompletedTask;
-        client.SendNotification(message);
+        client.SendModerationAlert(message);
         return Task.CompletedTask;
     }
 }

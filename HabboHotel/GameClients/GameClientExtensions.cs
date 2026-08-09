@@ -1,5 +1,6 @@
 ﻿using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 
 namespace Plus.HabboHotel.GameClients;
 
@@ -16,4 +17,9 @@ public static class GameClientExtensions
     }
 
     public static void SendNotification(this GameClient client, string message) => client.Send(new BroadcastMessageAlertComposer(message));
+
+    // pixelrp: user-facing moderation alerts render as the client's persistent
+    // red Moderation toast (mod.alert, display=BUBBLE), not the modal popup.
+    public static void SendModerationAlert(this GameClient client, string message) => client.Send(new RoomNotificationComposer("mod.alert",
+        new Dictionary<string, string> { { "display", "BUBBLE" }, { "message", message } }));
 }

@@ -39,7 +39,7 @@ internal class ModerationMuteEvent : IPacketEvent
         if (habbo.Client != null)
         {
             habbo.TimeMuted = length;
-            habbo.Client.SendNotification($"You have been muted by a moderator for {length} seconds!");
+            habbo.Client.SendModerationAlert($"You have been muted by a moderator for {length} seconds!");
         }
         return Task.CompletedTask;
     }

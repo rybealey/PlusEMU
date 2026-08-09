@@ -44,7 +44,7 @@ internal class ModerationTradeLockEvent : IPacketEvent
         if (habbo.Client != null)
         {
             habbo.TradingLockExpiry = length;
-            habbo.Client.SendNotification($"You have been trade banned for {days} day(s)!\r\rReason:\r\r{message}");
+            habbo.Client.SendModerationAlert($"You have been trade banned for {days} day(s)!\r\rReason:\r\r{message}");
         }
         return Task.CompletedTask;
     }

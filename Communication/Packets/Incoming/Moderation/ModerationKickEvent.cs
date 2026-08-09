@@ -19,7 +19,7 @@ internal class ModerationKickEvent : IPacketEvent
         if (!session.GetHabbo().Permissions.HasRight("mod_kick"))
             return Task.CompletedTask;
         var userId = packet.ReadInt();
-        packet.ReadString(); //message
+        var message = packet.ReadString();
         var client = _clientManager.GetClientByUserId(userId);
         if (client == null || client.GetHabbo() == null || client.GetHabbo().CurrentRoom == null || client.GetHabbo().Id == session.GetHabbo().Id)
             return Task.CompletedTask;
@@ -28,6 +28,9 @@ internal class ModerationKickEvent : IPacketEvent
             session.SendNotification(_languageManager.TryGetValue("moderation.kick.disallowed"));
             return Task.CompletedTask;
         }
+        // pixelrp: the kick message used to be read and discarded — deliver it.
+        if (!string.IsNullOrWhiteSpace(message))
+            client.SendModerationAlert(message);
         session.GetHabbo().CurrentRoom?.GetRoomUserManager().RemoveUserFromRoom(client, true);
         return Task.CompletedTask;
     }
