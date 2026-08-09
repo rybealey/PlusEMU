@@ -799,12 +799,8 @@ public class RoomUserManager
                                 horse.Y = user.SetY;
                             }
                         }
-                        if (user.X == _room.GetGameMap().Model.DoorX && user.Y == _room.GetGameMap().Model.DoorY && !toRemove.Contains(user) && !user.IsBot)
-                        {
-                            toRemove.Add(user);
-                            removed = true;
-                            return updated;
-                        }
+                        // pixelrp: the door tile is not an exit — players leave rooms via
+                        // teleports (staff also via navigator/hotel-view), never by walking out.
                         var items = _room.GetGameMap().GetCoordinatedItems(new(user.X, user.Y));
                         foreach (var item in items.ToList()) item.UserWalksOnFurni(user);
                         UpdateUserStatus(user, true);
