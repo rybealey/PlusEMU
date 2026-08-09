@@ -397,6 +397,23 @@ public class RoomItemHandling
 
     public bool SetFloorItem(GameClient session, Item item, int newX, int newY, int newRot, bool newItem, bool onRoller, bool sendMessage, bool updateRoomUserStatuses = false, double height = -1)
     {
+        // Items placed from inventory arrive via ToRoomObject() with RoomId 0 and no
+        // room reference, so Item.GetRoom() resolves to null until the next room
+        // reload — walking on/off such an item NRE'd the tick (and the crash repeated
+        // every cycle because SetStep never got cleared). Stamp the room up front.
+        item.RoomId = _room.RoomId;
+        // Same gap for owner identity: ToRoomObject() fills OwnerId but not the legacy
+        // UserId/Username pair the composers serialize, leaving the infostand's Owner
+        // blank until a reload. Only on new placements — movers must not become owners.
+        if (newItem)
+        {
+            if (item.OwnerId == 0 && session?.GetHabbo() != null)
+                item.OwnerId = (uint)session.GetHabbo().Id;
+            item.UserId = (int)item.OwnerId;
+            item.Username = session?.GetHabbo() != null && session.GetHabbo().Id == item.UserId
+                ? session.GetHabbo().Username
+                : PlusEnvironment.GetUsernameById(item.UserId);
+        }
         var needsReAdd = false;
         if (newItem)
         {
@@ -596,6 +613,15 @@ public class RoomItemHandling
             session.SendNotification(PlusEnvironment.LanguageManager.TryGetValue("room.item.already_placed"));
             return true;
         }
+        // Same RoomId + owner-identity stamps as SetFloorItem: inventory items arrive
+        // with RoomId 0 and without the legacy UserId/Username pair the composers use.
+        item.RoomId = _room.RoomId;
+        if (item.OwnerId == 0 && session?.GetHabbo() != null)
+            item.OwnerId = (uint)session.GetHabbo().Id;
+        item.UserId = (int)item.OwnerId;
+        item.Username = session?.GetHabbo() != null && session.GetHabbo().Id == item.UserId
+            ? session.GetHabbo().Username
+            : PlusEnvironment.GetUsernameById(item.UserId);
         item.Interactor.OnPlace(session, item);
         if (item.Definition.InteractionType == InteractionType.Moodlight)
         {

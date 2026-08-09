@@ -13,7 +13,7 @@ public static class ItemLoader
         var items = new List<Item>();
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         dbClient.SetQuery(
-            "SELECT `items`.*, COALESCE(`items_groups`.`group_id`, 0) AS `group_id` FROM `items` LEFT OUTER JOIN `items_groups` ON `items`.`id` = `items_groups`.`id` WHERE `items`.`room_id` = @rid;");
+            "SELECT `items`.*, COALESCE(`items_groups`.`group_id`, 0) AS `group_id`, COALESCE(`users`.`username`, '') AS `owner_username` FROM `items` LEFT OUTER JOIN `items_groups` ON `items`.`id` = `items_groups`.`id` LEFT OUTER JOIN `users` ON `users`.`id` = `items`.`user_id` WHERE `items`.`room_id` = @rid;");
         dbClient.AddParameter("rid", roomId);
         var table = dbClient.GetTable();
         if (table != null)
@@ -26,6 +26,7 @@ public static class ItemLoader
                     {
                         Id = Convert.ToUInt32(row["id"]),
                         UserId = Convert.ToInt32(row["user_id"]),
+                        Username = Convert.ToString(row["owner_username"]) ?? string.Empty,
                         Definition = data,
                         ExtraData = new LegacyDataFormat { Data = Convert.ToString(row["extra_data"]) ?? string.Empty },
                         GetX = Convert.ToInt32(row["x"]),

@@ -18,9 +18,21 @@ public class ObjectsComposer : IServerPacket
 
     public void Compose(IOutgoingPacket packet)
     {
-        packet.WriteInteger(1);
-        packet.WriteInteger(_room.OwnerId);
-        packet.WriteString(_room.OwnerName);
+        // The client resolves each object's owner name from this id->name dictionary;
+        // writing only the room owner left every other player's furni unattributed in
+        // the infostand.
+        var owners = new Dictionary<int, string> { [_room.OwnerId] = _room.OwnerName };
+        foreach (var item in _objects)
+        {
+            if (item.UserId > 0 && !owners.ContainsKey(item.UserId) && !string.IsNullOrEmpty(item.Username))
+                owners[item.UserId] = item.Username;
+        }
+        packet.WriteInteger(owners.Count);
+        foreach (var owner in owners)
+        {
+            packet.WriteInteger(owner.Key);
+            packet.WriteString(owner.Value);
+        }
         packet.Serialize(_objects);
     }
 }

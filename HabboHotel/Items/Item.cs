@@ -1110,8 +1110,15 @@ public class Item
     {
         if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null)
             return;
-        if (Definition.InteractionType == InteractionType.Tent || Definition.InteractionType == InteractionType.TentSmall) GetRoom().AddUserToTent(Id, user);
-        GetRoom().GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
+        // A null room here means this item's RoomId was never stamped (or the room
+        // unloaded mid-step). Skipping the triggers beats throwing: an exception on
+        // this path escapes the tick with the user's SetStep still set, wedging the
+        // whole room in a crash-every-cycle loop.
+        var room = GetRoom();
+        if (room == null)
+            return;
+        if (Definition.InteractionType == InteractionType.Tent || Definition.InteractionType == InteractionType.TentSmall) room.AddUserToTent(Id, user);
+        room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
         user.LastItem = this;
     }
 
@@ -1119,9 +1126,13 @@ public class Item
     {
         if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null)
             return;
+        // Same null-room guard as UserWalksOnFurni, for the same tick-wedging reason.
+        var room = GetRoom();
+        if (room == null)
+            return;
         if (Definition.InteractionType == InteractionType.Tent || Definition.InteractionType == InteractionType.TentSmall)
-            GetRoom().RemoveUserFromTent(Id, user);
-        GetRoom().GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
+            room.RemoveUserFromTent(Id, user);
+        room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
     }
 
     public void Destroy()
