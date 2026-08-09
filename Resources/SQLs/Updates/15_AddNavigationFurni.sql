@@ -23,13 +23,16 @@ VALUES
 
 -- Builders (912362) exists in the base dump; the Navigation child page does
 -- not exist everywhere (prod's migrated catalog lacks it), so create it if
--- missing. visible/enabled use the same legacy '' values as the sibling
--- Builders row so the page behaves identically.
+-- missing. visible/enabled are bit(1) columns (the mysql CLI renders them as
+-- invisible bytes — don't copy the "empty" look from a SELECT; '' coerces to
+-- 0 with strict mode off, which hides/disables the page). The UPDATE repairs
+-- rows already created with 0s by an earlier revision of this script.
 INSERT IGNORE INTO `catalog_pages`
     (`id`, `parent_id`, `caption`, `icon_image`, `min_rank`, `min_vip`, `order_num`,
      `page_link`, `page_layout`, `page_strings_1`, `page_strings_2`, `visible`, `enabled`)
 VALUES
-    (912363, 912362, 'Navigation', 47, 2, 0, 3, '', 'default_3x3', '', '', '', '');
+    (912363, 912362, 'Navigation', 47, 2, 0, 3, '', 'default_3x3', '', '', b'1', b'1');
+UPDATE `catalog_pages` SET `visible` = b'1', `enabled` = b'1' WHERE `id` = 912363;
 
 INSERT INTO `catalog_items`
     (`page_id`, `item_id`, `catalog_name`, `cost_credits`, `cost_pixels`,
