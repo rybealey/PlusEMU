@@ -17,10 +17,9 @@ internal class ModerationMuteEvent : IPacketEvent
         if (!session.GetHabbo().Permissions.HasRight("mod_mute"))
             return Task.CompletedTask;
         var userId = packet.ReadInt();
-        packet.ReadString(); //message
-        double length = packet.ReadInt() * 60;
-        packet.ReadString(); //unk1
-        packet.ReadString(); //unk2
+        var message = packet.ReadString();
+        packet.ReadInt(); // cfh topic id — the mod-tools mute sanction is a fixed 1 hour
+        double length = 3600;
         var habbo = PlusEnvironment.GetHabboById(userId);
         if (habbo == null)
         {
@@ -39,7 +38,9 @@ internal class ModerationMuteEvent : IPacketEvent
         if (habbo.Client != null)
         {
             habbo.TimeMuted = length;
-            habbo.Client.SendModerationAlert($"You have been muted by a moderator for {length} seconds!");
+            habbo.Client.SendModerationAlert(string.IsNullOrWhiteSpace(message)
+                ? $"You have been muted by a moderator for {length} seconds!"
+                : $"You have been muted by a moderator for {length} seconds!\r\rReason:\r\r{message}");
         }
         return Task.CompletedTask;
     }
