@@ -38,9 +38,12 @@ public class GameClientManager : IGameClientManager
         _clientPingStopwatch.Start();
     }
 
-    public int Count => _clients.Count;
+    // pixelrp: _clients is never populated in this fork (the connection layer
+    // tracks sessions itself) — online count and hotel-wide client iteration
+    // must use the login register, same as SendPacket.
+    public int Count => _userIdRegister.Count;
 
-    public ICollection<GameClient> GetClients => _clients.Values;
+    public ICollection<GameClient> GetClients => _userIdRegister.Values;
 
     public void OnCycle()
     {
@@ -52,6 +55,8 @@ public class GameClientManager : IGameClientManager
 
     public GameClient? GetClientByUsername(string username) => _usernameRegister.ContainsKey(username.ToLower()) ? _usernameRegister[username.ToLower()] : null;
 
+    // pixelrp: keyed by connection id, which nothing registers in this fork —
+    // always false. No callers; kept only to satisfy IGameClientManager.
     public bool TryGetClient(int clientId, out GameClient client) => _clients.TryGetValue(clientId, out client);
 
     public bool UpdateClientUsername(GameClient client, string oldUsername, string newUsername)
@@ -223,8 +228,8 @@ public class GameClientManager : IGameClientManager
         //{
         //    ExceptionLogger.LogException(e);
         //}
-        if (_clients.Count > 0)
-            _clients.Clear();
+        _userIdRegister.Clear();
+        _usernameRegister.Clear();
         _logger.LogInformation("Connections closed!");
     }
 
