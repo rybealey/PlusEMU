@@ -17,11 +17,7 @@ internal class AlertCommand : ITargetChatCommand
 
     public Task Execute(GameClient session, Room room, Habbo habbo, string[] parameters)
     {
-        if (habbo.Username == session.GetHabbo().Username)
-        {
-            session.SendWhisper("Get a life.");
-            return Task.CompletedTask;
-        }
+        // pixelrp: self-alerts are allowed — staff use them to preview the toast.
         var message = CommandManager.MergeParams(parameters);
         // pixelrp: delivered as the client's Moderation toast (red-tinted
         // Platform bubble), not the modal popup.
