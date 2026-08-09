@@ -1,4 +1,5 @@
-﻿using Plus.HabboHotel.GameClients;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
@@ -10,7 +11,7 @@ internal class AlertCommand : ITargetChatCommand
 
     public string Parameters => "%username% %Messages%";
 
-    public string Description => "Alert a user with a message of your choice.";
+    public string Description => "Alert a user with a bubble notification.";
 
     public bool MustBeInSameRoom => false;
 
@@ -22,7 +23,10 @@ internal class AlertCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
         var message = CommandManager.MergeParams(parameters);
-        habbo.Client.SendNotification($"{session.GetHabbo().Username} alerted you with the following message:\n\n{message}");
+        // pixelrp: delivered as the client's Moderation toast (red-tinted
+        // Platform bubble), not the modal popup.
+        habbo.Client.Send(new RoomNotificationComposer("mod.alert",
+            new Dictionary<string, string> { { "display", "BUBBLE" }, { "message", message } }));
         session.SendWhisper($"Alert successfully sent to {habbo.Username}");
         return Task.CompletedTask;
     }
