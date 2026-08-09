@@ -8,7 +8,10 @@
 -- one mints a linked pair (room_items_tele_links), and walking onto an arrow
 -- transports the user to its linked twin — including across rooms.
 
-INSERT INTO `furniture`
+-- The whole script is idempotent: furniture dedupes on its primary key, the
+-- page insert is guarded, and catalog_items (no natural unique key) clears its
+-- own rows first — safe to re-run after a partial earlier application.
+INSERT IGNORE INTO `furniture`
     (`id`, `item_name`, `public_name`, `type`, `width`, `length`, `stack_height`,
      `can_stack`, `can_sit`, `is_walkable`, `sprite_id`, `allow_recycle`,
      `allow_trade`, `allow_marketplace_sell`, `allow_gift`, `allow_inventory_stack`,
@@ -34,6 +37,7 @@ VALUES
     (912363, 912362, 'Navigation', 47, 2, 0, 3, '', 'default_3x3', '', '', b'1', b'1');
 UPDATE `catalog_pages` SET `visible` = b'1', `enabled` = b'1' WHERE `id` = 912363;
 
+DELETE FROM `catalog_items` WHERE `page_id` = 912363 AND `item_id` IN ('100001','100002','100003','100004','100005');
 INSERT INTO `catalog_items`
     (`page_id`, `item_id`, `catalog_name`, `cost_credits`, `cost_pixels`,
      `cost_diamonds`, `amount`, `offer_active`, `offer_id`)
