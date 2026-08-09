@@ -21,7 +21,16 @@ VALUES
     (100004, 'tp_arrow',       'Teleport Arrow',         's', 1, 1, 0, '1', '0', '1', 100004, '0', '1', '0', '1', '1', 'arrow',   0, 1, '0', '0', 0, 0, '0', 0, '0'),
     (100005, 'revamp_taxi',    'Taxi Sign',              's', 1, 1, 0, '0', '0', '0', 100005, '0', '1', '0', '1', '1', 'default', 0, 2, '0', '0', 0, 0, '0', 0, '0');
 
--- Builders (912362) > Navigation (912363) already exist in the base dump.
+-- Builders (912362) exists in the base dump; the Navigation child page does
+-- not exist everywhere (prod's migrated catalog lacks it), so create it if
+-- missing. visible/enabled use the same legacy '' values as the sibling
+-- Builders row so the page behaves identically.
+INSERT IGNORE INTO `catalog_pages`
+    (`id`, `parent_id`, `caption`, `icon_image`, `min_rank`, `min_vip`, `order_num`,
+     `page_link`, `page_layout`, `page_strings_1`, `page_strings_2`, `visible`, `enabled`)
+VALUES
+    (912363, 912362, 'Navigation', 47, 2, 0, 3, '', 'default_3x3', '', '', '', '');
+
 INSERT INTO `catalog_items`
     (`page_id`, `item_id`, `catalog_name`, `cost_credits`, `cost_pixels`,
      `cost_diamonds`, `amount`, `offer_active`, `offer_id`)
