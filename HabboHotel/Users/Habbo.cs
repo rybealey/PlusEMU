@@ -205,6 +205,10 @@ public class Habbo
 
     public bool SessionClothingBlocked { get; set; }
 
+    // Staff :rights toggle — rank 4+ have no room rights (any room, own rooms
+    // included) until they enable them per-room. Reset on room exit; never persisted.
+    public bool RoomRightsEnabled { get; set; }
+
     public bool InRoom => CurrentRoom != null;
 
     public Room? CurrentRoom { get; set; }
