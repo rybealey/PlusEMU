@@ -9,6 +9,7 @@ using Plus.Communication.Encryption;
 using Plus.Communication.Flash;
 using Plus.Communication.Nitro;
 using Plus.Communication.Packets.Outgoing.Moderation;
+using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.Communication.RCON;
 using Plus.Core;
 using Plus.Core.FigureData;
@@ -307,9 +308,17 @@ public class PlusEnvironment : IPlusEnvironment
         Console.Clear();
         Log.Info("Server shutting down...");
         Console.Title = "PLUS EMULATOR: SHUTTING DOWN!";
-        Game.ClientManager.SendPacket(new BroadcastMessageAlertComposer(LanguageManager.TryGetValue("server.shutdown.message")));
+        // pixelrp: the goodbye is the Platform toast, not the modal popup. The
+        // client animates the %countdown:N% token, so the wait below must match
+        // the advertised seconds before connections start closing.
+        Game.ClientManager.SendPacket(new RoomNotificationComposer("hotel.alert", new Dictionary<string, string>
+        {
+            { "display", "BUBBLE" },
+            { "message", "A software update has been pushed. PixelRP is restarting in… %countdown:15% seconds." }
+        }));
+        Thread.Sleep(15000);
         Game.StopGameLoop();
-        Thread.Sleep(2500);
+        Thread.Sleep(1000);
         _flashServer.Stop();
         Game.ClientManager.CloseAll(); //Close all connections
         Game.RoomManager.Dispose(); //Stop the game loop.
