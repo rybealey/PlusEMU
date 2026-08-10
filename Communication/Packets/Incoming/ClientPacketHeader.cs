@@ -302,7 +302,7 @@ public static class ClientPacketHeader
     public const uint GetGameAchievementsEvent = 1418; //482
     public const uint GetCatalogRoomPromotionEvent = 2757; //538
     public const uint MoveAvatarEvent = 2121; //1737
-    public const uint SaveBrandingItemEvent = 2208; //3156
+    public const uint SaveBrandingItemEvent = 3608; // Nitro SET_OBJECT_DATA
     public const uint SaveEnforcedCategorySettingsEvent = 531; //3413
     public const uint RespectPetEvent = 1967; //1618
     public const uint GetMarketplaceCanMakeOfferEvent = 1552; //1647

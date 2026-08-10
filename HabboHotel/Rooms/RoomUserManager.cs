@@ -226,7 +226,10 @@ public class RoomUserManager
         {
             user.SetStatus("flatctrl", "useradmin");
             session.Send(new YouAreOwnerComposer());
-            session.Send(new YouAreControllerComposer(4));
+            // Nitro only shows the branding (ads_background) editor at controller
+            // level 5 ("moderator"); level 4 caps out at plain owner tools.
+            session.Send(new YouAreControllerComposer(
+                session.GetHabbo().Permissions.HasRight("room_item_save_branding_items") ? 5 : 4));
         }
         else if (_room.CheckRights(session, false) && _room.Group == null)
         {
