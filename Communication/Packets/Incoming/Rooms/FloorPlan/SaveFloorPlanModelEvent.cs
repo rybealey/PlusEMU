@@ -136,9 +136,13 @@ internal class SaveFloorPlanModelEvent : RoomPacketEvent
         _roomManager.UnloadRoom(room.Id);
         foreach (var user in usersToReturn)
         {
-            if (user == null || user.GetClient() == null)
+            var client = user?.GetClient();
+            if (client?.GetHabbo() == null)
                 continue;
-            user.GetClient().Send(new RoomForwardComposer(room.Id));
+            // The room was just disposed without removing its users; drop the
+            // stale reference so the forced re-entry below starts clean.
+            client.GetHabbo().CurrentRoom = null;
+            client.Send(new RoomForwardComposer(room.Id));
         }
         return Task.CompletedTask;
     }

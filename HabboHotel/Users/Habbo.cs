@@ -357,7 +357,13 @@ public class Habbo
         if (Client.GetHabbo().InRoom)
         {
             var oldRoom = Client.GetHabbo().CurrentRoom;
-            oldRoom?.GetRoomUserManager().RemoveUserFromRoom(Client, false);
+            // A disposed room (unloaded while we were still in it, e.g. a floor
+            // plan save) has no user manager left; clear the stale reference or
+            // every future room entry NREs and the client stays on a black screen.
+            if (oldRoom != null && !oldRoom.MDisposed)
+                oldRoom.GetRoomUserManager().RemoveUserFromRoom(Client, false);
+            else
+                Client.GetHabbo().CurrentRoom = null;
         }
         if (Client.GetHabbo().IsTeleporting && Client.GetHabbo().TeleportingRoomId != id)
         {
