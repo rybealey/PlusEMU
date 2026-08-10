@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Data;
+using NLog;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.Wired;
 using Plus.HabboHotel.Items.Wired.Boxes;
@@ -11,6 +12,8 @@ namespace Plus.HabboHotel.Rooms.Instance;
 
 public class WiredComponent
 {
+    private static readonly ILogger Log = LogManager.GetLogger("Plus.HabboHotel.Rooms.Instance.WiredComponent");
+
     private readonly Room _room;
     private readonly ConcurrentDictionary<uint, IWiredItem> _wiredItems;
 
@@ -47,6 +50,15 @@ public class WiredComponent
     public IWiredItem LoadWiredBox(Item item)
     {
         var newBox = GenerateNewBox(item);
+        if (newBox == null)
+        {
+            // GenerateNewBox only maps a handful of wired types (WiredType is
+            // never populated from the item definition), so most wired
+            // furniture has no box implementation. An unmapped box must load
+            // as inert furniture, not NRE the entire room into unloadability.
+            Log.Warn($"<Room {_room.Id}> Wired item {item.Id} ({item.Definition.ItemName}) has no box implementation; loading as inert furniture.");
+            return null;
+        }
         DataRow row = null;
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
