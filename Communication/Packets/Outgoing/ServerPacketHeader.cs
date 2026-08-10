@@ -321,4 +321,7 @@ public static class ServerPacketHeader
     public const uint CameraStorageUrlMessageComposer = 4103;
     public const uint CameraPurchaseOkComposer = 4104;
     public const uint CameraPublishStatusMessageComposer = 4105;
+
+    //Dressing booth
+    public const uint InClientLinkComposer = 4106;
 }

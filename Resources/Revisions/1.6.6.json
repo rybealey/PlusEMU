@@ -541,6 +541,7 @@
     "ThumbnailStatusMessageComposer": 3595,
     "CameraStorageUrlMessageComposer": 3696,
     "CameraPurchaseOkComposer": 2783,
-    "CameraPublishStatusMessageComposer": 2057
+    "CameraPublishStatusMessageComposer": 2057,
+    "InClientLinkComposer": 2023
   }
 }
