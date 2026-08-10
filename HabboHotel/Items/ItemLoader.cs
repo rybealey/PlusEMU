@@ -28,7 +28,7 @@ public static class ItemLoader
                         UserId = Convert.ToInt32(row["user_id"]),
                         Username = Convert.ToString(row["owner_username"]) ?? string.Empty,
                         Definition = data,
-                        ExtraData = new LegacyDataFormat { Data = Convert.ToString(row["extra_data"]) ?? string.Empty },
+                        ExtraData = ItemBehaviourUtility.HydrateExtraData(data, Convert.ToString(row["extra_data"])),
                         GetX = Convert.ToInt32(row["x"]),
                         GetY = Convert.ToInt32(row["y"]),
                         GetZ = Convert.ToDouble(row["z"]),
@@ -64,7 +64,7 @@ public static class ItemLoader
                         Id = Convert.ToUInt32(row["id"]),
                         OwnerId = userId,
                         Definition = data,
-                        ExtraData = new LegacyDataFormat { Data = Convert.ToString(row["extra_data"]) ?? string.Empty },
+                        ExtraData = ItemBehaviourUtility.HydrateExtraData(data, Convert.ToString(row["extra_data"])),
                         UniqueNumber = Convert.ToUInt32(row["limited_number"]),
                         UniqueSeries = Convert.ToUInt32(row["limited_stack"])
                     });

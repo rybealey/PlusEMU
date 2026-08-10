@@ -20,10 +20,19 @@ internal class SaveBrandingItemEvent : IPacketEvent
             return Task.CompletedTask;
         if (item.Definition.InteractionType == InteractionType.Background)
         {
-            var data = packet.ReadInt();
-            var brandData = $"state{Convert.ToChar(9)}0";
-            for (var i = 1; i <= data; i++) brandData = brandData + Convert.ToChar(9) + packet.ReadString();
-            item.LegacyDataString = brandData;
+            // Nitro's SET_OBJECT_DATA: total string count, then flattened
+            // key/value pairs. Must live in a MapDataFormat — the serializer
+            // dispatches on the data object's type, and only MapDataFormat
+            // reaches the client as the category-1 map its branding logic reads.
+            var count = packet.ReadInt();
+            var map = new Dictionary<string, string> { ["state"] = "0" };
+            for (var i = 0; i < count / 2; i++)
+            {
+                var key = packet.ReadString();
+                var value = packet.ReadString();
+                if (!string.IsNullOrEmpty(key)) map[key] = value;
+            }
+            item.ExtraData = new Plus.HabboHotel.Items.DataFormat.MapDataFormat(map);
         }
         else if (item.Definition.InteractionType == InteractionType.FxProvider)
         {

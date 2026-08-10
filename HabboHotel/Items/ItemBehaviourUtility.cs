@@ -15,6 +15,47 @@ internal static class ItemBehaviourUtility
 
     public static bool IsLimited(this InventoryItem item) => item.UniqueSeries > 0;
 
+    /// <summary>
+    /// The wire serializer dispatches on the ExtraData object's type, so items
+    /// whose client-side logic expects a key/value map (category 1) must be
+    /// hydrated as MapDataFormat — a LegacyDataFormat reaches the client as
+    /// category 0 (one opaque string) and its map parses empty.
+    /// </summary>
+    public static IFurniObjectData HydrateExtraData(ItemDefinition definition, string raw)
+    {
+        raw ??= string.Empty;
+        if (definition.InteractionType == InteractionType.Background)
+        {
+            var map = new MapDataFormat();
+            if (!string.IsNullOrEmpty(raw))
+            {
+                try
+                {
+                    if (raw.Contains('\n'))
+                        map.Store(raw); // MapDataFormat.Serialize round-trip
+                    else
+                    {
+                        // Flattened key\tvalue\t… rows written by the pre-map
+                        // save handler (and equivalent imports).
+                        var parts = raw.Split('\t');
+                        for (var i = 0; i + 1 < parts.Length; i += 2)
+                        {
+                            if (!string.IsNullOrEmpty(parts[i]))
+                                map.Data[parts[i]] = parts[i + 1];
+                        }
+                    }
+                }
+                catch
+                {
+                    // Rows imported from another emulator aren't parseable —
+                    // start clean rather than failing the room load.
+                }
+            }
+            return map;
+        }
+        return new LegacyDataFormat { Data = raw };
+    }
+
     public static Item ToRoomObject(this InventoryItem item) => new()
     {
         Id = item.Id,

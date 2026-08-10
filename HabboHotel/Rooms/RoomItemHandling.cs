@@ -372,10 +372,14 @@ public class RoomItemHandling
                 using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
                 foreach (var item in _movedItems.Values.ToList())
                 {
-                    if (!string.IsNullOrEmpty(item.LegacyDataString))
+                    // Gate on the serialized form, not LegacyDataString — the
+                    // latter is always empty for non-legacy data (e.g. the
+                    // Background item's MapDataFormat) and would skip the write.
+                    var serializedData = item.ExtraData.Serialize();
+                    if (!string.IsNullOrEmpty(serializedData))
                     {
                         dbClient.SetQuery($"UPDATE `items` SET `extra_data` = @edata{item.Id} WHERE `id` = '{item.Id}' LIMIT 1");
-                        dbClient.AddParameter($"edata{item.Id}", item.ExtraData.Serialize());
+                        dbClient.AddParameter($"edata{item.Id}", serializedData);
                         dbClient.RunQuery();
                     }
                     if (item.IsWallItem && (!item.Definition.ItemName.Contains("wallpaper_single") || !item.Definition.ItemName.Contains("floor_single") ||
