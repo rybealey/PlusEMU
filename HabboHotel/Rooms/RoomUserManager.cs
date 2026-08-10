@@ -280,9 +280,6 @@ public class RoomUserManager
             if (session.GetHabbo().TentId > 0)
                 session.GetHabbo().TentId = 0;
             session.GetHabbo().CurrentRoom = null;
-            // Staff :rights toggle is per-room-visit; covers room change,
-            // hotel view, kick, and disconnect (Habbo.Dispose routes here).
-            session.GetHabbo().RoomRightsEnabled = false;
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
@@ -375,6 +372,12 @@ public class RoomUserManager
                 if (user != null)
                     user.Dispose();
             }
+            // Staff :rights toggle is per-room-visit; covers room change,
+            // hotel view, kick, and disconnect (Habbo.Dispose routes here).
+            // Reset after teardown (RemoveRoomUser/OnRemove, trade end, DB
+            // persistence) so CheckRights-dependent logic (e.g. the pet
+            // retention check in OnRemove) still sees the in-room value.
+            session.GetHabbo().RoomRightsEnabled = false;
         }
         catch (Exception e)
         {
