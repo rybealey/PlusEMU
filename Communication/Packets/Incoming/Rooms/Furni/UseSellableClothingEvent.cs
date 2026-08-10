@@ -4,6 +4,7 @@ using Plus.Database;
 using Plus.HabboHotel.Catalog.Clothing;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Users.Clothing;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
 
@@ -60,7 +61,7 @@ internal class UseSellableClothingEvent : IPacketEvent
         //Remove the item.
         room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
         session.GetHabbo().Clothing.AddClothing(clothing.ClothingName, clothing.PartIds);
-        session.Send(new FigureSetIdsComposer(session.GetHabbo().Clothing.GetClothingParts));
+        session.Send(new FigureSetIdsComposer(FullWardrobeUtility.GetVisibleClothingParts(session.GetHabbo(), _clothingManager)));
         session.Send(new RoomNotificationComposer("figureset.redeemed.success"));
         session.SendWhisper("If for some reason cannot see your new clothing, reload the hotel!");
         return Task.CompletedTask;
