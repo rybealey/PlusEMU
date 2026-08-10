@@ -291,7 +291,10 @@ public static class ServerPacketHeader
     public const uint BadgeDefinitionsComposer = 1827; //2066
     public const uint Game2WeeklyLeaderboardComposer = 275; //1127
     public const uint NameChangeUpdateComposer = 1226; //2698
-    public const uint RoomVisualizationSettingsComposer = 3003; //3786
+    // 3547 = Nitro IncomingHeader.ROOM_THICKNESS (RoomVisualizationSettingsEvent);
+    // the old 3003 matched no client header, so hide-walls/thickness silently
+    // never reached the client.
+    public const uint RoomVisualizationSettingsComposer = 3547; //3786
     public const uint MarketplaceMakeOfferResultComposer = 480; //3960
     public const uint FlatCreatedComposer = 3001; //1621
     public const uint BotInventoryComposer = 3692; //2620

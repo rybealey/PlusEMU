@@ -11,6 +11,14 @@ public static class RoomFactory
     private static int ToInt(object value, int fallback = 0) =>
         int.TryParse(Convert.ToString(value), out var parsed) ? parsed : fallback;
 
+    // Columns migrated from enum('0','1') to BOOLEAN come back from
+    // MySqlConnector as .NET bool (tinyint(1) with TreatTinyAsBoolean, the
+    // default), so Convert.ToString yields "True"/"False" and a == "1"
+    // comparison silently reads every row as false — hide-walls "reappearing
+    // after room load" was this. Handle both column shapes.
+    private static bool ToBool(object value) =>
+        value is bool b ? b : Convert.ToString(value) == "1";
+
 
     public static List<RoomData> GetRoomsDataByOwnerSortByName(int ownerId)
     {
@@ -32,17 +40,17 @@ public static class RoomFactory
                         ToInt(row["owner"]),
                         Convert.ToString(row["password"]), ToInt(row["score"]), Convert.ToString(row["roomtype"]), Convert.ToString(row["state"]), ToInt(row["users_now"]),
                         ToInt(row["users_max"]), ToInt(row["category"]), Convert.ToString(row["description"]), Convert.ToString(row["tags"]), Convert.ToString(row["floor"]),
-                        Convert.ToString(row["landscape"]), Convert.ToString(row["allow_pets"]) == "1", Convert.ToString(row["allow_pets_eat"]) == "1", Convert.ToString(row["room_blocking_disabled"]) == "1",
-                        Convert.ToString(row["allow_hidewall"]) == "1",
+                        Convert.ToString(row["landscape"]), ToBool(row["allow_pets"]), ToBool(row["allow_pets_eat"]), ToBool(row["room_blocking_disabled"]),
+                        ToBool(row["allow_hidewall"]),
                         ToInt(row["wallthick"]), ToInt(row["floorthick"]), Convert.ToString(row["wallpaper"]), ToInt(row["mute_settings"], 1),
                         ToInt(row["ban_settings"], 1),
                         ToInt(row["kick_settings"], 1), ToInt(row["chat_mode"]), ToInt(row["chat_size"]), ToInt(row["chat_speed"]),
                         ToInt(row["chat_extra_flood"]),
-                        ToInt(row["chat_hearing_distance"], 100), ToInt(row["trade_settings"]), Convert.ToString(row["push_enabled"]) == "1",
-                        Convert.ToString(row["pull_enabled"]) == "1",
-                        Convert.ToString(row["spush_enabled"]) == "1", Convert.ToString(row["spull_enabled"]) == "1", Convert.ToString(row["enables_enabled"]) == "1",
-                        Convert.ToString(row["respect_notifications_enabled"]) == "1",
-                        Convert.ToString(row["pet_morphs_allowed"]) == "1", ToInt(row["group_id"]), ToInt(row["sale_price"]), Convert.ToString(row["lay_enabled"]) == "1", model));
+                        ToInt(row["chat_hearing_distance"], 100), ToInt(row["trade_settings"]), ToBool(row["push_enabled"]),
+                        ToBool(row["pull_enabled"]),
+                        ToBool(row["spush_enabled"]), ToBool(row["spull_enabled"]), ToBool(row["enables_enabled"]),
+                        ToBool(row["respect_notifications_enabled"]),
+                        ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model));
                 }
             }
         }
@@ -74,16 +82,16 @@ public static class RoomFactory
                 data = new(Convert.ToUInt32(row["id"]), Convert.ToString(row["caption"]), Convert.ToString(row["model_name"]), username, ToInt(row["owner"]),
                     Convert.ToString(row["password"]), ToInt(row["score"]), Convert.ToString(row["roomtype"]), Convert.ToString(row["state"]), ToInt(row["users_now"]),
                     ToInt(row["users_max"]), ToInt(row["category"]), Convert.ToString(row["description"]), Convert.ToString(row["tags"]), Convert.ToString(row["floor"]),
-                    Convert.ToString(row["landscape"]), Convert.ToString(row["allow_pets"]) == "1", Convert.ToString(row["allow_pets_eat"]) == "1", Convert.ToString(row["room_blocking_disabled"]) == "1",
-                    Convert.ToString(row["allow_hidewall"]) == "1",
+                    Convert.ToString(row["landscape"]), ToBool(row["allow_pets"]), ToBool(row["allow_pets_eat"]), ToBool(row["room_blocking_disabled"]),
+                    ToBool(row["allow_hidewall"]),
                     ToInt(row["wallthick"]), ToInt(row["floorthick"]), Convert.ToString(row["wallpaper"]), ToInt(row["mute_settings"], 1),
                     ToInt(row["ban_settings"], 1),
                     ToInt(row["kick_settings"], 1), ToInt(row["chat_mode"]), ToInt(row["chat_size"]), ToInt(row["chat_speed"]),
                     ToInt(row["chat_extra_flood"]),
-                    ToInt(row["chat_hearing_distance"], 100), ToInt(row["trade_settings"]), Convert.ToString(row["push_enabled"]) == "1", Convert.ToString(row["pull_enabled"]) == "1",
-                    Convert.ToString(row["spush_enabled"]) == "1", Convert.ToString(row["spull_enabled"]) == "1", Convert.ToString(row["enables_enabled"]) == "1",
-                    Convert.ToString(row["respect_notifications_enabled"]) == "1",
-                    Convert.ToString(row["pet_morphs_allowed"]) == "1", ToInt(row["group_id"]), ToInt(row["sale_price"]), Convert.ToString(row["lay_enabled"]) == "1", model);
+                    ToInt(row["chat_hearing_distance"], 100), ToInt(row["trade_settings"]), ToBool(row["push_enabled"]), ToBool(row["pull_enabled"]),
+                    ToBool(row["spush_enabled"]), ToBool(row["spull_enabled"]), ToBool(row["enables_enabled"]),
+                    ToBool(row["respect_notifications_enabled"]),
+                    ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model);
                 return true;
             }
         }
