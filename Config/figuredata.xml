@@ -14147,6 +14147,10 @@
 <set id="1819" gender="U" club="0" colorable="0" selectable="1" preselectable="0">
 <part id="19" type="ca" colorable="0" index="0" colorindex="0"/>
 </set>
+<set id="80000103" gender="U" club="0" colorable="0" selectable="1" preselectable="0">
+<part id="80000103" type="ca" colorable="0" index="0" colorindex="0"/>
+<part id="80000113" type="ca" colorable="0" index="1" colorindex="0"/>
+</set>
 </settype>
 <settype type="wa" paletteid="3" mand_m_0="0" mand_f_0="0" mand_m_1="0" mand_f_1="0">
 <set id="2012" gender="U" club="0" colorable="0" selectable="1" preselectable="0">
