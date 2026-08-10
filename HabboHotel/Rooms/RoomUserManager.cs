@@ -705,6 +705,11 @@ public class RoomUserManager
                         toRemove.Add(user);
                         continue;
                     }
+                    if (user.NeedsIdleDisconnect)
+                    {
+                        user.GetClient()?.Disconnect();
+                        continue;
+                    }
                     var updated = false;
                     user.IdleTime++;
                     user.HandleSpamTicks();

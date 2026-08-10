@@ -172,13 +172,20 @@ public class RoomUser
                 return false;
             if (GetClient() == null || GetClient().GetHabbo() == null)
                 return true;
-            if (GetClient().GetHabbo().Permissions.HasRight("mod_tool") || GetRoom().OwnerId == HabboId)
-                return false;
-            if (GetRoom().Id == 1649919)
-                return false;
-            if (IdleTime >= 7200)
-                return true;
             return false;
+        }
+    }
+
+    // pixelrp: inactivity never sends players to hotel view (it's staff-only in
+    // this fork). A session with no typing or movement for 60 minutes
+    // (7200 ticks * 500ms room cycle) is disconnected outright instead.
+    public bool NeedsIdleDisconnect
+    {
+        get
+        {
+            if (IsBot)
+                return false;
+            return IdleTime >= 7200;
         }
     }
 
