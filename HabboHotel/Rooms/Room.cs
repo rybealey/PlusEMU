@@ -268,8 +268,6 @@ public class Room : RoomData
         {
             if (session == null || session.GetHabbo() == null)
                 return false;
-            if (session.GetHabbo().Rank >= 4 && !session.GetHabbo().RoomRightsEnabled)
-                return false;
             if (session.GetHabbo().Username == OwnerName && Type == "private")
                 return true;
             if (session.GetHabbo().Permissions.HasRight("room_any_owner"))

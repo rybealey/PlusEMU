@@ -205,16 +205,6 @@ public class Habbo
 
     public bool SessionClothingBlocked { get; set; }
 
-    // Staff :rights toggle — rank 4+ have no room rights (any room, own rooms
-    // included) until they enable them per-room. Reset on room exit; never persisted.
-    public bool RoomRightsEnabled { get; set; }
-
-    // Room the toggle was enabled in. Some exits bypass RemoveUserFromRoom's
-    // reset (disposed-room recovery, floor-plan saves), so PrepareRoom drops
-    // the toggle when the next entry targets a different room. Only meaningful
-    // while RoomRightsEnabled is true.
-    public uint RoomRightsRoomId { get; set; }
-
     public bool InRoom => CurrentRoom != null;
 
     public Room? CurrentRoom { get; set; }
@@ -379,13 +369,6 @@ public class Habbo
             else
                 Client.GetHabbo().CurrentRoom = null;
         }
-        // The :rights toggle is per-room-visit, but exits that bypass
-        // RemoveUserFromRoom (the disposed-room branch above, floor-plan saves)
-        // skip its reset. Drop it here unless this entry returns to the room it
-        // was enabled in — a floor-plan save re-forwards into the same room,
-        // which is the same visit continuing.
-        if (RoomRightsEnabled && RoomRightsRoomId != id)
-            RoomRightsEnabled = false;
         if (Client.GetHabbo().IsTeleporting && Client.GetHabbo().TeleportingRoomId != id)
         {
             Client.Send(new CloseConnectionComposer());

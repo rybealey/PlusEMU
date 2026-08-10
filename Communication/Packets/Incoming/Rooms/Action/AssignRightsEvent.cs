@@ -39,12 +39,10 @@ internal class AssignRightsEvent : RoomPacketEvent
         var roomUser = room.GetRoomUserManager().GetRoomUserByHabbo(userId);
         if (roomUser != null && !roomUser.IsBot)
         {
-            // Recompute instead of pushing "flatctrl 1" directly: a rank-4+
-            // target with the :rights toggle off must not get controller UI
-            // the server denies (Room.CheckRights), and group rooms grant
-            // controller level 3, not 1 — RefreshRights encodes both.
+            roomUser.SetStatus("flatctrl 1");
+            roomUser.UpdateNeeded = true;
             if (roomUser.GetClient() != null)
-                room.GetRoomUserManager().RefreshRights(roomUser.GetClient(), roomUser);
+                roomUser.GetClient().Send(new YouAreControllerComposer(1));
             session.Send(new FlatControllerAddedComposer(room.RoomId, roomUser.GetClient().GetHabbo().Id, roomUser.GetClient().GetHabbo().Username));
         }
         else
