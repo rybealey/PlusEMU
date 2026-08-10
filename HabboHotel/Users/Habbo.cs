@@ -67,6 +67,10 @@ public class Habbo
     // which the UI already uses to gate the rooms/catalog/inventory/camera icons.
     public bool IsStaff => Rank >= 5;
 
+    // Full-wardrobe cutoff: rank 4+ can wear any sellable clothing set
+    // without owning a user_clothing row (see FullWardrobeUtility).
+    public bool HasFullWardrobe => Rank >= 4;
+
     public bool IsAmbassador { get; set; }
 
     public string Motto { get; set; } = string.Empty;
