@@ -223,6 +223,24 @@ public class RoomUserManager
             session.GetHabbo().PendingRestore = null;
         }
         _room.SendPacket(new UsersComposer(user));
+        RefreshRights(session, user);
+        if (session.GetHabbo().Permissions.HasRight("mod_tool") && !session.GetHabbo().DisableForcedEffects)
+            session.GetHabbo().Effects.ApplyEffect(102);
+        if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
+            session.GetHabbo().Effects.ApplyEffect(178);
+        foreach (var bot in _bots.Values.ToList())
+        {
+            if (bot == null || bot.BotAi == null)
+                continue;
+            bot.BotAi.OnUserEnterRoom(user);
+        }
+        return true;
+    }
+
+    public void RefreshRights(GameClient session, RoomUser user)
+    {
+        // Clear any previous rights badge; re-added below if still entitled.
+        user.RemoveStatus("flatctrl");
         if (_room.CheckRights(session, true))
         {
             user.SetStatus("flatctrl", "useradmin");
@@ -245,17 +263,6 @@ public class RoomUserManager
         else
             session.Send(new YouAreNotControllerComposer());
         user.UpdateNeeded = true;
-        if (session.GetHabbo().Permissions.HasRight("mod_tool") && !session.GetHabbo().DisableForcedEffects)
-            session.GetHabbo().Effects.ApplyEffect(102);
-        if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
-            session.GetHabbo().Effects.ApplyEffect(178);
-        foreach (var bot in _bots.Values.ToList())
-        {
-            if (bot == null || bot.BotAi == null)
-                continue;
-            bot.BotAi.OnUserEnterRoom(user);
-        }
-        return true;
     }
 
     public void RemoveUserFromRoom(GameClient session, bool nofityUser, bool notifyKick = false)
@@ -273,6 +280,9 @@ public class RoomUserManager
             if (session.GetHabbo().TentId > 0)
                 session.GetHabbo().TentId = 0;
             session.GetHabbo().CurrentRoom = null;
+            // Staff :rights toggle is per-room-visit; covers room change,
+            // hotel view, kick, and disconnect (Habbo.Dispose routes here).
+            session.GetHabbo().RoomRightsEnabled = false;
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
