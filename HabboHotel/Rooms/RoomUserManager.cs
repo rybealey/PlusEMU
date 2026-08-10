@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using Plus.Communication.Packets.Outgoing.Avatar;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
@@ -300,6 +301,16 @@ public class RoomUserManager
                         if (user.GetClient().GetHabbo().Effects.CurrentEffect != 0)
                             user.GetClient().GetHabbo().Effects.ApplyEffect(0);
                     }
+                }
+                // Dressing booth: the avatar editor is global client UI and would
+                // survive the room change; close it and reopen the curtain.
+                foreach (var tileItem in _room.GetGameMap().GetCoordinatedItems(new(user.X, user.Y)))
+                {
+                    if (tileItem.Definition.InteractionType != InteractionType.DressingBooth)
+                        continue;
+                    tileItem.LegacyDataString = "0";
+                    tileItem.UpdateState(false, true);
+                    session.Send(new InClientLinkComposer("avatar-editor/hide"));
                 }
                 RemoveRoomUser(user);
                 if (user.CurrentItemEffect != ItemEffectType.None)

@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using Plus.Communication.Packets.Outgoing.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.Core;
@@ -248,6 +249,8 @@ public class Item
                     return new InteractorCannon();
                 case InteractionType.Counter:
                     return new InteractorCounter();
+                case InteractionType.DressingBooth:
+                    return new InteractorDressingBooth();
                 case InteractionType.None:
                 default:
                     return new InteractorGenericSwitch();
@@ -1118,6 +1121,12 @@ public class Item
         if (room == null)
             return;
         if (Definition.InteractionType == InteractionType.Tent || Definition.InteractionType == InteractionType.TentSmall) room.AddUserToTent(Id, user);
+        if (Definition.InteractionType == InteractionType.DressingBooth)
+        {
+            LegacyDataString = "1";
+            UpdateState(false, true);
+            user.GetClient().Send(new InClientLinkComposer("avatar-editor/show"));
+        }
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
         user.LastItem = this;
     }
@@ -1132,6 +1141,12 @@ public class Item
             return;
         if (Definition.InteractionType == InteractionType.Tent || Definition.InteractionType == InteractionType.TentSmall)
             room.RemoveUserFromTent(Id, user);
+        if (Definition.InteractionType == InteractionType.DressingBooth)
+        {
+            LegacyDataString = "0";
+            UpdateState(false, true);
+            user.GetClient().Send(new InClientLinkComposer("avatar-editor/hide"));
+        }
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
     }
 
