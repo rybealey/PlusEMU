@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Diagnostics;
 using Plus.Communication.Packets.Outgoing.Avatar;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
@@ -645,63 +644,16 @@ public class RoomUserManager
             if (!IsValid(user)) return;
             if (user.IsWalking || user.SetStep) return;      // already moving: tick owns it
             if (!user.PathRecalcNeeded) return;              // no pending request
-            if (user.PendingFirstStep) return;               // step already scheduled; it walks to the updated goal
-            var sinceLastMs = (long)(DateTime.Now - user.LastInstantStep).TotalMilliseconds;
-            if (sinceLastMs < 450) // rate cap: keep the user's beat instead of dropping to the tick's phase
+            if ((DateTime.Now - user.LastInstantStep).TotalMilliseconds < 450) return; // rate cap
+            var throwaway = new List<RoomUser>();
+            ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
+            user.LastInstantStep = DateTime.Now;
+            SerializeStatusUpdates();                          // push the "mv" status now
+            if (user.IsWalking && !user.SelfPaced)
             {
-                user.PendingFirstStep = true;
-                _ = DelayedFirstStep(user, FixedRateSchedule.RemainingUntil(0, 500, sinceLastMs));
-                return;
+                user.SelfPaced = true;
+                _ = SelfPaceWalk(user);   // fire-and-forget beat; coordinates via _cycleLock
             }
-            EmitFirstStepLocked(user);
-        }
-    }
-
-    // pixelrp instant-first-step: a click blocked by the rate cap used to be
-    // silently dropped and picked up by the global tick at an arbitrary phase —
-    // a visible 0-500ms freeze between chained short walks. Instead, fire the
-    // first step exactly one beat (500ms) after the previous instant step, so
-    // chained clicks walk as one continuous, evenly-paced path.
-    private async Task DelayedFirstStep(RoomUser user, long delayMs)
-    {
-        try
-        {
-            await Task.Delay((int)delayMs);
-            lock (_cycleLock)
-            {
-                user.PendingFirstStep = false;
-                if (!IsValid(user)) return;
-                if (user.IsWalking || user.SetStep) return;  // started moving some other way (roller, wired)
-                if (!user.PathRecalcNeeded) return;          // request gone (arrived click, teleport, cancel)
-                EmitFirstStepLocked(user);
-            }
-        }
-        catch (Exception e)
-        {
-            try
-            {
-                user.PendingFirstStep = false;
-            }
-            catch
-            {
-                // user tore down mid-flight; ownership already reverts to the tick
-            }
-            ExceptionLogger.LogException(e);
-        }
-    }
-
-    // Pathfind + emit a standing unit's first walk step and hand steps 2+ to its
-    // self-paced beat. Caller must hold _cycleLock.
-    private void EmitFirstStepLocked(RoomUser user)
-    {
-        var throwaway = new List<RoomUser>();
-        ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
-        user.LastInstantStep = DateTime.Now;
-        SerializeStatusUpdates();                          // push the "mv" status now
-        if (user.IsWalking && !user.SelfPaced)
-        {
-            user.SelfPaced = true;
-            _ = SelfPaceWalk(user);   // fire-and-forget beat; coordinates via _cycleLock
         }
     }
 
@@ -711,19 +663,13 @@ public class RoomUserManager
     // global tick skips a SelfPaced unit's movement (see OnCycle), so the two
     // never double-step; both take _cycleLock. Ends when the unit stops,
     // arrives, or leaves — handing movement back to the global tick.
-    // Beats are absolute deadlines from the instant step (walk start), so lock
-    // wait, processing time, and timer slop never accumulate into the cadence —
-    // the client animates each step over exactly 500ms and stalls visibly on
-    // any late beat. A beat delayed past a whole period is skipped, never burst.
     private async Task SelfPaceWalk(RoomUser user)
     {
         try
         {
-            var clock = Stopwatch.StartNew();
-            var schedule = new FixedRateSchedule(500, () => clock.ElapsedMilliseconds);
             while (true)
             {
-                await Task.Delay(schedule.DelayUntilNextBeat());
+                await Task.Delay(500);
                 lock (_cycleLock)
                 {
                     if (user == null || !IsValid(user) || !user.SelfPaced || !user.IsWalking)
@@ -795,9 +741,7 @@ public class RoomUserManager
                     if (_room.GotFreeze())
                         _room.GetFreeze().CycleUser(user);
                     var removed = false;
-                    // PendingFirstStep: a scheduled first step owns this unit's next move —
-                    // processing it here would start the walk on the tick's phase instead.
-                    if (!user.SelfPaced && !user.PendingFirstStep)
+                    if (!user.SelfPaced)
                     {
                         updated = ProcessUserMovement(user, toRemove, out removed);
                         if (removed) continue;

@@ -21,6 +21,9 @@ public class RoomManager : IRoomManager
 
     private readonly ConcurrentDictionary<uint, Room> _rooms;
 
+    private DateTime _cycleLastExecution;
+
+
     public RoomManager(ILogger<RoomManager> logger, IDatabase database, ILanguageManager languageManager)
     {
         _logger = logger;
@@ -33,31 +36,33 @@ public class RoomManager : IRoomManager
 
     public int Count => _rooms.Count;
 
-    // pixelrp drift-free tick: called once per 500ms beat by Game.GameCycle,
-    // which owns the cadence — no elapsed-time gate here anymore.
     public void OnCycle()
     {
         try
         {
-            foreach (var room in _rooms.Values.ToList())
+            var sinceLastTime = DateTime.Now - _cycleLastExecution;
+            if (sinceLastTime.TotalMilliseconds >= 500)
             {
-                if (room.IsCrashed)
-                    continue;
-                if (room.ProcessTask == null || room.ProcessTask.IsCompleted)
+                _cycleLastExecution = DateTime.Now;
+                foreach (var room in _rooms.Values.ToList())
                 {
-                    room.ProcessTask?.Dispose();
-                    room.ProcessTask = new(room.ProcessRoom);
-                    room.ProcessTask.Start();
-                    room.IsLagging = 0;
-                }
-                else
-                {
-                    room.IsLagging++;
-                    _logger.LogWarning("Room {RoomId} overran its 500ms cycle ({Count} consecutive)", room.Id, room.IsLagging);
-                    if (room.IsLagging >= 30)
+                    if (room.IsCrashed)
+                        continue;
+                    if (room.ProcessTask == null || room.ProcessTask.IsCompleted)
                     {
-                        room.IsCrashed = true;
-                        UnloadRoom(room.Id);
+                        room.ProcessTask?.Dispose();
+                        room.ProcessTask = new(room.ProcessRoom);
+                        room.ProcessTask.Start();
+                        room.IsLagging = 0;
+                    }
+                    else
+                    {
+                        room.IsLagging++;
+                        if (room.IsLagging >= 30)
+                        {
+                            room.IsCrashed = true;
+                            UnloadRoom(room.Id);
+                        }
                     }
                 }
             }

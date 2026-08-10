@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using Plus.Core;
+﻿using Plus.Core;
 using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.Bots;
@@ -19,7 +18,6 @@ using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat;
 using Plus.HabboHotel.Subscriptions;
 using Plus.HabboHotel.Talents;
-using Plus.Utilities;
 
 namespace Plus.HabboHotel;
 
@@ -127,23 +125,15 @@ public class Game : IGame
         _cycleActive = true;
     }
 
-    // pixelrp drift-free tick: the client animates each walk step over exactly
-    // 500ms from packet arrival, so the room tick must be a true 500ms metronome.
-    // The old 25ms-poll + ">= 500 elapsed" gate made every cycle 500ms plus
-    // scheduling slop, and the slop was re-anchored into the next deadline —
-    // walking users saw a hitch on every tile. Deadlines are now absolute
-    // (Stopwatch-based); a slow cycle skips beats instead of bursting.
     private void GameCycle()
     {
-        var clock = Stopwatch.StartNew();
-        var schedule = new FixedRateSchedule(500, () => clock.ElapsedMilliseconds);
         while (_cycleActive)
         {
             _cycleEnded = false;
             _roomManager.OnCycle();
             _clientManager.OnCycle();
             _cycleEnded = true;
-            Thread.Sleep(schedule.DelayUntilNextBeat());
+            Thread.Sleep(_cycleSleepTime);
         }
     }
 
