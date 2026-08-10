@@ -20,6 +20,7 @@ internal class RightsCommand : IChatCommand
             return;
         }
         session.GetHabbo().RoomRightsEnabled = argument == "on";
+        session.GetHabbo().RoomRightsRoomId = room.Id;
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user != null)
             room.GetRoomUserManager().RefreshRights(session, user);
