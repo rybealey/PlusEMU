@@ -66,6 +66,12 @@ public class RoomUser
     // the unit stops, arrives, or leaves, handing movement back to the tick.
     public bool SelfPaced;
 
+    // pixelrp instant-first-step: true while a rate-capped click's first step is
+    // scheduled for LastInstantStep + 500ms. Claims movement ownership (the tick
+    // skips this unit, see OnCycle) so the walk keeps the user's own beat phase
+    // instead of snapping to the tick's. Cleared when the scheduled step fires.
+    public bool PendingFirstStep;
+
     public int LlPartner = 0;
     public int LockedTilesCount;
     public bool MoonwalkEnabled = false;
