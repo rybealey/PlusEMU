@@ -3,6 +3,7 @@ using System.Data;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
+using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Moderation;
 
@@ -306,6 +307,26 @@ public sealed class ModerationManager : IModerationManager
     {
         ticket.Id = InsertTicket(ticket);
         return _modTickets.TryAdd(ticket.Id, ticket);
+    }
+
+    public void PickTicket(ModerationTicket ticket, Habbo moderator)
+    {
+        ticket.ModeratorId = moderator.Id;
+        ticket.ModeratorUsername = moderator.Username;
+        UpdateTicketStatus(ticket, ModerationTicketStatus.Picked);
+    }
+
+    public void ReleaseTicket(ModerationTicket ticket)
+    {
+        ticket.ModeratorId = 0;
+        ticket.ModeratorUsername = string.Empty;
+        UpdateTicketStatus(ticket, ModerationTicketStatus.Open);
+    }
+
+    public void CloseTicket(ModerationTicket ticket, ModerationTicketStatus status)
+    {
+        ticket.Answered = true;
+        UpdateTicketStatus(ticket, status);
     }
 
     /// <summary>

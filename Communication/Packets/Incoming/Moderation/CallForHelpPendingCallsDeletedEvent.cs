@@ -22,7 +22,7 @@ internal class CallForHelpPendingCallsDeletedEvent : IPacketEvent
             var pendingTicket = _moderationManager.GetTicketBySenderId(session.GetHabbo().Id);
             if (pendingTicket != null)
             {
-                pendingTicket.Answered = true;
+                _moderationManager.CloseTicket(pendingTicket, ModerationTicketStatus.Deleted);
                 _clientManager.SendPacket(new ModeratorSupportTicketComposer(session.GetHabbo().Id, pendingTicket), "mod_tool");
             }
         }

@@ -24,8 +24,7 @@ internal class ReleaseTicketEvent : IPacketEvent
         {
             if (!_moderationManager.TryGetTicket(packet.ReadInt(), out var ticket))
                 continue;
-            ticket.ModeratorId = 0;
-            ticket.ModeratorUsername = string.Empty;
+            _moderationManager.ReleaseTicket(ticket);
             _clientManager.SendPacket(new ModeratorSupportTicketComposer(session.GetHabbo().Id, ticket), "mod_tool");
         }
         return Task.CompletedTask;

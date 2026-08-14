@@ -38,7 +38,13 @@ internal class CloseTicketEvent : IPacketEvent
             connection.Execute("UPDATE `user_info` SET `cfhs_abusive` = `cfhs_abusive` + 1 WHERE `user_id` = @senderId LIMIT 1",
                 new { senderId = ticket.SenderId });
         }
-        ticket.Answered = true;
+        // The client's result codes: 1 = useless, 2 = abusive, 3 = resolved.
+        _moderationManager.CloseTicket(ticket, result switch
+        {
+            1 => ModerationTicketStatus.Invalid,
+            2 => ModerationTicketStatus.Abusive,
+            _ => ModerationTicketStatus.Resolved
+        });
         _clientManager.SendPacket(new ModeratorSupportTicketComposer(session.GetHabbo().Id, ticket), "mod_tool");
         return Task.CompletedTask;
     }
