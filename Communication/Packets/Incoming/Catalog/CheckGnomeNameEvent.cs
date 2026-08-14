@@ -1,4 +1,5 @@
-﻿using Dapper;
+﻿using Plus.Communication.Attributes;
+using Dapper;
 using Plus.Communication.Packets.Incoming.Rooms;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
@@ -11,6 +12,7 @@ using Plus.HabboHotel.Rooms.AI.Speech;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 internal class CheckGnomeNameEvent : RoomPacketEvent
 {
     private readonly IDatabase _database;

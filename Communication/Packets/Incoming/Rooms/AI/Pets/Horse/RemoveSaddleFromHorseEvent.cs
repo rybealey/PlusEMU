@@ -36,6 +36,12 @@ internal class RemoveSaddleFromHorseEvent : IPacketEvent
         if (petUser.PetData == null || petUser.PetData.OwnerId != session.GetHabbo().Id)
             return Task.CompletedTask;
 
+        // GetSaddleId falls through its default branch to a real furni id for a pet that has
+        // no saddle, and nothing here is replay-protected - so without this check every one of
+        // these packets mints a brand new tradable item into the sender's inventory.
+        if (petUser.PetData.Saddle == 0)
+            return Task.CompletedTask;
+
         //Fetch the furniture Id for the pets current saddle.
         var saddleId = ItemUtility.GetSaddleId(petUser.PetData.Saddle);
 

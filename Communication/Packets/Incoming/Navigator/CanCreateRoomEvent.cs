@@ -1,8 +1,10 @@
-﻿using Plus.Communication.Packets.Outgoing.Navigator;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
+[StaffOnly]
 internal class CanCreateRoomEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)

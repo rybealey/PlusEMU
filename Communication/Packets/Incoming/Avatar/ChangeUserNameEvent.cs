@@ -91,7 +91,7 @@ internal class ChangeUserNameEvent : IPacketEvent
             ownRooms.SendPacket(new RoomInfoUpdatedComposer(ownRooms.Id));
         }
         _achievementManager.ProgressAchievement(session, "ACH_Name", 1);
-        session.Send(new RoomForwardComposer(room.Id));
+        session.SendRoomForward(room.Id);
         return;
     }
 

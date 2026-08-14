@@ -1,9 +1,11 @@
-﻿using Plus.Communication.Packets.Incoming.Rooms;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Incoming.Rooms;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
+[StaffOnly]
 internal class GoToHotelViewEvent : RoomPacketEvent
 {
     public override Task Parse(Room room, GameClient session, IIncomingPacket packet)

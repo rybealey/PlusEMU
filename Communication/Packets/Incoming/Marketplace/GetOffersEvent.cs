@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using Plus.Communication.Attributes;
+using System.Data;
 using System.Text;
 using Plus.Communication.Packets.Outgoing.Marketplace;
 using Plus.Database;
@@ -7,6 +8,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Marketplace;
 
+[StaffOnly]
 internal class GetOffersEvent : IPacketEvent
 {
     private readonly IMarketplaceManager _marketplaceManager;

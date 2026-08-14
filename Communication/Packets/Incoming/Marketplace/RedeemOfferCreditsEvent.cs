@@ -1,10 +1,12 @@
-﻿using System.Data;
+﻿using Plus.Communication.Attributes;
+using System.Data;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Marketplace;
 
+[StaffOnly]
 internal class RedeemOfferCreditsEvent : IPacketEvent
 {
     private readonly IDatabase _database;

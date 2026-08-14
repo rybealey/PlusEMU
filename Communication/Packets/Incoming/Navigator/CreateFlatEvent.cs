@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Navigator;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Navigator;
@@ -7,6 +8,7 @@ using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
+[StaffOnly]
 internal class CreateFlatEvent : IPacketEvent
 {
     private readonly IWordFilterManager _wordFilterManager;

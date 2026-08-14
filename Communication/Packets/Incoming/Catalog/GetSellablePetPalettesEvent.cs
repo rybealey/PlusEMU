@@ -1,10 +1,12 @@
-﻿using Plus.Communication.Packets.Outgoing.Catalog;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.HabboHotel.Catalog.Pets;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 public class GetSellablePetPalettesEvent : IPacketEvent
 {
     private readonly IItemDataManager _itemDataManager;

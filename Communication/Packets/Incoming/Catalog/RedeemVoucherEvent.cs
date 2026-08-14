@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using Plus.Communication.Attributes;
+using System.Data;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Database;
@@ -7,6 +8,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 public class RedeemVoucherEvent : IPacketEvent
 {
     private readonly IVoucherManager _voucherManager;

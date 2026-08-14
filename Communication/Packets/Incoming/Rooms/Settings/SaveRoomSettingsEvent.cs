@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Microsoft.Extensions.Logging;
 using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Settings;
@@ -18,14 +19,17 @@ internal class SaveRoomSettingsEvent : IPacketEvent
     private readonly INavigatorManager _navigationManager;
     private readonly IAchievementManager _achievementManager;
     private readonly IDatabase _database;
+    private readonly ILogger<SaveRoomSettingsEvent> _logger;
 
-    public SaveRoomSettingsEvent(IRoomManager roomManager, IWordFilterManager wordFilterManager, INavigatorManager navigatorManager, IAchievementManager achievementManager, IDatabase database)
+    public SaveRoomSettingsEvent(IRoomManager roomManager, IWordFilterManager wordFilterManager, INavigatorManager navigatorManager, IAchievementManager achievementManager, IDatabase database,
+        ILogger<SaveRoomSettingsEvent> logger)
     {
         _roomManager = roomManager;
         _wordFilterManager = wordFilterManager;
         _navigationManager = navigatorManager;
         _achievementManager = achievementManager;
         _database = database;
+        _logger = logger;
     }
 
     public Task Parse(GameClient session, IIncomingPacket packet)
@@ -33,6 +37,17 @@ internal class SaveRoomSettingsEvent : IPacketEvent
         var roomId = packet.ReadUInt();
         if (!_roomManager.TryLoadRoom(roomId, out var room))
             return Task.CompletedTask;
+
+        // The room id comes from the packet, so without this any user could rewrite the
+        // settings of any room in the hotel - name, password, access, who may kick/ban -
+        // without owning it or even being inside it. GetRoomSettingsEvent gates the
+        // read-only version the same way.
+        if (!room.CheckRights(session, true))
+        {
+            _logger.LogWarning("Blocked room settings save for room {roomId} from {username} (id {userId}, rank {rank}) — not the owner.",
+                roomId, session.GetHabbo().Username, session.GetHabbo().Id, session.GetHabbo().Rank);
+            return Task.CompletedTask;
+        }
         var name = _wordFilterManager.CheckMessage(packet.ReadString());
         var description = _wordFilterManager.CheckMessage(packet.ReadString());
         var access = RoomAccessUtility.ToRoomAccess(packet.ReadInt());
@@ -98,9 +113,12 @@ internal class SaveRoomSettingsEvent : IPacketEvent
             maxUsers = 10;
         if (maxUsers > 50)
             maxUsers = 50;
-        if (!_navigationManager.TryGetSearchResultList(categoryId, out var searchResultList))
+        // TryGetSearchResultList leaves searchResultList null when the packet-supplied
+        // category id is unknown, so it has to be null-checked before it is read - not just
+        // have categoryId reassigned.
+        if (!_navigationManager.TryGetSearchResultList(categoryId, out var searchResultList) || searchResultList == null)
             categoryId = 36;
-        if (searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank ||
+        else if (searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank ||
             session.GetHabbo().Id != room.OwnerId && session.GetHabbo().Rank >= searchResultList.RequiredRank)
             categoryId = 36;
         if (tagCount > 2)

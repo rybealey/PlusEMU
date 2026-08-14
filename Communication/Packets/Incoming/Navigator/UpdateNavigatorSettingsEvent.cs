@@ -1,9 +1,11 @@
-﻿using Plus.Communication.Packets.Outgoing.Navigator;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Navigator;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
+[StaffOnly]
 internal class UpdateNavigatorSettingsEvent : IPacketEvent
 {
     private readonly INavigatorManager _navigatorManager;

@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using Plus.Communication.Attributes;
+using System.Data;
 using System.Text;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
@@ -11,6 +12,7 @@ using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Incoming.Marketplace;
 
+[StaffOnly]
 internal class BuyOfferEvent : IPacketEvent
 {
     private readonly IMarketplaceManager _marketplace;

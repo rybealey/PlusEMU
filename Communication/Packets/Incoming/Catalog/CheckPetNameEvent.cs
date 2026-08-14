@@ -1,10 +1,12 @@
-﻿using Plus.Communication.Packets.Outgoing.Catalog;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 public class CheckPetNameEvent : IPacketEvent
 {
     private readonly IWordFilterManager _wordFilterManager;

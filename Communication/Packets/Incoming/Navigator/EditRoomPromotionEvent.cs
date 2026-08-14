@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
@@ -6,6 +7,7 @@ using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
+[StaffOnly]
 internal class EditRoomPromotionEvent : IPacketEvent
 {
     private readonly IWordFilterManager _wordFilterManager;

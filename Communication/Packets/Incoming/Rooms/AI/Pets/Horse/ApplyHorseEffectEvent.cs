@@ -22,6 +22,11 @@ internal class ApplyHorseEffectEvent : RoomPacketEvent
         var item = room.GetRoomItemHandler().GetItem(itemId);
         if (item == null)
             return Task.CompletedTask;
+        // Every branch below deletes this item outright. The id comes from the packet and
+        // resolves against everything in the room, so without an owner check a visitor could
+        // consume another player's saddle or dye furni just by naming its id.
+        if (item.UserId != session.GetHabbo().Id)
+            return Task.CompletedTask;
         var petId = packet.ReadInt();
         if (!room.GetRoomUserManager().TryGetPet(petId, out var petUser))
             return Task.CompletedTask;

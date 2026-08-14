@@ -4,6 +4,7 @@ using NLog;
 using Plus.Communication.Encryption.Crypto.Prng;
 using Plus.Communication.Flash;
 using Plus.Communication.Packets;
+using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Communication.Revisions;
 using Plus.HabboHotel.Users;
 
@@ -46,6 +47,12 @@ public abstract class GameClient
 
     internal void OnDisconnected() => _habbo?.OnDisconnect();
 
+    /// <summary>
+    /// Upper bound on a single incoming frame. Real client packets are a few hundred bytes at
+    /// most; this only exists to bound what a hostile client can make us buffer.
+    /// </summary>
+    private const int MaxPacketLength = 1024 * 1024;
+
     internal abstract (bool Complete, uint MessageId, int HeaderLength, int Length) GetMessageIdAndPacketLength(ReadOnlyMemory<byte> buffer);
     internal virtual async void OnReceived(byte[] buffer, long offset, long size)
     {
@@ -62,8 +69,30 @@ public abstract class GameClient
         while (memory.Length > 0)
         {
             var (complete, messageId, headerLength, length) = GetMessageIdAndPacketLength(memory);
+
+            // The frame length comes straight off the wire, so an injection tool can send
+            // any value it likes. A negative one makes the slices below throw out of this
+            // async void method - an unhandled exception that takes the whole emulator down,
+            // not just this session. There is no way to resynchronise on a bad length either
+            // (we cannot find where the next frame starts), so drop the connection.
+            if (complete && (length < 0 || headerLength < 0 || length > MaxPacketLength))
+            {
+                Log.Warn($"Malformed packet frame from session {Id} (message {messageId}, length {length}) - disconnecting.");
+                Disconnect();
+                return;
+            }
+
             if (!complete)
             {
+                // An oversized length is reported as "incomplete" (the bytes never arrive),
+                // so without this cap a client could claim a huge frame and grow this buffer
+                // until the process runs out of memory.
+                if (memory.Length > MaxPacketLength)
+                {
+                    Log.Warn($"Session {Id} buffered {memory.Length} bytes without completing a packet - disconnecting.");
+                    Disconnect();
+                    return;
+                }
                 _incompleteStream ??= PlusMemoryStream.GetStream(memory.Span);
                 break;
             }
@@ -103,6 +132,19 @@ public abstract class GameClient
     {
         if (_habbo != null) throw new InvalidOperationException();
         _habbo = habbo;
+    }
+
+    /// <summary>
+    /// Forward this client to a room. Always use this instead of sending RoomForwardComposer
+    /// directly: it records the target as a server-authorized entry, which OpenFlatConnectionEvent
+    /// requires from non-staff clients (the navigator is staff-only, so an unauthorized flat
+    /// connection is an injected packet).
+    /// </summary>
+    public void SendRoomForward(uint roomId)
+    {
+        if (_habbo != null)
+            _habbo.AuthorizedRoomEntryId = roomId;
+        Send(new RoomForwardComposer(roomId));
     }
 
     public void Send(IServerPacket composer)

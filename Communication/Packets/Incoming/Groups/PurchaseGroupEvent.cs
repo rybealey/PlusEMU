@@ -54,7 +54,7 @@ internal class PurchaseGroupEvent : IPacketEvent
         session.Send(new PurchaseOkComposer());
         room.Group = group;
         if (session.GetHabbo().CurrentRoom != room)
-            session.Send(new RoomForwardComposer(room.Id));
+            session.SendRoomForward(room.Id);
         session.Send(new NewGroupInfoComposer(roomId, group.Id));
         return Task.CompletedTask;
     }

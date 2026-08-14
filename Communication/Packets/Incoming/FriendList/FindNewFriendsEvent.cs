@@ -20,7 +20,7 @@ internal class FindNewFriendsEvent : IPacketEvent
         if (instance != null)
         {
             session.Send(new FindFriendsProcessResultComposer(true));
-            session.Send(new RoomForwardComposer(instance.Id));
+            session.SendRoomForward(instance.Id);
         }
         else
             session.Send(new FindFriendsProcessResultComposer(false));

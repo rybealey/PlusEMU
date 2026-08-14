@@ -25,6 +25,11 @@ internal class SetGroupFavouriteEvent : IPacketEvent
             return Task.CompletedTask;
         if (!_groupManager.TryGetGroup(groupId, out var group))
             return Task.CompletedTask;
+        // Without this, any user could favourite any group in the hotel and wear its badge -
+        // including a staff guild's - by sending this packet with a group id they don't belong
+        // to. The badge is rendered from FavouriteGroupId alone and persists across relogs.
+        if (!group.IsMember(session.GetHabbo().Id))
+            return Task.CompletedTask;
         session.GetHabbo().HabboStats.FavouriteGroupId = group.Id;
         using (var connection = _database.Connection())
         {

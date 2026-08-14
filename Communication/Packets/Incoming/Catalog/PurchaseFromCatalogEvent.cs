@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using Plus.Communication.Attributes;
+using System.Globalization;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
 using Plus.Communication.Packets.Outgoing.Inventory.Bots;
@@ -20,6 +21,7 @@ using Dapper;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 public class PurchaseFromCatalogEvent : IPacketEvent
 {
     private readonly ICatalogManager _catalogManager;

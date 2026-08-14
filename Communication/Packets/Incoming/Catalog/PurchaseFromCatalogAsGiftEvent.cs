@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using Plus.Communication.Attributes;
+using System.Globalization;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
@@ -16,6 +17,7 @@ using Dapper;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 public class PurchaseFromCatalogAsGiftEvent : IPacketEvent
 {
     private readonly ICatalogManager _catalogManager;

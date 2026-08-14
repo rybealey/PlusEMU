@@ -167,6 +167,13 @@ public class Habbo
 
     public uint TeleportingRoomId { get; set; }
 
+    /// <summary>
+    /// Last room the server told this client to enter (RoomForwardComposer). Non-staff
+    /// clients may only open a flat connection to a server-authorized target — anything
+    /// else is an injected packet bypassing the staff-only navigator.
+    /// </summary>
+    public uint AuthorizedRoomEntryId { get; set; }
+
     public bool HasSpoken { get; set; }
 
     public double LastAdvertiseReport { get; set; }

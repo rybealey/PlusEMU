@@ -1,9 +1,11 @@
-﻿using Plus.Communication.Packets.Outgoing.Marketplace;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Marketplace;
 using Plus.HabboHotel.Catalog.Marketplace;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Marketplace;
 
+[StaffOnly]
 internal class CancelOfferEvent : IPacketEvent
 {
     private readonly IMarketplaceManager _marketplaceManager;

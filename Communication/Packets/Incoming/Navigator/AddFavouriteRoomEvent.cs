@@ -1,10 +1,12 @@
-﻿using Plus.Communication.Packets.Outgoing.Navigator;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
+[StaffOnly]
 public class AddFavouriteRoomEvent : IPacketEvent
 {
     private readonly IDatabase _database;

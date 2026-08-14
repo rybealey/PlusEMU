@@ -22,6 +22,11 @@ internal class StartQuestEvent : IPacketEvent
         var quest = _questManager.GetQuest(questId);
         if (quest == null)
             return Task.CompletedTask;
+        // Restarting a finished quest leaves its stored progress at or above the goal, so the
+        // very next progress tick completes it again and pays the reward again. Sending this
+        // packet in a loop with any qualifying action farms Duckets without limit.
+        if (session.GetHabbo().GetQuestProgress(quest.Id) >= quest.GoalData)
+            return Task.CompletedTask;
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.RunQuery($"REPLACE INTO `user_quests` (`user_id`,`quest_id`) VALUES ('{session.GetHabbo().Id}', '{quest.Id}')");

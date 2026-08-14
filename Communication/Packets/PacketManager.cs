@@ -13,6 +13,7 @@ public sealed class PacketManager : IPacketManager, IDisposable
 
     private readonly Dictionary<uint, IPacketEvent> _incomingPackets = new();
     private readonly HashSet<Type> _handshakePackets = new();
+    private readonly HashSet<Type> _staffOnlyPackets = new();
     private readonly Dictionary<uint, string> _packetNames = new();
 
     /// <summary>
@@ -39,6 +40,8 @@ public sealed class PacketManager : IPacketManager, IDisposable
             _packetNames.Add(header, packet.GetType().Name);
             if (packet.GetType().GetCustomAttribute<NoAuthenticationRequiredAttribute>() != null)
                 _handshakePackets.Add(packet.GetType());
+            if (packet.GetType().GetCustomAttribute<StaffOnlyAttribute>() != null)
+                _staffOnlyPackets.Add(packet.GetType());
         }
     }
 
@@ -62,6 +65,16 @@ public sealed class PacketManager : IPacketManager, IDisposable
         if (!_handshakePackets.Contains(pak.GetType()) && session.GetHabbo() == null)
         {
             _logger.LogDebug($"Session {session.Id} tried execute packet {messageId} but didn't handshake yet.");
+            return;
+        }
+
+        // Staff-only surfaces (catalog, navigator, ...) are hidden client-side, so any
+        // non-staff session sending one forged the packet (G-Earth or similar). Drop it
+        // here so no handler ever runs on an unauthorized session.
+        if (_staffOnlyPackets.Contains(pak.GetType()) && !session.GetHabbo().IsStaff)
+        {
+            _logger.LogWarning("Blocked staff-only packet {packet} from {username} (id {userId}, rank {rank}) — likely packet injection.",
+                pak.GetType().Name, session.GetHabbo().Username, session.GetHabbo().Id, session.GetHabbo().Rank);
             return;
         }
 

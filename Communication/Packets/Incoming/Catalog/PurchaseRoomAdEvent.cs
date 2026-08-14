@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Catalog;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
@@ -11,6 +12,7 @@ using Plus.HabboHotel.Friends;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
+[StaffOnly]
 public class PurchaseRoomAdEvent : IPacketEvent
 {
     private readonly IWordFilterManager _wordFilterManager;

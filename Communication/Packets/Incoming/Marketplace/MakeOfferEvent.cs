@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Inventory.Furni;
+﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Marketplace;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Marketplace;
@@ -8,6 +9,7 @@ using Plus.Utilities;
 
 namespace Plus.Communication.Packets.Incoming.Marketplace;
 
+[StaffOnly]
 internal class MakeOfferEvent : IPacketEvent
 {
     private readonly IMarketplaceManager _marketplaceManager;
