@@ -149,7 +149,15 @@ public abstract class GameClient
 
     public void Send(IServerPacket composer)
     {
-        var outgoingMessageId = Revision.InternalIdToOutgoingIdMapping[composer.MessageId];
+        // A composer whose header is 0, or one this revision doesn't map, used to throw
+        // KeyNotFoundException straight out of whatever handler was sending it — losing
+        // the rest of that handler's work rather than just the one packet. Name it in
+        // the log and drop the packet instead.
+        if (!Revision.InternalIdToOutgoingIdMapping.TryGetValue(composer.MessageId, out var outgoingMessageId))
+        {
+            Log.Warn($"No outgoing header mapped for {composer.GetType().Name} (EmuId: {composer.MessageId}) on revision {Revision.Name} - packet dropped.");
+            return;
+        }
         var stream = PlusMemoryStream.GetStream();
         stream.Position = 0;
         var packet = _packetFactory.CreateOutgoingPacket(stream);

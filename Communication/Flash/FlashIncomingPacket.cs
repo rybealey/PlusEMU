@@ -55,6 +55,12 @@ public class FlashIncomingPacket : IIncomingPacket
     public string ReadString()
     {
         var length = ReadUShort();
+        // A truncated, mis-encoded or injected packet can declare more string bytes
+        // than it actually carries. Slicing past the buffer throws out of whichever
+        // handler is mid-parse, which loses the whole packet (and disconnects the
+        // session) rather than the one bad field. Read what is actually there.
+        if (length > Buffer.Length)
+            length = (ushort)Buffer.Length;
         var value = System.Text.Encoding.UTF8.GetString(Buffer.Span.Slice(0, length));
         Buffer = Buffer.Slice(length);
         return value;

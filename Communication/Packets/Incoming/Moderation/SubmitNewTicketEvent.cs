@@ -8,6 +8,12 @@ namespace Plus.Communication.Packets.Incoming.Moderation;
 
 internal class SubmitNewTicketEvent : IPacketEvent
 {
+    /// <summary>The most reported chat lines a single ticket will carry.</summary>
+    private const int MaxReportedChats = 50;
+
+    /// <summary>Smallest possible chat entry: int user id + the string's length header.</summary>
+    private const int MinChatEntryLength = sizeof(int) + sizeof(ushort);
+
     public readonly IModerationManager _moderationManager;
     public readonly IGameClientManager _clientManager;
     public readonly IDatabase _database;
@@ -43,8 +49,17 @@ internal class SubmitNewTicketEvent : IPacketEvent
             return Task.CompletedTask;
         }
         var messagecount = packet.ReadInt();
-        for (var i = 0; i < messagecount; i++)
+
+        // Bound the loop by a sane cap AND the bytes actually left. A client that
+        // mis-encodes an earlier field shifts this read into garbage (a report sent
+        // from a stale client bundle reads 65536 here), and running off the buffer
+        // throws out of the handler — which silently loses the report, since the
+        // ticket is only created below. Reading what is actually there instead
+        // means such a report still reaches the mod tools.
+        for (var i = 0; i < messagecount && i < MaxReportedChats; i++)
         {
+            if (packet.Buffer.Length < MinChatEntryLength)
+                break;
             packet.ReadInt();
             chats.Add(packet.ReadString());
         }
