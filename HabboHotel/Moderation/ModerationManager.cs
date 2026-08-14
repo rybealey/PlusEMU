@@ -61,10 +61,16 @@ public sealed class ModerationManager : IModerationManager
     {
         if (_userPresets.Count > 0)
             _userPresets.Clear();
+        if (_roomPresets.Count > 0)
+            _roomPresets.Clear();
         if (_moderationCfhTopics.Count > 0)
             _moderationCfhTopics.Clear();
         if (_moderationCfhTopicActions.Count > 0)
             _moderationCfhTopicActions.Clear();
+        if (_userActionPresetCategories.Count > 0)
+            _userActionPresetCategories.Clear();
+        if (_userActionPresetMessages.Count > 0)
+            _userActionPresetMessages.Clear();
         if (_bans.Count > 0)
             _bans.Clear();
         using (var dbClient = _database.GetQueryReactor())
