@@ -17,6 +17,11 @@ public interface IModerationManager
     void CloseTicket(ModerationTicket ticket, ModerationTicketStatus status);
     bool TryGetTicket(int ticketId, out ModerationTicket ticket);
     bool UserHasTickets(int userId);
+
+    /// <summary>
+    /// Finds the caller's own unanswered ticket, if any. Answered (picked-and-closed)
+    /// tickets are never returned, matching the guard in <see cref="UserHasTickets" />.
+    /// </summary>
     ModerationTicket GetTicketBySenderId(int userId);
 
     /// <summary>

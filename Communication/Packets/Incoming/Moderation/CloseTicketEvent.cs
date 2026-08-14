@@ -28,6 +28,10 @@ internal class CloseTicketEvent : IPacketEvent
         var ticketId = packet.ReadInt();
         if (!_moderationManager.TryGetTicket(ticketId, out var ticket))
             return Task.CompletedTask;
+        // Already closed (e.g. a replayed/duplicate CLOSE packet): the row already
+        // holds its final status, and re-running this would rewrite that history.
+        if (ticket.Answered)
+            return Task.CompletedTask;
         if (ticket.ModeratorId != session.GetHabbo().Id)
             return Task.CompletedTask;
         var client = _clientManager.GetClientByUserId(ticket.SenderId);
