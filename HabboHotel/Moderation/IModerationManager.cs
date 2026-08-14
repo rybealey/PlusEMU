@@ -9,6 +9,14 @@ public interface IModerationManager
     ICollection<ModerationTicket> GetTickets { get; }
     Dictionary<string, List<ModerationPresetActions>> UserActionPresets { get; }
     void Init();
+
+    /// <summary>
+    /// Loads open/picked tickets from the database into the live queue. Boot-only —
+    /// call once at startup, never from <see cref="Init" />, which also runs at
+    /// runtime to reload presets.
+    /// </summary>
+    void LoadTickets();
+
     void ReCacheBans();
     void BanUser(string mod, ModerationBanType type, string banValue, string reason, double expireTimestamp);
     bool TryAddTicket(ModerationTicket ticket);

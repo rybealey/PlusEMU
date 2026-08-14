@@ -69,9 +69,14 @@ public class ModerationTicket
     /// <summary>The ticket's tab, as seen by the moderator whose id is passed in.</summary>
     public int GetStatus(int id)
     {
+        // Answered takes priority over ModeratorId: a withdrawn call is closed with
+        // ModeratorId still 0 (see CallForHelpPendingCallsDeletedEvent), and without
+        // this check it would render in the Open Issues tab (tab 1) as if unpicked.
+        if (Answered)
+            return 3;
         if (ModeratorId == 0)
             return 1;
-        if (ModeratorId == id && !Answered)
+        if (ModeratorId == id)
             return 2;
         return 3;
     }

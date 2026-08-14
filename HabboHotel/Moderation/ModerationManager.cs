@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
 using Plus.HabboHotel.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Moderation;
 
@@ -66,8 +67,6 @@ public sealed class ModerationManager : IModerationManager
             _moderationCfhTopicActions.Clear();
         if (_bans.Count > 0)
             _bans.Clear();
-        if (!_modTickets.IsEmpty)
-            _modTickets.Clear();
         using (var dbClient = _database.GetQueryReactor())
         {
             DataTable presetsTable = null;
@@ -180,71 +179,96 @@ public sealed class ModerationManager : IModerationManager
                 }
             }
         }
-        using (var dbClient = _database.GetQueryReactor())
-        {
-            // LEFT JOINs rather than INNER: a row whose users have since been
-            // deleted must be counted and reported, not silently dropped by the
-            // query.
-            dbClient.SetQuery(
-                "SELECT `t`.`id`, `t`.`score`, `t`.`type`, `t`.`category`, `t`.`message`, `t`.`reported_chats`, `t`.`room_id`, `t`.`room_name`, `t`.`timestamp`, " +
-                "`t`.`sender_id`, `s`.`username` AS `sender_username`, `t`.`reported_id`, `r`.`username` AS `reported_username`, " +
-                "`t`.`moderator_id`, `m`.`username` AS `moderator_username` " +
-                "FROM `moderation_tickets` AS `t` " +
-                "LEFT JOIN `users` AS `s` ON `s`.`id` = `t`.`sender_id` " +
-                "LEFT JOIN `users` AS `r` ON `r`.`id` = `t`.`reported_id` " +
-                "LEFT JOIN `users` AS `m` ON `m`.`id` = `t`.`moderator_id` " +
-                "WHERE `t`.`status` IN ('open', 'picked') ORDER BY `t`.`id`;");
-            var openTickets = dbClient.GetTable();
-            var skippedIds = new List<int>();
-            if (openTickets != null)
-            {
-                foreach (DataRow row in openTickets.Rows)
-                {
-                    var ticketId = Convert.ToInt32(row["id"]);
-                    var senderUsername = row["sender_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["sender_username"]);
-                    var reportedUsername = row["reported_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["reported_username"]);
-
-                    // A ticket that can no longer name who reported whom is no use
-                    // to staff.
-                    if (string.IsNullOrEmpty(senderUsername) || string.IsNullOrEmpty(reportedUsername))
-                    {
-                        skippedIds.Add(ticketId);
-                        continue;
-                    }
-
-                    // A single unreadable row (e.g. a value this migrated database
-                    // cannot be trusted to hold cleanly) must cost one ticket, not
-                    // every boot.
-                    try
-                    {
-                        var moderatorUsername = row["moderator_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["moderator_username"]);
-
-                        // The moderator who picked it has since been deleted; hand the
-                        // ticket back to the open queue rather than to a blank name.
-                        var moderatorId = string.IsNullOrEmpty(moderatorUsername) ? 0 : Convert.ToInt32(row["moderator_id"]);
-                        var ticket = new ModerationTicket(ticketId, Convert.ToInt32(row["type"]), Convert.ToInt32(row["category"]),
-                            Convert.ToDouble(row["timestamp"]), Convert.ToInt32(row["score"]),
-                            Convert.ToInt32(row["sender_id"]), senderUsername,
-                            Convert.ToInt32(row["reported_id"]), reportedUsername,
-                            moderatorId, moderatorUsername,
-                            Convert.ToString(row["message"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["room_name"]),
-                            ParseReportedChats(ticketId, row["reported_chats"]));
-                        _modTickets.TryAdd(ticket.Id, ticket);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Could not load moderation ticket {Id}; skipping it.", ticketId);
-                    }
-                }
-            }
-            if (skippedIds.Count > 0)
-                _logger.LogWarning("Skipped {Count} moderation tickets whose reporter or reported user no longer exists: {Ids}",
-                    skippedIds.Count, string.Join(", ", skippedIds));
-        }
         _logger.LogInformation("Loaded " + (_userPresets.Count + _roomPresets.Count) + " moderation presets.");
         _logger.LogInformation("Loaded " + _userActionPresetCategories.Count + " moderation categories.");
         _logger.LogInformation("Loaded " + _userActionPresetMessages.Count + " moderation action preset messages.");
         _logger.LogInformation("Cached " + _bans.Count + " username and machine bans.");
+    }
+
+    /// <summary>
+    /// Loads open/picked tickets from `moderation_tickets` into the live in-memory
+    /// queue. Boot-only — deliberately not part of <see cref="Init" />, which also
+    /// runs from the in-game ":update moderation" command to reload presets. Ticket
+    /// state is live (fallback negative ids for unpersisted tickets, in-session
+    /// closes that a DB write may not have caught up with yet); a preset reload must
+    /// not clear-and-reload it out from under staff. See also: the ids that
+    /// <see cref="InsertTicket" /> hands out when a write fails are stored only in
+    /// memory and would be discarded permanently by a reload.
+    /// </summary>
+    public void LoadTickets()
+    {
+        using var dbClient = _database.GetQueryReactor();
+        // LEFT JOINs rather than INNER: a row whose users have since been
+        // deleted must be counted and reported, not silently dropped by the
+        // query.
+        dbClient.SetQuery(
+            "SELECT `t`.`id`, `t`.`score`, `t`.`type`, `t`.`category`, `t`.`message`, `t`.`reported_chats`, `t`.`room_id`, `t`.`room_name`, `t`.`timestamp`, " +
+            "`t`.`sender_id`, `s`.`username` AS `sender_username`, `t`.`reported_id`, `r`.`username` AS `reported_username`, " +
+            "`t`.`moderator_id`, `m`.`username` AS `moderator_username` " +
+            "FROM `moderation_tickets` AS `t` " +
+            "LEFT JOIN `users` AS `s` ON `s`.`id` = `t`.`sender_id` " +
+            "LEFT JOIN `users` AS `r` ON `r`.`id` = `t`.`reported_id` " +
+            "LEFT JOIN `users` AS `m` ON `m`.`id` = `t`.`moderator_id` " +
+            "WHERE `t`.`status` IN ('open', 'picked') ORDER BY `t`.`id`;");
+        var openTickets = dbClient.GetTable();
+        var skippedIds = new List<int>();
+        if (openTickets != null)
+        {
+            foreach (DataRow row in openTickets.Rows)
+            {
+                var ticketId = Convert.ToInt32(row["id"]);
+                var senderUsername = row["sender_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["sender_username"]);
+                var reportedUsername = row["reported_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["reported_username"]);
+
+                // A ticket that can no longer name who reported whom is no use
+                // to staff.
+                if (string.IsNullOrEmpty(senderUsername) || string.IsNullOrEmpty(reportedUsername))
+                {
+                    skippedIds.Add(ticketId);
+                    continue;
+                }
+
+                // A single unreadable row (e.g. a value this migrated database
+                // cannot be trusted to hold cleanly) must cost one ticket, not
+                // every boot.
+                try
+                {
+                    var timestamp = Convert.ToDouble(row["timestamp"]);
+
+                    // A timestamp of 0, one stored in milliseconds instead of seconds,
+                    // or anything else outside a sane range would throw out of
+                    // FromUnixTimestamp/AgeInMilliseconds later — inside a packet
+                    // Compose(), which disconnects whoever is being sent it. Catch it
+                    // here instead, where the cost is one skipped row.
+                    if (!UnixTimestamp.IsValid(timestamp))
+                    {
+                        _logger.LogWarning("Moderation ticket {Id} has an invalid timestamp ({Timestamp}); skipping it.", ticketId, timestamp);
+                        continue;
+                    }
+
+                    var moderatorUsername = row["moderator_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["moderator_username"]);
+
+                    // The moderator who picked it has since been deleted; hand the
+                    // ticket back to the open queue rather than to a blank name.
+                    var moderatorId = string.IsNullOrEmpty(moderatorUsername) ? 0 : Convert.ToInt32(row["moderator_id"]);
+                    var ticket = new ModerationTicket(ticketId, Convert.ToInt32(row["type"]), Convert.ToInt32(row["category"]),
+                        timestamp, Convert.ToInt32(row["score"]),
+                        Convert.ToInt32(row["sender_id"]), senderUsername,
+                        Convert.ToInt32(row["reported_id"]), reportedUsername,
+                        moderatorId, moderatorUsername,
+                        Convert.ToString(row["message"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["room_name"]),
+                        ParseReportedChats(ticketId, row["reported_chats"]));
+                    _modTickets.TryAdd(ticket.Id, ticket);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Could not load moderation ticket {Id}; skipping it.", ticketId);
+                }
+            }
+        }
+        if (skippedIds.Count > 0)
+            _logger.LogWarning("Skipped {Count} moderation tickets whose reporter or reported user no longer exists: {Ids}",
+                skippedIds.Count, string.Join(", ", skippedIds));
         _logger.LogInformation("Loaded " + _modTickets.Count + " open moderation tickets.");
     }
 
@@ -311,6 +335,10 @@ public sealed class ModerationManager : IModerationManager
 
     public void PickTicket(ModerationTicket ticket, Habbo moderator)
     {
+        // Already closed: picking it would resurrect a resolved/withdrawn ticket as
+        // a live "picked" one, and it would load that way after the next restart.
+        if (ticket.Answered)
+            return;
         ticket.ModeratorId = moderator.Id;
         ticket.ModeratorUsername = moderator.Username;
         UpdateTicketStatus(ticket, ModerationTicketStatus.Picked);
@@ -318,6 +346,10 @@ public sealed class ModerationManager : IModerationManager
 
     public void ReleaseTicket(ModerationTicket ticket)
     {
+        // Already closed: releasing it would destroy the recorded outcome and who
+        // handled it, reopening a ticket that already has a final status.
+        if (ticket.Answered)
+            return;
         ticket.ModeratorId = 0;
         ticket.ModeratorUsername = string.Empty;
         UpdateTicketStatus(ticket, ModerationTicketStatus.Open);

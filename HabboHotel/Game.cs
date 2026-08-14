@@ -100,6 +100,7 @@ public class Game : IGame
     public Task Init()
     {
         _moderationManager.Init();
+        _moderationManager.LoadTickets(); // Boot-only; see LoadTickets' doc comment.
         _televisionManager.Init();
         _navigatorManager.Init();
         _roomManager.LoadModels();

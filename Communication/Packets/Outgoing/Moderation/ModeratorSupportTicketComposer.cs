@@ -22,7 +22,7 @@ public class ModeratorSupportTicketComposer : IServerPacket
         packet.WriteInteger(_ticket.GetStatus(_id)); // Tab ID
         packet.WriteInteger(_ticket.Type); // Type
         packet.WriteInteger(_ticket.Category); // Category
-        packet.WriteInteger(Convert.ToInt32((DateTime.Now - UnixTimestamp.FromUnixTimestamp(_ticket.Timestamp)).TotalMilliseconds)); // This should fix the overflow?
+        packet.WriteInteger(UnixTimestamp.AgeInMilliseconds(_ticket.Timestamp)); // Age in ms, clamped — see UnixTimestamp.AgeInMilliseconds
         packet.WriteInteger(_ticket.Priority); // Priority
         packet.WriteInteger(0); //??
         packet.WriteInteger(_ticket.SenderId); // Sender ID
