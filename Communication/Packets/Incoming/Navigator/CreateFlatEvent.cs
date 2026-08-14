@@ -49,7 +49,7 @@ internal class CreateFlatEvent : IPacketEvent
         if (!_navigatorManager.TryGetSearchResultList(category, out var searchResultList) ||
             searchResultList.CategoryType != NavigatorCategoryType.Category ||
             searchResultList.RequiredRank > session.GetHabbo().Rank)
-            category = 36;
+            category = RoomCategories.FallbackId;
         if (maxVisitors < 10 || maxVisitors > 25)
             maxVisitors = 10;
         if (tradeSettings < 0 || tradeSettings > 2)

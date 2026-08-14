@@ -117,10 +117,13 @@ internal class SaveRoomSettingsEvent : IPacketEvent
         // category id is unknown, so it has to be null-checked before it is read - not just
         // have categoryId reassigned.
         if (!_navigationManager.TryGetSearchResultList(categoryId, out var searchResultList) || searchResultList == null)
-            categoryId = 36;
-        else if (searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank ||
-            session.GetHabbo().Id != room.OwnerId && session.GetHabbo().Rank >= searchResultList.RequiredRank)
-            categoryId = 36;
+            categoryId = RoomCategories.FallbackId;
+        // The rank check below is the whole gate: a category may only be chosen by someone of at
+        // least its required rank. Stock also bounced any non-owner whose rank *cleared* the
+        // requirement, which inverted the intent - staff editing someone else's room silently had
+        // every category choice replaced by the fallback, so rooms could not be re-filed at all.
+        else if (searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank)
+            categoryId = RoomCategories.FallbackId;
         if (tagCount > 2)
             return Task.CompletedTask;
         room.AllowPets = allowPets;

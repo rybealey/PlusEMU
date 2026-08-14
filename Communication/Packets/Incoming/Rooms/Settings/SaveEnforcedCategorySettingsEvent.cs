@@ -25,8 +25,14 @@ internal class SaveEnforcedCategorySettingsEvent : IPacketEvent
         var tradeSettings = packet.ReadInt();
         if (tradeSettings < 0 || tradeSettings > 2)
             tradeSettings = 0;
-        if (!_navigationManager.TryGetSearchResultList(categoryId, out var searchResultList)) categoryId = 36;
-        if (searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank) categoryId = 36;
+        // Stock read searchResultList on the next line without checking it, so an unknown
+        // category id - trivially injectable, since it comes straight off the packet - threw a
+        // NullReferenceException out of the handler.
+        if (!_navigationManager.TryGetSearchResultList(categoryId, out var searchResultList) || searchResultList == null ||
+            searchResultList.CategoryType != NavigatorCategoryType.Category || searchResultList.RequiredRank > session.GetHabbo().Rank)
+            categoryId = RoomCategories.FallbackId;
+        // NOTE: stock never applies categoryId/tradeSettings to the room - this handler parses
+        // and drops the packet. Left as-is; room settings are saved through SaveRoomSettingsEvent.
         return Task.CompletedTask;
     }
 }

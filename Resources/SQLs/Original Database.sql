@@ -23552,15 +23552,17 @@ INSERT INTO `navigator_categories` VALUES ('24', 'roomads_view', 'promotion_gran
 INSERT INTO `navigator_categories` VALUES ('25', 'roomads_view', 'promotion_friending', 'Friending', 'REGULAR', '1', 'promotion_category', 'SHOW_MORE', '1', '7');
 INSERT INTO `navigator_categories` VALUES ('26', 'roomads_view', 'promotion_jobs', 'Jobs', 'REGULAR', '1', 'promotion_category', 'SHOW_MORE', '1', '8');
 INSERT INTO `navigator_categories` VALUES ('27', 'roomads_view', 'promotion_group_events', 'Group Events', 'REGULAR', '1', 'promotion_category', 'SHOW_MORE', '1', '9');
+-- PixelRP room categories (see Updates/23_RoomCategories.sql). Ids 29-34 are
+-- the live set; 28/35/36 are the disabled remains of the stock Habbo list.
 INSERT INTO `navigator_categories` VALUES ('28', 'hotel_view', 'staff_rooms', 'Staff Rooms', 'REGULAR', '5', 'category', 'SHOW_MORE', '0', '0');
-INSERT INTO `navigator_categories` VALUES ('29', 'hotel_view', 'chat_chill_discussion', 'Chat, Chill & Discussion', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '2');
-INSERT INTO `navigator_categories` VALUES ('30', 'hotel_view', 'trading_casinos', 'Trading & Casinos ', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '4');
-INSERT INTO `navigator_categories` VALUES ('31', 'hotel_view', 'games_events', 'Games & Events', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '3');
-INSERT INTO `navigator_categories` VALUES ('32', 'hotel_view', 'parties_clubs', 'Parties & Clubs', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '5');
-INSERT INTO `navigator_categories` VALUES ('33', 'hotel_view', 'role_playing', 'Role Playing', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '6');
-INSERT INTO `navigator_categories` VALUES ('34', 'hotel_view', 'help_centers', 'Help Centers', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '7');
-INSERT INTO `navigator_categories` VALUES ('35', 'hotel_view', 'agencies', 'Agencies', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '8');
-INSERT INTO `navigator_categories` VALUES ('36', 'hotel_view', 'all_other_rooms', 'All Other Rooms', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '9');
+INSERT INTO `navigator_categories` VALUES ('29', 'hotel_view', 'corporations', 'Corporations', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '2');
+INSERT INTO `navigator_categories` VALUES ('30', 'hotel_view', 'residential', 'Residential', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '3');
+INSERT INTO `navigator_categories` VALUES ('31', 'hotel_view', 'commercial', 'Commercial', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '4');
+INSERT INTO `navigator_categories` VALUES ('32', 'hotel_view', 'industrial', 'Industrial', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '5');
+INSERT INTO `navigator_categories` VALUES ('33', 'hotel_view', 'farm', 'Farm', 'REGULAR', '1', 'category', 'SHOW_MORE', '1', '6');
+INSERT INTO `navigator_categories` VALUES ('34', 'hotel_view', 'staff', 'Staff', 'REGULAR', '5', 'category', 'SHOW_MORE', '1', '7');
+INSERT INTO `navigator_categories` VALUES ('35', 'hotel_view', 'agencies', 'Agencies', 'REGULAR', '1', 'category', 'SHOW_MORE', '0', '8');
+INSERT INTO `navigator_categories` VALUES ('36', 'hotel_view', 'all_other_rooms', 'All Other Rooms', 'REGULAR', '1', 'category', 'SHOW_MORE', '0', '9');
 INSERT INTO `navigator_categories` VALUES ('37', 'myworld_view', 'my_rights', 'Rooms Where I Have Rights', 'REGULAR', '1', 'my_rights', 'SHOW_MORE', '1', '0');
 
 -- ----------------------------
