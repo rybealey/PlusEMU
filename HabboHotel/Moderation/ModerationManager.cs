@@ -3,7 +3,6 @@ using System.Data;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
-using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Moderation;
 
@@ -195,11 +194,12 @@ public sealed class ModerationManager : IModerationManager
                 "LEFT JOIN `users` AS `m` ON `m`.`id` = `t`.`moderator_id` " +
                 "WHERE `t`.`status` IN ('open', 'picked') ORDER BY `t`.`id`;");
             var openTickets = dbClient.GetTable();
-            var skipped = 0;
+            var skippedIds = new List<int>();
             if (openTickets != null)
             {
                 foreach (DataRow row in openTickets.Rows)
                 {
+                    var ticketId = Convert.ToInt32(row["id"]);
                     var senderUsername = row["sender_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["sender_username"]);
                     var reportedUsername = row["reported_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["reported_username"]);
 
@@ -207,26 +207,38 @@ public sealed class ModerationManager : IModerationManager
                     // to staff.
                     if (string.IsNullOrEmpty(senderUsername) || string.IsNullOrEmpty(reportedUsername))
                     {
-                        skipped++;
+                        skippedIds.Add(ticketId);
                         continue;
                     }
-                    var moderatorUsername = row["moderator_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["moderator_username"]);
 
-                    // The moderator who picked it has since been deleted; hand the
-                    // ticket back to the open queue rather than to a blank name.
-                    var moderatorId = string.IsNullOrEmpty(moderatorUsername) ? 0 : Convert.ToInt32(row["moderator_id"]);
-                    var ticket = new ModerationTicket(Convert.ToInt32(row["id"]), Convert.ToInt32(row["type"]), Convert.ToInt32(row["category"]),
-                        Convert.ToDouble(row["timestamp"]), Convert.ToInt32(row["score"]),
-                        Convert.ToInt32(row["sender_id"]), senderUsername,
-                        Convert.ToInt32(row["reported_id"]), reportedUsername,
-                        moderatorId, moderatorUsername,
-                        Convert.ToString(row["message"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["room_name"]),
-                        ParseReportedChats(row["reported_chats"]));
-                    _modTickets.TryAdd(ticket.Id, ticket);
+                    // A single unreadable row (e.g. a value this migrated database
+                    // cannot be trusted to hold cleanly) must cost one ticket, not
+                    // every boot.
+                    try
+                    {
+                        var moderatorUsername = row["moderator_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["moderator_username"]);
+
+                        // The moderator who picked it has since been deleted; hand the
+                        // ticket back to the open queue rather than to a blank name.
+                        var moderatorId = string.IsNullOrEmpty(moderatorUsername) ? 0 : Convert.ToInt32(row["moderator_id"]);
+                        var ticket = new ModerationTicket(ticketId, Convert.ToInt32(row["type"]), Convert.ToInt32(row["category"]),
+                            Convert.ToDouble(row["timestamp"]), Convert.ToInt32(row["score"]),
+                            Convert.ToInt32(row["sender_id"]), senderUsername,
+                            Convert.ToInt32(row["reported_id"]), reportedUsername,
+                            moderatorId, moderatorUsername,
+                            Convert.ToString(row["message"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["room_name"]),
+                            ParseReportedChats(ticketId, row["reported_chats"]));
+                        _modTickets.TryAdd(ticket.Id, ticket);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Could not load moderation ticket {Id}; skipping it.", ticketId);
+                    }
                 }
             }
-            if (skipped > 0)
-                _logger.LogWarning("Skipped " + skipped + " moderation tickets whose reporter or reported user no longer exists.");
+            if (skippedIds.Count > 0)
+                _logger.LogWarning("Skipped {Count} moderation tickets whose reporter or reported user no longer exists: {Ids}",
+                    skippedIds.Count, string.Join(", ", skippedIds));
         }
         _logger.LogInformation("Loaded " + (_userPresets.Count + _roomPresets.Count) + " moderation presets.");
         _logger.LogInformation("Loaded " + _userActionPresetCategories.Count + " moderation categories.");
@@ -305,6 +317,12 @@ public sealed class ModerationManager : IModerationManager
     private int InsertTicket(ModerationTicket ticket)
     {
         using var dbClient = _database.GetQueryReactor();
+        if (dbClient == null)
+        {
+            _logger.LogError("Could not save the moderation ticket from user {SenderId}: no database connection was available. It will reach staff this session but is lost on the next restart.",
+                ticket.SenderId);
+            return Interlocked.Decrement(ref _unpersistedTicketId);
+        }
         dbClient.SetQuery(
             "INSERT INTO `moderation_tickets` (`score`,`type`,`category`,`status`,`sender_id`,`reported_id`,`moderator_id`,`message`,`reported_chats`,`room_id`,`room_name`,`timestamp`) " +
             "VALUES (@score, @type, @category, 'open', @senderId, @reportedId, 0, @message, @reportedChats, @roomId, @roomName, @timestamp);");
@@ -332,6 +350,11 @@ public sealed class ModerationManager : IModerationManager
         if (ticket.Id <= 0) // Never persisted (see InsertTicket) — no row to update.
             return;
         using var dbClient = _database.GetQueryReactor();
+        if (dbClient == null)
+        {
+            _logger.LogError("Could not update moderation ticket {Id}: no database connection was available.", ticket.Id);
+            return;
+        }
         dbClient.SetQuery("UPDATE `moderation_tickets` SET `status` = @status, `moderator_id` = @moderatorId WHERE `id` = @id LIMIT 1;");
         dbClient.AddParameter("status", status.ToString().ToLowerInvariant());
         dbClient.AddParameter("moderatorId", ticket.ModeratorId);
@@ -343,7 +366,7 @@ public sealed class ModerationManager : IModerationManager
     /// The quoted chat lines are stored as a JSON array. Anything unreadable loads
     /// as no chats rather than taking startup down with it.
     /// </summary>
-    private List<string> ParseReportedChats(object value)
+    private List<string> ParseReportedChats(int ticketId, object value)
     {
         if (value == DBNull.Value)
             return new();
@@ -356,7 +379,7 @@ public sealed class ModerationManager : IModerationManager
         }
         catch (JsonException)
         {
-            _logger.LogWarning("Could not read the quoted chats on a moderation ticket; loading it without them.");
+            _logger.LogWarning("Could not read the quoted chats on moderation ticket {Id}; loading it without them.", ticketId);
             return new();
         }
     }
