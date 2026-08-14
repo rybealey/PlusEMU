@@ -103,6 +103,16 @@ public class RoomUser
     public int Y; //byte
     public double Z;
 
+    // pixelrp last-position restore: the position most recently written to `users`, and the
+    // countdown to the next check. Room exit is not a reliable place to persist this on its
+    // own - a crash, an OOM kill or a disconnect mid room-change never reaches it - so the
+    // position is flushed as it changes and the exit write becomes the final top-up.
+    // -1 means "nothing persisted yet this session", which forces the first flush.
+    public int SavedX = -1;
+    public int SavedY = -1;
+    public int SavedRot = -1;
+    public int PositionSaveCountdown;
+
     public RoomUser(int habboId, uint roomId, int virtualId, Room room)
     {
         Freezed = false;

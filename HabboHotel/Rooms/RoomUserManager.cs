@@ -31,6 +31,13 @@ public class RoomUserManager
     // pixelrp instant-first-step: serializes TryInstantFirstStep against OnCycle's tick.
     private readonly object _cycleLock = new();
 
+    /// <summary>
+    /// How many 500ms ticks between position-persistence checks for a user whose tile changed.
+    /// Four ticks (~2s) keeps the stored position close enough that a crash costs at most a
+    /// couple of steps, without writing on every footfall.
+    /// </summary>
+    private const int PositionSaveIntervalCycles = 4;
+
     public int UserCount;
 
 
@@ -698,6 +705,7 @@ public class RoomUserManager
     public void OnCycle()
     {
         var userCounter = 0;
+        List<RoomUser> dirtyPositions = null;
         try
         {
             lock (_cycleLock)
@@ -753,7 +761,11 @@ public class RoomUserManager
                     else
                         userCounter++;
                     if (!updated) UpdateUserEffect(user, user.X, user.Y);
+                    if (IsPositionSaveDue(user))
+                        (dirtyPositions ??= new List<RoomUser>()).Add(user);
                 }
+                if (dirtyPositions != null)
+                    FlushPositions(dirtyPositions);
                 foreach (var userToRemove in toRemove.ToList())
                 {
                     var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userToRemove.HabboId);
@@ -769,6 +781,61 @@ public class RoomUserManager
         catch (Exception e)
         {
             ExceptionLogger.LogCriticalException(e);
+        }
+    }
+
+    /// <summary>
+    /// True when this user's tile/rotation has changed since it was last written to `users`
+    /// and the throttle has elapsed. Checked on the 500ms tick, so a walking player costs at
+    /// most one write every <see cref="PositionSaveIntervalCycles"/> ticks and a standing one
+    /// costs nothing.
+    /// </summary>
+    private static bool IsPositionSaveDue(RoomUser user)
+    {
+        if (user == null || user.IsBot || user.GetClient()?.GetHabbo() == null)
+            return false;
+        if (--user.PositionSaveCountdown > 0)
+            return false;
+        user.PositionSaveCountdown = PositionSaveIntervalCycles;
+        return user.X != user.SavedX || user.Y != user.SavedY || user.RotBody != user.SavedRot;
+    }
+
+    /// <summary>
+    /// Persists the given users' positions. This is what makes the restore survive terminations
+    /// that never reach RemoveUserFromRoom - a crash, an OOM kill, a pulled network cable, or a
+    /// disconnect while the user is between rooms.
+    /// </summary>
+    private void FlushPositions(List<RoomUser> users)
+    {
+        try
+        {
+            using var dbClient = PlusEnvironment.DatabaseManager.Connection();
+            foreach (var user in users)
+            {
+                var habbo = user.GetClient()?.GetHabbo();
+                if (habbo == null)
+                    continue;
+                dbClient.Execute(
+                    "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot, `home_room` = @roomId WHERE `id` = @userId LIMIT 1",
+                    new
+                    {
+                        userId = habbo.Id,
+                        roomId = _room.RoomId,
+                        x = user.X,
+                        y = user.Y,
+                        rot = user.RotBody
+                    });
+                user.SavedX = user.X;
+                user.SavedY = user.Y;
+                user.SavedRot = user.RotBody;
+                // Same mirroring the exit save does, so the logout write of HomeRoom cannot
+                // put back a stale room id.
+                habbo.HomeRoom = _room.RoomId;
+            }
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
         }
     }
 
