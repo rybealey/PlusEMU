@@ -19,9 +19,9 @@ internal class GetModeratorTicketChatlogsEvent : IPacketEvent
         if (!session.GetHabbo().Permissions.HasRight("mod_tickets"))
             return Task.CompletedTask;
         var ticketId = packet.ReadInt();
-        if (!_moderationManager.TryGetTicket(ticketId, out var ticket) || ticket.Room == null)
+        if (!_moderationManager.TryGetTicket(ticketId, out var ticket) || ticket.RoomId == 0)
             return Task.CompletedTask;
-        if (!RoomFactory.TryGetData(ticket.Room.Id, out var data))
+        if (!RoomFactory.TryGetData(ticket.RoomId, out var data))
             return Task.CompletedTask;
         session.Send(new ModeratorTicketChatlogComposer(ticket, data, ticket.Timestamp));
         return Task.CompletedTask;

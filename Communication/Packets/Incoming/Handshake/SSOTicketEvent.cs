@@ -124,6 +124,7 @@ public class SsoTicketEvent : IPacketEvent
             if (session.GetHabbo().Permissions.HasRight("mod_tickets"))
             {
                 session.Send(new ModeratorInitComposer(
+                    session.GetHabbo().Id,
                     _moderationManager.UserMessagePresets,
                     _moderationManager.RoomMessagePresets,
                     _moderationManager.GetTickets));

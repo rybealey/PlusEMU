@@ -28,15 +28,15 @@ internal class CloseTicketEvent : IPacketEvent
         var ticketId = packet.ReadInt();
         if (!_moderationManager.TryGetTicket(ticketId, out var ticket))
             return Task.CompletedTask;
-        if (ticket.Moderator.Id != session.GetHabbo().Id)
+        if (ticket.ModeratorId != session.GetHabbo().Id)
             return Task.CompletedTask;
-        var client = _clientManager.GetClientByUserId(ticket.Sender.Id);
+        var client = _clientManager.GetClientByUserId(ticket.SenderId);
         if (client != null) client.Send(new ModeratorSupportTicketResponseComposer(result));
         if (result == 2)
         {
             using var connection = _database.Connection();
             connection.Execute("UPDATE `user_info` SET `cfhs_abusive` = `cfhs_abusive` + 1 WHERE `user_id` = @senderId LIMIT 1",
-                new { senderId = ticket.Sender.Id });
+                new { senderId = ticket.SenderId });
         }
         ticket.Answered = true;
         _clientManager.SendPacket(new ModeratorSupportTicketComposer(session.GetHabbo().Id, ticket), "mod_tool");

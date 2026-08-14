@@ -22,8 +22,8 @@ public class ModeratorTicketChatlogComposer : IServerPacket
     public void Compose(IOutgoingPacket packet)
     {
         packet.WriteInteger(_ticket.Id);
-        packet.WriteInteger(_ticket.Sender?.Id ?? 0);
-        packet.WriteInteger(_ticket.Reported?.Id ?? 0);
+        packet.WriteInteger(_ticket.SenderId);
+        packet.WriteInteger(_ticket.ReportedId);
         packet.WriteUInteger(_roomData.Id);
         packet.WriteByte(1);
         packet.WriteShort(2); //Count
@@ -38,7 +38,7 @@ public class ModeratorTicketChatlogComposer : IServerPacket
         {
             packet.WriteString(UnixTimestamp.FromUnixTimestamp(_timestamp).ToShortTimeString());
             packet.WriteInteger(_ticket.Id);
-            packet.WriteString(_ticket.Reported != null ? _ticket.Reported.Username : "No username");
+            packet.WriteString(string.IsNullOrEmpty(_ticket.ReportedUsername) ? "No username" : _ticket.ReportedUsername);
             packet.WriteString(chat);
             packet.WriteBoolean(false);
         }

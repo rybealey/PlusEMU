@@ -10,10 +10,15 @@ public class ModeratorInitComposer : IServerPacket
     private readonly ICollection<string> _roomPresets;
     private readonly ICollection<ModerationTicket> _tickets;
 
+    // Which tab a ticket belongs in is relative to who is looking: a ticket
+    // picked by *this* moderator is "mine", anyone else's is not.
+    private readonly int _viewerId;
+
     public uint MessageId => ServerPacketHeader.ModeratorInitComposer;
 
-    public ModeratorInitComposer(ICollection<string> userPresets, ICollection<string> roomPresets, ICollection<ModerationTicket> tickets)
+    public ModeratorInitComposer(int viewerId, ICollection<string> userPresets, ICollection<string> roomPresets, ICollection<ModerationTicket> tickets)
     {
+        _viewerId = viewerId;
         _userPresets = userPresets;
         _roomPresets = roomPresets;
         _tickets = tickets;
@@ -25,20 +30,20 @@ public class ModeratorInitComposer : IServerPacket
         foreach (var ticket in _tickets)
         {
             packet.WriteInteger(ticket.Id); // Id
-            packet.WriteInteger(ticket.GetStatus(ticket.Id)); // Tab ID
+            packet.WriteInteger(ticket.GetStatus(_viewerId)); // Tab ID
             packet.WriteInteger(ticket.Type); // Type
             packet.WriteInteger(ticket.Category); // Category
             packet.WriteInteger(Convert.ToInt32((DateTime.Now - UnixTimestamp.FromUnixTimestamp(ticket.Timestamp)).TotalMilliseconds)); // This should fix the overflow?
             packet.WriteInteger(ticket.Priority); // Priority
-            packet.WriteInteger(ticket.Sender?.Id ?? 0); // Sender ID
+            packet.WriteInteger(ticket.SenderId); // Sender ID
             packet.WriteInteger(1);
-            packet.WriteString(ticket.Sender == null ? string.Empty : ticket.Sender.Username); // Sender Name
-            packet.WriteInteger(ticket.Reported?.Id ?? 0); // Reported ID
-            packet.WriteString(ticket.Reported == null ? string.Empty : ticket.Reported.Username); // Reported Name
-            packet.WriteInteger(ticket.Moderator?.Id ?? 0); // Moderator ID
-            packet.WriteString(ticket.Moderator == null ? string.Empty : ticket.Moderator.Username); // Mod Name
+            packet.WriteString(ticket.SenderUsername); // Sender Name
+            packet.WriteInteger(ticket.ReportedId); // Reported ID
+            packet.WriteString(ticket.ReportedUsername); // Reported Name
+            packet.WriteInteger(ticket.ModeratorId); // Moderator ID
+            packet.WriteString(ticket.ModeratorUsername); // Mod Name
             packet.WriteString(ticket.Issue); // Issue
-            packet.WriteUInteger(ticket.Room?.Id ?? 0); // Room Id
+            packet.WriteUInteger(ticket.RoomId); // Room Id
             packet.WriteInteger(0); //LOOP
         }
         packet.WriteInteger(_userPresets.Count);
