@@ -1,7 +1,9 @@
 ﻿using System.Collections.Concurrent;
 using System.Data;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
+using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Moderation;
 
@@ -20,7 +22,11 @@ public sealed class ModerationManager : IModerationManager
     private readonly Dictionary<int, List<ModerationPresetActionMessages>> _userActionPresetMessages = new();
     private readonly List<string> _userPresets = new();
 
-    private int _ticketCount = 1;
+    /// <summary>
+    /// Ids for tickets that could not be written (see <see cref="InsertTicket" />).
+    /// Counts down from 0 so these can never collide with a real row id.
+    /// </summary>
+    private int _unpersistedTicketId;
 
     public ICollection<string> UserMessagePresets => _userPresets;
 
@@ -60,6 +66,8 @@ public sealed class ModerationManager : IModerationManager
             _moderationCfhTopicActions.Clear();
         if (_bans.Count > 0)
             _bans.Clear();
+        if (!_modTickets.IsEmpty)
+            _modTickets.Clear();
         using (var dbClient = _database.GetQueryReactor())
         {
             DataTable presetsTable = null;
@@ -172,10 +180,59 @@ public sealed class ModerationManager : IModerationManager
                 }
             }
         }
+        using (var dbClient = _database.GetQueryReactor())
+        {
+            // LEFT JOINs rather than INNER: a row whose users have since been
+            // deleted must be counted and reported, not silently dropped by the
+            // query.
+            dbClient.SetQuery(
+                "SELECT `t`.`id`, `t`.`score`, `t`.`type`, `t`.`category`, `t`.`message`, `t`.`reported_chats`, `t`.`room_id`, `t`.`room_name`, `t`.`timestamp`, " +
+                "`t`.`sender_id`, `s`.`username` AS `sender_username`, `t`.`reported_id`, `r`.`username` AS `reported_username`, " +
+                "`t`.`moderator_id`, `m`.`username` AS `moderator_username` " +
+                "FROM `moderation_tickets` AS `t` " +
+                "LEFT JOIN `users` AS `s` ON `s`.`id` = `t`.`sender_id` " +
+                "LEFT JOIN `users` AS `r` ON `r`.`id` = `t`.`reported_id` " +
+                "LEFT JOIN `users` AS `m` ON `m`.`id` = `t`.`moderator_id` " +
+                "WHERE `t`.`status` IN ('open', 'picked') ORDER BY `t`.`id`;");
+            var openTickets = dbClient.GetTable();
+            var skipped = 0;
+            if (openTickets != null)
+            {
+                foreach (DataRow row in openTickets.Rows)
+                {
+                    var senderUsername = row["sender_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["sender_username"]);
+                    var reportedUsername = row["reported_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["reported_username"]);
+
+                    // A ticket that can no longer name who reported whom is no use
+                    // to staff.
+                    if (string.IsNullOrEmpty(senderUsername) || string.IsNullOrEmpty(reportedUsername))
+                    {
+                        skipped++;
+                        continue;
+                    }
+                    var moderatorUsername = row["moderator_username"] == DBNull.Value ? string.Empty : Convert.ToString(row["moderator_username"]);
+
+                    // The moderator who picked it has since been deleted; hand the
+                    // ticket back to the open queue rather than to a blank name.
+                    var moderatorId = string.IsNullOrEmpty(moderatorUsername) ? 0 : Convert.ToInt32(row["moderator_id"]);
+                    var ticket = new ModerationTicket(Convert.ToInt32(row["id"]), Convert.ToInt32(row["type"]), Convert.ToInt32(row["category"]),
+                        Convert.ToDouble(row["timestamp"]), Convert.ToInt32(row["score"]),
+                        Convert.ToInt32(row["sender_id"]), senderUsername,
+                        Convert.ToInt32(row["reported_id"]), reportedUsername,
+                        moderatorId, moderatorUsername,
+                        Convert.ToString(row["message"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["room_name"]),
+                        ParseReportedChats(row["reported_chats"]));
+                    _modTickets.TryAdd(ticket.Id, ticket);
+                }
+            }
+            if (skipped > 0)
+                _logger.LogWarning("Skipped " + skipped + " moderation tickets whose reporter or reported user no longer exists.");
+        }
         _logger.LogInformation("Loaded " + (_userPresets.Count + _roomPresets.Count) + " moderation presets.");
         _logger.LogInformation("Loaded " + _userActionPresetCategories.Count + " moderation categories.");
         _logger.LogInformation("Loaded " + _userActionPresetMessages.Count + " moderation action preset messages.");
         _logger.LogInformation("Cached " + _bans.Count + " username and machine bans.");
+        _logger.LogInformation("Loaded " + _modTickets.Count + " open moderation tickets.");
     }
 
     public void ReCacheBans()
@@ -235,8 +292,73 @@ public sealed class ModerationManager : IModerationManager
 
     public bool TryAddTicket(ModerationTicket ticket)
     {
-        ticket.Id = _ticketCount++;
+        ticket.Id = InsertTicket(ticket);
         return _modTickets.TryAdd(ticket.Id, ticket);
+    }
+
+    /// <summary>
+    /// Writes a new report and returns its row id. A database failure must not
+    /// cost the hotel the report — the query adapter logs and returns 0, so fall
+    /// back to a negative id that keeps the ticket usable in memory for this
+    /// session and is plainly not a row.
+    /// </summary>
+    private int InsertTicket(ModerationTicket ticket)
+    {
+        using var dbClient = _database.GetQueryReactor();
+        dbClient.SetQuery(
+            "INSERT INTO `moderation_tickets` (`score`,`type`,`category`,`status`,`sender_id`,`reported_id`,`moderator_id`,`message`,`reported_chats`,`room_id`,`room_name`,`timestamp`) " +
+            "VALUES (@score, @type, @category, 'open', @senderId, @reportedId, 0, @message, @reportedChats, @roomId, @roomName, @timestamp);");
+        dbClient.AddParameter("score", ticket.Priority);
+        dbClient.AddParameter("type", ticket.Type);
+        dbClient.AddParameter("category", ticket.Category);
+        dbClient.AddParameter("senderId", ticket.SenderId);
+        dbClient.AddParameter("reportedId", ticket.ReportedId);
+        dbClient.AddParameter("message", ticket.Issue);
+        dbClient.AddParameter("reportedChats", JsonSerializer.Serialize(ticket.ReportedChats));
+        dbClient.AddParameter("roomId", ticket.RoomId);
+        dbClient.AddParameter("roomName", ticket.RoomName);
+        dbClient.AddParameter("timestamp", ticket.Timestamp);
+        var id = Convert.ToInt32(dbClient.InsertQuery());
+        if (id > 0)
+            return id;
+        _logger.LogError("Could not save the moderation ticket from user {SenderId}. It will reach staff this session but is lost on the next restart.",
+            ticket.SenderId);
+        return Interlocked.Decrement(ref _unpersistedTicketId);
+    }
+
+    /// <summary>Writes a ticket's status and picking moderator through to its row.</summary>
+    private void UpdateTicketStatus(ModerationTicket ticket, ModerationTicketStatus status)
+    {
+        if (ticket.Id <= 0) // Never persisted (see InsertTicket) — no row to update.
+            return;
+        using var dbClient = _database.GetQueryReactor();
+        dbClient.SetQuery("UPDATE `moderation_tickets` SET `status` = @status, `moderator_id` = @moderatorId WHERE `id` = @id LIMIT 1;");
+        dbClient.AddParameter("status", status.ToString().ToLowerInvariant());
+        dbClient.AddParameter("moderatorId", ticket.ModeratorId);
+        dbClient.AddParameter("id", ticket.Id);
+        dbClient.RunQuery();
+    }
+
+    /// <summary>
+    /// The quoted chat lines are stored as a JSON array. Anything unreadable loads
+    /// as no chats rather than taking startup down with it.
+    /// </summary>
+    private List<string> ParseReportedChats(object value)
+    {
+        if (value == DBNull.Value)
+            return new();
+        var raw = Convert.ToString(value);
+        if (string.IsNullOrEmpty(raw))
+            return new();
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(raw) ?? new();
+        }
+        catch (JsonException)
+        {
+            _logger.LogWarning("Could not read the quoted chats on a moderation ticket; loading it without them.");
+            return new();
+        }
     }
 
     public bool TryGetTicket(int ticketId, out ModerationTicket ticket) => _modTickets.TryGetValue(ticketId, out ticket);
