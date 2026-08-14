@@ -192,7 +192,11 @@ public class PurchaseFromCatalogEvent : IPacketEvent
             session.GetHabbo().Diamonds -= totalDiamondCost;
             session.Send(new HabboActivityPointNotificationComposer(session.GetHabbo().Diamonds, 0, 5));
         }
-        switch (item.Definition.Type.ToString().ToLower())
+        // Dispatch on the raw product-type char (s/i/e/r/b/p), NOT item.Definition.Type:
+        // that property is a Floor/Wall enum whose ToString() is "Floor"/"Wall", so the
+        // e/r/b/p cases below were unreachable and bots, effects, badges and pets were all
+        // delivered through `default` as generic (wall) furniture.
+        switch (item.Definition.ProductType)
         {
             default:
                 var generatedGenericItems = new List<Item>();

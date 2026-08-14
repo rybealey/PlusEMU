@@ -10,6 +10,15 @@ public class ItemDefinition
     public string ItemName { get; set; }
     public string PublicName { get; set; }
     public ItemType Type { get; set; }
+
+    /// <summary>
+    /// Raw furniture sprite-type char from the database: <c>s</c> floor, <c>i</c> wall,
+    /// <c>e</c> effect, <c>r</c> bot, <c>b</c> badge, <c>p</c> pet. <see cref="Type"/>
+    /// collapses this to Floor/Wall, which loses the product category the catalog
+    /// purchase dispatcher needs to route bots, effects, badges and pets correctly.
+    /// </summary>
+    public string ProductType { get; set; }
+
     public FurniCategory Category { get; set; } = FurniCategory.Default;
     public int Width { get; set; }
     public int Length { get; set; }

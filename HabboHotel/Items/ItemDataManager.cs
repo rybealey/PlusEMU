@@ -39,6 +39,7 @@ public class ItemDataManager : IItemDataManager
                             ItemName = Convert.ToString(row["item_name"]),
                             PublicName = Convert.ToString(row["public_name"]),
                             Type = string.Equals(row["type"].ToString(), "s", StringComparison.OrdinalIgnoreCase) ? ItemType.Floor : ItemType.Wall,
+                            ProductType = Convert.ToString(row["type"]).ToLowerInvariant(),
                             Width = Convert.ToInt32(row["width"]),
                             Length = Convert.ToInt32(row["length"]),
                             Height = Convert.ToDouble(row["stack_height"]),
