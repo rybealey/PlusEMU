@@ -259,8 +259,7 @@ public class RoomUserManager
         else
             session.Send(new YouAreNotControllerComposer());
         user.UpdateNeeded = true;
-        if (session.GetHabbo().Permissions.HasRight("mod_tool") && !session.GetHabbo().DisableForcedEffects)
-            session.GetHabbo().Effects.ApplyEffect(102);
+        // Staff are no longer given a forced effect (102) on room entry.
         if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
             session.GetHabbo().Effects.ApplyEffect(178);
         foreach (var bot in _bots.Values.ToList())
