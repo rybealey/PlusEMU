@@ -7,6 +7,11 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public class RoomBot
 {
+    // Every non-pet bot wears this "enable"/effect so players can spot a bot on
+    // the map at a glance. Applied at deploy and on room entry rather than
+    // stored, so it covers existing and new bots alike with no data migration.
+    public const int IdentifierEffect = 187;
+
     public BotAiType AiType;
 
     public bool AutomaticChat;

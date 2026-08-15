@@ -24,7 +24,9 @@ internal class OpenBotActionEvent : IPacketEvent
         botSpeech += botUser.BotData.SpeakingInterval;
         botSpeech += ";#;";
         botSpeech += botUser.BotData.MixSentences;
-        if (actionId == 2 || actionId == 5)
+        // 2 = setup speech, 5 = change name, 3 = relax/walk toggle (read the
+        // current walk mode so the client can label the button correctly).
+        if (actionId == 2 || actionId == 3 || actionId == 5)
             session.Send(new OpenBotActionComposer(botUser, actionId, botSpeech));
         return Task.CompletedTask;
     }

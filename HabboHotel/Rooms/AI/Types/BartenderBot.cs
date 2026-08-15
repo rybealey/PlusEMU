@@ -80,10 +80,11 @@ internal class BartenderBot : BotAi
             return;
         if (_speechTimer <= 0)
         {
-            if (GetBotData().RandomSpeech.Count > 0)
+            // Only auto-speak when the bot has lines AND automatic chat is on.
+            // The old code returned from the whole tick when automatic chat was
+            // off (and never reset the timer), freezing the bot in place.
+            if (GetBotData().RandomSpeech.Count > 0 && GetBotData().AutomaticChat)
             {
-                if (GetBotData().AutomaticChat == false)
-                    return;
                 var speech = GetBotData().GetRandomSpeech();
                 var @string = PlusEnvironment.Game.ChatManager.GetFilter().CheckMessage(speech.Message);
                 if (@string.Contains("<img src") || @string.Contains("<font ") || @string.Contains("</font>") || @string.Contains("</a>") || @string.Contains("<i>"))

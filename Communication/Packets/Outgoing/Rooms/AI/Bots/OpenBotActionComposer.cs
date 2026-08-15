@@ -26,6 +26,10 @@ public class OpenBotActionComposer : IServerPacket
             packet.WriteString(_botSpeech);
         else if (_actionId == 5)
             packet.WriteString(_botUser.BotData.Name);
+        else if (_actionId == 3)
+            // Current walk mode ("freeroam" / "stand") so the client can label
+            // the toggle "Relax" vs "Walk Around".
+            packet.WriteString(_botUser.BotData.WalkingMode);
 
     }
 }

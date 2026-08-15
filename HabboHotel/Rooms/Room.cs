@@ -457,6 +457,9 @@ public class Room : RoomData
                 session.Send(new CarryObjectComposer(user.VirtualId, user.CarryItemId));
             if (!user.IsBot && !user.IsPet && user.CurrentEffect > 0)
                 session.Send(new AvatarEffectComposer(user.VirtualId, user.CurrentEffect));
+            else if (user.IsBot && !user.IsPet)
+                // Bots always wear the identifier effect so entering players can spot them.
+                session.Send(new AvatarEffectComposer(user.VirtualId, RoomBot.IdentifierEffect));
         }
         session.Send(new UserUpdateComposer(_roomUserManager.GetUserList().ToList()));
         session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));

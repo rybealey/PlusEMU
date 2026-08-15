@@ -58,7 +58,12 @@ public class RoomUserManager
     public RoomUser DeployBot(RoomBot bot, Pet pet)
     {
         var user = new RoomUser(0, _room.RoomId, _primaryPrivateUserId++, _room);
-        bot.VirtualId = _primaryPrivateUserId;
+        // Match the avatar's virtual id. Using _primaryPrivateUserId here read
+        // the ALREADY-incremented counter, so BotData.VirtualId was one ahead of
+        // the bot's own avatar (and collided with the next avatar deployed) —
+        // which is why "Copy my looks" (UserChangeComposer(BotData)) targeted the
+        // wrong/missing avatar and never applied.
+        bot.VirtualId = user.VirtualId;
         var personalId = _secondaryPrivateUserId++;
         user.InternalRoomId = personalId;
         _users.TryAdd(personalId, user);
@@ -102,6 +107,8 @@ public class RoomUserManager
             else
                 _bots.TryAdd(user.BotData.Id, user);
             _room.SendPacket(new DanceComposer(user, user.BotData.DanceId));
+            // Identify bots on the map — every bot wears the identifier effect.
+            _room.SendPacket(new AvatarEffectComposer(user.VirtualId, RoomBot.IdentifierEffect));
         }
         return user;
     }
