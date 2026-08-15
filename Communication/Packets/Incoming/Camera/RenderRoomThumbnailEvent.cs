@@ -31,7 +31,20 @@ internal class RenderRoomThumbnailEvent : IPacketEvent
 
         var bytes = new byte[length];
         packet.ReadBytes(bytes);
-        _cameraPhotoManager.StoreThumbnail(session.GetHabbo().Id, bytes);
+
+        // This packet is only sent by the in-room thumbnail camera (the photo
+        // camera uses RenderRoom), so it sets the CURRENT room's thumbnail and
+        // is restricted to the room owner (or staff with rights). Previously the
+        // bytes were stashed in the photo "_small" cache and never written, so
+        // clicking Save did nothing.
+        var room = session.GetHabbo().CurrentRoom;
+        if (room == null || !room.CheckRights(session, true))
+        {
+            session.Send(new ThumbnailStatusMessageComposer(false));
+            return Task.CompletedTask;
+        }
+
+        _cameraPhotoManager.StoreRoomThumbnail(room.RoomId, bytes);
         session.Send(new ThumbnailStatusMessageComposer(true));
         return Task.CompletedTask;
     }

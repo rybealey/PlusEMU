@@ -6,6 +6,15 @@ namespace Plus.HabboHotel.Camera;
 public interface ICameraPhotoManager
 {
     void StoreThumbnail(int userId, byte[] bytes);
+
+    /// <summary>
+    ///     Persists a room's thumbnail image (set from the in-client room
+    ///     thumbnail camera) under the camera storage path as
+    ///     <c>thumbnail/{roomId}.png</c>, which is what the client's
+    ///     <c>thumbnails.url</c> resolves to.
+    /// </summary>
+    void StoreRoomThumbnail(uint roomId, byte[] bytes);
+
     string StorePhoto(int userId, uint roomId, byte[] bytes);
     bool TryGetPending(int userId, out PendingPhoto pending);
 

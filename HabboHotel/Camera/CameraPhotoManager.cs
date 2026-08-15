@@ -30,6 +30,15 @@ public class CameraPhotoManager : ICameraPhotoManager
 
     public void StoreThumbnail(int userId, byte[] bytes) => _pendingThumbnails[userId] = bytes;
 
+    public void StoreRoomThumbnail(uint roomId, byte[] bytes)
+    {
+        // Served at "{camera.url.base}/thumbnail/{roomId}.png", which is what
+        // the client's thumbnails.url config resolves %thumbnail% (= roomId) to.
+        var directory = Path.Combine(StoragePath, "thumbnail");
+        Directory.CreateDirectory(directory);
+        File.WriteAllBytes(Path.Combine(directory, $"{roomId}.png"), bytes);
+    }
+
     public string StorePhoto(int userId, uint roomId, byte[] bytes)
     {
         var urlBase = UrlBase;
