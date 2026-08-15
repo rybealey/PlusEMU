@@ -44,16 +44,35 @@ public class CommandManager : ICommandManager
             return false;
         if (message == $"{_prefix}commands")
         {
-            var list = new StringBuilder();
-            list.Append("This is the list of commands you have available:\n");
+            // Group the caller's available commands by tier, derived from each
+            // command's namespace (.../Commands/<Tier>/Foo.cs), and emit them as
+            // readable text with [Tier] section markers. The client parses this
+            // into a grouped, filterable table; the marker line keeps it distinct
+            // from every other MOTD so nothing else is affected.
+            var tierOrder = new[] { "User", "Moderator", "Administrator" };
+            var byTier = new Dictionary<string, List<ICommandBase>>();
             foreach (var cmdList in _commands.ToList())
             {
-                if (!string.IsNullOrEmpty(cmdList.Value.PermissionRequired))
-                {
-                    if (!session.GetHabbo().Permissions.HasCommand(cmdList.Value.PermissionRequired))
-                        continue;
-                }
-                list.Append($":{cmdList.Key} {cmdList.Value.Parameters} - {cmdList.Value.Description}\n");
+                var cmd = cmdList.Value;
+                if (!string.IsNullOrEmpty(cmd.PermissionRequired) && !session.GetHabbo().Permissions.HasCommand(cmd.PermissionRequired))
+                    continue;
+                var ns = cmd.GetType().Namespace ?? string.Empty;
+                var tier = ns.Substring(ns.LastIndexOf('.') + 1);
+                if (Array.IndexOf(tierOrder, tier) < 0)
+                    tier = "Other";
+                if (!byTier.TryGetValue(tier, out var bucket))
+                    byTier[tier] = bucket = new List<ICommandBase>();
+                bucket.Add(cmd);
+            }
+            var list = new StringBuilder();
+            list.Append("This is the list of commands you have available:\n");
+            foreach (var tier in tierOrder.Append("Other"))
+            {
+                if (!byTier.TryGetValue(tier, out var bucket) || bucket.Count == 0)
+                    continue;
+                list.Append($"[{tier}]\n");
+                foreach (var cmd in bucket.OrderBy(c => c.Key))
+                    list.Append($":{cmd.Key} {cmd.Parameters} - {cmd.Description}\n");
             }
             session.Send(new MotdNotificationComposer(list.ToString()));
             return true;
