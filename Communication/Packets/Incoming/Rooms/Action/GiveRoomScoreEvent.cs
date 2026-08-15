@@ -15,26 +15,10 @@ internal class GiveRoomScoreEvent : RoomPacketEvent
     }
     public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
     {
-        if (session.GetHabbo().RatedRooms.Contains(room.RoomId) || room.CheckRights(session, true))
-            return Task.CompletedTask;
-        var rating = packet.ReadInt();
-        switch (rating)
-        {
-            case -1:
-                room.Score--;
-                break;
-            case 1:
-                room.Score++;
-                break;
-            default:
-                return Task.CompletedTask;
-        }
-        using (var dbClient = _database.GetQueryReactor())
-        {
-            dbClient.RunQuery($"UPDATE rooms SET score = '{room.Score}' WHERE id = '{room.RoomId}' LIMIT 1");
-        }
-        session.GetHabbo().RatedRooms.Add(room.RoomId);
-        session.Send(new RoomRatingComposer(room.Score, !(session.GetHabbo().RatedRooms.Contains(room.RoomId) || room.CheckRights(session, true))));
+        // Room likes/ratings are disabled hotel-wide. Ignore every rate packet,
+        // including crafted/injected ones: the like button is removed from the
+        // client, and no score may be registered here. _database is retained so
+        // the handler's DI registration is unchanged.
         return Task.CompletedTask;
     }
 }
