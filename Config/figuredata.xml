@@ -14394,9 +14394,6 @@
 </set>
 </settype>
 <settype type="cc" paletteid="3" mand_m_0="0" mand_f_0="0" mand_m_1="0" mand_f_1="0">
-<set id="847202874" gender="U" club="0" colorable="0" selectable="1" preselectable="0">
-<part id="847202874" type="rc" colorable="0" index="0" colorindex="0"/>
-</set>
 <set id="3002" gender="M" club="2" colorable="1" selectable="1" preselectable="0">
 <part id="2000" type="cc" colorable="1" index="0" colorindex="1"/>
 <part id="2000" type="lc" colorable="1" index="0" colorindex="1"/>
