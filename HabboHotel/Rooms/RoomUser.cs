@@ -61,6 +61,14 @@ public class RoomUser
     // tile per 500ms (matching the tick's own cadence).
     public DateTime LastInstantStep = DateTime.MinValue;
 
+    // pixelrp instant-first-step: monotonic token identifying the CURRENT
+    // self-pace loop for this unit. Bumped (under the room's _cycleLock) each
+    // time TryInstantFirstStep starts or supersedes a loop; a loop whose
+    // captured generation no longer matches exits without touching state, so a
+    // stale scheduled beat can never double-step a user that a newer click
+    // already advanced.
+    public long WalkGeneration;
+
     // pixelrp self-paced walk: true while this unit's steps 2+ are being driven
     // by its own SelfPaceWalk beat instead of the shared room tick. Reset when
     // the unit stops, arrives, or leaves, handing movement back to the tick.

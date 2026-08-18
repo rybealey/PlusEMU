@@ -667,7 +667,8 @@ public class RoomUserManager
                 if (!user.SelfPaced)
                 {
                     user.SelfPaced = true;
-                    _ = SelfPaceWalk(user, Math.Max(1, 500 - (int)sinceLastMs), true);
+                    user.WalkGeneration++;
+                    _ = SelfPaceWalk(user, Math.Max(1, 500 - (int)sinceLastMs), true, user.WalkGeneration);
                 }
                 return;
             }
@@ -675,10 +676,15 @@ public class RoomUserManager
             ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
             user.LastInstantStep = DateTime.Now;
             SerializeStatusUpdates();                          // push the "mv" status now
-            if (user.IsWalking && !user.SelfPaced)
+            if (user.IsWalking)
             {
+                // Start a fresh beat anchored to THIS emission. Bumping the
+                // generation supersedes any pending loop (e.g. one scheduled by
+                // a rate-capped click moments ago) so it exits instead of
+                // double-stepping ~30ms after this step.
                 user.SelfPaced = true;
-                _ = SelfPaceWalk(user, 500, false);   // fire-and-forget beat; coordinates via _cycleLock
+                user.WalkGeneration++;
+                _ = SelfPaceWalk(user, 500, false, user.WalkGeneration);
             }
         }
     }
@@ -694,7 +700,7 @@ public class RoomUserManager
     // allowPreWalkFirstBeat: the first beat may fire for a unit that is not
     // walking yet but has a pending PathRecalcNeeded (the rate-capped click) —
     // that beat pathfinds and emits the first step itself.
-    private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat)
+    private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat, long generation)
     {
         try
         {
@@ -708,9 +714,12 @@ public class RoomUserManager
                 if (waitMs > 0) await Task.Delay((int)waitMs);
                 lock (_cycleLock)
                 {
-                    if (user == null || !IsValid(user) || !user.SelfPaced)
+                    // Superseded by a newer loop? Exit without touching state —
+                    // SelfPaced now belongs to the newer generation.
+                    if (user.WalkGeneration != generation) return;
+                    if (!IsValid(user) || !user.SelfPaced)
                     {
-                        if (user != null) user.SelfPaced = false;
+                        user.SelfPaced = false;
                         return;
                     }
                     var preWalkStart = allowPreWalkFirstBeat && beat == 1
@@ -734,7 +743,7 @@ public class RoomUserManager
         }
         catch (Exception e)
         {
-            try { user.SelfPaced = false; } catch { }
+            try { if (user.WalkGeneration == generation) user.SelfPaced = false; } catch { }
             ExceptionLogger.LogException(e);
         }
     }
