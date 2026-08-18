@@ -19,6 +19,10 @@ public abstract class WebsocketGameServer<TGameServerOptions> : WsServer, IGameS
         IPacketManager packetManager) : base(options.Value.Hostname,
         options.Value.Port)
     {
+        // pixelrp: disable Nagle's algorithm on accepted sessions. The game sends
+        // many tiny packets (per-step "mv" statuses, chat); letting the kernel
+        // batch them adds tens of ms of latency and jitter to every update.
+        OptionNoDelay = true;
         _clientFactory = clientFactory;
         _packetManager = packetManager;
     }
