@@ -644,10 +644,12 @@ public class RoomUserManager
 
     // pixelrp instant-first-step: emit a standing unit's first walk step the
     // instant the click arrives instead of waiting up to 500ms for the next
-    // room tick. Subsequent steps stay on the tick, so walk SPEED is unchanged.
-    // Serialized against the tick via _cycleLock. Kill switch: server_settings
-    // key `pathfinder.instant.first.step.disabled` = 1. Cooldown guarantees a
-    // click can never produce more than one tile per 500ms.
+    // room tick. Subsequent steps stay on a per-user metronome beat, so walk
+    // SPEED is unchanged. Serialized against the tick via _cycleLock. Kill
+    // switch: server_settings key `pathfinder.instant.first.step.disabled` = 1.
+    // A click inside the 450ms cooldown no longer falls back to the (late)
+    // global tick — it is scheduled at exactly lastStep + 500ms instead, so
+    // responsiveness stays consistent while the speed cap holds.
     public void TryInstantFirstStep(RoomUser user)
     {
         if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.instant.first.step.disabled") == "1") return;
@@ -655,9 +657,20 @@ public class RoomUserManager
         lock (_cycleLock)
         {
             if (!IsValid(user)) return;
-            if (user.IsWalking || user.SetStep) return;      // already moving: tick owns it
+            if (user.IsWalking || user.SetStep) return;      // already moving: its beat owns it
             if (!user.PathRecalcNeeded) return;              // no pending request
-            if ((DateTime.Now - user.LastInstantStep).TotalMilliseconds < 450) return; // rate cap
+            var sinceLastMs = (DateTime.Now - user.LastInstantStep).TotalMilliseconds;
+            if (sinceLastMs < 450)
+            {
+                // Rate-capped: schedule the first step at exactly lastStep + 500ms
+                // via the self-pace loop instead of leaving it to the global tick.
+                if (!user.SelfPaced)
+                {
+                    user.SelfPaced = true;
+                    _ = SelfPaceWalk(user, Math.Max(1, 500 - (int)sinceLastMs), true);
+                }
+                return;
+            }
             var throwaway = new List<RoomUser>();
             ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
             user.LastInstantStep = DateTime.Now;
@@ -665,33 +678,51 @@ public class RoomUserManager
             if (user.IsWalking && !user.SelfPaced)
             {
                 user.SelfPaced = true;
-                _ = SelfPaceWalk(user);   // fire-and-forget beat; coordinates via _cycleLock
+                _ = SelfPaceWalk(user, 500, false);   // fire-and-forget beat; coordinates via _cycleLock
             }
         }
     }
 
     // pixelrp self-paced walk: after an instant first step, drive THIS unit's
-    // remaining steps on its own 500ms beat so they are evenly spaced from the
-    // instant step instead of snapping to the shared room-tick phase. The
-    // global tick skips a SelfPaced unit's movement (see OnCycle), so the two
-    // never double-step; both take _cycleLock. Ends when the unit stops,
+    // remaining steps on a metronome anchored to the instant step — beat n is
+    // due at firstBeatDelayMs + (n-1)*500 on a monotonic clock, so processing
+    // time and timer slop never accumulate and steps reach the client evenly
+    // spaced (its per-tile animation is a fixed window; late steps = stutter).
+    // The global tick skips a SelfPaced unit's movement (see OnCycle), so the
+    // two never double-step; both take _cycleLock. Ends when the unit stops,
     // arrives, or leaves — handing movement back to the global tick.
-    private async Task SelfPaceWalk(RoomUser user)
+    // allowPreWalkFirstBeat: the first beat may fire for a unit that is not
+    // walking yet but has a pending PathRecalcNeeded (the rate-capped click) —
+    // that beat pathfinds and emits the first step itself.
+    private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat)
     {
         try
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var beat = 0;
             while (true)
             {
-                await Task.Delay(500);
+                beat++;
+                var dueMs = firstBeatDelayMs + (beat - 1) * 500L;
+                var waitMs = dueMs - clock.ElapsedMilliseconds;
+                if (waitMs > 0) await Task.Delay((int)waitMs);
                 lock (_cycleLock)
                 {
-                    if (user == null || !IsValid(user) || !user.SelfPaced || !user.IsWalking)
+                    if (user == null || !IsValid(user) || !user.SelfPaced)
                     {
                         if (user != null) user.SelfPaced = false;
                         return;
                     }
+                    var preWalkStart = allowPreWalkFirstBeat && beat == 1
+                        && !user.IsWalking && user.PathRecalcNeeded;
+                    if (!user.IsWalking && !preWalkStart)
+                    {
+                        user.SelfPaced = false;
+                        return;
+                    }
                     var removed = false;
                     ProcessUserMovement(user, new List<RoomUser>(), out removed);
+                    if (preWalkStart) user.LastInstantStep = DateTime.Now;
                     SerializeStatusUpdates();
                     if (removed || !user.IsWalking)
                     {
