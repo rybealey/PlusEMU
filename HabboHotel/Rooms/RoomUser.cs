@@ -380,10 +380,7 @@ public class RoomUser
         return false;
     }
 
-    // mentionedUser (pixelrp): when a shout @mentions a player in the room, that
-    // player receives the message with bubble style 25 (mention alert) instead
-    // of the sender's bubble. Resolved in ShoutEvent; null for normal chat.
-    public void OnChat(int colour, string message, bool shout, RoomUser mentionedUser = null)
+    public void OnChat(int colour, string message, bool shout)
     {
         if (GetClient() == null || GetClient().GetHabbo() == null || _mRoom == null)
             return;
@@ -391,11 +388,41 @@ public class RoomUser
             return;
         GetClient().GetHabbo().HasSpoken = true;
         if (_mRoom.WordFilterList.Count > 0 && !GetClient().GetHabbo().Permissions.HasRight("word_filter_override")) message = _mRoom.GetFilter().CheckMessage(message);
+        var emotion = PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message);
         IServerPacket packet = null;
         if (shout)
-            packet = new ShoutComposer(VirtualId, message, PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message), colour);
+            packet = new ShoutComposer(VirtualId, message, emotion, colour);
         else
-            packet = new ChatComposer(VirtualId, message, PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message), colour);
+            packet = new ChatComposer(VirtualId, message, emotion, colour);
+
+        // pixelrp mention: any message containing "@Name" of another player in
+        // the room (case-insensitive — GetRoomUserByHabbo matches OrdinalIgnoreCase)
+        // is delivered to that player with bubble style 25 (mention alert; the
+        // client also plays a mention sound on it) while everyone else sees the
+        // sender's normal bubble. Applies to talk and shout alike; the client's
+        // "@x" shorthand expands to the selected HUD target, but any typed
+        // @Name behaves the same.
+        RoomUser mentionedUser = null;
+        if (message.IndexOf('@') >= 0)
+        {
+            foreach (var token in message.Split(' '))
+            {
+                if (token.Length < 2 || token[0] != '@')
+                    continue;
+                var candidate = _mRoom.GetRoomUserManager()
+                    .GetRoomUserByHabbo(token.Substring(1).TrimEnd('.', ',', '!', '?', ':', ';'));
+                if (candidate != null && !candidate.IsBot && candidate != this)
+                {
+                    mentionedUser = candidate;
+                    break;
+                }
+            }
+        }
+        IServerPacket mentionPacket = null;
+        if (mentionedUser != null)
+            mentionPacket = shout
+                ? new ShoutComposer(VirtualId, message, emotion, 25)
+                : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25);
         if (GetClient().GetHabbo().TentId > 0)
         {
             _mRoom.SendToTent(GetClient().GetHabbo().Id, GetClient().GetHabbo().TentId, packet);
@@ -420,11 +447,11 @@ public class RoomUser
                     continue;
                 if (_mRoom.ChatDistance > 0 && Gamemap.TileDistance(X, Y, user.X, user.Y) > _mRoom.ChatDistance)
                     continue;
-                // pixelrp target mention: the mentioned player alone sees this
-                // shout in bubble style 25 so being addressed is unmissable.
-                if (shout && mentionedUser != null && user == mentionedUser)
+                // pixelrp mention: the mentioned player alone sees this message
+                // in bubble style 25 so being addressed is unmissable.
+                if (mentionPacket != null && user == mentionedUser)
                 {
-                    user.GetClient().Send(new ShoutComposer(VirtualId, message, PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message), 25));
+                    user.GetClient().Send(mentionPacket);
                     continue;
                 }
                 user.GetClient().Send((IServerPacket)packet);

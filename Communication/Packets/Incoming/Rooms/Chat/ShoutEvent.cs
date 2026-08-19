@@ -4,7 +4,6 @@ using Plus.Core.Settings;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Moderation;
 using Plus.HabboHotel.Quests;
-using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Commands;
 using Plus.HabboHotel.Rooms.Chat.Filter;
 using Plus.HabboHotel.Rooms.Chat.Logs;
@@ -101,30 +100,7 @@ public class ShoutEvent : IPacketEvent
             message = _wordFilterManager.CheckMessage(message);
         _questManager.ProgressUserQuest(session, QuestType.SocialChat);
         user.UnIdle();
-
-        // pixelrp target mention: a shout containing "@Name" of another player in
-        // the room is delivered to that player with bubble style 25 (mention
-        // alert) while everyone else sees the sender's normal bubble. The client
-        // writes these via its "@x" shorthand (expands to the selected HUD
-        // target), but any typed @Name behaves the same.
-        RoomUser mentionedUser = null;
-        if (message.IndexOf('@') >= 0)
-        {
-            foreach (var token in message.Split(' '))
-            {
-                if (token.Length < 2 || token[0] != '@')
-                    continue;
-                var candidate = room.GetRoomUserManager()
-                    .GetRoomUserByHabbo(token.Substring(1).TrimEnd('.', ',', '!', '?', ':', ';'));
-                if (candidate != null && !candidate.IsBot && candidate != user)
-                {
-                    mentionedUser = candidate;
-                    break;
-                }
-            }
-        }
-
-        user.OnChat(user.LastBubble, message, true, mentionedUser);
+        user.OnChat(user.LastBubble, message, true);
         return;
     }
 }
