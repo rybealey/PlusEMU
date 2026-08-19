@@ -380,7 +380,10 @@ public class RoomUser
         return false;
     }
 
-    public void OnChat(int colour, string message, bool shout)
+    // mentionedUser (pixelrp): when a shout @mentions a player in the room, that
+    // player receives the message with bubble style 25 (mention alert) instead
+    // of the sender's bubble. Resolved in ShoutEvent; null for normal chat.
+    public void OnChat(int colour, string message, bool shout, RoomUser mentionedUser = null)
     {
         if (GetClient() == null || GetClient().GetHabbo() == null || _mRoom == null)
             return;
@@ -417,6 +420,13 @@ public class RoomUser
                     continue;
                 if (_mRoom.ChatDistance > 0 && Gamemap.TileDistance(X, Y, user.X, user.Y) > _mRoom.ChatDistance)
                     continue;
+                // pixelrp target mention: the mentioned player alone sees this
+                // shout in bubble style 25 so being addressed is unmissable.
+                if (shout && mentionedUser != null && user == mentionedUser)
+                {
+                    user.GetClient().Send(new ShoutComposer(VirtualId, message, PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message), 25));
+                    continue;
+                }
                 user.GetClient().Send((IServerPacket)packet);
             }
         }
