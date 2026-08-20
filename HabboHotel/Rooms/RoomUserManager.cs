@@ -672,6 +672,29 @@ public class RoomUserManager
                 }
                 return;
             }
+
+            // pixelrp formation join: starting a walk right next to a player who
+            // is ALREADY walking waits for the shared 500ms beat grid (<=500ms)
+            // instead of stepping instantly — the pair is phase-locked from the
+            // very first step, so a follower never floats a fraction of a tile
+            // behind while the slew converges. Solo starts (no walking player
+            // within 2 tiles) keep the instant first step.
+            if (!user.SelfPaced)
+            {
+                foreach (var other in GetUserList().ToList())
+                {
+                    if (other == null || other == user || other.IsBot || !other.IsWalking)
+                        continue;
+                    if (Math.Max(Math.Abs(other.X - user.X), Math.Abs(other.Y - user.Y)) > 2)
+                        continue;
+                    user.SelfPaced = true;
+                    user.WalkGeneration++;
+                    var toGrid = (int)((500 - (Environment.TickCount64 % 500)) % 500);
+                    _ = SelfPaceWalk(user, Math.Max(1, toGrid), true, user.WalkGeneration);
+                    return;
+                }
+            }
+
             var throwaway = new List<RoomUser>();
             ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
             user.LastInstantStep = DateTime.Now;
