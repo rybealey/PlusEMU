@@ -690,10 +690,11 @@ public class RoomUserManager
     }
 
     // pixelrp self-paced walk: after an instant first step, drive THIS unit's
-    // remaining steps on a metronome anchored to the instant step — beat n is
-    // due at firstBeatDelayMs + (n-1)*500 on a monotonic clock, so processing
-    // time and timer slop never accumulate and steps reach the client evenly
-    // spaced (its per-tile animation is a fixed window; late steps = stutter).
+    // remaining steps on an absolute-time metronome (no drift accumulation —
+    // late steps stutter the client's fixed per-tile animation window) that
+    // CONVERGES onto the shared wall-clock 500ms grid by lengthening beats
+    // ≤30ms each, so all walkers end up phase-locked and formations render in
+    // whole-tile offsets (see the formation-lock comment in the loop).
     // The global tick skips a SelfPaced unit's movement (see OnCycle), so the
     // two never double-step; both take _cycleLock. Ends when the unit stops,
     // arrives, or leaves — handing movement back to the global tick.
@@ -702,15 +703,35 @@ public class RoomUserManager
     // that beat pathfinds and emits the first step itself.
     private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat, long generation)
     {
+        const int BeatMs = 500;
+        // pixelrp formation lock: per-beat cap on how much a beat may be
+        // LENGTHENED while converging onto the shared wall-clock grid below.
+        // Lengthen-only keeps the 1 tile / 500ms speed cap intact, and 30ms
+        // stays inside the client's 530ms per-tile animation window so the
+        // converging steps don't stutter.
+        const int SlewMaxMs = 30;
         try
         {
-            var clock = System.Diagnostics.Stopwatch.StartNew();
             var beat = 0;
+            var next = Environment.TickCount64 + firstBeatDelayMs;
             while (true)
             {
                 beat++;
-                var dueMs = firstBeatDelayMs + (beat - 1) * 500L;
-                var waitMs = dueMs - clock.ElapsedMilliseconds;
+                if (beat > 1)
+                {
+                    // Converge this walker's beats onto the shared 500ms
+                    // wall-clock grid (multiples of BeatMs on TickCount64) so
+                    // any two units walking together end up stepping at the
+                    // same instants — a follower renders exactly N whole tiles
+                    // behind instead of a constant fraction of a tile (each
+                    // walker's beats used to be anchored to its own first step,
+                    // leaving pairs offset by an arbitrary 0-500ms phase). The
+                    // first beat is exempt: the instant first step's follow-up
+                    // must come 500ms after it, wherever the grid sits.
+                    var toGrid = (int)((BeatMs - (next % BeatMs)) % BeatMs);
+                    next += Math.Min(SlewMaxMs, toGrid);
+                }
+                var waitMs = next - Environment.TickCount64;
                 if (waitMs > 0) await Task.Delay((int)waitMs);
                 lock (_cycleLock)
                 {
@@ -739,6 +760,7 @@ public class RoomUserManager
                         return;
                     }
                 }
+                next += BeatMs;
             }
         }
         catch (Exception e)
