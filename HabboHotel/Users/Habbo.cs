@@ -196,6 +196,11 @@ public class Habbo
     public int RpEnergy { get; set; } = 100;
     public int RpEnergyMax { get; set; } = 100;
 
+    // Aggression is transient (not persisted): set via :setagg (or future RP
+    // systems) and drained by the room tick at 100 points per 45 seconds.
+    // Stored as double so the per-tick decay can be fractional.
+    public double RpAggression { get; set; }
+
     public void EnsureRpStatsLoaded()
     {
         if (RpStatsLoaded)

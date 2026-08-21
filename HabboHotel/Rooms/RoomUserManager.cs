@@ -240,7 +240,7 @@ public class RoomUserManager
         // pixelrp RP stats: announce the entering player's health/energy to the
         // room (the enterer receives everyone else's in Room.SendObjects).
         session.GetHabbo().EnsureRpStatsLoaded();
-        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax));
+        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression)));
         if (_room.CheckRights(session, true))
         {
             user.SetStatus("flatctrl", "useradmin");
@@ -830,6 +830,14 @@ public class RoomUserManager
                     var updated = false;
                     user.IdleTime++;
                     user.HandleSpamTicks();
+                    // pixelrp aggression decay: a full bar (100) drains over 45
+                    // seconds (500ms tick -> 100/90 per tick); broadcast each
+                    // tick while active so every HUD strip tracks it live.
+                    if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
+                    {
+                        habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
+                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression)));
+                    }
                     if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
                     {
                         user.IsAsleep = true;

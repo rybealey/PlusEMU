@@ -453,7 +453,7 @@ public class Room : RoomData
             {
                 var habbo = user.GetClient().GetHabbo();
                 habbo.EnsureRpStatsLoaded();
-                session.Send(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax));
+                session.Send(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression)));
             }
             if (user.IsBot && user.BotData.DanceId > 0)
                 session.Send(new DanceComposer(user, user.BotData.DanceId));
