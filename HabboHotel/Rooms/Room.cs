@@ -447,6 +447,14 @@ public class Room : RoomData
             if (user == null)
                 continue;
             session.Send(new UsersComposer(user));
+            // pixelrp RP stats: the entering client learns every player's
+            // health/energy for the HUD (bots/pets have no stats).
+            if (!user.IsBot && !user.IsPet && user.GetClient()?.GetHabbo() != null)
+            {
+                var habbo = user.GetClient().GetHabbo();
+                habbo.EnsureRpStatsLoaded();
+                session.Send(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax));
+            }
             if (user.IsBot && user.BotData.DanceId > 0)
                 session.Send(new DanceComposer(user, user.BotData.DanceId));
             else if (!user.IsBot && !user.IsPet && user.IsDancing)

@@ -186,6 +186,50 @@ public class Habbo
 
     public int CustomBubbleId { get; set; }
 
+    // pixelrp RP stats (health/energy shown in the player HUD). Lazy-loaded
+    // from `user_rp_stats` on first use (row created with 100/100 defaults);
+    // values only change via explicit mutation (:sethp / :seten and future RP
+    // systems) — no regen. See EnsureRpStatsLoaded/SaveRpStats.
+    public bool RpStatsLoaded { get; set; }
+    public int RpHealth { get; set; } = 100;
+    public int RpHealthMax { get; set; } = 100;
+    public int RpEnergy { get; set; } = 100;
+    public int RpEnergyMax { get; set; } = 100;
+
+    public void EnsureRpStatsLoaded()
+    {
+        if (RpStatsLoaded)
+            return;
+        RpStatsLoaded = true;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `health`,`health_max`,`energy`,`energy_max` FROM `user_rp_stats` WHERE `user_id` = @id LIMIT 1");
+        dbClient.AddParameter("id", Id);
+        var row = dbClient.GetRow();
+        if (row == null)
+        {
+            dbClient.SetQuery("INSERT INTO `user_rp_stats` (`user_id`,`health`,`health_max`,`energy`,`energy_max`) VALUES (@id,100,100,100,100)");
+            dbClient.AddParameter("id", Id);
+            dbClient.RunQuery();
+            return;
+        }
+        RpHealth = Convert.ToInt32(row["health"]);
+        RpHealthMax = Convert.ToInt32(row["health_max"]);
+        RpEnergy = Convert.ToInt32(row["energy"]);
+        RpEnergyMax = Convert.ToInt32(row["energy_max"]);
+    }
+
+    public void SaveRpStats()
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax WHERE `user_id` = @id");
+        dbClient.AddParameter("hp", RpHealth);
+        dbClient.AddParameter("hpmax", RpHealthMax);
+        dbClient.AddParameter("en", RpEnergy);
+        dbClient.AddParameter("enmax", RpEnergyMax);
+        dbClient.AddParameter("id", Id);
+        dbClient.RunQuery();
+    }
+
     public int FastfoodScore { get; set; }
 
     public int PetId { get; set; }

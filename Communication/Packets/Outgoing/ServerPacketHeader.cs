@@ -162,6 +162,9 @@ public static class ServerPacketHeader
     public const uint GroupMembersComposer = 1401; //2297
     public const uint UpdateFavouriteGroupComposer = 2000; //3685
     public const uint GroupMemberUpdatedComposer = 3911; //2954
+
+    // pixelrp custom packets (wire ids defined in revisions/1.6.6.json)
+    public const uint RpStatsComposer = 3901;
     public const uint RefreshFavouriteGroupComposer = 149; //382
 
     // Group Forums

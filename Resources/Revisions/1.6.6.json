@@ -542,6 +542,7 @@
     "CameraStorageUrlMessageComposer": 3696,
     "CameraPurchaseOkComposer": 2783,
     "CameraPublishStatusMessageComposer": 2057,
-    "InClientLinkComposer": 2023
+    "InClientLinkComposer": 2023,
+    "RpStatsComposer": 3901
   }
 }

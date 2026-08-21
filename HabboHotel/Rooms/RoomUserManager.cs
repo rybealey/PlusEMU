@@ -237,6 +237,10 @@ public class RoomUserManager
             session.GetHabbo().PendingRestore = null;
         }
         _room.SendPacket(new UsersComposer(user));
+        // pixelrp RP stats: announce the entering player's health/energy to the
+        // room (the enterer receives everyone else's in Room.SendObjects).
+        session.GetHabbo().EnsureRpStatsLoaded();
+        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax));
         if (_room.CheckRights(session, true))
         {
             user.SetStatus("flatctrl", "useradmin");
