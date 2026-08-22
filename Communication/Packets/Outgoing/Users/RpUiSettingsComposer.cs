@@ -9,16 +9,19 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 public class RpUiSettingsComposer : IServerPacket
 {
     private readonly string _chromeColor;
+    private readonly int _chromeOpacity;
 
     public uint MessageId => ServerPacketHeader.RpUiSettingsComposer;
 
-    public RpUiSettingsComposer(string chromeColor)
+    public RpUiSettingsComposer(string chromeColor, int chromeOpacity)
     {
         _chromeColor = chromeColor ?? "";
+        _chromeOpacity = chromeOpacity;
     }
 
     public void Compose(IOutgoingPacket packet)
     {
         packet.WriteString(_chromeColor);
+        packet.WriteInteger(_chromeOpacity);
     }
 }

@@ -15,6 +15,7 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var color = packet.ReadString() ?? "";
+        var opacity = packet.ReadInt();
         if (color != "" && !HexColor().IsMatch(color))
             return Task.CompletedTask;
         var habbo = session.GetHabbo();
@@ -22,6 +23,7 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
             return Task.CompletedTask;
         habbo.EnsureRpUiSettingsLoaded();
         habbo.RpUiChromeColor = color;
+        habbo.RpUiChromeOpacity = Math.Clamp(opacity, 40, 100);
         habbo.SaveRpUiSettings();
         return Task.CompletedTask;
     }

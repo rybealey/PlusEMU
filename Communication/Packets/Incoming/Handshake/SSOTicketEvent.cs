@@ -101,7 +101,7 @@ public class SsoTicketEvent : IPacketEvent
                 FriendBarStateUtility.GetInt(session.GetHabbo().FriendbarState)));
             // pixelrp: persisted UI settings (chrome color scheme).
             session.GetHabbo().EnsureRpUiSettingsLoaded();
-            session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor));
+            session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity));
             //SendMessage(new TalentTrackLevelComposer());
 
 
