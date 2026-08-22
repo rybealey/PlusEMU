@@ -479,6 +479,59 @@ public class RoomUser
         }
     }
 
+    // pixelrp RP stats: knocked out at 0 health — forced to lay frozen where
+    // they stand until healed above 0. State-driven: call after any health
+    // change (or on room entry); it applies or lifts the state to match.
+    public bool RpKnockedOut { get; private set; }
+
+    public void UpdateRpKnockoutState()
+    {
+        if (IsBot)
+            return;
+        var habbo = GetClient()?.GetHabbo();
+        if (habbo == null)
+            return;
+        habbo.EnsureRpStatsLoaded();
+        var shouldBeOut = habbo.RpHealth <= 0;
+        if (shouldBeOut == RpKnockedOut)
+            return;
+
+        if (shouldBeOut)
+        {
+            RpKnockedOut = true;
+            ClearMovement(false);
+            PathRecalcNeeded = false;
+            CanWalk = false;
+            if (Statusses.ContainsKey("sit"))
+            {
+                Statusses.Remove("sit");
+                Z += 0.35;
+                IsSitting = false;
+            }
+            if (!Statusses.ContainsKey("lay"))
+            {
+                if (RotBody % 2 != 0)
+                    RotBody--;
+                RotHead = RotBody;
+                Statusses["lay"] = "1.0 null";
+                Z -= 0.35;
+                IsLying = true;
+            }
+        }
+        else
+        {
+            RpKnockedOut = false;
+            CanWalk = true;
+            if (Statusses.ContainsKey("lay"))
+            {
+                Statusses.Remove("lay");
+                Z += 0.35;
+                IsLying = false;
+            }
+        }
+        UpdateNeeded = true;
+    }
+
     public void ClearMovement(bool update)
     {
         IsWalking = false;

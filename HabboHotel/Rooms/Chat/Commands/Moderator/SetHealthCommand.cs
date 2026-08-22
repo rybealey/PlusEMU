@@ -33,7 +33,10 @@ internal class SetHealthCommand : ITargetChatCommand
 
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser != null)
+        {
             room.SendPacket(new RpStatsComposer(targetUser.VirtualId, target.RpHealth, target.RpHealthMax, target.RpEnergy, target.RpEnergyMax, (int)Math.Round(target.RpAggression)));
+            room.GetRoomUserManager().ApplyRpKnockout(targetUser);
+        }
 
         var adminUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         adminUser?.OnChat(23, $"*{session.GetHabbo().Username} sets {target.Username}'s health to {value}*", true);

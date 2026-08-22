@@ -16,6 +16,9 @@ internal class StandCommand : IChatCommand
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Username);
         if (user == null)
             return;
+        // pixelrp RP stats: knocked out (0 health) — the forced lay stays.
+        if (user.RpKnockedOut)
+            return;
         if (user.IsSitting)
         {
             user.Statusses.Remove("sit");

@@ -134,6 +134,20 @@ public class RoomUserManager
 
     public RoomUser GetUserForSquare(int x, int y) => _room.GetGameMap().GetRoomUsers(new(x, y)).FirstOrDefault();
 
+    // pixelrp RP stats: apply/lift the 0-health knockout state and push the
+    // resulting posture to the room immediately (commands run off-tick, so
+    // without this the lay/stand would wait for the next 500ms cycle).
+    public void ApplyRpKnockout(RoomUser user)
+    {
+        if (user == null)
+            return;
+        lock (_cycleLock)
+        {
+            user.UpdateRpKnockoutState();
+            SerializeStatusUpdates();
+        }
+    }
+
     public bool AddAvatarToRoom(GameClient session)
     {
         if (_room == null)
@@ -241,6 +255,8 @@ public class RoomUserManager
         // room (the enterer receives everyone else's in Room.SendObjects).
         session.GetHabbo().EnsureRpStatsLoaded();
         _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression)));
+        // Knocked-out players (0 health persists) re-enter laying and frozen.
+        user.UpdateRpKnockoutState();
         if (_room.CheckRights(session, true))
         {
             user.SetStatus("flatctrl", "useradmin");

@@ -16,6 +16,9 @@ internal class LayCommand : IChatCommand
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return;
+        // pixelrp RP stats: knocked out (0 health) — the forced lay stays.
+        if (user.RpKnockedOut)
+            return;
         if (!room.GetGameMap().ValidTile(user.X + 2, user.Y + 2) && !room.GetGameMap().ValidTile(user.X + 1, user.Y + 1))
         {
             session.SendWhisper("Oops, cannot lay down here - try elsewhere!");
