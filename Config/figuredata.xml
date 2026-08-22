@@ -2414,6 +2414,14 @@
 <part id="30" type="hr" colorable="1" index="0" colorindex="1"/>
 <part id="30" type="hrb" colorable="1" index="0" colorindex="1"/>
 </set>
+<set id="100021462" gender="U" club="0" colorable="1" selectable="1" preselectable="0">
+<part id="100021462" type="hr" colorable="1" index="0" colorindex="1"/>
+<part id="100021463" type="hr" colorable="1" index="1" colorindex="2"/>
+</set>
+<set id="140952645" gender="U" club="0" colorable="1" selectable="1" preselectable="0">
+<part id="140952645" type="hr" colorable="1" index="0" colorindex="1"/>
+<part id="140952646" type="hr" colorable="1" index="1" colorindex="2"/>
+</set>
 </settype>
 <settype type="hd" paletteid="1" mand_m_0="1" mand_f_0="1" mand_m_1="1" mand_f_1="1">
 <set id="620" gender="F" club="0" colorable="1" selectable="1" preselectable="0">
