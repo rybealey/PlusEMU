@@ -242,6 +242,7 @@ public class Habbo
     public bool RpUiSettingsLoaded { get; set; }
     public string RpUiChromeColor { get; set; } = "";
     public int RpUiChromeOpacity { get; set; } = 95;
+    public string RpUiHeaderColor { get; set; } = "";
 
     public void EnsureRpUiSettingsLoaded()
     {
@@ -249,22 +250,24 @@ public class Habbo
             return;
         RpUiSettingsLoaded = true;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT `chrome_color`,`chrome_opacity` FROM `user_ui_settings` WHERE `user_id` = @id LIMIT 1");
+        dbClient.SetQuery("SELECT `chrome_color`,`chrome_opacity`,`header_color` FROM `user_ui_settings` WHERE `user_id` = @id LIMIT 1");
         dbClient.AddParameter("id", Id);
         var row = dbClient.GetRow();
         if (row == null)
             return;
         RpUiChromeColor = Convert.ToString(row["chrome_color"]) ?? "";
         RpUiChromeOpacity = Convert.ToInt32(row["chrome_opacity"]);
+        RpUiHeaderColor = Convert.ToString(row["header_color"]) ?? "";
     }
 
     public void SaveRpUiSettings()
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("REPLACE INTO `user_ui_settings` (`user_id`,`chrome_color`,`chrome_opacity`) VALUES (@id,@color,@opacity)");
+        dbClient.SetQuery("REPLACE INTO `user_ui_settings` (`user_id`,`chrome_color`,`chrome_opacity`,`header_color`) VALUES (@id,@color,@opacity,@header)");
         dbClient.AddParameter("id", Id);
         dbClient.AddParameter("color", RpUiChromeColor);
         dbClient.AddParameter("opacity", RpUiChromeOpacity);
+        dbClient.AddParameter("header", RpUiHeaderColor);
         dbClient.RunQuery();
     }
 
