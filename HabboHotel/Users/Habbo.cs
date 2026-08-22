@@ -235,6 +235,36 @@ public class Habbo
         dbClient.RunQuery();
     }
 
+    // pixelrp UI settings: the player's chosen UI chrome color scheme
+    // ("#rrggbb", empty = client default). Lazily loaded like the RP stats;
+    // sent to the client at login (RpUiSettingsComposer) and saved when the
+    // client picks a scheme (RpSaveUiSettingsEvent).
+    public bool RpUiSettingsLoaded { get; set; }
+    public string RpUiChromeColor { get; set; } = "";
+
+    public void EnsureRpUiSettingsLoaded()
+    {
+        if (RpUiSettingsLoaded)
+            return;
+        RpUiSettingsLoaded = true;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `chrome_color` FROM `user_ui_settings` WHERE `user_id` = @id LIMIT 1");
+        dbClient.AddParameter("id", Id);
+        var row = dbClient.GetRow();
+        if (row == null)
+            return;
+        RpUiChromeColor = Convert.ToString(row["chrome_color"]) ?? "";
+    }
+
+    public void SaveRpUiSettings()
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("REPLACE INTO `user_ui_settings` (`user_id`,`chrome_color`) VALUES (@id,@color)");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("color", RpUiChromeColor);
+        dbClient.RunQuery();
+    }
+
     public int FastfoodScore { get; set; }
 
     public int PetId { get; set; }

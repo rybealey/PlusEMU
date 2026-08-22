@@ -9,6 +9,7 @@ using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
+using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Communication.Packets.Outgoing.Sound;
 using Plus.Core;
 using Plus.Core.FigureData;
@@ -98,6 +99,9 @@ public class SsoTicketEvent : IPacketEvent
             session.Send(new SoundSettingsComposer(session.GetHabbo().ClientVolume, session.GetHabbo().ChatPreference, session.GetHabbo().AllowMessengerInvites,
                 session.GetHabbo().FocusPreference,
                 FriendBarStateUtility.GetInt(session.GetHabbo().FriendbarState)));
+            // pixelrp: persisted UI settings (chrome color scheme).
+            session.GetHabbo().EnsureRpUiSettingsLoaded();
+            session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor));
             //SendMessage(new TalentTrackLevelComposer());
 
 
