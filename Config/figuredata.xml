@@ -12174,6 +12174,9 @@
 <set id="1603" gender="U" club="2" colorable="1" selectable="1" preselectable="0">
 <part id="3" type="he" colorable="1" index="0" colorindex="1"/>
 </set>
+<set id="19792140" gender="U" club="0" colorable="1" selectable="1" preselectable="0">
+<part id="19792140" type="he" colorable="1" index="0" colorindex="1"/>
+</set>
 </settype>
 <settype type="ea" paletteid="3" mand_m_0="0" mand_f_0="0" mand_m_1="0" mand_f_1="0">
 <set id="1406" gender="U" club="0" colorable="0" selectable="1" preselectable="1">
