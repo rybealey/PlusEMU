@@ -135,7 +135,18 @@ public class CatalogManager : ICatalogManager, IStartable
         foreach (CatalogPage page in pages)
         {
             if (_items.ContainsKey(page.Id))
+            {
                 page.Items = _items[page.Id];
+
+                // pixelrp: ItemOffers was never populated (stock PlusEMU gap), so
+                // CatalogIndexComposer advertised zero offers per page and the
+                // client-side furni search / offer lookup could never resolve.
+                foreach (var item in page.Items.Values)
+                {
+                    if (item.OfferId != -1 && !page.ItemOffers.ContainsKey(item.OfferId))
+                        page.ItemOffers.Add(item.OfferId, item);
+                }
+            }
 
             page.PageStringsList1 = !string.IsNullOrWhiteSpace(page.PageStrings1) ? page.PageStrings1!.Split("|").ToList() : new();
             page.PageStringsList2 = !string.IsNullOrWhiteSpace(page.PageStrings2) ? page.PageStrings2!.Split("|").ToList() : new();
