@@ -30,7 +30,7 @@ internal class KillCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser != null)
         {
-            room.SendPacket(new RpStatsComposer(targetUser.VirtualId, target.RpHealth, target.RpHealthMax, target.RpEnergy, target.RpEnergyMax, (int)Math.Round(target.RpAggression)));
+            room.SendPacket(new RpStatsComposer(targetUser.VirtualId, target.RpHealth, target.RpHealthMax, target.RpEnergy, target.RpEnergyMax, (int)Math.Round(target.RpAggression), target.RpPassiveSeconds > 0 ? 1 : 0));
             room.GetRoomUserManager().ApplyRpKnockout(targetUser);
         }
 

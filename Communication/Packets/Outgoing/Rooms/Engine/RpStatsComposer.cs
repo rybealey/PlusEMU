@@ -15,10 +15,11 @@ public class RpStatsComposer : IServerPacket
     private readonly int _energy;
     private readonly int _energyMax;
     private readonly int _aggression;
+    private readonly int _passive;
 
     public uint MessageId => ServerPacketHeader.RpStatsComposer;
 
-    public RpStatsComposer(int virtualId, int health, int healthMax, int energy, int energyMax, int aggression)
+    public RpStatsComposer(int virtualId, int health, int healthMax, int energy, int energyMax, int aggression, int passive)
     {
         _virtualId = virtualId;
         _health = health;
@@ -26,6 +27,7 @@ public class RpStatsComposer : IServerPacket
         _energy = energy;
         _energyMax = energyMax;
         _aggression = aggression;
+        _passive = passive;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -36,5 +38,6 @@ public class RpStatsComposer : IServerPacket
         packet.WriteInteger(_energy);
         packet.WriteInteger(_energyMax);
         packet.WriteInteger(_aggression);
+        packet.WriteInteger(_passive);
     }
 }

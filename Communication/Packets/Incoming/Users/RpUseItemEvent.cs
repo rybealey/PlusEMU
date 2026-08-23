@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.GameClients;
 
@@ -29,6 +30,8 @@ public class RpUseItemEvent : IPacketEvent
                 habbo.SaveRpStats();
                 var roomUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
                 roomUser?.OnChat(5, "*consume the Kylie Jeener smoothie, activating passive status*", true);
+                if (roomUser != null)
+                    habbo.CurrentRoom.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 1));
                 break;
         }
         session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
