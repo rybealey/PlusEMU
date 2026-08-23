@@ -835,7 +835,34 @@ public class RoomUserManager
                     // pixelrp aggression decay: a full bar (100) drains over 45
                     // seconds (500ms tick -> 100/90 per tick); broadcast each
                     // tick while active so every HUD strip tracks it live.
-                    if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
+                    // pixelrp passive status: count down ONLINE seconds; whisper on
+                // every minute boundary, and once more when it expires. Saved on
+                // each whisper so a crash/logout loses <60s of countdown.
+                if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpPassiveSeconds: > 0 } habboPas)
+                {
+                    var nowTick = Environment.TickCount64;
+                    if (habboPas.RpPassiveLastTick == 0)
+                        habboPas.RpPassiveLastTick = nowTick;
+                    var elapsedSec = (int)((nowTick - habboPas.RpPassiveLastTick) / 1000);
+                    if (elapsedSec >= 1)
+                    {
+                        habboPas.RpPassiveLastTick += elapsedSec * 1000L;
+                        var beforeMinutes = (habboPas.RpPassiveSeconds + 59) / 60;
+                        habboPas.RpPassiveSeconds = Math.Max(0, habboPas.RpPassiveSeconds - elapsedSec);
+                        var afterMinutes = (habboPas.RpPassiveSeconds + 59) / 60;
+                        if (habboPas.RpPassiveSeconds == 0)
+                        {
+                            user.GetClient().SendWhisper("Your passive status has expired.");
+                            habboPas.SaveRpStats();
+                        }
+                        else if (afterMinutes < beforeMinutes)
+                        {
+                            user.GetClient().SendWhisper($"Your passive status expires in {afterMinutes} minutes.");
+                            habboPas.SaveRpStats();
+                        }
+                    }
+                }
+                if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
                         _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression)));

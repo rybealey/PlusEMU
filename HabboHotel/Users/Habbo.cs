@@ -201,13 +201,20 @@ public class Habbo
     // Stored as double so the per-tick decay can be fractional.
     public double RpAggression { get; set; }
 
+    // Passive status (consumable smoothie): remaining ONLINE seconds.
+    // Persisted in user_rp_stats.passive_seconds; decremented by the room
+    // tick while the player is in a room (see RoomUserManager.OnCycle).
+    // RpPassiveLastTick is the transient decrement clock.
+    public int RpPassiveSeconds { get; set; }
+    public long RpPassiveLastTick { get; set; }
+
     public void EnsureRpStatsLoaded()
     {
         if (RpStatsLoaded)
             return;
         RpStatsLoaded = true;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT `health`,`health_max`,`energy`,`energy_max` FROM `user_rp_stats` WHERE `user_id` = @id LIMIT 1");
+        dbClient.SetQuery("SELECT `health`,`health_max`,`energy`,`energy_max`,`passive_seconds` FROM `user_rp_stats` WHERE `user_id` = @id LIMIT 1");
         dbClient.AddParameter("id", Id);
         var row = dbClient.GetRow();
         if (row == null)
@@ -221,16 +228,18 @@ public class Habbo
         RpHealthMax = Convert.ToInt32(row["health_max"]);
         RpEnergy = Convert.ToInt32(row["energy"]);
         RpEnergyMax = Convert.ToInt32(row["energy_max"]);
+        RpPassiveSeconds = Convert.ToInt32(row["passive_seconds"]);
     }
 
     public void SaveRpStats()
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax WHERE `user_id` = @id");
+        dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax, `passive_seconds` = @passive WHERE `user_id` = @id");
         dbClient.AddParameter("hp", RpHealth);
         dbClient.AddParameter("hpmax", RpHealthMax);
         dbClient.AddParameter("en", RpEnergy);
         dbClient.AddParameter("enmax", RpEnergyMax);
+        dbClient.AddParameter("passive", RpPassiveSeconds);
         dbClient.AddParameter("id", Id);
         dbClient.RunQuery();
     }
@@ -269,6 +278,70 @@ public class Habbo
         dbClient.AddParameter("opacity", RpUiChromeOpacity);
         dbClient.AddParameter("header", RpUiHeaderColor);
         dbClient.RunQuery();
+    }
+
+    // pixelrp RP inventory (backpack carry slots 1-10). No caching — reads
+    // and writes go straight to user_rp_inventory; the client is refreshed
+    // with RpInventoryComposer after every change.
+    public const int RpCarrySlots = 10;
+
+    public List<(int Slot, string Item, int Count)> LoadRpInventory()
+    {
+        var list = new List<(int, string, int)>();
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `slot`,`item`,`count` FROM `user_rp_inventory` WHERE `user_id` = @id ORDER BY `slot`");
+        dbClient.AddParameter("id", Id);
+        var table = dbClient.GetTable();
+        if (table != null)
+            foreach (System.Data.DataRow row in table.Rows)
+                list.Add((Convert.ToInt32(row["slot"]), Convert.ToString(row["item"]), Convert.ToInt32(row["count"])));
+        return list;
+    }
+
+    /// <summary>Adds one of an item (stacking onto an existing slot of the
+    /// same item, else the first free carry slot). Returns the slot, or -1
+    /// when the backpack is full.</summary>
+    public int AddRpItem(string item)
+    {
+        var inventory = LoadRpInventory();
+        var existing = inventory.FirstOrDefault(entry => entry.Item == item);
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        if (existing.Item == item && existing.Slot > 0)
+        {
+            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` + 1 WHERE `user_id` = @id AND `slot` = @slot");
+            dbClient.AddParameter("id", Id);
+            dbClient.AddParameter("slot", existing.Slot);
+            dbClient.RunQuery();
+            return existing.Slot;
+        }
+        var used = inventory.Select(entry => entry.Slot).ToHashSet();
+        var slot = Enumerable.Range(1, RpCarrySlots).FirstOrDefault(candidate => !used.Contains(candidate));
+        if (slot == 0)
+            return -1;
+        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("slot", slot);
+        dbClient.AddParameter("item", item);
+        dbClient.RunQuery();
+        return slot;
+    }
+
+    /// <summary>Removes one of whatever sits in the slot. Returns the item
+    /// key, or null when the slot is empty.</summary>
+    public string ConsumeRpItem(int slot)
+    {
+        var entry = LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot);
+        if (string.IsNullOrEmpty(entry.Item))
+            return null;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        if (entry.Count > 1)
+            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` - 1 WHERE `user_id` = @id AND `slot` = @slot");
+        else
+            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("slot", slot);
+        dbClient.RunQuery();
+        return entry.Item;
     }
 
     public int FastfoodScore { get; set; }

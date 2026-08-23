@@ -274,7 +274,8 @@
     "PurchasePhotoEvent": 2408,
     "RenderRoomEvent": 3226,
     "RenderRoomThumbnailEvent": 1982,
-    "RpSaveUiSettingsEvent": 3903
+    "RpSaveUiSettingsEvent": 3903,
+    "RpUseItemEvent": 3905
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -545,6 +546,7 @@
     "CameraPublishStatusMessageComposer": 2057,
     "InClientLinkComposer": 2023,
     "RpStatsComposer": 3901,
-    "RpUiSettingsComposer": 3902
+    "RpUiSettingsComposer": 3902,
+    "RpInventoryComposer": 3904
   }
 }

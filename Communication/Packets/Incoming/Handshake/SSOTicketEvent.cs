@@ -102,6 +102,7 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: persisted UI settings (chrome color scheme).
             session.GetHabbo().EnsureRpUiSettingsLoaded();
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor));
+            session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
             //SendMessage(new TalentTrackLevelComposer());
 
 

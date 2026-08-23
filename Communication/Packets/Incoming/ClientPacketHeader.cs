@@ -395,4 +395,5 @@ public static class ClientPacketHeader
 
     // pixelrp custom incoming packets
     public const uint RpSaveUiSettingsEvent = 3903;
+    public const uint RpUseItemEvent = 3905;
 }
