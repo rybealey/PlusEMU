@@ -58,8 +58,10 @@ public class WhisperEvent : IPacketEvent
         var toUser = @params.Split(' ')[0];
         var message = @params.Substring(toUser.Length + 1);
         var colour = packet.ReadInt();
-        // pixelrp: the whisperer's chosen username color rides the packet.
+        // pixelrp: the whisperer's chosen username color + icon ride the packet.
         var usernameColor = session.GetHabbo().RpUiUsernameColor ?? "";
+        var usernameIcon = session.GetHabbo().RpUiUsernameIcon ?? "";
+        var usernameIconColor = session.GetHabbo().RpUiUsernameIconColor ?? "";
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return Task.CompletedTask;
@@ -101,16 +103,16 @@ public class WhisperEvent : IPacketEvent
                 session.Disconnect();
                 return Task.CompletedTask;
             }
-            session.Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor));
+            session.Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
             return Task.CompletedTask;
         }
         _questManager.ProgressUserQuest(session, QuestType.SocialChat);
         user.UnIdle();
-        user.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor));
+        user.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
         if (!user2.IsBot && user2.UserId != user.UserId)
         {
             if (!user2.GetClient().GetHabbo().IgnoresComponent.IsIgnored(session.GetHabbo().Id))
-                user2.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor));
+                user2.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
         }
         var toNotify = room.GetRoomUserManager().GetRoomUserByRank(2);
         if (toNotify.Count > 0)
@@ -120,7 +122,7 @@ public class WhisperEvent : IPacketEvent
                 if (notifiable != null && notifiable.HabboId != user2.HabboId && notifiable.HabboId != user.HabboId)
                 {
                     if (notifiable.GetClient() != null && notifiable.GetClient().GetHabbo() != null && !notifiable.GetClient().GetHabbo().IgnorePublicWhispers)
-                        notifiable.GetClient().Send(new WhisperComposer(user.VirtualId, $"[Whisper to {toUser}] {message}", 0, user.LastBubble, usernameColor));
+                        notifiable.GetClient().Send(new WhisperComposer(user.VirtualId, $"[Whisper to {toUser}] {message}", 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
                 }
             }
         }

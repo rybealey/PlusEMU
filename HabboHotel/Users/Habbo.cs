@@ -253,6 +253,8 @@ public class Habbo
     public int RpUiChromeOpacity { get; set; } = 95;
     public string RpUiHeaderColor { get; set; } = "";
     public string RpUiUsernameColor { get; set; } = "";
+    public string RpUiUsernameIcon { get; set; } = "";
+    public string RpUiUsernameIconColor { get; set; } = "";
 
     public void EnsureRpUiSettingsLoaded()
     {
@@ -260,7 +262,7 @@ public class Habbo
             return;
         RpUiSettingsLoaded = true;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT `chrome_color`,`chrome_opacity`,`header_color`,`username_color` FROM `user_ui_settings` WHERE `user_id` = @id LIMIT 1");
+        dbClient.SetQuery("SELECT `chrome_color`,`chrome_opacity`,`header_color`,`username_color`,`username_icon`,`username_icon_color` FROM `user_ui_settings` WHERE `user_id` = @id LIMIT 1");
         dbClient.AddParameter("id", Id);
         var row = dbClient.GetRow();
         if (row == null)
@@ -269,17 +271,21 @@ public class Habbo
         RpUiChromeOpacity = Convert.ToInt32(row["chrome_opacity"]);
         RpUiHeaderColor = Convert.ToString(row["header_color"]) ?? "";
         RpUiUsernameColor = Convert.ToString(row["username_color"]) ?? "";
+        RpUiUsernameIcon = Convert.ToString(row["username_icon"]) ?? "";
+        RpUiUsernameIconColor = Convert.ToString(row["username_icon_color"]) ?? "";
     }
 
     public void SaveRpUiSettings()
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("REPLACE INTO `user_ui_settings` (`user_id`,`chrome_color`,`chrome_opacity`,`header_color`,`username_color`) VALUES (@id,@color,@opacity,@header,@username)");
+        dbClient.SetQuery("REPLACE INTO `user_ui_settings` (`user_id`,`chrome_color`,`chrome_opacity`,`header_color`,`username_color`,`username_icon`,`username_icon_color`) VALUES (@id,@color,@opacity,@header,@username,@icon,@iconcolor)");
         dbClient.AddParameter("id", Id);
         dbClient.AddParameter("color", RpUiChromeColor);
         dbClient.AddParameter("opacity", RpUiChromeOpacity);
         dbClient.AddParameter("header", RpUiHeaderColor);
         dbClient.AddParameter("username", RpUiUsernameColor);
+        dbClient.AddParameter("icon", RpUiUsernameIcon);
+        dbClient.AddParameter("iconcolor", RpUiUsernameIconColor);
         dbClient.RunQuery();
     }
 

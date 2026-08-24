@@ -388,15 +388,17 @@ public class RoomUser
             return;
         GetClient().GetHabbo().HasSpoken = true;
         if (_mRoom.WordFilterList.Count > 0 && !GetClient().GetHabbo().Permissions.HasRight("word_filter_override")) message = _mRoom.GetFilter().CheckMessage(message);
-        // pixelrp: the speaker's chosen username color rides the chat packet so
-        // every recipient can color the username in this user's bubble.
+        // pixelrp: the speaker's chosen username color + icon ride the chat
+        // packet so every recipient can render them on this user's bubble.
         var usernameColor = GetClient().GetHabbo().RpUiUsernameColor ?? "";
+        var usernameIcon = GetClient().GetHabbo().RpUiUsernameIcon ?? "";
+        var usernameIconColor = GetClient().GetHabbo().RpUiUsernameIconColor ?? "";
         var emotion = PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message);
         IServerPacket packet = null;
         if (shout)
-            packet = new ShoutComposer(VirtualId, message, emotion, colour, usernameColor);
+            packet = new ShoutComposer(VirtualId, message, emotion, colour, usernameColor, usernameIcon, usernameIconColor);
         else
-            packet = new ChatComposer(VirtualId, message, emotion, colour, usernameColor);
+            packet = new ChatComposer(VirtualId, message, emotion, colour, usernameColor, usernameIcon, usernameIconColor);
 
         // pixelrp mention: any message containing "@Name" of another player in
         // the room (case-insensitive — GetRoomUserByHabbo matches OrdinalIgnoreCase)
@@ -424,12 +426,12 @@ public class RoomUser
         IServerPacket mentionPacket = null;
         if (mentionedUser != null)
             mentionPacket = shout
-                ? new ShoutComposer(VirtualId, message, emotion, 25, usernameColor)
-                : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25, usernameColor);
+                ? new ShoutComposer(VirtualId, message, emotion, 25, usernameColor, usernameIcon, usernameIconColor)
+                : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25, usernameColor, usernameIcon, usernameIconColor);
         if (GetClient().GetHabbo().TentId > 0)
         {
             _mRoom.SendToTent(GetClient().GetHabbo().Id, GetClient().GetHabbo().TentId, packet);
-            packet = new WhisperComposer(VirtualId, $"[Tent Chat] {message}", 0, colour, usernameColor);
+            packet = new WhisperComposer(VirtualId, $"[Tent Chat] {message}", 0, colour, usernameColor, usernameIcon, usernameIconColor);
             var toNotify = _mRoom.GetRoomUserManager().GetRoomUserByRank(2);
             if (toNotify.Count > 0)
             {
