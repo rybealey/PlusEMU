@@ -388,12 +388,15 @@ public class RoomUser
             return;
         GetClient().GetHabbo().HasSpoken = true;
         if (_mRoom.WordFilterList.Count > 0 && !GetClient().GetHabbo().Permissions.HasRight("word_filter_override")) message = _mRoom.GetFilter().CheckMessage(message);
+        // pixelrp: the speaker's chosen username color rides the chat packet so
+        // every recipient can color the username in this user's bubble.
+        var usernameColor = GetClient().GetHabbo().RpUiUsernameColor ?? "";
         var emotion = PlusEnvironment.Game.ChatManager.GetEmotions().GetEmotionsForText(message);
         IServerPacket packet = null;
         if (shout)
-            packet = new ShoutComposer(VirtualId, message, emotion, colour);
+            packet = new ShoutComposer(VirtualId, message, emotion, colour, usernameColor);
         else
-            packet = new ChatComposer(VirtualId, message, emotion, colour);
+            packet = new ChatComposer(VirtualId, message, emotion, colour, usernameColor);
 
         // pixelrp mention: any message containing "@Name" of another player in
         // the room (case-insensitive — GetRoomUserByHabbo matches OrdinalIgnoreCase)
@@ -421,12 +424,12 @@ public class RoomUser
         IServerPacket mentionPacket = null;
         if (mentionedUser != null)
             mentionPacket = shout
-                ? new ShoutComposer(VirtualId, message, emotion, 25)
-                : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25);
+                ? new ShoutComposer(VirtualId, message, emotion, 25, usernameColor)
+                : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25, usernameColor);
         if (GetClient().GetHabbo().TentId > 0)
         {
             _mRoom.SendToTent(GetClient().GetHabbo().Id, GetClient().GetHabbo().TentId, packet);
-            packet = new WhisperComposer(VirtualId, $"[Tent Chat] {message}", 0, colour);
+            packet = new WhisperComposer(VirtualId, $"[Tent Chat] {message}", 0, colour, usernameColor);
             var toNotify = _mRoom.GetRoomUserManager().GetRoomUserByRank(2);
             if (toNotify.Count > 0)
             {
