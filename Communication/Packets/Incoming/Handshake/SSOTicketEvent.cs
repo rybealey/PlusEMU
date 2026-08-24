@@ -83,6 +83,18 @@ public class SsoTicketEvent : IPacketEvent
         var error = await _authenticate.AuthenticateUsingSSO(session, sso);
         if (error == null)
         {
+            // pixelrp beta: the beta hotel (compose.beta.yaml) sets
+            // STAFF_ONLY_LOGIN=1 so only staff (rank >= 5) can enter; a
+            // disconnect here gives the same clear "Handshake Failed" the
+            // auth-failure path below produces. Unset in prod.
+            if (Environment.GetEnvironmentVariable("STAFF_ONLY_LOGIN") == "1" && session.GetHabbo().Rank < 5)
+            {
+                _logger.LogWarning("Staff-only hotel: rejecting login for {user} (rank {rank}).",
+                    session.GetHabbo().Username, session.GetHabbo().Rank);
+                session.Disconnect();
+                return;
+            }
+
             session.Send(new AuthenticationOkComposer());
 
             // TODO @80O: Move to individual incoming message handlers.
