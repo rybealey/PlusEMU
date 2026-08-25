@@ -69,6 +69,24 @@ public class CameraPhotoManager : ICameraPhotoManager
         return url;
     }
 
+    public string StoreEditedPhoto(byte[] bytes)
+    {
+        var urlBase = UrlBase;
+        if (string.IsNullOrEmpty(urlBase))
+        {
+            _logger.LogError("camera.url.base is not configured; refusing to store edited photo");
+            throw new InvalidOperationException("camera.url.base setting is not configured; cannot store photo.");
+        }
+
+        Directory.CreateDirectory(StoragePath);
+        var photoId = Guid.NewGuid().ToString("N");
+        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}.png"), bytes);
+        // Same bytes for the _small variant — edits happen outside the
+        // capture flow, so there's no separate thumbnail render to use.
+        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}_small.png"), bytes);
+        return $"{urlBase}/photo_{photoId}.png";
+    }
+
     public bool TryGetPending(int userId, out PendingPhoto pending) => _pendingPhotos.TryGetValue(userId, out pending);
 
     public bool TryConsumePurchase(int userId, out PendingPhoto pending)

@@ -16,6 +16,16 @@ public interface ICameraPhotoManager
     void StoreRoomThumbnail(uint roomId, byte[] bytes);
 
     string StorePhoto(int userId, uint roomId, byte[] bytes);
+
+    /// <summary>
+    ///     pixelrp: persists an edited (cropped/zoomed) copy of a photo as a
+    ///     brand-new file pair (full + _small) and returns its absolute URL.
+    ///     No pending-photo state involved; the caller updates the owning
+    ///     camera_web row. The original file stays — photo furni printed
+    ///     from it keep rendering.
+    /// </summary>
+    string StoreEditedPhoto(byte[] bytes);
+
     bool TryGetPending(int userId, out PendingPhoto pending);
 
     /// <summary>

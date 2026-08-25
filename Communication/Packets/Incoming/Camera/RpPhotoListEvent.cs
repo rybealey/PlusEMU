@@ -1,5 +1,3 @@
-using Dapper;
-using Plus.Communication.Packets.Outgoing.Camera;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 
@@ -12,8 +10,6 @@ namespace Plus.Communication.Packets.Incoming.Camera;
 /// </summary>
 internal class RpPhotoListEvent : IPacketEvent
 {
-    private const int MaxPhotos = 120;
-
     private readonly IDatabase _database;
 
     public RpPhotoListEvent(IDatabase database)
@@ -23,13 +19,8 @@ internal class RpPhotoListEvent : IPacketEvent
 
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
-        var habbo = session.GetHabbo();
-        if (habbo == null)
+        if (session.GetHabbo() == null)
             return;
-        using var connection = _database.Connection();
-        var rows = await connection.QueryAsync<(int Id, string Url, int Timestamp, bool Visible)>(
-            "SELECT `id`, `url`, `timestamp`, `visible` FROM `camera_web` WHERE `user_id` = @userId ORDER BY `id` DESC LIMIT @limit",
-            new { userId = habbo.Id, limit = MaxPhotos });
-        session.Send(new RpPhotoListComposer(rows.Select(row => new RpPhotoListComposer.Photo(row.Id, row.Url, row.Timestamp, row.Visible)).ToList()));
+        await RpPhotoLibrary.SendPhotoList(_database, session);
     }
 }
