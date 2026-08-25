@@ -167,6 +167,7 @@ public static class ServerPacketHeader
     public const uint RpStatsComposer = 3901;
     public const uint RpUiSettingsComposer = 3902;
     public const uint RpInventoryComposer = 3904;
+    public const uint RpMessengerReceiptComposer = 3906;
     public const uint RefreshFavouriteGroupComposer = 149; //382
 
     // Group Forums

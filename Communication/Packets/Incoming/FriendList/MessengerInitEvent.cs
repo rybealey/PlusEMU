@@ -8,10 +8,12 @@ namespace Plus.Communication.Packets.Incoming.FriendList;
 internal class MessengerInitEvent : IPacketEvent
 {
     private readonly IMessengerDataLoader _messengerDataLoader;
+    private readonly IGameClientManager _gameClientManager;
 
-    public MessengerInitEvent(IMessengerDataLoader messengerDataLoader)
+    public MessengerInitEvent(IMessengerDataLoader messengerDataLoader, IGameClientManager gameClientManager)
     {
         _messengerDataLoader = messengerDataLoader;
+        _gameClientManager = gameClientManager;
     }
 
     public async Task Parse(GameClient session, IIncomingPacket packet)
@@ -33,7 +35,14 @@ internal class MessengerInitEvent : IPacketEvent
 
         var messages = await _messengerDataLoader.GetAndDeleteOfflineMessages(session.GetHabbo().Id);
         foreach (var (userId, report) in messages)
+        {
             foreach (var (message, secondsAgo) in report)
                 session.Send(new NewConsoleMessageComposer(userId, message, secondsAgo));
+            // pixelrp: their stored messages just reached this client - tell
+            // the sender's phone they were delivered, if they're online.
+            var sender = _gameClientManager.GetClientByUserId(userId);
+            if (sender?.GetHabbo()?.Messenger.GetFriend(session.GetHabbo().Id) != null)
+                sender.Send(new RpMessengerReceiptComposer(session.GetHabbo().Id, RpMessengerReceiptComposer.Delivered));
+        }
     }
 }

@@ -85,6 +85,9 @@ internal class MessengerEventSynchronizer : IAuthenticationTask
         var friend = messenger.GetFriend(habbo.Id);
         if (friend == null) return;
         messenger.ReceiveMessage(friend, args.Message);
+        // pixelrp: the friend's client got the message live - tell the
+        // sender's phone it was delivered.
+        habbo.Client.Send(new RpMessengerReceiptComposer(args.Friend.Id, RpMessengerReceiptComposer.Delivered));
     }
 
     private async Task OnFriendsUpdated(Habbo habbo, MessengerBuddiesModifiedEventArgs args)
