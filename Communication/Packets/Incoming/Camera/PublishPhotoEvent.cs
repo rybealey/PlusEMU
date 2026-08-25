@@ -32,9 +32,16 @@ internal class PublishPhotoEvent : IPacketEvent
         if (_cameraPhotoManager.TryMarkPublished(session.GetHabbo().Id))
         {
             using var connection = _database.Connection();
-            await connection.ExecuteAsync(
-                "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 1)",
-                new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
+            // pixelrp: if the photo was purchased first it already sits in the
+            // player's private library (visible = 0) — publishing flips that
+            // same row public instead of inserting a duplicate.
+            var updated = await connection.ExecuteAsync(
+                "UPDATE `camera_web` SET `visible` = 1 WHERE `user_id` = @userId AND `url` = @url",
+                new { userId = session.GetHabbo().Id, url = pending.Url });
+            if (updated == 0)
+                await connection.ExecuteAsync(
+                    "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 1)",
+                    new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
         }
 
         session.Send(new CameraPublishStatusMessageComposer(true, pending.Url));

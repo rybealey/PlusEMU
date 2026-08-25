@@ -276,7 +276,8 @@
     "RenderRoomThumbnailEvent": 1982,
     "RpSaveUiSettingsEvent": 3903,
     "RpUseItemEvent": 3905,
-    "RpMessengerMarkReadEvent": 3907
+    "RpMessengerMarkReadEvent": 3907,
+    "RpPhotoListEvent": 3908
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -549,6 +550,7 @@
     "RpStatsComposer": 3901,
     "RpUiSettingsComposer": 3902,
     "RpInventoryComposer": 3904,
-    "RpMessengerReceiptComposer": 3906
+    "RpMessengerReceiptComposer": 3906,
+    "RpPhotoListComposer": 3909
   }
 }

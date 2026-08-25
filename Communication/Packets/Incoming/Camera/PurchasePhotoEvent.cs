@@ -1,6 +1,8 @@
 using System.Text.Json;
+using Dapper;
 using Plus.Communication.Packets.Outgoing.Camera;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
+using Plus.Database;
 using Plus.HabboHotel.Camera;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
@@ -12,15 +14,17 @@ internal class PurchasePhotoEvent : IPacketEvent
     private readonly ICameraPhotoManager _cameraPhotoManager;
     private readonly IItemDataManager _itemDataManager;
     private readonly IItemFactory _itemFactory;
+    private readonly IDatabase _database;
 
-    public PurchasePhotoEvent(ICameraPhotoManager cameraPhotoManager, IItemDataManager itemDataManager, IItemFactory itemFactory)
+    public PurchasePhotoEvent(ICameraPhotoManager cameraPhotoManager, IItemDataManager itemDataManager, IItemFactory itemFactory, IDatabase database)
     {
         _cameraPhotoManager = cameraPhotoManager;
         _itemDataManager = itemDataManager;
         _itemFactory = itemFactory;
+        _database = database;
     }
 
-    public Task Parse(GameClient session, IIncomingPacket packet)
+    public async Task Parse(GameClient session, IIncomingPacket packet)
     {
         // Protocol note: CameraPurchaseOK has no failure variant, so a missing
         // pending photo cannot send a "failed" reply — silent return + the
@@ -36,10 +40,10 @@ internal class PurchasePhotoEvent : IPacketEvent
         if (!_cameraPhotoManager.TryConsumePurchase(session.GetHabbo().Id, out var pending))
         {
             if (pending == null)
-                return Task.CompletedTask;
+                return;
 
             session.Send(new CameraPurchaseOkComposer());
-            return Task.CompletedTask;
+            return;
         }
 
         // From here the photo is reserved as purchased. If we cannot actually
@@ -48,7 +52,7 @@ internal class PurchasePhotoEvent : IPacketEvent
         if (!_itemDataManager.Items.TryGetValue(CameraPhotoItem.BaseItemId, out var definition))
         {
             _cameraPhotoManager.ResetPurchase(session.GetHabbo().Id);
-            return Task.CompletedTask;
+            return;
         }
 
         var extradata = JsonSerializer.Serialize(new
@@ -67,13 +71,20 @@ internal class PurchasePhotoEvent : IPacketEvent
         if (item == null)
         {
             _cameraPhotoManager.ResetPurchase(session.GetHabbo().Id);
-            return Task.CompletedTask;
+            return;
         }
 
         if (session.GetHabbo().Inventory.Furniture.AddItem(item.ToInventoryItem()))
             session.Send(new FurniListNotificationComposer(item.Id, 1));
         session.Send(new FurniListUpdateComposer());
         session.Send(new CameraPurchaseOkComposer());
-        return Task.CompletedTask;
+
+        // pixelrp: purchased photos also land in the player's private photo
+        // library (the phone's Photos app) as a hidden camera_web row —
+        // PublishPhoto flips `visible` to put the same row on the CMS page.
+        using var connection = _database.Connection();
+        await connection.ExecuteAsync(
+            "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 0)",
+            new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
     }
 }

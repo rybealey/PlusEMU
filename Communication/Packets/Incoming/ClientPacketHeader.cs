@@ -397,4 +397,5 @@ public static class ClientPacketHeader
     public const uint RpSaveUiSettingsEvent = 3903;
     public const uint RpUseItemEvent = 3905;
     public const uint RpMessengerMarkReadEvent = 3907;
+    public const uint RpPhotoListEvent = 3908;
 }
