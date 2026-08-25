@@ -16599,13 +16599,6 @@
 <part id="1801" type="lc" colorable="0" index="1" colorindex="0"/>
 <part id="1801" type="rc" colorable="0" index="1" colorindex="0"/>
 </set>
-<set id="116893436" gender="U" club="0" colorable="1" selectable="1" preselectable="0">
-<part id="116893436" type="lc" colorable="1" index="0" colorindex="1"/>
-<part id="116893436" type="rc" colorable="1" index="0" colorindex="1"/>
-<part id="116893437" type="lc" colorable="1" index="1" colorindex="2"/>
-<part id="116893438" type="lc" colorable="1" index="2" colorindex="1"/>
-<part id="116893439" type="lc" colorable="0" index="3" colorindex="0"/>
-</set>
 </settype>
 <settype type="cp" paletteid="3" mand_m_0="0" mand_f_0="0" mand_m_1="0" mand_f_1="0">
 <set id="3119" gender="U" club="0" colorable="1" selectable="1" preselectable="0">
