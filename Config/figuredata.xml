@@ -16603,7 +16603,7 @@
 <part id="116893436" type="lc" colorable="1" index="0" colorindex="1"/>
 <part id="116893436" type="rc" colorable="1" index="0" colorindex="1"/>
 <part id="116893437" type="lc" colorable="1" index="1" colorindex="2"/>
-<part id="116893438" type="lc" colorable="1" index="2" colorindex="2"/>
+<part id="116893438" type="lc" colorable="1" index="2" colorindex="1"/>
 <part id="116893439" type="lc" colorable="0" index="3" colorindex="0"/>
 </set>
 </settype>
