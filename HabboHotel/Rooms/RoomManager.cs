@@ -43,6 +43,12 @@ public class RoomManager : IRoomManager
             var sinceLastTime = DateTime.Now - _cycleLastExecution;
             if (sinceLastTime.TotalMilliseconds >= 500)
             {
+                // TEMP stall telemetry (2026-08-25): the loop polls every 5ms,
+                // so firing much later than 500ms means the game-cycle thread
+                // itself stalled (GC pause or ClientManager.OnCycle blocking),
+                // freezing movement in every room at once.
+                if (sinceLastTime.TotalMilliseconds > 750)
+                    _logger.LogWarning("[stall] Room cycle fired {Ms}ms after the previous one (target 500ms)", (int)sinceLastTime.TotalMilliseconds);
                 _cycleLastExecution = DateTime.Now;
                 foreach (var room in _rooms.Values.ToList())
                 {
@@ -52,12 +58,17 @@ public class RoomManager : IRoomManager
                     {
                         room.ProcessTask?.Dispose();
                         room.ProcessTask = new(room.ProcessRoom);
+                        room.ProcessTaskStarted = DateTime.Now;
                         room.ProcessTask.Start();
                         room.IsLagging = 0;
                     }
                     else
                     {
                         room.IsLagging++;
+                        // TEMP stall telemetry: a skipped tick sends no movement
+                        // updates — this is the freeze players see.
+                        _logger.LogWarning("[stall] Room {Id} tick skipped - ProcessRoom still running after {Ms}ms (lagging={Lagging})",
+                            room.Id, (int)(DateTime.Now - room.ProcessTaskStarted).TotalMilliseconds, room.IsLagging);
                         if (room.IsLagging >= 30)
                         {
                             room.IsCrashed = true;

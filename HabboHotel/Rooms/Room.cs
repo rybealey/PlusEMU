@@ -17,11 +17,15 @@ using Plus.HabboHotel.Rooms.Games.Freeze;
 using Plus.HabboHotel.Rooms.Games.Teams;
 using Plus.HabboHotel.Rooms.Instance;
 using Plus.Utilities;
+using NLog;
+using System.Diagnostics;
 
 namespace Plus.HabboHotel.Rooms;
 
 public class Room : RoomData
 {
+    private static readonly NLog.ILogger Log = LogManager.GetLogger("Plus.HabboHotel.Rooms.Room");
+
     private readonly BansComponent _bansComponent;
 
     private readonly FilterComponent _filterComponent;
@@ -49,6 +53,9 @@ public class Room : RoomData
     public Dictionary<int, double> MutedUsers;
 
     public Task ProcessTask;
+    // Set by RoomManager when ProcessTask starts, so a skipped tick can report
+    // how long the still-running ProcessRoom has been going.
+    public DateTime ProcessTaskStarted;
     public bool RoomMuted;
 
     public TeamManager Teambanzai;
@@ -347,6 +354,13 @@ public class Room : RoomData
                 PlusEnvironment.Game.RoomManager.UnloadRoom(Id);
                 return;
             }
+            // TEMP stall telemetry (2026-08-25): a phase that overruns the
+            // 500ms tick makes RoomManager skip the next tick — the
+            // freeze-then-teleport players report. Log which phase ate the
+            // time; remove with the [gap] client logger once the stall source
+            // is confirmed.
+            var sw = Stopwatch.StartNew();
+            long tItems = 0, tUsers = 0, tSerialize = 0, tGameItems = 0;
             try
             {
                 GetRoomItemHandler().OnCycle();
@@ -355,6 +369,7 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            tItems = sw.ElapsedMilliseconds;
             try
             {
                 GetRoomUserManager().OnCycle();
@@ -363,6 +378,7 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            tUsers = sw.ElapsedMilliseconds;
             try
             {
                 GetRoomUserManager().SerializeStatusUpdates();
@@ -371,6 +387,7 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            tSerialize = sw.ElapsedMilliseconds;
             try
             {
                 if (_gameItemHandler != null)
@@ -380,6 +397,7 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            tGameItems = sw.ElapsedMilliseconds;
             try
             {
                 GetWired().OnCycle();
@@ -388,6 +406,9 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            var total = sw.ElapsedMilliseconds;
+            if (total > 250)
+                Log.Warn($"[stall] Room {Id} ProcessRoom took {total}ms (items={tItems}ms users={tUsers - tItems}ms serialize={tSerialize - tUsers}ms gameitems={tGameItems - tSerialize}ms wired={total - tGameItems}ms)");
         }
         catch (Exception e)
         {

@@ -26,6 +26,7 @@ namespace Plus.HabboHotel;
 // This class will be obsolete. Do not reference to Game().<Service> but inject it instead.
 public class Game : IGame
 {
+    private static readonly NLog.ILogger Log = NLog.LogManager.GetLogger("Plus.HabboHotel.Game");
     private readonly IGameClientManager _clientManager;
     private readonly IModerationManager _moderationManager;
     private readonly IItemDataManager _itemDataManager;
@@ -136,8 +137,16 @@ public class Game : IGame
         while (_cycleActive)
         {
             _cycleEnded = false;
+            // TEMP stall telemetry (2026-08-25): both calls run on this one
+            // thread; either blocking delays every room tick. Split the timing
+            // so a stall names its half.
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             _roomManager.OnCycle();
+            var tRooms = sw.ElapsedMilliseconds;
             _clientManager.OnCycle();
+            var tTotal = sw.ElapsedMilliseconds;
+            if (tTotal > 250)
+                Log.Warn($"[stall] Game cycle iteration took {tTotal}ms (roomManager={tRooms}ms, clientManager={tTotal - tRooms}ms)");
             _cycleEnded = true;
             Thread.Sleep(_cycleSleepTime);
         }
