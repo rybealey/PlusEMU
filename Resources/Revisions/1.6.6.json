@@ -279,7 +279,8 @@
     "RpMessengerMarkReadEvent": 3907,
     "RpPhotoListEvent": 3908,
     "RpDeletePhotoEvent": 3910,
-    "RpUpdatePhotoEvent": 3912
+    "RpUpdatePhotoEvent": 3912,
+    "RpSaveScreenshotEvent": 3913
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,

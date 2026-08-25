@@ -400,4 +400,5 @@ public static class ClientPacketHeader
     public const uint RpPhotoListEvent = 3908;
     public const uint RpDeletePhotoEvent = 3910;
     public const uint RpUpdatePhotoEvent = 3912;
+    public const uint RpSaveScreenshotEvent = 3913;
 }
