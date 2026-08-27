@@ -1,5 +1,8 @@
 ﻿using NLog;
 using Plus.Communication.Packets.Outgoing.Handshake;
+using Plus.Communication.Packets.Outgoing.Inventory.Badges;
+using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Users.Process;
 
@@ -26,6 +29,11 @@ internal sealed class ProcessComponent
     /// Player to update, handle, change etc.
     /// </summary>
     private Habbo _player;
+
+    /// <summary>
+    /// Tracks whether the player was VIP as of the last cycle, so a mid-session expiry can be detected.
+    /// </summary>
+    private bool _vipWasActive;
 
     /// <summary>
     /// ThreadPooled Timer.
@@ -55,6 +63,7 @@ internal sealed class ProcessComponent
         if (_player != null)
             return false;
         _player = player;
+        _vipWasActive = player.IsVip;
         _timer = new(Run, null, _runtimeInSec * 1000, _runtimeInSec * 1000);
         return true;
     }
@@ -107,6 +116,24 @@ internal sealed class ProcessComponent
                 PlusEnvironment.Game.AchievementManager.ProgressAchievement(_player.Client, "ACH_AllTimeHotelPresence", 1);
             _player.CheckCreditsTimer();
             _player.Effects.CheckEffectExpiry(_player);
+
+            // pixelrp: VIP expiry crossed while online - demote live. Soft lapse:
+            // the figure and items in slots 11-12 are untouched.
+            if (_vipWasActive && !_player.IsVip)
+            {
+                var game = PlusEnvironment.Game;
+                _player.Permissions = new(game.PermissionManager.GetPermissionsForPlayer(_player), game.PermissionManager.GetCommandsForPlayer(_player));
+                if (game.SubscriptionManager.TryGetSubscriptionData(1, out var subData) && !string.IsNullOrEmpty(subData.Badge)
+                    && _player.Inventory.Badges.HasBadge(subData.Badge))
+                {
+                    game.BadgeManager.RemoveBadge(_player, subData.Badge).GetAwaiter().GetResult();
+                    _player.Client?.Send(new BadgesComposer(_player.Id, _player.Inventory.Badges.Badges));
+                }
+                _player.Client?.Send(new UserRightsComposer(0, _player.Rank, _player.IsAmbassador));
+                _player.Client?.Send(new ScrSendUserInfoComposer(_player));
+                _player.Client?.SendWhisper("Your VIP has expired - visit the Diamonds Store to renew.");
+            }
+            _vipWasActive = _player.IsVip;
 
             // END CODE
 

@@ -1,4 +1,5 @@
 ﻿using Plus.HabboHotel.Achievements;
+using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.Bots;
 using Plus.HabboHotel.Cache;
 using Plus.HabboHotel.Catalog;
@@ -7,6 +8,7 @@ using Plus.HabboHotel.Games;
 using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Navigator;
+using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat;
@@ -32,6 +34,10 @@ public interface IGame
     [Obsolete("Use dependency injection instead.")] IAchievementManager AchievementManager { get; }
 
     [Obsolete("Use dependency injection instead.")] ISubscriptionManager SubscriptionManager { get; }
+
+    [Obsolete("Use dependency injection instead.")] IPermissionManager PermissionManager { get; }
+
+    [Obsolete("Use dependency injection instead.")] IBadgeManager BadgeManager { get; }
 
     [Obsolete("Use dependency injection instead.")] IQuestManager QuestManager { get; }
 

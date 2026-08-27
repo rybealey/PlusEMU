@@ -176,6 +176,10 @@ public class Game : IGame
 
     public ISubscriptionManager SubscriptionManager => _subscriptionManager;
 
+    public IPermissionManager PermissionManager => _permissionManager;
+
+    public IBadgeManager BadgeManager => _badgeManager;
+
     public IQuestManager QuestManager => _questManager;
 
     public IGroupManager GroupManager => _groupManager;
