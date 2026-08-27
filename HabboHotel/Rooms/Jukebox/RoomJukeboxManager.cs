@@ -136,7 +136,14 @@ public class RoomJukeboxManager
         {
             if (_current == null)
                 return;
-            if (!ended && _current.DurationSec == 0 && durationSec >= 10 && durationSec <= 7200)
+            // Only the queuer's own player has actually loaded this track, so
+            // only their client's report can be trusted to set the duration —
+            // otherwise anyone in the room could inject a bogus (10, false)
+            // to truncate every song or a (7200, false) to freeze the room.
+            // If the queuer leaves before reporting, the 600s Cycle cap
+            // still backstops an unset duration.
+            if (!ended && _current.DurationSec == 0 && durationSec >= 10 && durationSec <= 7200 &&
+                session.GetHabbo().Id == _current.QueuedById)
             {
                 _current.DurationSec = durationSec;
                 broadcastDuration = true;
