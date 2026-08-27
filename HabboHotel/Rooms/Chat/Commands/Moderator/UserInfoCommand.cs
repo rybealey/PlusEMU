@@ -35,7 +35,7 @@ internal class UserInfoCommand : IChatCommand
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery(
-                "SELECT `id`,`username`,`mail`,`rank`,`motto`,`credits`,`activity_points`,`vip_points`,`gotw_points`,`online`,`rank_vip` FROM users WHERE `username` = @Username LIMIT 1");
+                "SELECT `id`,`username`,`mail`,`rank`,`motto`,`credits`,`activity_points`,`vip_points`,`gotw_points`,`online`,`vip_expire` FROM users WHERE `username` = @Username LIMIT 1");
             dbClient.AddParameter("Username", username);
             userData = dbClient.GetRow();
         }
@@ -62,7 +62,13 @@ internal class UserInfoCommand : IChatCommand
         habboInfo.Append("Generic Info:\r");
         habboInfo.Append($"ID: {Convert.ToInt32(userData["id"])}\r");
         habboInfo.Append($"Rank: {Convert.ToInt32(userData["rank"])}\r");
-        habboInfo.Append($"VIP Rank: {Convert.ToInt32(userData["rank_vip"])}\r");
+        // pixelrp: rank_vip is dead/stale; vip_expire (unix seconds) is the source of truth.
+        var vipExpire = Convert.ToInt64(userData["vip_expire"]);
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var vipStatus = vipExpire > nowUnix
+            ? $"Active ({Math.Ceiling((vipExpire - nowUnix) / 86400.0)} days left)"
+            : "None";
+        habboInfo.Append($"VIP: {vipStatus}\r");
         habboInfo.Append($"Email: {Convert.ToString(userData["mail"])}\r");
         habboInfo.Append($"Online Status: {(targetClient != null ? "True" : "False")}\r\r");
         habboInfo.Append("Currency Info:\r");
