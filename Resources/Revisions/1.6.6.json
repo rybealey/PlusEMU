@@ -285,7 +285,8 @@
     "RpJukeboxRemoveEvent": 3919,
     "RpJukeboxSkipEvent": 3921,
     "RpJukeboxReportEvent": 3922,
-    "RpRoomZoneSaveEvent": 3923
+    "RpRoomZoneSaveEvent": 3923,
+    "RpPassiveCancelEvent": 3927
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,

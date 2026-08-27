@@ -406,4 +406,5 @@ public static class ClientPacketHeader
     public const uint RpJukeboxSkipEvent = 3921;
     public const uint RpJukeboxReportEvent = 3922;
     public const uint RpRoomZoneSaveEvent = 3923;
+    public const uint RpPassiveCancelEvent = 3927;
 }

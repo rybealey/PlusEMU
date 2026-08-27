@@ -29,7 +29,7 @@ public class RpUseItemEvent : IPacketEvent
                 habbo.RpPassiveLastTick = 0;
                 habbo.SaveRpStats();
                 var roomUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
-                roomUser?.OnChat(5, "*consume the Kylie Jeener smoothie, activating passive status*", true);
+                roomUser?.OnChat(5, "*consumes the Kylie Jeener smoothie, activating passive status*", true);
                 if (roomUser != null)
                     habbo.CurrentRoom.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 1));
                 break;
