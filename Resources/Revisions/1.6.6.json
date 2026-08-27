@@ -280,7 +280,11 @@
     "RpPhotoListEvent": 3908,
     "RpDeletePhotoEvent": 3910,
     "RpUpdatePhotoEvent": 3912,
-    "RpSaveScreenshotEvent": 3913
+    "RpSaveScreenshotEvent": 3913,
+    "RpJukeboxAddEvent": 3918,
+    "RpJukeboxRemoveEvent": 3919,
+    "RpJukeboxSkipEvent": 3921,
+    "RpJukeboxReportEvent": 3922
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -554,6 +558,7 @@
     "RpUiSettingsComposer": 3902,
     "RpInventoryComposer": 3904,
     "RpMessengerReceiptComposer": 3906,
-    "RpPhotoListComposer": 3909
+    "RpPhotoListComposer": 3909,
+    "RpJukeboxStateComposer": 3917
   }
 }

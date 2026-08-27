@@ -16,6 +16,7 @@ public class RoomJukeboxManager
     private const int UnknownDurationCapSec = 600;
 
     private readonly Room _room;
+    private readonly object _lock = new();
     private readonly List<JukeboxTrack> _queue = new();
     private readonly Dictionary<int, DateTime> _lastAddByUser = new();
     private JukeboxTrack _current;
@@ -26,6 +27,7 @@ public class RoomJukeboxManager
         _room = room;
     }
 
+    // Caller must hold _lock.
     private int ElapsedSec => (_current == null) ? 0 : (int)(DateTime.UtcNow - _currentStartedAt).TotalSeconds;
 
     public bool HasJukebox() =>
@@ -48,21 +50,34 @@ public class RoomJukeboxManager
     {
         if (!HasJukebox())
             return "There's no jukebox in this room.";
-        if (_queue.Count >= MaxQueue)
-            return "The queue is full.";
-        if (ParseVideoId(url) == null)
-            return "That doesn't look like a YouTube link.";
-        if (_lastAddByUser.TryGetValue(session.GetHabbo().Id, out var last) &&
-            (DateTime.UtcNow - last).TotalSeconds < AddCooldownSec)
-            return "Hold on a moment before queueing another song.";
-        _lastAddByUser[session.GetHabbo().Id] = DateTime.UtcNow;
+        lock (_lock)
+        {
+            if (_queue.Count >= MaxQueue)
+                return "The queue is full.";
+            if (ParseVideoId(url) == null)
+                return "That doesn't look like a YouTube link.";
+            if (_lastAddByUser.TryGetValue(session.GetHabbo().Id, out var last) &&
+                (DateTime.UtcNow - last).TotalSeconds < AddCooldownSec)
+                return "Hold on a moment before queueing another song.";
+            _lastAddByUser[session.GetHabbo().Id] = DateTime.UtcNow;
+        }
         return null;
     }
 
     public void Enqueue(JukeboxTrack track)
     {
-        _queue.Add(track);
-        if (_current == null)
+        bool startNext;
+        lock (_lock)
+        {
+            // Closes the precheck/async-fetch race: TryAdd's queue-full check
+            // ran before metadata resolution; re-check here under the lock
+            // right before the actual mutation.
+            if (_queue.Count >= MaxQueue)
+                return;
+            _queue.Add(track);
+            startNext = _current == null;
+        }
+        if (startNext)
             StartNext();
         else
             BroadcastState();
@@ -70,34 +85,44 @@ public class RoomJukeboxManager
 
     private void StartNext()
     {
-        if (_queue.Count == 0)
+        lock (_lock)
         {
-            _current = null;
-            BroadcastState();
-            return;
+            if (_queue.Count == 0)
+            {
+                _current = null;
+            }
+            else
+            {
+                _current = _queue[0];
+                _queue.RemoveAt(0);
+                _currentStartedAt = DateTime.UtcNow;
+            }
         }
-        _current = _queue[0];
-        _queue.RemoveAt(0);
-        _currentStartedAt = DateTime.UtcNow;
         BroadcastState();
     }
 
     public bool TryRemove(GameClient session, int index)
     {
-        if (index < 0 || index >= _queue.Count)
-            return false;
-        var canManage = _room.CheckRights(session, true) || _room.CheckRights(session);
-        if (!canManage && _queue[index].QueuedById != session.GetHabbo().Id)
-            return false;
-        _queue.RemoveAt(index);
+        lock (_lock)
+        {
+            if (index < 0 || index >= _queue.Count)
+                return false;
+            var canManage = _room.CheckRights(session, true) || _room.CheckRights(session);
+            if (!canManage && _queue[index].QueuedById != session.GetHabbo().Id)
+                return false;
+            _queue.RemoveAt(index);
+        }
         BroadcastState();
         return true;
     }
 
     public bool TrySkip(GameClient session)
     {
-        if (_current == null || !(_room.CheckRights(session, true) || _room.CheckRights(session)))
-            return false;
+        lock (_lock)
+        {
+            if (_current == null || !(_room.CheckRights(session, true) || _room.CheckRights(session)))
+                return false;
+        }
         StartNext();
         return true;
     }
@@ -105,29 +130,41 @@ public class RoomJukeboxManager
     // Clients report the player's real duration once loaded, and the ended signal.
     public void Report(GameClient session, int durationSec, bool ended)
     {
-        if (_current == null)
-            return;
-        if (!ended && _current.DurationSec == 0 && durationSec >= 10 && durationSec <= 7200)
+        var broadcastDuration = false;
+        var startNext = false;
+        lock (_lock)
         {
-            _current.DurationSec = durationSec;
+            if (_current == null)
+                return;
+            if (!ended && _current.DurationSec == 0 && durationSec >= 10 && durationSec <= 7200)
+            {
+                _current.DurationSec = durationSec;
+                broadcastDuration = true;
+            }
+            else if (ended)
+            {
+                var minElapsed = (_current.DurationSec > 0) ? (int)(_current.DurationSec * 0.8) : 30;
+                startNext = ElapsedSec >= minElapsed;
+            }
+        }
+        if (startNext)
+            StartNext();
+        else if (broadcastDuration)
             BroadcastState();
-            return;
-        }
-        if (ended)
-        {
-            var minElapsed = (_current.DurationSec > 0) ? (int)(_current.DurationSec * 0.8) : 30;
-            if (ElapsedSec >= minElapsed)
-                StartNext();
-        }
     }
 
     // Called from the room cycle: server-side auto-advance safety net.
     public void Cycle()
     {
-        if (_current == null)
-            return;
-        var cap = (_current.DurationSec > 0) ? (_current.DurationSec + 2) : UnknownDurationCapSec;
-        if (ElapsedSec > cap)
+        bool startNext;
+        lock (_lock)
+        {
+            if (_current == null)
+                return;
+            var cap = (_current.DurationSec > 0) ? (_current.DurationSec + 2) : UnknownDurationCapSec;
+            startNext = ElapsedSec > cap;
+        }
+        if (startNext)
             StartNext();
     }
 
@@ -137,13 +174,39 @@ public class RoomJukeboxManager
     {
         if (HasJukebox())
             return;
-        _current = null;
-        _queue.Clear();
+        lock (_lock)
+        {
+            _current = null;
+            _queue.Clear();
+        }
         BroadcastState();
     }
 
-    public IServerPacket BuildState() => new RpJukeboxStateComposer(HasJukebox(), _current, ElapsedSec, _queue);
+    // Snapshots _current/_queue under the lock so the composer (serialized
+    // outside the lock, on whichever thread calls Send) never reads state
+    // that another thread is concurrently mutating.
+    public IServerPacket BuildState()
+    {
+        lock (_lock)
+        {
+            var currentSnapshot = (_current == null)
+                ? null
+                : new JukeboxTrack
+                {
+                    VideoId = _current.VideoId,
+                    Title = _current.Title,
+                    Author = _current.Author,
+                    DurationSec = _current.DurationSec,
+                    QueuedBy = _current.QueuedBy,
+                    QueuedById = _current.QueuedById
+                };
+            var queueSnapshot = new List<JukeboxTrack>(_queue);
+            return new RpJukeboxStateComposer(HasJukebox(), currentSnapshot, ElapsedSec, queueSnapshot);
+        }
+    }
 
+    // BuildState() takes and releases _lock internally, so the actual Send
+    // below always runs outside the lock (no network I/O while holding it).
     public void BroadcastState() => _room.SendPacket(BuildState());
 
     public void SendState(GameClient session) => session.Send(BuildState());
