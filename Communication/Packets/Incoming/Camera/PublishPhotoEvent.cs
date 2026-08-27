@@ -1,4 +1,5 @@
 using Dapper;
+using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Outgoing.Camera;
 using Plus.Database;
 using Plus.HabboHotel.Camera;
@@ -6,6 +7,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Camera;
 
+[VipOnly]
 internal class PublishPhotoEvent : IPacketEvent
 {
     private readonly ICameraPhotoManager _cameraPhotoManager;

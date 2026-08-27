@@ -35,6 +35,10 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
             return Task.CompletedTask;
         if (icon != "" && !IconClass().IsMatch(icon))
             return Task.CompletedTask;
+        // pixelrp: image icons named vip-*.png (stored as "img-vip-...") are
+        // VIP-exclusive.
+        if (icon.StartsWith("img-vip-") && !session.GetHabbo().IsVip)
+            return Task.CompletedTask;
         var habbo = session.GetHabbo();
         if (habbo == null)
             return Task.CompletedTask;

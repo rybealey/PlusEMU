@@ -46,9 +46,9 @@ internal class EnableCommand : IChatCommand
             session.SendWhisper("Sorry, only staff members can use this effects.");
             return;
         }
-        if (effectId == 178 && !session.GetHabbo().Permissions.HasRight("gold_vip") && !session.GetHabbo().Permissions.HasRight("events_staff"))
+        if (effectId == 178 && !session.GetHabbo().Permissions.HasRight("silver_vip") && !session.GetHabbo().Permissions.HasRight("gold_vip") && !session.GetHabbo().Permissions.HasRight("events_staff"))
         {
-            session.SendWhisper("Sorry, only Gold VIP and Events Staff members can use this effect.");
+            session.SendWhisper("Sorry, only VIP and Events Staff members can use this effect.");
             return;
         }
         session.GetHabbo().Effects.ApplyEffect(effectId);

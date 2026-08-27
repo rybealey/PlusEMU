@@ -1,9 +1,11 @@
+using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Outgoing.Camera;
 using Plus.HabboHotel.Camera;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Camera;
 
+[VipOnly]
 internal class RenderRoomEvent : IPacketEvent
 {
     // Client-supplied length guards allocation from a hostile/buggy client

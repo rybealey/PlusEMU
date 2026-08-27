@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Dapper;
+using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Outgoing.Camera;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Database;
@@ -9,6 +10,7 @@ using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Incoming.Camera;
 
+[VipOnly]
 internal class PurchasePhotoEvent : IPacketEvent
 {
     private readonly ICameraPhotoManager _cameraPhotoManager;
