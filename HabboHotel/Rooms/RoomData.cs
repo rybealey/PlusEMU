@@ -110,6 +110,7 @@ public class RoomData
         EnablesEnabled = data.EnablesEnabled;
         ReverseRollers = data.ReverseRollers;
         LayEnabled = data.LayEnabled;
+        IsSafeZone = data.IsSafeZone;
         Model = data.Model;
     }
 
@@ -159,6 +160,11 @@ public class RoomData
     public int SalePrice { get; set; }
     public bool ReverseRollers { get; set; }
     public bool LayEnabled { get; set; }
+
+    // pixelrp: safe-zone rooms freeze the passive-status countdown for
+    // everyone inside. Not a ctor arg (the positional ctor is unwieldy);
+    // RoomFactory assigns it after construction from `is_safe_zone`.
+    public bool IsSafeZone { get; set; }
 
 
     public RoomModel Model { get; set; }

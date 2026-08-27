@@ -50,7 +50,10 @@ public static class RoomFactory
                         ToBool(row["pull_enabled"]),
                         ToBool(row["spush_enabled"]), ToBool(row["spull_enabled"]), ToBool(row["enables_enabled"]),
                         ToBool(row["respect_notifications_enabled"]),
-                        ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model));
+                        ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model)
+                    {
+                        IsSafeZone = ToBool(row["is_safe_zone"])
+                    });
                 }
             }
         }
@@ -92,6 +95,7 @@ public static class RoomFactory
                     ToBool(row["spush_enabled"]), ToBool(row["spull_enabled"]), ToBool(row["enables_enabled"]),
                     ToBool(row["respect_notifications_enabled"]),
                     ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model);
+                data.IsSafeZone = ToBool(row["is_safe_zone"]);
                 return true;
             }
         }

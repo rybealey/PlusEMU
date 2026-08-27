@@ -1,4 +1,5 @@
 ﻿using Plus.Communication.Packets.Outgoing.Rooms.Settings;
+using Plus.Communication.Packets.Outgoing.Rooms.Settings;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
 
@@ -21,6 +22,9 @@ internal class GetRoomSettingsEvent : IPacketEvent
         if (!room.CheckRights(session, true))
             return Task.CompletedTask;
         session.Send(new RoomSettingsDataComposer(room));
+        // pixelrp: the Roleplay tab's zone type rides alongside the stock
+        // settings data (the stock packet's wire shape can't be extended).
+        session.Send(new RpRoomZoneComposer(room.Id, room.IsSafeZone));
         return Task.CompletedTask;
     }
 }

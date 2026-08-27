@@ -843,23 +843,34 @@ public class RoomUserManager
                     var nowTick = Environment.TickCount64;
                     if (habboPas.RpPassiveLastTick == 0)
                         habboPas.RpPassiveLastTick = nowTick;
-                    var elapsedSec = (int)((nowTick - habboPas.RpPassiveLastTick) / 1000);
-                    if (elapsedSec >= 1)
+                    // pixelrp safe zones: the countdown freezes here. Keep
+                    // re-anchoring the decrement clock every tick so none of
+                    // the time spent in this room counts once they step back
+                    // into an unsafe room.
+                    if (_room.IsSafeZone)
                     {
-                        habboPas.RpPassiveLastTick += elapsedSec * 1000L;
-                        var beforeMinutes = (habboPas.RpPassiveSeconds + 59) / 60;
-                        habboPas.RpPassiveSeconds = Math.Max(0, habboPas.RpPassiveSeconds - elapsedSec);
-                        var afterMinutes = (habboPas.RpPassiveSeconds + 59) / 60;
-                        if (habboPas.RpPassiveSeconds == 0)
+                        habboPas.RpPassiveLastTick = nowTick;
+                    }
+                    else
+                    {
+                        var elapsedSec = (int)((nowTick - habboPas.RpPassiveLastTick) / 1000);
+                        if (elapsedSec >= 1)
                         {
-                            user.GetClient().SendWhisper("Your passive status has expired.");
-                            habboPas.SaveRpStats();
-                            _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0));
-                        }
-                        else if (afterMinutes < beforeMinutes)
-                        {
-                            user.GetClient().SendWhisper($"Your passive status expires in {afterMinutes} minutes.");
-                            habboPas.SaveRpStats();
+                            habboPas.RpPassiveLastTick += elapsedSec * 1000L;
+                            var beforeMinutes = (habboPas.RpPassiveSeconds + 59) / 60;
+                            habboPas.RpPassiveSeconds = Math.Max(0, habboPas.RpPassiveSeconds - elapsedSec);
+                            var afterMinutes = (habboPas.RpPassiveSeconds + 59) / 60;
+                            if (habboPas.RpPassiveSeconds == 0)
+                            {
+                                user.GetClient().SendWhisper("Your passive status has expired.");
+                                habboPas.SaveRpStats();
+                                _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0));
+                            }
+                            else if (afterMinutes < beforeMinutes)
+                            {
+                                user.GetClient().SendWhisper($"Your passive status expires in {afterMinutes} minutes.");
+                                habboPas.SaveRpStats();
+                            }
                         }
                     }
                 }
