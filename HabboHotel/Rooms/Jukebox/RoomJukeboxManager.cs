@@ -212,9 +212,34 @@ public class RoomJukeboxManager
         }
     }
 
+    // The jukebox furni animates while a track plays (ExtraData "1") and
+    // reverts to idle ("0") otherwise. Runs after every state broadcast:
+    // idempotent, cheap, and only sends a furni update when the state
+    // actually flips. Never called under _lock (UpdateState sends packets).
+    private void SyncJukeboxItemState()
+    {
+        bool playing;
+        lock (_lock)
+        {
+            playing = _current != null;
+        }
+        var extraData = playing ? "1" : "0";
+        foreach (var item in _room.GetRoomItemHandler().GetFloor.Where(item => item.Definition.ItemName == JukeboxItemName).ToList())
+        {
+            if (item.ExtraData == null || item.ExtraData.Serialize() == extraData)
+                continue;
+            item.ExtraData.Store(extraData);
+            item.UpdateState(false, true);
+        }
+    }
+
     // BuildState() takes and releases _lock internally, so the actual Send
     // below always runs outside the lock (no network I/O while holding it).
-    public void BroadcastState() => _room.SendPacket(BuildState());
+    public void BroadcastState()
+    {
+        _room.SendPacket(BuildState());
+        SyncJukeboxItemState();
+    }
 
     public void SendState(GameClient session) => session.Send(BuildState());
 }
