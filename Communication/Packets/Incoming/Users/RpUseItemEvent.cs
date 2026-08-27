@@ -18,13 +18,26 @@ public class RpUseItemEvent : IPacketEvent
         var habbo = session.GetHabbo();
         if (habbo == null || slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots)
             return Task.CompletedTask;
-        var item = habbo.ConsumeRpItem(slot);
-        if (item == null)
+        // Peek before consuming: a failed precondition must not burn the item.
+        var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
+        if (string.IsNullOrEmpty(item))
             return Task.CompletedTask;
         switch (item)
         {
             case "smoothie":
                 habbo.EnsureRpStatsLoaded();
+                // Only drinkable in a safe zone, and only at full health.
+                if (habbo.CurrentRoom is not { IsSafeZone: true })
+                {
+                    session.SendWhisper("You can only drink a Passive Smoothie in a safe zone.");
+                    return Task.CompletedTask;
+                }
+                if (habbo.RpHealth < habbo.RpHealthMax)
+                {
+                    session.SendWhisper("You need full health to drink a Passive Smoothie.");
+                    return Task.CompletedTask;
+                }
+                habbo.ConsumeRpItem(slot);
                 habbo.RpPassiveSeconds = 3600;
                 habbo.RpPassiveLastTick = 0;
                 habbo.SaveRpStats();
