@@ -14,6 +14,8 @@ internal class MoveAvatarEvent : IPacketEvent
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null || !user.CanWalk)
             return Task.CompletedTask;
+        // A player-initiated path ends any staff-forced :walk patrol.
+        user.ForcedWalkHorizontal = null;
         var moveX = packet.ReadInt();
         var moveY = packet.ReadInt();
         if (moveX == user.X && moveY == user.Y)

@@ -52,6 +52,12 @@ public class RoomUser
     public bool IsRolling = false;
     public bool IsSitting = false;
     public bool IsWalking;
+
+    // pixelrp :walk command - staff-forced patrol along one axis. null =
+    // off; true = horizontal, false = vertical. Cleared the moment the
+    // player clicks a tile of their own (MoveAvatarEvent).
+    public bool? ForcedWalkHorizontal;
+    public int ForcedWalkDirection = 1;
     public int LastBubble = 0;
     public double LastInteraction;
     public Item LastItem = null;

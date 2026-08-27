@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Drawing;
+using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Avatar;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
@@ -838,6 +839,20 @@ public class RoomUserManager
                     // pixelrp passive status: count down ONLINE seconds; whisper on
                 // every minute boundary, and once more when it expires. Saved on
                 // each whisper so a crash/logout loses <60s of countdown.
+                // pixelrp :walk - staff-forced patrol. Re-evaluated every
+                // cycle so the user reverses at the lane end without pausing;
+                // the same lane scan the bot patrol uses (GenericBot).
+                if (!user.IsBot && user.ForcedWalkHorizontal is { } forcedHorizontal && !user.IsWalking && user.CanWalk)
+                {
+                    var lane = FindForcedWalkEnd(user.X, user.Y, forcedHorizontal, user.ForcedWalkDirection);
+                    if (lane.X == user.X && lane.Y == user.Y)
+                    {
+                        user.ForcedWalkDirection = -user.ForcedWalkDirection;
+                        lane = FindForcedWalkEnd(user.X, user.Y, forcedHorizontal, user.ForcedWalkDirection);
+                    }
+                    if (lane.X != user.X || lane.Y != user.Y)
+                        user.MoveTo(lane.X, lane.Y);
+                }
                 if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpPassiveSeconds: > 0 } habboPas)
                 {
                     var nowTick = Environment.TickCount64;
@@ -1563,5 +1578,19 @@ public class RoomUserManager
         _pets = null;
         _bots = null;
         _room = null;
+    }
+
+    // pixelrp :walk - furthest open tile along one axis from (x, y).
+    private Point FindForcedWalkEnd(int x, int y, bool horizontal, int direction)
+    {
+        var map = _room.GetGameMap();
+        var end = new Point(x, y);
+        while (true)
+        {
+            var next = horizontal ? new Point(end.X + direction, end.Y) : new Point(end.X, end.Y + direction);
+            if (!map.ValidTile(next.X, next.Y) || !map.SquareIsOpen(next.X, next.Y, false))
+                return end;
+            end = next;
+        }
     }
 }
