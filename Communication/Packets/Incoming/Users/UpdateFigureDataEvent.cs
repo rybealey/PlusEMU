@@ -27,7 +27,7 @@ internal class UpdateFigureDataEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var gender = packet.ReadString().ToUpper();
-        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, true);
+        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip);
         if (look == session.GetHabbo().Look)
             return Task.CompletedTask;
         if ((DateTime.Now - session.GetHabbo().LastClothingUpdateTime).TotalSeconds <= 2.0)

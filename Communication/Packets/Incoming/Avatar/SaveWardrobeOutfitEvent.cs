@@ -22,7 +22,7 @@ internal class SaveWardrobeOutfitEvent : IPacketEvent
         var slotId = packet.ReadInt();
         var look = packet.ReadString();
         var gender = packet.ReadString();
-        look = _figureDataManager.ProcessFigure(look, gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, true);
+        look = _figureDataManager.ProcessFigure(look, gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip);
 
         using (var connection = _database.Connection())
         {

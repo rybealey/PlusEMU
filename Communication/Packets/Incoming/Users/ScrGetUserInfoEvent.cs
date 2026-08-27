@@ -7,7 +7,7 @@ internal class ScrGetUserInfoEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        session.Send(new ScrSendUserInfoComposer());
+        session.Send(new ScrSendUserInfoComposer(session.GetHabbo()));
         return Task.CompletedTask;
     }
 }
