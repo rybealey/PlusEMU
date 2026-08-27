@@ -16,6 +16,7 @@ using Plus.HabboHotel.Rooms.Games.Football;
 using Plus.HabboHotel.Rooms.Games.Freeze;
 using Plus.HabboHotel.Rooms.Games.Teams;
 using Plus.HabboHotel.Rooms.Instance;
+using Plus.HabboHotel.Rooms.Jukebox;
 using Plus.Utilities;
 using NLog;
 using System.Diagnostics;
@@ -40,6 +41,7 @@ public class Room : RoomData
 
     private Gamemap _gamemap;
     private RoomItemHandling _roomItemHandling;
+    private RoomJukeboxManager _jukeboxManager;
 
     private RoomUserManager _roomUserManager;
     private Soccer _soccer;
@@ -112,6 +114,8 @@ public class Room : RoomData
     }
 
     public RoomUserManager GetRoomUserManager() => _roomUserManager;
+
+    public RoomJukeboxManager GetJukeboxManager() => _jukeboxManager ??= new RoomJukeboxManager(this);
 
     public Soccer GetSoccer()
     {
@@ -406,6 +410,14 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            try
+            {
+                GetJukeboxManager().Cycle();
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+            }
             var total = sw.ElapsedMilliseconds;
             if (total > 250)
                 Log.Warn($"[stall] Room {Id} ProcessRoom took {total}ms (items={tItems}ms users={tUsers - tItems}ms serialize={tSerialize - tUsers}ms gameitems={tGameItems - tSerialize}ms wired={total - tGameItems}ms)");
@@ -493,6 +505,10 @@ public class Room : RoomData
         session.Send(new UserUpdateComposer(_roomUserManager.GetUserList().ToList()));
         session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));
         session.Send(new ItemsComposer(GetRoomItemHandler().GetWall.ToArray(), this));
+        // pixelrp jukebox: sent unconditionally, even with no jukebox in the
+        // room — the packet is tiny and the client hides the panel itself
+        // via present=false (see RoomJukeboxManager.BuildState).
+        GetJukeboxManager().SendState(session);
     }
 
     public void AddTent(uint tentId)

@@ -225,6 +225,11 @@ public class RoomItemHandling
             item.UpdateNeeded = false;
         }
         RemoveRoomItem(item);
+        // pixelrp jukebox: RemoveRoomItem() has already pulled the item out of
+        // _floorItems/the game map above, so HasJukebox() inside
+        // OnJukeboxRemoved() correctly reflects its absence.
+        if (item.Definition.ItemName == "jukebox*1")
+            _room.GetJukeboxManager().OnJukeboxRemoved();
     }
 
     private void RemoveRoomItem(Item item)
@@ -569,6 +574,10 @@ public class RoomItemHandling
                 _wallItems.TryAdd(item.Id, item);
             if (sendMessage)
                 _room.SendPacket(new ObjectAddComposer(item));
+            // pixelrp jukebox: only a genuinely new placement, not a
+            // move/rotate re-entry into this same `if (newItem)` branch.
+            if (item.Definition.ItemName == "jukebox*1")
+                _room.GetJukeboxManager().OnJukeboxPlaced();
         }
         else
         {
@@ -726,6 +735,11 @@ public class RoomItemHandling
             session.Send(new FurniListAddComposer(item.ToInventoryItem()));
         }
         _rollers.Clear();
+        // pixelrp jukebox: /pickall bypasses RemoveFurniture entirely, so a
+        // picked-up jukebox needs its own notification here. Safe to call
+        // unconditionally — OnJukeboxRemoved() no-ops when a jukebox is
+        // still on the floor (HasJukebox() check runs after the loop above).
+        _room.GetJukeboxManager().OnJukeboxRemoved();
         return items;
     }
 
