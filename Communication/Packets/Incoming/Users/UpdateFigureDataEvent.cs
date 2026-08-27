@@ -27,7 +27,8 @@ internal class UpdateFigureDataEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var gender = packet.ReadString().ToUpper();
-        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip);
+        // pixelrp: staff keep club clothing access even without an active VIP subscription.
+        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip || session.GetHabbo().IsStaff);
         if (look == session.GetHabbo().Look)
             return Task.CompletedTask;
         if ((DateTime.Now - session.GetHabbo().LastClothingUpdateTime).TotalSeconds <= 2.0)

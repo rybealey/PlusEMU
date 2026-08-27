@@ -42,7 +42,8 @@ internal class FacelessCommand : IChatCommand
                 break;
             }
         }
-        session.GetHabbo().Look = _figureDataManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip);
+        // pixelrp: staff keep club clothing access even without an active VIP subscription.
+        session.GetHabbo().Look = _figureDataManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip || session.GetHabbo().IsStaff);
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.RunQuery($"UPDATE `users` SET `look` = '{session.GetHabbo().Look}' WHERE `id` = '{session.GetHabbo().Id}' LIMIT 1");

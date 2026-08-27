@@ -19,6 +19,9 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return Task.CompletedTask;
         var color = packet.ReadString() ?? "";
         var opacity = packet.ReadInt();
         var header = packet.ReadString() ?? "";
@@ -37,10 +40,7 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
             return Task.CompletedTask;
         // pixelrp: image icons named vip-*.png (stored as "img-vip-...") are
         // VIP-exclusive.
-        if (icon.StartsWith("img-vip-") && !session.GetHabbo().IsVip)
-            return Task.CompletedTask;
-        var habbo = session.GetHabbo();
-        if (habbo == null)
+        if (icon.StartsWith("img-vip-") && !habbo.IsVip)
             return Task.CompletedTask;
         habbo.EnsureRpUiSettingsLoaded();
         habbo.RpUiChromeColor = color;

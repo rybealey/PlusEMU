@@ -5,6 +5,7 @@ using Plus.Communication.Packets.Outgoing.BuildersClub;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Inventory.Achievements;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
+using Plus.Communication.Packets.Outgoing.Inventory.Badges;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Navigator;
@@ -135,9 +136,23 @@ public class SsoTicketEvent : IPacketEvent
                         await _badgeManager.GiveBadge(session.GetHabbo(), subData.Badge);
                 }
             }
+            // pixelrp: the grant above is gated on VipRank, which is 0 once a
+            // subscription lapses, so it never fires again for a lapsed user -
+            // meaning a badge granted while VIP was active would otherwise be
+            // held forever. Fetch subscription 1 explicitly and strip its
+            // badge here when the user is no longer VIP.
+            if (!session.GetHabbo().IsVip && _subscriptionManager.TryGetSubscriptionData(1, out var lapsedSubData))
+            {
+                if (!string.IsNullOrEmpty(lapsedSubData.Badge) && session.GetHabbo().Inventory.Badges.HasBadge(lapsedSubData.Badge))
+                {
+                    await _badgeManager.RemoveBadge(session.GetHabbo(), lapsedSubData.Badge);
+                    session.Send(new BadgesComposer(session.GetHabbo().Id, session.GetHabbo().Inventory.Badges.Badges));
+                }
+            }
             if (!_cacheManager.ContainsUser(session.GetHabbo().Id))
                 _cacheManager.GenerateUser(session.GetHabbo().Id);
-            session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip);
+            // pixelrp: login never strips club parts (soft lapse) - only outfit saves validate club access.
+            session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, true);
             session.GetHabbo().InitProcess();
             if (session.GetHabbo().Permissions.HasRight("mod_tickets"))
             {

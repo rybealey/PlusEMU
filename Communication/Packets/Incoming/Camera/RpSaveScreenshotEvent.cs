@@ -1,5 +1,4 @@
 using Dapper;
-using Plus.Communication.Attributes;
 using Plus.Database;
 using Plus.HabboHotel.Camera;
 using Plus.HabboHotel.GameClients;
@@ -13,7 +12,6 @@ namespace Plus.Communication.Packets.Incoming.Camera;
 /// library. Works anywhere — no room required. Replies with the refreshed
 /// library.
 /// </summary>
-[VipOnly]
 internal class RpSaveScreenshotEvent : IPacketEvent
 {
     private const int MaxPhotoBytes = 2_000_000;

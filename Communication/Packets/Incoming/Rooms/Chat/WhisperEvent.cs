@@ -78,7 +78,12 @@ public class WhisperEvent : IPacketEvent
         if (!_chatStyleManager.TryGetStyle(colour, out var style) ||
             style.RequiredRight.Length > 0 && !session.GetHabbo().Permissions.HasRight(style.RequiredRight))
             colour = 0;
-        user.LastBubble = session.GetHabbo().CustomBubbleId == 0 ? colour : session.GetHabbo().CustomBubbleId;
+        // pixelrp: the persisted bubble must still pass the style's required right
+        // (e.g. a VIP bubble after VIP lapses) - fall back to the validated colour.
+        var customBubble = session.GetHabbo().CustomBubbleId;
+        if (customBubble != 0 && (!_chatStyleManager.TryGetStyle(customBubble, out var customStyle) || customStyle.RequiredRight.Length > 0 && !session.GetHabbo().Permissions.HasRight(customStyle.RequiredRight)))
+            customBubble = 0;
+        user.LastBubble = customBubble == 0 ? colour : customBubble;
         if (!session.GetHabbo().Permissions.HasRight("mod_tool"))
         {
             if (user.IncrementAndCheckFlood(out var muteTime))
