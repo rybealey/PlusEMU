@@ -299,7 +299,12 @@ public class Habbo
     // pixelrp RP inventory (backpack carry slots 1-10). No caching — reads
     // and writes go straight to user_rp_inventory; the client is refreshed
     // with RpInventoryComposer after every change.
-    public const int RpCarrySlots = 10;
+    // pixelrp: 12 physical slots (the client renders 12); the last two unlock
+    // while VIP is active. Soft lapse: items already in 11-12 stay usable and
+    // consumable after expiry, but nothing new can be placed there.
+    public const int RpCarrySlots = 12;
+    public const int RpCarrySlotsBase = 10;
+    public int RpUnlockedSlots => IsVip ? RpCarrySlots : RpCarrySlotsBase;
 
     public List<(int Slot, string Item, int Count)> LoadRpInventory()
     {
@@ -322,7 +327,7 @@ public class Habbo
         var inventory = LoadRpInventory();
         var existing = inventory.FirstOrDefault(entry => entry.Item == item);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        if (existing.Item == item && existing.Slot > 0)
+        if (existing.Item == item && existing.Slot > 0 && existing.Slot <= RpUnlockedSlots)
         {
             dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` + 1 WHERE `user_id` = @id AND `slot` = @slot");
             dbClient.AddParameter("id", Id);
@@ -331,7 +336,7 @@ public class Habbo
             return existing.Slot;
         }
         var used = inventory.Select(entry => entry.Slot).ToHashSet();
-        var slot = Enumerable.Range(1, RpCarrySlots).FirstOrDefault(candidate => !used.Contains(candidate));
+        var slot = Enumerable.Range(1, RpUnlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
         if (slot == 0)
             return -1;
         dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
