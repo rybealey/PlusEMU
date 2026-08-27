@@ -107,7 +107,14 @@ public class Habbo
 
     public bool FocusPreference { get; set; }
 
-    public int VipRank { get; set; }
+    // pixelrp: VIP is time-based. vip_expire (unix seconds) is the source of
+    // truth; rank_vip is no longer read. VipRank is derived so every legacy
+    // VipRank gate (permissions_subscriptions, catalog min_vip, respect
+    // allowance) keys off live VIP status.
+    public long VipExpire { get; set; }
+    public DateTime? VipLastStipend { get; set; }
+    public bool IsVip => VipExpire > DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    public int VipRank => IsVip ? 1 : 0;
 
     public bool AllowTradingRequests { get; set; }
 
