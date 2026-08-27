@@ -33,13 +33,43 @@ public class RconConnection
                 return;
             }
             var data = Encoding.Default.GetString(_buffer, 0, bytes);
-            if (!PlusEnvironment.RconSocket.GetCommands().Parse(data)) Log.Error($"Failed to execute a MUS command. Raw data: {data}");
+            var trimmed = data.Trim();
+            if (trimmed.Length > 0 && trimmed[0] == '{')
+            {
+                // CMS JSON dialect: {"key": "...", "data": {...}}. One request per connection —
+                // write the response and flush it before the socket closes in Dispose().
+                var success = PlusEnvironment.RconSocket.GetCommands().ParseJson(trimmed, out var response);
+                if (!success) Log.Error($"Failed to execute a JSON RCON command. Raw data: {data}");
+                SendResponse(response);
+            }
+            else
+            {
+                // Legacy dialect: command\x01p1:p2. No response is written.
+                if (!PlusEnvironment.RconSocket.GetCommands().Parse(data)) Log.Error($"Failed to execute a MUS command. Raw data: {data}");
+            }
         }
         catch (Exception e)
         {
             Console.WriteLine(e.ToString());
         }
         Dispose();
+    }
+
+    private void SendResponse(string response)
+    {
+        if (string.IsNullOrEmpty(response) || _socket == null)
+            return;
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(response);
+            var sent = 0;
+            while (sent < bytes.Length)
+                sent += _socket.Send(bytes, sent, bytes.Length - sent, SocketFlags.None);
+        }
+        catch (Exception e)
+        {
+            Log.Error($"Failed to write RCON JSON response: {e}");
+        }
     }
 
     public void Dispose()
