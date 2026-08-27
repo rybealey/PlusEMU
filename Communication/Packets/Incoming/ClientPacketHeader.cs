@@ -401,4 +401,8 @@ public static class ClientPacketHeader
     public const uint RpDeletePhotoEvent = 3910;
     public const uint RpUpdatePhotoEvent = 3912;
     public const uint RpSaveScreenshotEvent = 3913;
+    public const uint RpJukeboxAddEvent = 3918;
+    public const uint RpJukeboxRemoveEvent = 3919;
+    public const uint RpJukeboxSkipEvent = 3921;
+    public const uint RpJukeboxReportEvent = 3922;
 }
