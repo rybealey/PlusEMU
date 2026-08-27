@@ -7,6 +7,7 @@ public class GenericBot : BotAi
 {
     private readonly int _virtualId;
     private int _actionTimer;
+    private int _patrolDirection = 1;
     private int _speechTimer;
 
     public GenericBot(int virtualId)
@@ -51,7 +52,8 @@ public class GenericBot : BotAi
         if (_actionTimer <= 0)
         {
             Point nextCoord;
-            switch (GetBotData().WalkingMode.ToLower())
+            var walkingMode = GetBotData().WalkingMode.ToLower();
+            switch (walkingMode)
             {
                 default:
                 case "stand":
@@ -96,10 +98,47 @@ public class GenericBot : BotAi
                     break;
                 case "specified_range":
                     break;
+                case "patrol_horizontal":
+                    TickPatrol(true);
+                    break;
+                case "patrol_vertical":
+                    TickPatrol(false);
+                    break;
             }
-            _actionTimer = Random.Shared.Next(5, 15);
+            // Patrol re-evaluates every other tick so the bot turns around
+            // promptly at the end of its lane instead of idling there.
+            _actionTimer = walkingMode is "patrol_horizontal" or "patrol_vertical" ? 1 : Random.Shared.Next(5, 15);
         }
         else
             _actionTimer--;
+    }
+
+    private void TickPatrol(bool horizontal)
+    {
+        var user = GetRoomUser();
+        if (user == null || user.IsWalking)
+            return;
+        var target = FindPatrolEnd(user.X, user.Y, horizontal, _patrolDirection);
+        if (target.X == user.X && target.Y == user.Y)
+        {
+            _patrolDirection = -_patrolDirection;
+            target = FindPatrolEnd(user.X, user.Y, horizontal, _patrolDirection);
+            if (target.X == user.X && target.Y == user.Y)
+                return; // boxed in on both sides — stand until the lane opens
+        }
+        user.MoveTo(target.X, target.Y);
+    }
+
+    private Point FindPatrolEnd(int x, int y, bool horizontal, int direction)
+    {
+        var map = GetRoom().GetGameMap();
+        var end = new Point(x, y);
+        while (true)
+        {
+            var next = horizontal ? new Point(end.X + direction, end.Y) : new Point(end.X, end.Y + direction);
+            if (!map.ValidTile(next.X, next.Y) || !map.SquareIsOpen(next.X, next.Y, false))
+                return end;
+            end = next;
+        }
     }
 }

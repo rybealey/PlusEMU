@@ -26,7 +26,7 @@ internal class SaveBotActionEvent : IPacketEvent
         var botId = packet.ReadInt();
         var actionId = packet.ReadInt();
         var dataString = packet.ReadString();
-        if (actionId < 1 || actionId > 5)
+        if ((actionId < 1 || actionId > 5) && actionId != 90 && actionId != 91 && actionId != 92)
             return Task.CompletedTask;
         if (!room.GetRoomUserManager().TryGetBot(botId, out var bot))
             return Task.CompletedTask;
@@ -40,6 +40,9 @@ internal class SaveBotActionEvent : IPacketEvent
          * 3 = Relax
          * 4 = Dance
          * 5 = Change Name
+         * 90 = Walk Horizontally (patrol)
+         * 91 = Walk Vertically (patrol)
+         * 92 = Walk freely (clear patrol)
          */
         switch (actionId)
         {
@@ -148,6 +151,20 @@ internal class SaveBotActionEvent : IPacketEvent
                     dbClient.RunQuery();
                 }
                 room.SendPacket(new UsersComposer(bot));
+                break;
+            }
+            case 90:
+            case 91:
+            case 92:
+            {
+                bot.BotData.WalkingMode = actionId switch
+                {
+                    90 => "patrol_horizontal",
+                    91 => "patrol_vertical",
+                    _ => "freeroam"
+                };
+                using var dbClient = _database.GetQueryReactor();
+                dbClient.RunQuery($"UPDATE `bots` SET `walk_mode` = '{bot.BotData.WalkingMode}' WHERE `id` = '{bot.BotData.Id}' LIMIT 1");
                 break;
             }
         }
