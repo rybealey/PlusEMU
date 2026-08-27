@@ -24,7 +24,11 @@ public sealed class Database : IDatabase
             Port = configuration.Value.Port,
             Server = configuration.Value.Hostname,
             UserID = configuration.Value.Username,
-            AllowZeroDateTime = true,
+            // AllowZeroDateTime must stay OFF: it makes the driver return
+            // DATE/DATETIME columns as MySqlDateTime, which Dapper cannot map
+            // onto DateTime properties (users.vip_last_stipend broke every
+            // VIP login at SSO). ConvertZeroDateTime alone covers legacy
+            // zero-dates by returning DateTime.MinValue.
             ConvertZeroDateTime = true,
             SslMode = MySqlSslMode.None
         }.ToString();
