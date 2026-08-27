@@ -74,13 +74,28 @@ public class RconConnection
 
     public void Dispose()
     {
-        if (_socket != null)
+        try
         {
-            _socket.Shutdown(SocketShutdown.Both);
-            _socket.Close();
-            _socket.Dispose();
+            if (_socket != null)
+            {
+                _socket.Shutdown(SocketShutdown.Both);
+                _socket.Close();
+                _socket.Dispose();
+            }
         }
-        _socket = null;
-        _buffer = null;
+        catch (Exception e)
+        {
+            // A peer reset (or an already-dropped socket) after we've
+            // written the JSON response can make Shutdown/Close throw here.
+            // This runs from an async I/O completion callback on the
+            // threadpool, where an unhandled exception is fatal to the
+            // process - never let it escape uncaught.
+            Log.Error($"Error disposing RCON connection socket: {e}");
+        }
+        finally
+        {
+            _socket = null;
+            _buffer = null;
+        }
     }
 }
