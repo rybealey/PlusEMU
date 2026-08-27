@@ -171,6 +171,8 @@ public static class ServerPacketHeader
     public const uint RpPhotoListComposer = 3909;
     public const uint RpJukeboxStateComposer = 3917;
     public const uint RpRoomZoneComposer = 3924;
+    public const uint DiamondsStoreComposer = 3925;
+    public const uint DiamondsStorePurchaseResultComposer = 3926;
     public const uint RefreshFavouriteGroupComposer = 149; //382
 
     // Group Forums

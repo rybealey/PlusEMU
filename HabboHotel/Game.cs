@@ -4,6 +4,7 @@ using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.Bots;
 using Plus.HabboHotel.Cache;
 using Plus.HabboHotel.Catalog;
+using Plus.HabboHotel.DiamondsStore;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Games;
 using Plus.HabboHotel.Groups;
@@ -53,6 +54,7 @@ public class Game : IGame
     private IPermissionManager _permissionManager;
     private IRewardManager _rewardManager;
     private ISubscriptionManager _subscriptionManager;
+    private readonly IDiamondsStoreManager _diamondsStoreManager;
     private ITalentTrackManager _talentTrackManager;
     private bool _cycleActive;
 
@@ -79,6 +81,7 @@ public class Game : IGame
         IRewardManager rewardManager,
         IBadgeManager badgeManager,
         ISubscriptionManager subscriptionManager,
+        IDiamondsStoreManager diamondsStoreManager,
         IPermissionManager permissionManager)
     {
         _clientManager = gameClientManager;
@@ -100,10 +103,11 @@ public class Game : IGame
         _rewardManager = rewardManager;
         _badgeManager = badgeManager;
         _subscriptionManager = subscriptionManager;
+        _diamondsStoreManager = diamondsStoreManager;
         _permissionManager = permissionManager;
     }
 
-    public Task Init()
+    public async Task Init()
     {
         _moderationManager.Init();
         _moderationManager.LoadTickets(); // Boot-only; see LoadTickets' doc comment.
@@ -121,8 +125,8 @@ public class Game : IGame
         _badgeManager.Init();
         _permissionManager.Init();
         _subscriptionManager.Init();
+        await _diamondsStoreManager.Init(); // pixelrp: Store tab listings.
         _cacheManager.Init();
-        return Task.CompletedTask;
     }
 
     public void StartGameLoop()

@@ -286,7 +286,9 @@
     "RpJukeboxSkipEvent": 3921,
     "RpJukeboxReportEvent": 3922,
     "RpRoomZoneSaveEvent": 3923,
-    "RpPassiveCancelEvent": 3927
+    "RpPassiveCancelEvent": 3927,
+    "GetDiamondsStoreEvent": 3929,
+    "PurchaseDiamondsStoreItemEvent": 3930
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -562,6 +564,8 @@
     "RpMessengerReceiptComposer": 3906,
     "RpPhotoListComposer": 3909,
     "RpJukeboxStateComposer": 3917,
-    "RpRoomZoneComposer": 3924
+    "RpRoomZoneComposer": 3924,
+    "DiamondsStoreComposer": 3925,
+    "DiamondsStorePurchaseResultComposer": 3926
   }
 }
