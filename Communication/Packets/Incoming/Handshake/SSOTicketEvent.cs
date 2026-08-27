@@ -5,6 +5,7 @@ using Plus.Communication.Packets.Outgoing.BuildersClub;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Inventory.Achievements;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
+using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Notifications;
@@ -149,6 +150,34 @@ public class SsoTicketEvent : IPacketEvent
             if (_settingsManager.TryGetValue("user.login.message.enabled") == "1")
                 session.Send(new MotdNotificationComposer(_languageManager.TryGetValue("user.login.message")));
             await _rewardManager.CheckRewards(session);
+
+            // pixelrp: daily VIP stipend - once per calendar day while VIP is active.
+            try
+            {
+                var habbo = session.GetHabbo();
+                if (habbo.IsVip && (!habbo.VipLastStipend.HasValue || habbo.VipLastStipend.Value.Date != DateTime.Today))
+                {
+                    var stipend = Convert.ToInt32(_settingsManager.TryGetValue("vip.stipend.daily"));
+                    if (stipend > 0)
+                    {
+                        habbo.Diamonds += stipend;
+                        habbo.VipLastStipend = DateTime.Today;
+                        using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
+                        {
+                            dbClient.SetQuery("UPDATE `users` SET `vip_points` = @diamonds, `vip_last_stipend` = CURDATE() WHERE `id` = @id LIMIT 1");
+                            dbClient.AddParameter("diamonds", habbo.Diamonds);
+                            dbClient.AddParameter("id", habbo.Id);
+                            dbClient.RunQuery();
+                        }
+                        session.Send(new HabboActivityPointNotificationComposer(habbo.Diamonds, stipend, 5));
+                        session.SendWhisper($"VIP stipend: {stipend} diamonds added to your wallet.");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+            }
 
             // pixelrp last-position restore: forward the user into the room they were
             // last in. Entry validation still runs server-side; on denial the client
