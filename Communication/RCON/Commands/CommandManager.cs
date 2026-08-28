@@ -133,6 +133,20 @@ public class CommandManager : ICommandManager
                     parameters = new[] { userId };
                     break;
                 }
+                case "givepassive":
+                {
+                    if (!hasData ||
+                        !TryGetPositionalString(data, "user_id", out var userId) ||
+                        !TryGetPositionalString(data, "seconds", out var seconds))
+                    {
+                        response = BuildResponse(1, "Invalid parameters for 'givepassive'");
+                        return false;
+                    }
+
+                    pluCommandKey = "give_user_passive";
+                    parameters = new[] { userId, seconds };
+                    break;
+                }
                 default:
                     response = BuildResponse(1, $"Unknown RCON command '{cmsKey}'");
                     return false;
