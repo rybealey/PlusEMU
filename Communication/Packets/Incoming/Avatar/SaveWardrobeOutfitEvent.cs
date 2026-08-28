@@ -23,7 +23,8 @@ internal class SaveWardrobeOutfitEvent : IPacketEvent
         var look = packet.ReadString();
         var gender = packet.ReadString();
         // pixelrp: staff keep club clothing access even without an active VIP subscription.
-        look = _figureDataManager.ProcessFigure(look, gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, session.GetHabbo().IsVip || session.GetHabbo().IsStaff);
+        // pixelrp: HC/club clothing is not VIP-gated.
+        look = _figureDataManager.ProcessFigure(look, gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, true);
 
         using (var connection = _database.Connection())
         {
