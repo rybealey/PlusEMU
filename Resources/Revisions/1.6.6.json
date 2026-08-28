@@ -279,6 +279,7 @@
     "RpMessengerMarkReadEvent": 3907,
     "RpMessengerTypingEvent": 3933,
     "SetAirplaneModeEvent": 3934,
+    "RpSavePhotoEvent": 3936,
     "RpPhotoListEvent": 3908,
     "RpDeletePhotoEvent": 3910,
     "RpUpdatePhotoEvent": 3912,

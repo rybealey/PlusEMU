@@ -12,15 +12,20 @@ public class PendingPhoto
 {
     public string PhotoId { get; }
     public uint RoomId { get; }
+
+    // pixelrp: the room's name snapshotted at render time - stored on the
+    // camera_web row so the caption survives later room renames/deletions.
+    public string RoomName { get; }
     public string Url { get; }
     public long TakenUnixMs { get; }
     public bool Purchased { get; set; }
     public bool Published { get; set; }
 
-    public PendingPhoto(string photoId, uint roomId, string url, long takenUnixMs)
+    public PendingPhoto(string photoId, uint roomId, string roomName, string url, long takenUnixMs)
     {
         PhotoId = photoId;
         RoomId = roomId;
+        RoomName = roomName;
         Url = url;
         TakenUnixMs = takenUnixMs;
     }

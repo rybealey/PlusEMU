@@ -27,9 +27,15 @@ internal class RpDeletePhotoEvent : IPacketEvent
             return;
         using (var connection = _database.Connection())
         {
-            await connection.ExecuteAsync(
+            var deleted = await connection.ExecuteAsync(
                 "DELETE FROM `camera_web` WHERE `id` = @photoId AND `user_id` = @userId",
                 new { photoId, userId = habbo.Id });
+            // Tagged-player rows go with the photo (ownership was just
+            // verified by the delete above actually removing a row).
+            if (deleted > 0)
+                await connection.ExecuteAsync(
+                    "DELETE FROM `camera_web_users` WHERE `photo_id` = @photoId",
+                    new { photoId });
         }
         await RpPhotoLibrary.SendPhotoList(_database, session);
     }

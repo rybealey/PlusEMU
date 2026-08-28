@@ -27,6 +27,12 @@ internal class RpSaveScreenshotEvent : IPacketEvent
 
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // Leading kind flag: 0 = a phone-screen screenshot, 1 = a photo
+        // received in a DM and saved into the library ("saved"). Anything
+        // else is rejected.
+        var kind = packet.ReadInt();
+        if (kind != 0 && kind != 1)
+            return;
         var length = packet.ReadInt();
         if (length <= 0 || length > MaxPhotoBytes)
             return;
@@ -41,8 +47,16 @@ internal class RpSaveScreenshotEvent : IPacketEvent
         using (var connection = _database.Connection())
         {
             await connection.ExecuteAsync(
-                "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 0)",
-                new { userId = habbo.Id, roomId = (habbo.CurrentRoom?.RoomId ?? 0), timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), url });
+                "INSERT INTO `camera_web` (`user_id`, `room_id`, `room_name`, `timestamp`, `url`, `visible`, `source`) VALUES (@userId, @roomId, @roomName, @timestamp, @url, 0, @source)",
+                new
+                {
+                    userId = habbo.Id,
+                    roomId = (habbo.CurrentRoom?.RoomId ?? 0),
+                    roomName = (habbo.CurrentRoom?.Name ?? ""),
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    url,
+                    source = (kind == 1 ? "saved" : "screenshot")
+                });
         }
         await RpPhotoLibrary.SendPhotoList(_database, session);
     }

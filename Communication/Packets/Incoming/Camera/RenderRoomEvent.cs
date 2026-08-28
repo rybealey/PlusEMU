@@ -35,7 +35,7 @@ internal class RenderRoomEvent : IPacketEvent
         if (room == null)
             return Task.CompletedTask;
 
-        _cameraPhotoManager.StorePhoto(session.GetHabbo().Id, room.RoomId, bytes);
+        _cameraPhotoManager.StorePhoto(session.GetHabbo().Id, room.RoomId, room.Name, bytes);
 
         // CameraStorageUrl replies with the filename only, not the absolute
         // URL — the client builds its checkout preview by concatenating the

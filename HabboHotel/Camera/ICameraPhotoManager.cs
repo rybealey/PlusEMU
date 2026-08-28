@@ -15,7 +15,7 @@ public interface ICameraPhotoManager
     /// </summary>
     void StoreRoomThumbnail(uint roomId, byte[] bytes);
 
-    string StorePhoto(int userId, uint roomId, byte[] bytes);
+    string StorePhoto(int userId, uint roomId, string roomName, byte[] bytes);
 
     /// <summary>
     ///     pixelrp: persists an edited (cropped/zoomed) copy of a photo as a

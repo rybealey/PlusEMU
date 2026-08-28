@@ -86,7 +86,7 @@ internal class PurchasePhotoEvent : IPacketEvent
         // PublishPhoto flips `visible` to put the same row on the CMS page.
         using var connection = _database.Connection();
         await connection.ExecuteAsync(
-            "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 0)",
-            new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
+            "INSERT INTO `camera_web` (`user_id`, `room_id`, `room_name`, `timestamp`, `url`, `visible`, `source`) VALUES (@userId, @roomId, @roomName, @timestamp, @url, 0, 'camera')",
+            new { userId = session.GetHabbo().Id, roomId = pending.RoomId, roomName = pending.RoomName, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
     }
 }

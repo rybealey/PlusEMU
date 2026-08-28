@@ -42,8 +42,8 @@ internal class PublishPhotoEvent : IPacketEvent
                 new { userId = session.GetHabbo().Id, url = pending.Url });
             if (updated == 0)
                 await connection.ExecuteAsync(
-                    "INSERT INTO `camera_web` (`user_id`, `room_id`, `timestamp`, `url`, `visible`) VALUES (@userId, @roomId, @timestamp, @url, 1)",
-                    new { userId = session.GetHabbo().Id, roomId = pending.RoomId, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
+                    "INSERT INTO `camera_web` (`user_id`, `room_id`, `room_name`, `timestamp`, `url`, `visible`, `source`) VALUES (@userId, @roomId, @roomName, @timestamp, @url, 1, 'camera')",
+                    new { userId = session.GetHabbo().Id, roomId = pending.RoomId, roomName = pending.RoomName, timestamp = pending.TakenUnixMs / 1000, url = pending.Url });
         }
 
         session.Send(new CameraPublishStatusMessageComposer(true, pending.Url));

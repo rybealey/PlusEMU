@@ -39,7 +39,7 @@ public class CameraPhotoManager : ICameraPhotoManager
         File.WriteAllBytes(Path.Combine(directory, $"{roomId}.png"), bytes);
     }
 
-    public string StorePhoto(int userId, uint roomId, byte[] bytes)
+    public string StorePhoto(int userId, uint roomId, string roomName, byte[] bytes)
     {
         var urlBase = UrlBase;
         if (string.IsNullOrEmpty(urlBase))
@@ -64,7 +64,7 @@ public class CameraPhotoManager : ICameraPhotoManager
         var smallBytes = _pendingThumbnails.TryRemove(userId, out var thumb) ? thumb : bytes;
         File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}_small.png"), smallBytes);
         var url = $"{urlBase}/photo_{photoId}.png";
-        var pending = new PendingPhoto(photoId, roomId, url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var pending = new PendingPhoto(photoId, roomId, roomName ?? "", url, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         _pendingPhotos[userId] = pending;
         return url;
     }
