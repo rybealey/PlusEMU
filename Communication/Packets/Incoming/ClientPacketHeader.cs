@@ -400,6 +400,12 @@ public static class ClientPacketHeader
     public const uint RpMessengerTypingEvent = 3933;
     public const uint SetAirplaneModeEvent = 3934;
     public const uint RpSavePhotoEvent = 3936;
+    public const uint RpRequestAlbumsEvent = 3937;
+    public const uint RpCreateAlbumEvent = 3939;
+    public const uint RpDeleteAlbumEvent = 3940;
+    public const uint RpAlbumMemberEvent = 3941;
+    public const uint RpAlbumPhotoEvent = 3942;
+    public const uint RpRequestAlbumPhotosEvent = 3943;
     public const uint RpPhotoListEvent = 3908;
     public const uint RpDeletePhotoEvent = 3910;
     public const uint RpUpdatePhotoEvent = 3912;
