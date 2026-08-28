@@ -13,6 +13,7 @@ public class RpMessengerReceiptComposer : IServerPacket
 {
     public const int Delivered = 1;
     public const int Read = 2;
+    public const int NotDelivered = 3; // pixelrp: recipient has airplane mode on
 
     private readonly int _friendId;
     private readonly int _type;

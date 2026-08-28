@@ -81,6 +81,14 @@ internal class MessengerEventSynchronizer : IAuthenticationTask
             return;
         }
 
+        // pixelrp: recipient has airplane mode on - don't deliver, and tell
+        // the sender's phone the message bounced.
+        if (target.GetHabbo().AirplaneMode)
+        {
+            habbo.Client.Send(new RpMessengerReceiptComposer(args.Friend.Id, RpMessengerReceiptComposer.NotDelivered));
+            return;
+        }
+
         var messenger = target.GetHabbo().Messenger;
         var friend = messenger.GetFriend(habbo.Id);
         if (friend == null) return;

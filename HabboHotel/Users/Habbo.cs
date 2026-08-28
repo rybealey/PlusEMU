@@ -142,6 +142,11 @@ public class Habbo
 
     public bool DisableForcedEffects { get; set; }
 
+    // pixelrp: airplane mode - hides incoming friend requests and bounces DMs
+    // sent to this player. Loaded from users.airplane_mode; toggled via the
+    // phone's Settings app.
+    public bool AirplaneMode { get; set; }
+
     public bool ChangingName { get; set; }
 
     public double FloodTime { get; set; }
