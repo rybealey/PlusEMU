@@ -168,6 +168,7 @@ public static class ServerPacketHeader
     public const uint RpUiSettingsComposer = 3902;
     public const uint RpInventoryComposer = 3904;
     public const uint RpMessengerReceiptComposer = 3906;
+    public const uint RpMessengerFriendTypingComposer = 3932;
     public const uint RpPhotoListComposer = 3909;
     public const uint RpJukeboxStateComposer = 3917;
     public const uint RpRoomZoneComposer = 3924;
