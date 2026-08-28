@@ -400,12 +400,17 @@ public static class ClientPacketHeader
     public const uint RpMessengerTypingEvent = 3933;
     public const uint SetAirplaneModeEvent = 3934;
     public const uint RpSavePhotoEvent = 3936;
-    public const uint RpRequestAlbumsEvent = 3937;
-    public const uint RpCreateAlbumEvent = 3939;
-    public const uint RpDeleteAlbumEvent = 3940;
-    public const uint RpAlbumMemberEvent = 3941;
-    public const uint RpAlbumPhotoEvent = 3942;
-    public const uint RpRequestAlbumPhotosEvent = 3943;
+    // Album packets: internal ids live in 439xx because the 3937+ range
+    // collides with stock internal ids (GetRoomRightsEvent = 3937). The WIRE
+    // ids stay 3937-3944 in revisions/1.6.6.json - the revisions cache maps
+    // internal->wire by constant NAME, so internal and wire may differ (same
+    // pattern as KickUserEvent = 1336 //3929).
+    public const uint RpRequestAlbumsEvent = 43937; //3937
+    public const uint RpCreateAlbumEvent = 43939; //3939
+    public const uint RpDeleteAlbumEvent = 43940; //3940
+    public const uint RpAlbumMemberEvent = 43941; //3941
+    public const uint RpAlbumPhotoEvent = 43942; //3942
+    public const uint RpRequestAlbumPhotosEvent = 43943; //3943
     public const uint RpPhotoListEvent = 3908;
     public const uint RpDeletePhotoEvent = 3910;
     public const uint RpUpdatePhotoEvent = 3912;
