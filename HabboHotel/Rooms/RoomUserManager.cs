@@ -728,6 +728,11 @@ public class RoomUserManager
             // beats.)
 
             var throwaway = new List<RoomUser>();
+            // The instant step's timing is exact (emitted right now), so it is
+            // fully renderable on the room timeline - the local click starts
+            // moving with zero authority gap.
+            user.NextStepScheduledTick = Environment.TickCount64;
+            user.NextStepOnGrid = true;
             ProcessUserMovement(user, throwaway, out _);      // pathfind + emit first step
             user.LastInstantStep = DateTime.Now;
             SerializeStatusUpdates();                          // push the "mv" status now
@@ -764,26 +769,26 @@ public class RoomUserManager
         {
             var beat = 0;
             var next = Environment.TickCount64 + firstBeatDelayMs;
-            // pixelrp movement authority: the beat AFTER the emitted first
-            // step hops onto the shared wall-clock 500ms grid (multiples of
-            // BeatMs on TickCount64) in ONE discrete alignment — a single
-            // ≤499ms hold on the first tile — instead of the old ≤30ms/beat
-            // gradual slew. From that beat on every walker world-wide steps
-            // at the same instants and one grid boundary = one shared cycle
-            // origin, so clients render synchronized walkers from a single
-            // shared phase with zero acquisition. The pre-walk first beat
-            // (rate-capped click) still emits the FIRST step itself and stays
-            // off-grid for responsiveness, like the instant first step.
+            // pixelrp movement authority: converge each walker's beats onto
+            // the shared wall-clock 500ms grid by lengthening beats <=30ms at
+            // a time. Clients render every edge from its TRUE wire cycleStart,
+            // so a slewing beat shows as at most a 30ms boundary clamp (1-2
+            // frames, imperceptible) - unlike the discrete full-grid hop this
+            // replaces, whose <=499ms standstill after the instant first step
+            // WAS the visible local walking hitch. Walkers phase-lock onto one
+            // shared cycle origin within a few beats and stay there; every
+            // scheduled beat carries exact timing, so all steps are timeline-
+            // renderable (onGrid) from the first.
+            const int SlewMaxMs = 30;
             var alignFromBeat = allowPreWalkFirstBeat ? 2 : 1;
             while (true)
             {
                 beat++;
-                var onGrid = false;
+                var onGrid = true;
                 if (beat >= alignFromBeat)
                 {
                     var toGrid = (int)((BeatMs - (next % BeatMs)) % BeatMs);
-                    next += toGrid;
-                    onGrid = true;
+                    next += Math.Min(SlewMaxMs, toGrid);
                 }
                 var waitMs = next - Environment.TickCount64;
                 if (waitMs > 0) await Task.Delay((int)waitMs);
@@ -815,6 +820,8 @@ public class RoomUserManager
                     ProcessUserMovement(user, new List<RoomUser>(), out removed);
                     if (preWalkStart) user.LastInstantStep = DateTime.Now;
                     SerializeStatusUpdates();
+                    if (user.IsWalking && !user.SetStep)
+                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-no-step beat={beat} seq={user.MovementSeq} gen={generation}");
                     if (removed || !user.IsWalking)
                     {
                         Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=loop-exit reason={(removed ? "removed" : "arrived")} beat={beat} seq={user.MovementSeq} gen={generation} pathPending={user.PathRecalcNeeded}");
@@ -1037,6 +1044,15 @@ public class RoomUserManager
         removed = false;
         var updated = false;
         var invalidStep = false;
+        // pixelrp movement authority: consume the scheduled-step presets
+        // EXACTLY ONCE per call. A beat that emits no step (arrival, blocked
+        // tile) must never leak its schedule into a later walk's first step -
+        // that stamped instant steps with cycleStarts up to seconds old
+        // (proven by ROOMAUTH_SRV vs client capture: stale seq-46 at 9.7s).
+        var presetStepTick = user.NextStepScheduledTick;
+        var presetStepOnGrid = user.NextStepOnGrid;
+        user.NextStepScheduledTick = 0;
+        user.NextStepOnGrid = false;
         if (user.IsRolling)
                 {
                     if (user.RollerDelay <= 0)
@@ -1219,10 +1235,8 @@ public class RoomUserManager
                             // SerializeStatusUpdates). Scheduled beat time
                             // when the self-pace loop preset it, else "now".
                             user.MovementSeq++;
-                            user.StepStartedTick = (user.NextStepScheduledTick > 0) ? user.NextStepScheduledTick : Environment.TickCount64;
-                            user.StepOnGrid = user.NextStepOnGrid;
-                            user.NextStepScheduledTick = 0;
-                            user.NextStepOnGrid = false;
+                            user.StepStartedTick = (presetStepTick > 0) ? presetStepTick : Environment.TickCount64;
+                            user.StepOnGrid = presetStepOnGrid;
                             UpdateUserEffect(user, user.SetX, user.SetY);
                             updated = true;
                             if (user.RidingHorse && user.IsPet == false && !user.IsBot)
