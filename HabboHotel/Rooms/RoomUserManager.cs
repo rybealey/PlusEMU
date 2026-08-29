@@ -720,6 +720,7 @@ public class RoomUserManager
                 {
                     user.SelfPaced = true;
                     user.WalkGeneration++;
+                    Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=rate-capped");
                     Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=rate-capped-prewalk delayMs={Math.Max(1, 500 - (int)sinceLastMs)} seq={user.MovementSeq} gen={user.WalkGeneration}");
                     _ = SelfPaceWalk(user, Math.Max(1, 500 - (int)sinceLastMs), true, user.WalkGeneration);
                 }
@@ -785,11 +786,16 @@ public class RoomUserManager
         var windowMs = 120;
         if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.window.ms"), out var configured))
             windowMs = configured;
-        if (windowMs <= 0) return false;
+        if (windowMs <= 0)
+        {
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=window-disabled");
+            return false;
+        }
 
         var now = Environment.TickCount64;
         var rejectReason = (string)null;
         var humansNearby = 0;
+        var gateNotes = new List<string>();
 
         foreach (var reference in GetUserList().ToList())
         {
@@ -798,6 +804,7 @@ public class RoomUserManager
             humansNearby++;
             if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep)
             {
+                gateNotes.Add($"{reference.VirtualId}:not-walking(sp={reference.SelfPaced},w={reference.IsWalking},ss={reference.SetStep})");
                 rejectReason ??= "ref-not-walking";
                 continue;
             }
@@ -805,11 +812,13 @@ public class RoomUserManager
             var delay = reference.NextBeatTick - now;
             if (delay <= 0)
             {
+                gateNotes.Add($"{reference.VirtualId}:beat-stale({delay})");
                 rejectReason ??= "ref-beat-stale";
                 continue;
             }
             if (delay > windowMs)
             {
+                gateNotes.Add($"{reference.VirtualId}:window({delay}ms)");
                 rejectReason ??= $"window-exceeded delayMs={delay}";
                 continue;
             }
@@ -820,6 +829,7 @@ public class RoomUserManager
                 new(user.X, user.Y), new(user.GoalX, user.GoalY));
             if (preview == null || preview.Count <= 1)
             {
+                gateNotes.Add($"{reference.VirtualId}:no-route");
                 rejectReason ??= "no-route";
                 break;
             }
@@ -840,6 +850,7 @@ public class RoomUserManager
                 relation = 1;  // AHEAD: the edge after the reference's next
             else
             {
+                gateNotes.Add($"{reference.VirtualId}:no-relation(first=({user.X},{user.Y})->({firstTo.X},{firstTo.Y}) refLook={reference.LookaheadCount})");
                 rejectReason ??= "no-route-relation";
                 continue;
             }
@@ -857,8 +868,7 @@ public class RoomUserManager
             return true;
         }
 
-        if (humansNearby > 0)
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} reason={rejectReason ?? "no-eligible-reference"} humansNearby={humansNearby}");
+        Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason={(humansNearby > 0 ? (rejectReason ?? "no-eligible-reference") : "no-human-nearby")} humansNearby={humansNearby} details={(gateNotes.Count > 0 ? string.Join("|", gateNotes) : "-")}");
 
         return false;
     }
@@ -878,15 +888,28 @@ public class RoomUserManager
         var windowMs = 60;
         if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.redirect.window.ms"), out var configured))
             windowMs = configured;
-        if (windowMs <= 0) return false;
-        if (!user.SelfPaced || !user.SetStep) return false;
+        if (windowMs <= 0)
+        {
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=window-disabled");
+            return false;
+        }
+        if (!user.SelfPaced || !user.SetStep)
+        {
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=joiner-not-selfpaced(sp={user.SelfPaced},ss={user.SetStep})");
+            return false;
+        }
 
         var now = Environment.TickCount64;
         var ownBoundary = user.NextBeatTick;
-        if (ownBoundary <= now) return false;
+        if (ownBoundary <= now)
+        {
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=own-beat-stale({ownBoundary - now}ms)");
+            return false;
+        }
 
         var rejectReason = (string)null;
         var humansNearby = 0;
+        var gateNotes = new List<string>();
 
         foreach (var reference in GetUserList().ToList())
         {
@@ -895,11 +918,13 @@ public class RoomUserManager
             humansNearby++;
             if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep)
             {
+                gateNotes.Add($"{reference.VirtualId}:not-walking(sp={reference.SelfPaced},w={reference.IsWalking},ss={reference.SetStep})");
                 rejectReason ??= "ref-not-walking";
                 continue;
             }
             if (reference.NextBeatTick <= now)
             {
+                gateNotes.Add($"{reference.VirtualId}:beat-stale");
                 rejectReason ??= "ref-beat-stale";
                 continue;
             }
@@ -908,6 +933,7 @@ public class RoomUserManager
             var gap = (int)(((reference.NextBeatTick - ownBoundary) % 500 + 500) % 500);
             if (gap > windowMs)
             {
+                gateNotes.Add($"{reference.VirtualId}:window({gap}ms)");
                 rejectReason ??= $"window-exceeded gapMs={gap}";
                 continue;
             }
@@ -918,6 +944,7 @@ public class RoomUserManager
                 new(user.SetX, user.SetY), new(user.GoalX, user.GoalY));
             if (preview == null || preview.Count <= 1)
             {
+                gateNotes.Add($"{reference.VirtualId}:no-route");
                 rejectReason ??= "no-route";
                 break;
             }
@@ -934,6 +961,7 @@ public class RoomUserManager
                 relation = 1;
             else
             {
+                gateNotes.Add($"{reference.VirtualId}:no-relation(entry=({user.SetX},{user.SetY})->({firstTo.X},{firstTo.Y}) refCur=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLook={reference.LookaheadCount})");
                 rejectReason ??= "no-route-relation";
                 continue;
             }
@@ -950,8 +978,7 @@ public class RoomUserManager
             return true;
         }
 
-        if (humansNearby > 0)
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason={rejectReason ?? "no-eligible-reference"} humansNearby={humansNearby}");
+        Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason={(humansNearby > 0 ? (rejectReason ?? "no-eligible-reference") : "no-human-nearby")} humansNearby={humansNearby} details={(gateNotes.Count > 0 ? string.Join("|", gateNotes) : "-")}");
 
         return false;
     }
