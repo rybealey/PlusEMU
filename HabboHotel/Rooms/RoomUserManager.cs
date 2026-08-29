@@ -769,27 +769,19 @@ public class RoomUserManager
         {
             var beat = 0;
             var next = Environment.TickCount64 + firstBeatDelayMs;
-            // pixelrp movement authority: converge each walker's beats onto
-            // the shared wall-clock 500ms grid by lengthening beats <=30ms at
-            // a time. Clients render every edge from its TRUE wire cycleStart,
-            // so a slewing beat shows as at most a 30ms boundary clamp (1-2
-            // frames, imperceptible) - unlike the discrete full-grid hop this
-            // replaces, whose <=499ms standstill after the instant first step
-            // WAS the visible local walking hitch. Walkers phase-lock onto one
-            // shared cycle origin within a few beats and stay there; every
-            // scheduled beat carries exact timing, so all steps are timeline-
-            // renderable (onGrid) from the first.
-            const int SlewMaxMs = 30;
-            var alignFromBeat = allowPreWalkFirstBeat ? 2 : 1;
+            // pixelrp movement authority: STRICT 500ms metronome. Every beat
+            // fires exactly BeatMs after the previous one, anchored at the
+            // instant first step - no grid alignment, no slew, no variable
+            // timing of any kind. Consecutive edges are exactly contiguous on
+            // the wire (cycleStart[n+1] = cycleStart[n] + 500), which is what
+            // lets clients roll over with ZERO boundary waits. Cross-walker
+            // phase alignment is deliberately absent (deferred to a future
+            // formation pass); every scheduled step carries exact timing and
+            // is timeline-renderable.
             while (true)
             {
                 beat++;
                 var onGrid = true;
-                if (beat >= alignFromBeat)
-                {
-                    var toGrid = (int)((BeatMs - (next % BeatMs)) % BeatMs);
-                    next += Math.Min(SlewMaxMs, toGrid);
-                }
                 var waitMs = next - Environment.TickCount64;
                 if (waitMs > 0) await Task.Delay((int)waitMs);
                 lock (_cycleLock)
@@ -1237,6 +1229,29 @@ public class RoomUserManager
                             user.MovementSeq++;
                             user.StepStartedTick = (presetStepTick > 0) ? presetStepTick : Environment.TickCount64;
                             user.StepOnGrid = presetStepOnGrid;
+                            // Peek the walker's own REAL path for up to two
+                            // future tiles (PathStep already advanced past the
+                            // step just emitted; the list is goal-first).
+                            user.LookaheadCount = 0;
+                            if (!user.FastWalking && !user.SuperFastWalking)
+                            {
+                                if (user.PathStep < user.Path.Count && (user.GoalX != user.SetX || user.GoalY != user.SetY))
+                                {
+                                    var peek1 = user.Path[user.Path.Count - user.PathStep - 1];
+                                    user.Look1X = peek1.X;
+                                    user.Look1Y = peek1.Y;
+                                    user.Look1Z100 = (int)Math.Round(_room.GetGameMap().SqAbsoluteHeight(peek1.X, peek1.Y) * 100);
+                                    user.LookaheadCount = 1;
+                                    if ((user.PathStep + 1) < user.Path.Count && (user.GoalX != peek1.X || user.GoalY != peek1.Y))
+                                    {
+                                        var peek2 = user.Path[user.Path.Count - user.PathStep - 2];
+                                        user.Look2X = peek2.X;
+                                        user.Look2Y = peek2.Y;
+                                        user.Look2Z100 = (int)Math.Round(_room.GetGameMap().SqAbsoluteHeight(peek2.X, peek2.Y) * 100);
+                                        user.LookaheadCount = 2;
+                                    }
+                                }
+                            }
                             UpdateUserEffect(user, user.SetX, user.SetY);
                             updated = true;
                             if (user.RidingHorse && user.IsPet == false && !user.IsBot)

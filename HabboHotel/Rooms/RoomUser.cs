@@ -85,6 +85,17 @@ public class RoomUser
     public bool StepOnGrid;
     public long NextStepScheduledTick;
     public bool NextStepOnGrid;
+    // Lookahead peeked from the walker's own real path at emission: the next
+    // 0-2 tiles it WILL step to (provisional - a blocked tile or redirect is
+    // corrected by the real packets that follow). Lets clients queue future
+    // edges so rendering never packet-waits at a tile boundary.
+    public int LookaheadCount;
+    public int Look1X;
+    public int Look1Y;
+    public int Look1Z100;
+    public int Look2X;
+    public int Look2Y;
+    public int Look2Z100;
 
     // pixelrp self-paced walk: true while this unit's steps 2+ are being driven
     // by its own SelfPaceWalk beat instead of the shared room tick. Reset when
