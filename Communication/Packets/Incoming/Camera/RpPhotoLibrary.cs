@@ -22,12 +22,15 @@ internal static class RpPhotoLibrary
             new { userId = session.GetHabbo().Id, limit = MaxPhotos })).ToList();
 
         // Tagged players per photo (phone camera shots only; empty for the
-        // rest) - one query for the whole page of photos.
+        // rest) - one query for the whole page of photos. The tag's stored
+        // username is only a capture-time snapshot: serve the CURRENT name
+        // (renames keep People groups intact), falling back to the snapshot
+        // when the account no longer exists.
         var taggedByPhoto = new Dictionary<int, List<string>>();
         if (rows.Count > 0)
         {
             var tagRows = await connection.QueryAsync<(int PhotoId, string Username)>(
-                "SELECT `photo_id`, `username` FROM `camera_web_users` WHERE `photo_id` IN @photoIds",
+                "SELECT `t`.`photo_id`, COALESCE(`u`.`username`, `t`.`username`) AS `username` FROM `camera_web_users` `t` LEFT JOIN `users` `u` ON `u`.`id` = `t`.`user_id` WHERE `t`.`photo_id` IN @photoIds",
                 new { photoIds = rows.Select(row => row.Id).ToList() });
             foreach (var tag in tagRows)
             {
