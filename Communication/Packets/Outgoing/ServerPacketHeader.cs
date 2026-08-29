@@ -174,7 +174,11 @@ public static class ServerPacketHeader
     public const uint RpCorpDetailComposer = 3947;
     public const uint RpUserCorpComposer = 3950;
     public const uint RpDiscordStatusComposer = 3952;
-    public const uint RpMovementCycleComposer = 3954;
+    // 3954 is BURNED: it collides with the stock client incoming header
+    // COMPETITION_ROOMS_DATA, whose parser wins the dispatch and eats the
+    // packet. Custom wire ids must be checked against the client's stock
+    // IncomingHeader/OutgoingHeader tables, not just our own ledger.
+    public const uint RpMovementCycleComposer = 3955;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpAlbumListComposer = 43938; //3938
     public const uint RpAlbumPhotosComposer = 43944; //3944
