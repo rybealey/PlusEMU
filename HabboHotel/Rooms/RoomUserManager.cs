@@ -639,7 +639,20 @@ public class RoomUserManager
             users.Add(user);
         }
         if (users.Count > 0)
+        {
             _room.SendPacket(new UserUpdateComposer(users));
+
+            // pixelrp movement authority: follow each freshly emitted step's
+            // "mv" status with its authoritative cycle timing. Seq-gated so a
+            // non-step status refresh never re-sends stale timing.
+            foreach (var user in users)
+            {
+                if (user.IsPet || !user.SetStep || !user.IsWalking) continue;
+                if (user.MovementSeq == user.MovementSeqSent) continue;
+                user.MovementSeqSent = user.MovementSeq;
+                _room.SendPacket(new RpMovementCycleComposer(user));
+            }
+        }
     }
 
     public void UpdateUserStatusses()
@@ -738,32 +751,30 @@ public class RoomUserManager
     private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat, long generation)
     {
         const int BeatMs = 500;
-        // pixelrp formation lock: per-beat cap on how much a beat may be
-        // LENGTHENED while converging onto the shared wall-clock grid below.
-        // Lengthen-only keeps the 1 tile / 500ms speed cap intact, and 30ms
-        // stays inside the client's 530ms per-tile animation window so the
-        // converging steps don't stutter.
-        const int SlewMaxMs = 30;
         try
         {
             var beat = 0;
             var next = Environment.TickCount64 + firstBeatDelayMs;
+            // pixelrp movement authority: the beat AFTER the emitted first
+            // step hops onto the shared wall-clock 500ms grid (multiples of
+            // BeatMs on TickCount64) in ONE discrete alignment — a single
+            // ≤499ms hold on the first tile — instead of the old ≤30ms/beat
+            // gradual slew. From that beat on every walker world-wide steps
+            // at the same instants and one grid boundary = one shared cycle
+            // origin, so clients render synchronized walkers from a single
+            // shared phase with zero acquisition. The pre-walk first beat
+            // (rate-capped click) still emits the FIRST step itself and stays
+            // off-grid for responsiveness, like the instant first step.
+            var alignFromBeat = allowPreWalkFirstBeat ? 2 : 1;
             while (true)
             {
                 beat++;
-                if (beat > 1)
+                var onGrid = false;
+                if (beat >= alignFromBeat)
                 {
-                    // Converge this walker's beats onto the shared 500ms
-                    // wall-clock grid (multiples of BeatMs on TickCount64) so
-                    // any two units walking together end up stepping at the
-                    // same instants — a follower renders exactly N whole tiles
-                    // behind instead of a constant fraction of a tile (each
-                    // walker's beats used to be anchored to its own first step,
-                    // leaving pairs offset by an arbitrary 0-500ms phase). The
-                    // first beat is exempt: the instant first step's follow-up
-                    // must come 500ms after it, wherever the grid sits.
                     var toGrid = (int)((BeatMs - (next % BeatMs)) % BeatMs);
-                    next += Math.Min(SlewMaxMs, toGrid);
+                    next += toGrid;
+                    onGrid = true;
                 }
                 var waitMs = next - Environment.TickCount64;
                 if (waitMs > 0) await Task.Delay((int)waitMs);
@@ -785,6 +796,8 @@ public class RoomUserManager
                         return;
                     }
                     var removed = false;
+                    user.NextStepScheduledTick = next;
+                    user.NextStepOnGrid = onGrid;
                     ProcessUserMovement(user, new List<RoomUser>(), out removed);
                     if (preWalkStart) user.LastInstantStep = DateTime.Now;
                     SerializeStatusUpdates();
@@ -1186,6 +1199,15 @@ public class RoomUserManager
                             user.SetX = nextX;
                             user.SetY = nextY;
                             user.SetZ = nextZ;
+                            // pixelrp movement authority: stamp this step's
+                            // timing for RpMovementCycleComposer (sent by
+                            // SerializeStatusUpdates). Scheduled beat time
+                            // when the self-pace loop preset it, else "now".
+                            user.MovementSeq++;
+                            user.StepStartedTick = (user.NextStepScheduledTick > 0) ? user.NextStepScheduledTick : Environment.TickCount64;
+                            user.StepOnGrid = user.NextStepOnGrid;
+                            user.NextStepScheduledTick = 0;
+                            user.NextStepOnGrid = false;
                             UpdateUserEffect(user, user.SetX, user.SetY);
                             updated = true;
                             if (user.RidingHorse && user.IsPet == false && !user.IsBot)

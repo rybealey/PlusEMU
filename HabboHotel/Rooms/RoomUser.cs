@@ -75,6 +75,17 @@ public class RoomUser
     // already advanced.
     public long WalkGeneration;
 
+    // pixelrp movement authority (RpMovementCycleComposer): each emitted walk
+    // step is stamped with a monotonic sequence and its authoritative start
+    // tick; SelfPaceWalk presets NextStep* with the scheduled beat so on-grid
+    // steps carry the exact shared-grid boundary, not a measured wake-up time.
+    public long MovementSeq;
+    public long MovementSeqSent;
+    public long StepStartedTick;
+    public bool StepOnGrid;
+    public long NextStepScheduledTick;
+    public bool NextStepOnGrid;
+
     // pixelrp self-paced walk: true while this unit's steps 2+ are being driven
     // by its own SelfPaceWalk beat instead of the shared room tick. Reset when
     // the unit stops, arrives, or leaves, handing movement back to the tick.

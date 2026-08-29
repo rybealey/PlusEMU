@@ -576,6 +576,7 @@
     "RpCorpDetailComposer": 3947,
     "RpUserCorpComposer": 3950,
     "RpDiscordStatusComposer": 3952,
+    "RpMovementCycleComposer": 3954,
     "RpStatsComposer": 3901,
     "RpUiSettingsComposer": 3902,
     "RpInventoryComposer": 3904,
