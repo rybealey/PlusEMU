@@ -24,6 +24,13 @@ internal class SuperHireCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => false;
 
+    // Tiers are entered as numbers but always read as numerals: Cadet II.
+    private static string TierNumeral(int tier) => tier switch
+    {
+        1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V",
+        _ => tier.ToString()
+    };
+
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         if (parameters.Length < 1 || string.IsNullOrWhiteSpace(parameters[0]))
@@ -85,8 +92,9 @@ internal class SuperHireCommand : ITargetChatCommand
         if (session.GetHabbo().CurrentRoom?.Id != targetRoom?.Id)
             session.Send(composer);
 
-        session.SendWhisper($"Hired {target.Username} into {corp.Name} as {rank.Name} (tier {tier}).");
-        target.Client?.SendWhisper($"You've been hired into {corp.Name} as {rank.Name} (tier {tier})!");
+        var tierNumeral = TierNumeral(tier);
+        session.SendWhisper($"Hired {target.Username} into {corp.Name} as {rank.Name} {tierNumeral}.");
+        target.Client?.SendWhisper($"You've been hired into {corp.Name} as {rank.Name} {tierNumeral}!");
         return Task.CompletedTask;
     }
 }
