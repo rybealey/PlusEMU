@@ -276,6 +276,7 @@
     "RenderRoomThumbnailEvent": 1982,
     "RpSaveUiSettingsEvent": 3903,
     "RpUseItemEvent": 3905,
+    "RpMoveItemEvent": 3945,
     "RpMessengerMarkReadEvent": 3907,
     "RpMessengerTypingEvent": 3933,
     "SetAirplaneModeEvent": 3934,

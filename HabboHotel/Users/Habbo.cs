@@ -356,6 +356,28 @@ public class Habbo
         return slot;
     }
 
+    /// <summary>Moves the backpack item in `from` into `to`, swapping when the
+    /// target slot is occupied. Rows keep their counts; the three-step dance
+    /// through temp slot 0 (never a real slot - they're 1-based) satisfies the
+    /// (user_id, slot) primary key.</summary>
+    public void MoveRpItem(int from, int to)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = 0 WHERE `user_id` = @id AND `slot` = @from");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("from", from);
+        dbClient.RunQuery();
+        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = @from WHERE `user_id` = @id AND `slot` = @to");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("from", from);
+        dbClient.AddParameter("to", to);
+        dbClient.RunQuery();
+        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = @to WHERE `user_id` = @id AND `slot` = 0");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("to", to);
+        dbClient.RunQuery();
+    }
+
     /// <summary>Removes one of whatever sits in the slot. Returns the item
     /// key, or null when the slot is empty.</summary>
     public string ConsumeRpItem(int slot)
