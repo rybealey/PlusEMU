@@ -787,7 +787,17 @@ public class RoomUserManager
         // (found via the gate trace: every click rejected window-disabled), so
         // 0 cannot mean "off" here. Missing/0 -> default; explicit negative
         // value disables admission.
-        var windowMs = 120;
+        //
+        // Default 500 = DETERMINISTIC admission: any route-compatible fresh
+        // click anchors to the reference grid (start delayed to its next
+        // boundary, <=499ms, avg ~250ms). Field data proved the anchor gap
+        // between two walks is CONSTANT for their lifetime - redirect retries
+        // re-roll nothing, and probabilistic windows (120 -> 24%/walk) simply
+        // lose (observed 146/199/242ms misses). The route-relation gate keeps
+        // this safe: the delay only ever applies to genuine formation joins
+        // (standing exactly on the reference's trail with a matching first
+        // edge); ordinary clicks stay instant.
+        var windowMs = 500;
         if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.window.ms"), out var configured) && configured != 0)
             windowMs = configured;
         if (windowMs < 0)
