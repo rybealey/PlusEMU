@@ -25,10 +25,11 @@ internal class SuperHireCommand : ITargetChatCommand
     public bool MustBeInSameRoom => false;
 
     // Tiers are entered as numbers but always read as numerals: Cadet II.
+    // Tier 0 = a no-tier leadership rank; renders as nothing.
     private static string TierNumeral(int tier) => tier switch
     {
         1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V",
-        _ => tier.ToString()
+        _ => ""
     };
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
@@ -64,15 +65,28 @@ internal class SuperHireCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
         var tier = 1;
-        if (parameters.Length >= 3 && !int.TryParse(parameters[2], out tier))
+        if (rank.Tiers == 0)
         {
-            session.SendWhisper($"Tier must be a number (1-{rank.Tiers}).");
-            return Task.CompletedTask;
+            // leadership ranks (top three of any corp) carry no tiers
+            if (parameters.Length >= 3)
+            {
+                session.SendWhisper($"{rank.Name} is a leadership rank and has no tiers.");
+                return Task.CompletedTask;
+            }
+            tier = 0;
         }
-        if (tier < 1 || tier > rank.Tiers)
+        else
         {
-            session.SendWhisper($"Tier must be between 1 and {rank.Tiers} for {rank.Name}.");
-            return Task.CompletedTask;
+            if (parameters.Length >= 3 && !int.TryParse(parameters[2], out tier))
+            {
+                session.SendWhisper($"Tier must be a number (1-{rank.Tiers}).");
+                return Task.CompletedTask;
+            }
+            if (tier < 1 || tier > rank.Tiers)
+            {
+                session.SendWhisper($"Tier must be between 1 and {rank.Tiers} for {rank.Name}.");
+                return Task.CompletedTask;
+            }
         }
         connection.Execute(
             "INSERT INTO `rp_corporation_employees` (`user_id`, `corporation_id`, `rank_id`, `tier`, `hired_at`) " +
@@ -92,9 +106,9 @@ internal class SuperHireCommand : ITargetChatCommand
         if (session.GetHabbo().CurrentRoom?.Id != targetRoom?.Id)
             session.Send(composer);
 
-        var tierNumeral = TierNumeral(tier);
-        session.SendWhisper($"Hired {target.Username} into {corp.Name} as {rank.Name} {tierNumeral}.");
-        target.Client?.SendWhisper($"You've been hired into {corp.Name} as {rank.Name} {tierNumeral}!");
+        var title = string.IsNullOrEmpty(TierNumeral(tier)) ? rank.Name : $"{rank.Name} {TierNumeral(tier)}";
+        session.SendWhisper($"Hired {target.Username} into {corp.Name} as {title}.");
+        target.Client?.SendWhisper($"You've been hired into {corp.Name} as {title}!");
         return Task.CompletedTask;
     }
 }
