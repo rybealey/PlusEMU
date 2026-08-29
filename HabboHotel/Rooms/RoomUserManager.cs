@@ -1282,7 +1282,38 @@ public class RoomUserManager
                         (dirtyPositions ??= new List<RoomUser>()).Add(user);
                 }
                 if (dirtyPositions != null)
-                    FlushPositions(dirtyPositions);
+                {
+                    // Snapshot in-memory here; the MySQL writes run on a
+                    // background task, OFF _cycleLock and off the tick
+                    // thread. This flush used to execute synchronous UPDATEs
+                    // while holding the lock every walker's 500ms beat needs
+                    // to emit its step - one slow query stalled EVERY
+                    // walker's beat by the same amount (field: beat-late
+                    // bursts of 124-991ms hitting all users at one tick).
+                    var positionSnapshots = new List<object>();
+                    foreach (var user in dirtyPositions)
+                    {
+                        var habbo = user.GetClient()?.GetHabbo();
+                        if (habbo == null)
+                            continue;
+                        positionSnapshots.Add(new
+                        {
+                            userId = habbo.Id,
+                            roomId = _room.RoomId,
+                            x = user.X,
+                            y = user.Y,
+                            rot = user.RotBody
+                        });
+                        user.SavedX = user.X;
+                        user.SavedY = user.Y;
+                        user.SavedRot = user.RotBody;
+                        // Same mirroring the exit save does, so the logout write of HomeRoom cannot
+                        // put back a stale room id.
+                        habbo.HomeRoom = _room.RoomId;
+                    }
+                    if (positionSnapshots.Count > 0)
+                        _ = Task.Run(() => FlushPositions(positionSnapshots));
+                }
                 foreach (var userToRemove in toRemove.ToList())
                 {
                     var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userToRemove.HabboId);
@@ -1322,32 +1353,16 @@ public class RoomUserManager
     /// that never reach RemoveUserFromRoom - a crash, an OOM kill, a pulled network cable, or a
     /// disconnect while the user is between rooms.
     /// </summary>
-    private void FlushPositions(List<RoomUser> users)
+    private static void FlushPositions(List<object> positionSnapshots)
     {
         try
         {
             using var dbClient = PlusEnvironment.DatabaseManager.Connection();
-            foreach (var user in users)
+            foreach (var snapshot in positionSnapshots)
             {
-                var habbo = user.GetClient()?.GetHabbo();
-                if (habbo == null)
-                    continue;
                 dbClient.Execute(
                     "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot, `home_room` = @roomId WHERE `id` = @userId LIMIT 1",
-                    new
-                    {
-                        userId = habbo.Id,
-                        roomId = _room.RoomId,
-                        x = user.X,
-                        y = user.Y,
-                        rot = user.RotBody
-                    });
-                user.SavedX = user.X;
-                user.SavedY = user.Y;
-                user.SavedRot = user.RotBody;
-                // Same mirroring the exit save does, so the logout write of HomeRoom cannot
-                // put back a stale room id.
-                habbo.HomeRoom = _room.RoomId;
+                    snapshot);
             }
         }
         catch (Exception e)
