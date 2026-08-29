@@ -487,6 +487,11 @@ public class Room : RoomData
                 var habbo = user.GetClient().GetHabbo();
                 habbo.EnsureRpStatsLoaded();
                 session.Send(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), habbo.RpPassiveSeconds > 0 ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
+                // pixelrp corporations: the entering client learns everyone's
+                // employment (infostand corp badge slot / profile row).
+                var employment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(habbo.Id);
+                if (employment != null)
+                    session.Send(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(habbo.Id, employment));
             }
             if (user.IsBot && user.BotData.DanceId > 0)
                 session.Send(new DanceComposer(user, user.BotData.DanceId));

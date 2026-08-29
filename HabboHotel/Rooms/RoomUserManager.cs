@@ -256,6 +256,10 @@ public class RoomUserManager
         // room (the enterer receives everyone else's in Room.SendObjects).
         session.GetHabbo().EnsureRpStatsLoaded();
         _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().RpPassiveSeconds > 0 ? 1 : 0, session.GetHabbo().Rank >= 5 ? 1 : 0));
+        // pixelrp corporations: announce the entering player's employment.
+        var enteringEmployment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(session.GetHabbo().Id);
+        if (enteringEmployment != null)
+            _room.SendPacket(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(session.GetHabbo().Id, enteringEmployment));
         // Knocked-out players (0 health persists) re-enter laying and frozen.
         user.UpdateRpKnockoutState();
         if (_room.CheckRights(session, true))
