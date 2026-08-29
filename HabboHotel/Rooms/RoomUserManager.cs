@@ -697,10 +697,17 @@ public class RoomUserManager
             if (!IsValid(user)) return;
             if (user.IsWalking || user.SetStep)
             {
-                // Redirect while moving: the existing beat's ProcessUserMovement
-                // consumes PathRecalcNeeded seamlessly on-grid.
                 if (user.PathRecalcNeeded)
+                {
+                    // Redirect while moving: first try formation admission at
+                    // the redirect's natural edge boundary - this is where
+                    // real following actually happens (spam-clicks mid-walk).
+                    if (TryReserveRedirectFormation(user)) return;
+
+                    // Otherwise the existing beat's ProcessUserMovement
+                    // consumes PathRecalcNeeded seamlessly on the own grid.
                     Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=redirect-owned-by-beat seq={user.MovementSeq}");
+                }
                 return;
             }
             if (!user.PathRecalcNeeded) return;              // no pending request
@@ -856,6 +863,99 @@ public class RoomUserManager
         return false;
     }
 
+    // pixelrp formation admission for MID-WALK REDIRECTS - the dominant real
+    // follow pattern (players spam-click while moving). The joiner's current
+    // 500ms edge is untouched; its NEXT edge is re-anchored to the reference's
+    // grid when the first reference boundary after the joiner's own boundary
+    // is at most the redirect window away (default 60ms - rendered as a
+    // sub-perceptual boundary clamp, far below every fault threshold). Each
+    // redirect click is an independent admission draw, so a sustained follow
+    // locks into exact whole-tile formation within a few clicks and then
+    // stays locked (the shared anchor persists across later redirects).
+    // Kill/tune: server_settings `pathfinder.formation.redirect.window.ms`.
+    private bool TryReserveRedirectFormation(RoomUser user)
+    {
+        var windowMs = 60;
+        if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.redirect.window.ms"), out var configured))
+            windowMs = configured;
+        if (windowMs <= 0) return false;
+        if (!user.SelfPaced || !user.SetStep) return false;
+
+        var now = Environment.TickCount64;
+        var ownBoundary = user.NextBeatTick;
+        if (ownBoundary <= now) return false;
+
+        var rejectReason = (string)null;
+        var humansNearby = 0;
+
+        foreach (var reference in GetUserList().ToList())
+        {
+            if (reference == null || reference == user || reference.IsBot || reference.IsPet) continue;
+            if (Math.Max(Math.Abs(reference.X - user.X), Math.Abs(reference.Y - user.Y)) > 3) continue;
+            humansNearby++;
+            if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep)
+            {
+                rejectReason ??= "ref-not-walking";
+                continue;
+            }
+            if (reference.NextBeatTick <= now)
+            {
+                rejectReason ??= "ref-beat-stale";
+                continue;
+            }
+
+            // First reference boundary at or after the joiner's own boundary.
+            var gap = (int)(((reference.NextBeatTick - ownBoundary) % 500 + 500) % 500);
+            if (gap > windowMs)
+            {
+                rejectReason ??= $"window-exceeded gapMs={gap}";
+                continue;
+            }
+            var entryTick = ownBoundary + gap;
+
+            // The joiner's entry edge starts from its CURRENT edge's goal.
+            var preview = PathFinder.FindPath(user, _room.GetGameMap().DiagonalEnabled, _room.GetGameMap(),
+                new(user.SetX, user.SetY), new(user.GoalX, user.GoalY));
+            if (preview == null || preview.Count <= 1)
+            {
+                rejectReason ??= "no-route";
+                break;
+            }
+            var firstTo = preview[preview.Count - 2];
+
+            var relation = 99;
+            if (user.SetX == reference.X && user.SetY == reference.Y && firstTo.X == reference.SetX && firstTo.Y == reference.SetY)
+                relation = -1;
+            else if (reference.LookaheadCount >= 1 && user.SetX == reference.SetX && user.SetY == reference.SetY
+                && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
+                relation = 0;
+            else if (reference.LookaheadCount >= 2 && user.SetX == reference.Look1X && user.SetY == reference.Look1Y
+                && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
+                relation = 1;
+            else
+            {
+                rejectReason ??= "no-route-relation";
+                continue;
+            }
+
+            Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} joinerEntry=({user.SetX},{user.SetY})->({firstTo.X},{firstTo.Y}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) gapMs={gap}");
+
+            user.FormationRefVirtualId = reference.VirtualId;
+            user.FormationRefGeneration = reference.WalkGeneration;
+            user.FormationRelation = relation;
+            user.FormationEntryTick = entryTick;
+            user.WalkGeneration++;
+            Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} entryTick={entryTick} leadTimeMs={entryTick - now} gapMs={gap} gen={user.WalkGeneration}");
+            _ = SelfPaceWalk(user, 1, false, user.WalkGeneration, entryTick);
+            return true;
+        }
+
+        if (humansNearby > 0)
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason={rejectReason ?? "no-eligible-reference"} humansNearby={humansNearby}");
+
+        return false;
+    }
+
     // pixelrp self-paced walk: after an instant first step, drive THIS unit's
     // remaining steps on an absolute-time metronome (no drift accumulation —
     // late steps stutter the client's fixed per-tile animation window) that
@@ -919,7 +1019,7 @@ public class RoomUserManager
                     // identically either way (the anchor is already this beat's
                     // exact schedule; relation and spacing are emergent route
                     // truth, so no correction ever exists to apply or skip).
-                    if (preWalkStart && user.FormationRefVirtualId > 0)
+                    if (beat == 1 && user.FormationRefVirtualId > 0)
                     {
                         var formationRef = GetRoomUserByVirtualId(user.FormationRefVirtualId);
                         var refValid = (formationRef != null && formationRef.SelfPaced && formationRef.IsWalking
