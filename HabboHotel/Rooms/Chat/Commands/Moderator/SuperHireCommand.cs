@@ -106,9 +106,16 @@ internal class SuperHireCommand : ITargetChatCommand
         if (session.GetHabbo().CurrentRoom?.Id != targetRoom?.Id)
             session.Send(composer);
 
+        // Announce theatrically: the staff member shouts the hire in their
+        // room (bubble 23) and the new hire shouts in theirs (bubble 4).
         var title = string.IsNullOrEmpty(TierNumeral(tier)) ? rank.Name : $"{rank.Name} {TierNumeral(tier)}";
-        session.SendWhisper($"Hired {target.Username} into {corp.Name} as {title}.");
-        target.Client?.SendWhisper($"You've been hired into {corp.Name} as {title}!");
+        var staffRoomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(session.GetHabbo().Id);
+        staffRoomUser?.OnChat(23, $"*has hired {target.Username} into {corp.Name} as {title}*", true);
+        var targetRoomUser = targetRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(target.Id);
+        if (targetRoomUser != null)
+            targetRoomUser.OnChat(4, $"*has been hired into {corp.Name} as {title}*", true);
+        else
+            target.Client?.SendWhisper($"You've been hired into {corp.Name} as {title}!");
         return Task.CompletedTask;
     }
 }

@@ -5,8 +5,7 @@ namespace Plus.Communication.Packets.Incoming.Users;
 
 /// <summary>
 /// pixelrp: the player clicked the x on their HUD passive tag to end their
-/// passive status early. Announced with the same bubble-5 shout style as
-/// the smoothie that granted it.
+/// passive status early. Announced with a bubble-27 shout.
 /// </summary>
 internal class RpPassiveCancelEvent : IPacketEvent
 {
@@ -24,7 +23,7 @@ internal class RpPassiveCancelEvent : IPacketEvent
         var roomUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
         if (roomUser == null)
             return Task.CompletedTask;
-        roomUser.OnChat(5, "*discovers newfound anger, eliminating their passive state*", true);
+        roomUser.OnChat(27, "*discovers newfound anger, eliminating their passive state*", true);
         habbo.CurrentRoom.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 0, habbo.Rank >= 5 ? 1 : 0));
         return Task.CompletedTask;
     }
