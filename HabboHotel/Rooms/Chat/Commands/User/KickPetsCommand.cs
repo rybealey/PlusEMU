@@ -45,8 +45,10 @@ internal class KickPetsCommand : IChatCommand
                 else
                     bot.RidingHorse = false;
             }
+            // skip humans and non-pet bots; the inverted check here used to
+            // NRE on the first human and abort the whole command
             var pet = bot.PetData;
-            if (pet != null) return;
+            if (pet == null) continue;
             pet.RoomId = 0;
             pet.PlacedInRoom = false;
             room.GetRoomUserManager().RemoveBot(bot.VirtualId, false);

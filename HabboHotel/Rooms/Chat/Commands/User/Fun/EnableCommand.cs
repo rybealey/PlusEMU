@@ -39,7 +39,10 @@ internal class EnableCommand : IChatCommand
         var effectId = 0;
         if (!int.TryParse(parameters[0], out effectId))
             return;
-        if (effectId > int.MaxValue || effectId < int.MinValue)
+        // negative ids are the internal "clear" sentinel - not enableable.
+        // Unknown positive ids are safe: the client resolves them to no
+        // effect gracefully.
+        if (effectId < 0)
             return;
         if ((effectId == 102 || effectId == 187) && !session.GetHabbo().Permissions.HasRight("mod_tool"))
         {

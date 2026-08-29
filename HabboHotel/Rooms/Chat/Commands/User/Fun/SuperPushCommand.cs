@@ -81,10 +81,10 @@ internal class SuperPushCommand : ITargetChatCommand
                 targetUser.MoveTo(targetUser.X - 3, targetUser.Y);
                 targetUser.MoveTo(targetUser.X, targetUser.Y + 3);
             }
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*super pushes {parameters[1]}*", 0, thisUser.LastBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*super pushes {target.Username}*", 0, thisUser.LastBubble));
         }
         else
-            session.SendWhisper($"Oops, {parameters[1]} is not close enough!");
+            session.SendWhisper($"Oops, {target.Username} is not close enough!");
         return Task.CompletedTask;
     }
 }

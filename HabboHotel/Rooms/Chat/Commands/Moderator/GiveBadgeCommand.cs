@@ -35,10 +35,10 @@ internal class GiveBadgeCommand : ITargetChatCommand
             if (target.Id != session.GetHabbo().Id)
                 target.Client.SendNotification("You have just been given a badge!");
             else
-                session.SendWhisper($"You have successfully given yourself the badge {parameters[2]}!");
+                session.SendWhisper($"You have successfully given yourself the badge {badgeCode}!");
         }
         else
-            session.SendWhisper($"Oops, that user already has this badge ({parameters[2]}) !");
+            session.SendWhisper($"Oops, that user already has this badge ({badgeCode}) !");
         return Task.CompletedTask;
     }
 }
