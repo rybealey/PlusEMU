@@ -173,6 +173,7 @@ public static class ServerPacketHeader
     public const uint RpCorpsComposer = 3946;
     public const uint RpCorpDetailComposer = 3947;
     public const uint RpUserCorpComposer = 3950;
+    public const uint RpDiscordStatusComposer = 3952;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpAlbumListComposer = 43938; //3938
     public const uint RpAlbumPhotosComposer = 43944; //3944

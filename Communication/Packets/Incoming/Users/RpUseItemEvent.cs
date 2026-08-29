@@ -77,6 +77,8 @@ public class RpUseItemEvent : IPacketEvent
                 var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 habbo.VipExpire = Math.Max(now, habbo.VipExpire) + storeItem.VipDays * 86400L;
                 habbo.SaveKey("vip_expire", habbo.VipExpire.ToString());
+                // pixelrp discord sync: grant the Discord VIP role promptly.
+                Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(habbo.Id, "vip");
                 habbo.Permissions = new(_permissionManager.GetPermissionsForPlayer(habbo), _permissionManager.GetCommandsForPlayer(habbo));
                 if (_subscriptionManager.TryGetSubscriptionData(1, out var subData) && !string.IsNullOrEmpty(subData.Badge)
                     && !habbo.Inventory.Badges.HasBadge(subData.Badge))

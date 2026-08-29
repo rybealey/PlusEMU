@@ -99,6 +99,10 @@ public class SsoTicketEvent : IPacketEvent
 
             session.Send(new AuthenticationOkComposer());
 
+            // pixelrp discord sync: linked players get their Online role (and
+            // any drifted state) refreshed shortly after login.
+            Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(session.GetHabbo().Id, "login");
+
             // TODO @80O: Move to individual incoming message handlers.
             session.Send(new AvatarEffectsComposer(session.GetHabbo().Effects.GetAllEffects));
             session.Send(new NavigatorSettingsComposer(session.GetHabbo().HomeRoom));
