@@ -858,7 +858,21 @@ public class RoomUserManager
                 relation = -1; // BEHIND: joiner walks the edge the reference is leaving
             else if (reference.LookaheadCount >= 1 && user.X == reference.SetX && user.Y == reference.SetY
                 && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
-                relation = 0;  // ALIGNED: same edge as the reference's next
+            {
+                // ALIGNED = walking the exact same tiles as the reference:
+                // two real players fully merged, with front/behind falling to
+                // the renderer's arbitrary same-coordinate tiebreaker (the
+                // "he rendered behind me" report). Suppressed by default -
+                // auto-admission produces BEHIND/AHEAD only. Enable with
+                // server_settings pathfinder.formation.allow.aligned = 1.
+                if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.allow.aligned") != "1")
+                {
+                    gateNotes.Add($"{reference.VirtualId}:aligned-suppressed");
+                    rejectReason ??= "aligned-overlap-suppressed";
+                    continue;
+                }
+                relation = 0;
+            }
             else if (reference.LookaheadCount >= 2 && user.X == reference.Look1X && user.Y == reference.Look1Y
                 && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
                 relation = 1;  // AHEAD: the edge after the reference's next
@@ -971,7 +985,16 @@ public class RoomUserManager
                 relation = -1;
             else if (reference.LookaheadCount >= 1 && user.SetX == reference.SetX && user.SetY == reference.SetY
                 && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
+            {
+                // Same-tile merge suppression - see the fresh-path note.
+                if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.allow.aligned") != "1")
+                {
+                    gateNotes.Add($"{reference.VirtualId}:aligned-suppressed");
+                    rejectReason ??= "aligned-overlap-suppressed";
+                    continue;
+                }
                 relation = 0;
+            }
             else if (reference.LookaheadCount >= 2 && user.SetX == reference.Look1X && user.SetY == reference.Look1Y
                 && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
                 relation = 1;
