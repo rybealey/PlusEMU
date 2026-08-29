@@ -327,10 +327,14 @@ public class Habbo
     /// <summary>Adds one of an item (stacking onto an existing slot of the
     /// same item, else the first free carry slot). Returns the slot, or -1
     /// when the backpack is full.</summary>
+    // A stack holds at most this many; the next item overflows into a free
+    // slot (or fails as backpack-full like any other add).
+    public const int RpStackCap = 10;
+
     public int AddRpItem(string item)
     {
         var inventory = LoadRpInventory();
-        var existing = inventory.FirstOrDefault(entry => entry.Item == item);
+        var existing = inventory.FirstOrDefault(entry => entry.Item == item && entry.Count < RpStackCap);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         if (existing.Item == item && existing.Slot > 0 && existing.Slot <= RpUnlockedSlots)
         {
