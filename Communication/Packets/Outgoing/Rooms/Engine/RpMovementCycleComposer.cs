@@ -30,6 +30,30 @@ public class RpMovementCycleComposer : IServerPacket
 
     public uint MessageId => ServerPacketHeader.RpMovementCycleComposer;
 
+    /// <summary>
+    /// pixelrp walk-end marker: a zero-length edge (from == to) at the
+    /// terminal tile, sequenced in the same monotonic MovementSeq stream as
+    /// real steps. Clients treat from==to as "route complete": queued
+    /// provisional lookahead for THIS walk is dropped instead of rendered
+    /// (an abrupt shorten/stop otherwise overshoots dead tiles until the
+    /// stale timer), and the stop happens exactly at the final edge's
+    /// boundary with no hold ambiguity.
+    /// </summary>
+    public RpMovementCycleComposer(RoomUser user, long boundaryTick)
+    {
+        _virtualId = user.VirtualId;
+        _seq = (int)(user.MovementSeq & 0x7fffffff);
+        _onGrid = true;
+        _fromX = user.X;
+        _fromY = user.Y;
+        _fromZ100 = (int)System.Math.Round(user.Z * 100);
+        _toX = _fromX;
+        _toY = _fromY;
+        _toZ100 = _fromZ100;
+        _cycleStart = boundaryTick;
+        _lookCount = 0;
+    }
+
     public RpMovementCycleComposer(RoomUser user)
     {
         _virtualId = user.VirtualId;

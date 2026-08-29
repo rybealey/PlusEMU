@@ -1046,6 +1046,21 @@ public class RoomUserManager
     // allowPreWalkFirstBeat: the first beat may fire for a unit that is not
     // walking yet but has a pending PathRecalcNeeded (the rate-capped click) —
     // that beat pathfinds and emits the first step itself.
+    // pixelrp walk-end marker: emitted the moment a walk exits (arrived,
+    // stopped, shortened to nothing) so clients can drop the walk's queued
+    // provisional lookahead instead of rendering dead tiles. Sequenced in the
+    // same monotonic MovementSeq stream, always BEFORE any newer walk's first
+    // step (emission sits behind the generation check and _cycleLock), so a
+    // delayed marker can never invalidate a newly started route: clients
+    // reject it as stale once any newer packet has arrived.
+    private void SendWalkEndMarker(RoomUser user, long boundaryTick)
+    {
+        if (user == null || user.IsPet) return;
+        user.MovementSeq++;
+        user.MovementSeqSent = user.MovementSeq;
+        _room.SendPacket(new RpMovementCycleComposer(user, boundaryTick));
+    }
+
     private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat, long generation, long anchorTick = 0)
     {
         const int BeatMs = 500;
@@ -1087,6 +1102,7 @@ public class RoomUserManager
                     if (user.WalkGeneration != generation) return;
                     if (!IsValid(user) || !user.SelfPaced)
                     {
+                        if (IsValid(user)) SendWalkEndMarker(user, next);
                         user.SelfPaced = false;
                         return;
                     }
@@ -1109,6 +1125,7 @@ public class RoomUserManager
                     }
                     if (!user.IsWalking && !preWalkStart)
                     {
+                        SendWalkEndMarker(user, next);
                         user.SelfPaced = false;
                         return;
                     }
@@ -1123,6 +1140,7 @@ public class RoomUserManager
                     if (removed || !user.IsWalking)
                     {
                         Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=loop-exit reason={(removed ? "removed" : "arrived")} beat={beat} seq={user.MovementSeq} gen={generation} pathPending={user.PathRecalcNeeded}");
+                        if (!removed) SendWalkEndMarker(user, next);
                         user.SelfPaced = false;
                         return;
                     }
@@ -1247,8 +1265,11 @@ public class RoomUserManager
                     var removed = false;
                     if (!user.SelfPaced)
                     {
+                        var wasStepping = (user.IsWalking && user.SetStep);
                         updated = ProcessUserMovement(user, toRemove, out removed);
                         if (removed) continue;
+                        if (wasStepping && !user.IsWalking)
+                            SendWalkEndMarker(user, (user.StepStartedTick > 0) ? (user.StepStartedTick + 500) : Environment.TickCount64);
                     }
                     if (user.RidingHorse)
                         user.ApplyEffect(77);
