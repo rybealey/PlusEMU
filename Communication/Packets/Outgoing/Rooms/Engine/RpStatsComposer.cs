@@ -16,10 +16,11 @@ public class RpStatsComposer : IServerPacket
     private readonly int _energyMax;
     private readonly int _aggression;
     private readonly int _passive;
+    private readonly int _staff;
 
     public uint MessageId => ServerPacketHeader.RpStatsComposer;
 
-    public RpStatsComposer(int virtualId, int health, int healthMax, int energy, int energyMax, int aggression, int passive)
+    public RpStatsComposer(int virtualId, int health, int healthMax, int energy, int energyMax, int aggression, int passive, int staff)
     {
         _virtualId = virtualId;
         _health = health;
@@ -28,6 +29,7 @@ public class RpStatsComposer : IServerPacket
         _energyMax = energyMax;
         _aggression = aggression;
         _passive = passive;
+        _staff = staff;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -39,5 +41,7 @@ public class RpStatsComposer : IServerPacket
         packet.WriteInteger(_energyMax);
         packet.WriteInteger(_aggression);
         packet.WriteInteger(_passive);
+        // staff/verified flag: shows the verified badge in the infostand
+        packet.WriteInteger(_staff);
     }
 }

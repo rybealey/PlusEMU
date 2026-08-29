@@ -255,7 +255,7 @@ public class RoomUserManager
         // pixelrp RP stats: announce the entering player's health/energy to the
         // room (the enterer receives everyone else's in Room.SendObjects).
         session.GetHabbo().EnsureRpStatsLoaded();
-        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().RpPassiveSeconds > 0 ? 1 : 0));
+        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().RpPassiveSeconds > 0 ? 1 : 0, session.GetHabbo().Rank >= 5 ? 1 : 0));
         // Knocked-out players (0 health persists) re-enter laying and frozen.
         user.UpdateRpKnockoutState();
         if (_room.CheckRights(session, true))
@@ -879,7 +879,7 @@ public class RoomUserManager
                             {
                                 user.GetClient().SendWhisper("Your passive status has expired.");
                                 habboPas.SaveRpStats();
-                                _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0));
+                                _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0, habboPas.Rank >= 5 ? 1 : 0));
                             }
                             else if (afterMinutes < beforeMinutes)
                             {
@@ -892,7 +892,7 @@ public class RoomUserManager
                 if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
-                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.RpPassiveSeconds > 0 ? 1 : 0));
+                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.RpPassiveSeconds > 0 ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
                     }
                     if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
                     {
