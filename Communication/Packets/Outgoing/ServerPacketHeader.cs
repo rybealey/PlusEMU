@@ -170,6 +170,8 @@ public static class ServerPacketHeader
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
     public const uint RpAirplaneModeComposer = 3935;
+    public const uint RpCorpsComposer = 3946;
+    public const uint RpCorpDetailComposer = 3947;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpAlbumListComposer = 43938; //3938
     public const uint RpAlbumPhotosComposer = 43944; //3944
