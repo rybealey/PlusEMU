@@ -727,6 +727,14 @@ public class RoomUserManager
             // shared-grid slew below still phase-locks walkers within a few
             // beats.)
 
+            // pixelrp formation admission: if a compatible walker's beat
+            // boundary lands within the small admission window, anchor this
+            // walk to THAT grid instead of the click instant - the first
+            // synchronized edge is then already exact BEHIND/ALIGNED/AHEAD
+            // with zero correction. Otherwise fall through to the instant
+            // start and remain independent (never a fractional formation).
+            if (TryReserveFormationEntry(user)) return;
+
             var throwaway = new List<RoomUser>();
             // The instant step's timing is exact (emitted right now), so it is
             // fully renderable on the room timeline - the local click starts
@@ -748,6 +756,94 @@ public class RoomUserManager
                 _ = SelfPaceWalk(user, 500, false, user.WalkGeneration);
             }
         }
+    }
+
+    // pixelrp formation admission (FORMATION_PRE_ENTRY): decide a clean
+    // formation entry BEFORE the joiner's first visible edge exists. If a
+    // nearby compatible walker's next beat boundary lands within the small
+    // admission window, the joiner's ENTIRE walk is anchored to that walker's
+    // 500ms grid by scheduling its first step at that exact boundary - the
+    // first synchronized edge is then already the correct real route slot
+    // (BEHIND = reference's current edge, ALIGNED = its next, AHEAD = the one
+    // after) at the shared phase, with zero position correction, zero speed
+    // change and zero mid-walk holds. A click outside the window stays fully
+    // independent (the fractional in-between state is never exposed as
+    // synchronized). This is scheduling metadata only: nothing here moves,
+    // pauses or corrects an avatar, and members simply sharing one anchor is
+    // what extends the model to any group size with no pair state.
+    // Kill/tune: server_settings `pathfinder.formation.window.ms`
+    // (default 120; 0 disables admission entirely).
+    private bool TryReserveFormationEntry(RoomUser user)
+    {
+        var windowMs = 120;
+        if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.window.ms"), out var configured))
+            windowMs = configured;
+        if (windowMs <= 0) return false;
+
+        var now = Environment.TickCount64;
+        var rejectReason = (string)null;
+
+        foreach (var reference in GetUserList().ToList())
+        {
+            if (reference == null || reference == user || reference.IsBot || reference.IsPet) continue;
+            if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep) continue;
+            if (Math.Max(Math.Abs(reference.X - user.X), Math.Abs(reference.Y - user.Y)) > 3) continue;
+
+            var delay = reference.NextBeatTick - now;
+            if (delay <= 0) continue;
+            if (delay > windowMs)
+            {
+                rejectReason ??= $"window-exceeded delayMs={delay}";
+                continue;
+            }
+
+            // Preview the joiner's REAL first edge (same pathfinder call the
+            // walk itself will use at the entry beat).
+            var preview = PathFinder.FindPath(user, _room.GetGameMap().DiagonalEnabled, _room.GetGameMap(),
+                new(user.X, user.Y), new(user.GoalX, user.GoalY));
+            if (preview == null || preview.Count <= 1)
+            {
+                rejectReason ??= "no-route";
+                break;
+            }
+            var firstTo = preview[preview.Count - 2];
+
+            // Relation from REAL route slots at the entry beat: when the joiner
+            // starts, the reference rolls onto its lookahead-1 edge. Matching
+            // the reference's CURRENT edge therefore means one slot behind;
+            // lookahead-1 means aligned; lookahead-2 means one slot ahead.
+            var relation = 99;
+            if (user.X == reference.X && user.Y == reference.Y && firstTo.X == reference.SetX && firstTo.Y == reference.SetY)
+                relation = -1; // BEHIND: joiner walks the edge the reference is leaving
+            else if (reference.LookaheadCount >= 1 && user.X == reference.SetX && user.Y == reference.SetY
+                && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
+                relation = 0;  // ALIGNED: same edge as the reference's next
+            else if (reference.LookaheadCount >= 2 && user.X == reference.Look1X && user.Y == reference.Look1Y
+                && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
+                relation = 1;  // AHEAD: the edge after the reference's next
+            else
+            {
+                rejectReason ??= "no-route-relation";
+                continue;
+            }
+
+            Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} relation={relation} joinerFirst=({user.X},{user.Y})->({firstTo.X},{firstTo.Y}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLookahead={reference.LookaheadCount} delayMs={delay}");
+
+            user.FormationRefVirtualId = reference.VirtualId;
+            user.FormationRefGeneration = reference.WalkGeneration;
+            user.FormationRelation = relation;
+            user.FormationEntryTick = reference.NextBeatTick;
+            user.SelfPaced = true;
+            user.WalkGeneration++;
+            Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} relation={relation} entryTick={reference.NextBeatTick} leadTimeMs={delay} gen={user.WalkGeneration}");
+            _ = SelfPaceWalk(user, (int)delay, true, user.WalkGeneration);
+            return true;
+        }
+
+        if (rejectReason != null)
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} reason={rejectReason}");
+
+        return false;
     }
 
     // pixelrp self-paced walk: after an instant first step, drive THIS unit's
@@ -782,6 +878,7 @@ public class RoomUserManager
             {
                 beat++;
                 var onGrid = true;
+                user.NextBeatTick = next;
                 var waitMs = next - Environment.TickCount64;
                 if (waitMs > 0) await Task.Delay((int)waitMs);
                 lock (_cycleLock)
@@ -801,6 +898,21 @@ public class RoomUserManager
                     }
                     var preWalkStart = allowPreWalkFirstBeat && beat == 1
                         && !user.IsWalking && user.PathRecalcNeeded;
+                    // pixelrp formation admission: the reserved entry beat has
+                    // arrived. Validate lightly and log - the walk proceeds
+                    // identically either way (the anchor is already this beat's
+                    // exact schedule; relation and spacing are emergent route
+                    // truth, so no correction ever exists to apply or skip).
+                    if (preWalkStart && user.FormationRefVirtualId > 0)
+                    {
+                        var formationRef = GetRoomUserByVirtualId(user.FormationRefVirtualId);
+                        var refValid = (formationRef != null && formationRef.SelfPaced && formationRef.IsWalking
+                            && formationRef.WalkGeneration == user.FormationRefGeneration);
+                        Console.WriteLine(refValid
+                            ? $"[ROOMAUTH_FORMATION_ENTER] user={user.VirtualId} ref={user.FormationRefVirtualId} relation={user.FormationRelation} entryTick={user.FormationEntryTick} beatTick={next}"
+                            : $"[ROOMAUTH_FORMATION_CANCEL] user={user.VirtualId} ref={user.FormationRefVirtualId} relation={user.FormationRelation} reason={(formationRef == null ? "ref-gone" : (!formationRef.IsWalking ? "ref-stopped" : "ref-repathed"))}");
+                        user.FormationRefVirtualId = 0;
+                    }
                     if (!user.IsWalking && !preWalkStart)
                     {
                         user.SelfPaced = false;

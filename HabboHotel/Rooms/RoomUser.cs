@@ -90,6 +90,16 @@ public class RoomUser
     // corrected by the real packets that follow). Lets clients queue future
     // edges so rendering never packet-waits at a tile boundary.
     public int LookaheadCount;
+
+    // pixelrp formation admission: the walker's next scheduled beat time
+    // (published by SelfPaceWalk each iteration) so a joiner's walk start can
+    // be anchored to an existing walker's 500ms grid, and the transient
+    // reservation made at click time (validated + logged at the entry beat).
+    public long NextBeatTick;
+    public int FormationRefVirtualId;
+    public long FormationRefGeneration;
+    public int FormationRelation;
+    public long FormationEntryTick;
     public int Look1X;
     public int Look1Y;
     public int Look1Z100;
