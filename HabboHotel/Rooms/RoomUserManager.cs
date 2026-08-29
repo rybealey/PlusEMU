@@ -783,10 +783,14 @@ public class RoomUserManager
     // (default 120; 0 disables admission entirely).
     private bool TryReserveFormationEntry(RoomUser user)
     {
+        // SettingsManager.TryGetValue returns the STRING "0" for MISSING keys
+        // (found via the gate trace: every click rejected window-disabled), so
+        // 0 cannot mean "off" here. Missing/0 -> default; explicit negative
+        // value disables admission.
         var windowMs = 120;
-        if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.window.ms"), out var configured))
+        if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.window.ms"), out var configured) && configured != 0)
             windowMs = configured;
-        if (windowMs <= 0)
+        if (windowMs < 0)
         {
             Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=window-disabled");
             return false;
@@ -885,10 +889,12 @@ public class RoomUserManager
     // Kill/tune: server_settings `pathfinder.formation.redirect.window.ms`.
     private bool TryReserveRedirectFormation(RoomUser user)
     {
+        // See fresh-path note: missing settings keys read as "0", so 0 cannot
+        // mean "off". Missing/0 -> default; explicit negative disables.
         var windowMs = 60;
-        if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.redirect.window.ms"), out var configured))
+        if (int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.redirect.window.ms"), out var configured) && configured != 0)
             windowMs = configured;
-        if (windowMs <= 0)
+        if (windowMs < 0)
         {
             Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=window-disabled");
             return false;
