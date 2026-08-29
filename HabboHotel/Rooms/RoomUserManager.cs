@@ -695,7 +695,14 @@ public class RoomUserManager
         lock (_cycleLock)
         {
             if (!IsValid(user)) return;
-            if (user.IsWalking || user.SetStep) return;      // already moving: its beat owns it
+            if (user.IsWalking || user.SetStep)
+            {
+                // Redirect while moving: the existing beat's ProcessUserMovement
+                // consumes PathRecalcNeeded seamlessly on-grid.
+                if (user.PathRecalcNeeded)
+                    Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=redirect-owned-by-beat seq={user.MovementSeq}");
+                return;
+            }
             if (!user.PathRecalcNeeded) return;              // no pending request
             var sinceLastMs = (DateTime.Now - user.LastInstantStep).TotalMilliseconds;
             if (sinceLastMs < 450)
@@ -706,6 +713,7 @@ public class RoomUserManager
                 {
                     user.SelfPaced = true;
                     user.WalkGeneration++;
+                    Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=rate-capped-prewalk delayMs={Math.Max(1, 500 - (int)sinceLastMs)} seq={user.MovementSeq} gen={user.WalkGeneration}");
                     _ = SelfPaceWalk(user, Math.Max(1, 500 - (int)sinceLastMs), true, user.WalkGeneration);
                 }
                 return;
@@ -731,6 +739,7 @@ public class RoomUserManager
                 // double-stepping ~30ms after this step.
                 user.SelfPaced = true;
                 user.WalkGeneration++;
+                Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=instant-first-step seq={user.MovementSeq} gen={user.WalkGeneration} tick={Environment.TickCount64}");
                 _ = SelfPaceWalk(user, 500, false, user.WalkGeneration);
             }
         }
@@ -780,6 +789,11 @@ public class RoomUserManager
                 if (waitMs > 0) await Task.Delay((int)waitMs);
                 lock (_cycleLock)
                 {
+                    // pixelrp lag-hunt instrumentation: a beat firing late is
+                    // an authoritative-packet gap the client cannot hide.
+                    var lateMs = Environment.TickCount64 - next;
+                    if (lateMs > 100)
+                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-late lateMs={lateMs} beat={beat} scheduled={next} onGrid={onGrid} seq={user.MovementSeq} gen={generation}");
                     // Superseded by a newer loop? Exit without touching state —
                     // SelfPaced now belongs to the newer generation.
                     if (user.WalkGeneration != generation) return;
@@ -803,6 +817,7 @@ public class RoomUserManager
                     SerializeStatusUpdates();
                     if (removed || !user.IsWalking)
                     {
+                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=loop-exit reason={(removed ? "removed" : "arrived")} beat={beat} seq={user.MovementSeq} gen={generation} pathPending={user.PathRecalcNeeded}");
                         user.SelfPaced = false;
                         return;
                     }
