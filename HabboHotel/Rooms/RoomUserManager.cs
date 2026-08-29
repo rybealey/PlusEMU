@@ -811,10 +811,24 @@ public class RoomUserManager
         var humansNearby = 0;
         var gateNotes = new List<string>();
 
+        // PROXIMITY ANCHORING: a fresh walk starting near ANY walking player
+        // inherits that player's grid, route relation or not. Sharing the
+        // anchor is what makes fractional overlap structurally impossible -
+        // two walkers on one grid are whole-tile-offset on any shared
+        // corridor, no matter where their routes diverge or remerge (field
+        // logs showed both overlap incidents were geometry-failed joins:
+        // a diagonal merge-in and a pathfinder-avoidance perturbation).
+        // Exact route matching remains as the relation LABEL (-1/0/+1);
+        // unmatched geometry is labeled prox(9). Nearest walker wins.
+        RoomUser best = null;
+        var bestDistance = int.MaxValue;
+        long bestDelay = 0;
+
         foreach (var reference in GetUserList().ToList())
         {
             if (reference == null || reference == user || reference.IsBot || reference.IsPet) continue;
-            if (Math.Max(Math.Abs(reference.X - user.X), Math.Abs(reference.Y - user.Y)) > 3) continue;
+            var distance = Math.Max(Math.Abs(reference.X - user.X), Math.Abs(reference.Y - user.Y));
+            if (distance > 3) continue;
             humansNearby++;
             if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep)
             {
@@ -837,62 +851,70 @@ public class RoomUserManager
                 continue;
             }
 
-            // Preview the joiner's REAL first edge (same pathfinder call the
-            // walk itself will use at the entry beat).
+            if (distance < bestDistance)
+            {
+                best = reference;
+                bestDistance = distance;
+                bestDelay = delay;
+            }
+        }
+
+        if (best != null)
+        {
+            var reference = best;
+            var entryTick = reference.NextBeatTick;
+            var relation = 9; // proximity anchor - no exact route relation
+            var relationNote = "prox";
+
             var preview = PathFinder.FindPath(user, _room.GetGameMap().DiagonalEnabled, _room.GetGameMap(),
                 new(user.X, user.Y), new(user.GoalX, user.GoalY));
-            if (preview == null || preview.Count <= 1)
-            {
-                gateNotes.Add($"{reference.VirtualId}:no-route");
-                rejectReason ??= "no-route";
-                break;
-            }
-            var firstTo = preview[preview.Count - 2];
 
-            // Relation from REAL route slots at the entry beat: when the joiner
-            // starts, the reference rolls onto its lookahead-1 edge. Matching
-            // the reference's CURRENT edge therefore means one slot behind;
-            // lookahead-1 means aligned; lookahead-2 means one slot ahead.
-            var relation = 99;
-            if (user.X == reference.X && user.Y == reference.Y && firstTo.X == reference.SetX && firstTo.Y == reference.SetY)
-                relation = -1; // BEHIND: joiner walks the edge the reference is leaving
-            else if (reference.LookaheadCount >= 1 && user.X == reference.SetX && user.Y == reference.SetY
-                && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
+            if (preview != null && preview.Count > 1)
             {
-                // ALIGNED = walking the exact same tiles as the reference:
-                // two real players fully merged, with front/behind falling to
-                // the renderer's arbitrary same-coordinate tiebreaker (the
-                // "he rendered behind me" report). Suppressed by default -
-                // auto-admission produces BEHIND/AHEAD only. Enable with
-                // server_settings pathfinder.formation.allow.aligned = 1.
-                if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.allow.aligned") != "1")
+                var firstTo = preview[preview.Count - 2];
+
+                if (user.X == reference.X && user.Y == reference.Y && firstTo.X == reference.SetX && firstTo.Y == reference.SetY)
                 {
-                    gateNotes.Add($"{reference.VirtualId}:aligned-suppressed");
-                    rejectReason ??= "aligned-overlap-suppressed";
-                    continue;
+                    relation = -1;
+                    relationNote = "behind";
                 }
-                relation = 0;
-            }
-            else if (reference.LookaheadCount >= 2 && user.X == reference.Look1X && user.Y == reference.Look1Y
-                && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
-                relation = 1;  // AHEAD: the edge after the reference's next
-            else
-            {
-                gateNotes.Add($"{reference.VirtualId}:no-relation(first=({user.X},{user.Y})->({firstTo.X},{firstTo.Y}) refLook={reference.LookaheadCount})");
-                rejectReason ??= "no-route-relation";
-                continue;
+                else if (reference.LookaheadCount >= 1 && user.X == reference.SetX && user.Y == reference.SetY
+                    && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
+                {
+                    // Same-edge geometry would MERGE the avatars. Unless
+                    // aligned walking is explicitly enabled, defer entry one
+                    // extra beat: the joiner walks the same path one slot
+                    // later = a clean whole-tile BEHIND trail instead.
+                    if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.allow.aligned") == "1")
+                    {
+                        relation = 0;
+                        relationNote = "aligned";
+                    }
+                    else
+                    {
+                        entryTick += 500;
+                        relation = -1;
+                        relationNote = "aligned-deferred";
+                    }
+                }
+                else if (reference.LookaheadCount >= 2 && user.X == reference.Look1X && user.Y == reference.Look1Y
+                    && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
+                {
+                    relation = 1;
+                    relationNote = "ahead";
+                }
             }
 
-            Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} relation={relation} joinerFirst=({user.X},{user.Y})->({firstTo.X},{firstTo.Y}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLookahead={reference.LookaheadCount} delayMs={delay}");
+            Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} relation={relation}({relationNote}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLookahead={reference.LookaheadCount} distance={bestDistance} delayMs={entryTick - now}");
 
             user.FormationRefVirtualId = reference.VirtualId;
             user.FormationRefGeneration = reference.WalkGeneration;
             user.FormationRelation = relation;
-            user.FormationEntryTick = reference.NextBeatTick;
+            user.FormationEntryTick = entryTick;
             user.SelfPaced = true;
             user.WalkGeneration++;
-            Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} relation={relation} entryTick={reference.NextBeatTick} leadTimeMs={delay} gen={user.WalkGeneration}");
-            _ = SelfPaceWalk(user, (int)delay, true, user.WalkGeneration, reference.NextBeatTick);
+            Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} relation={relation}({relationNote}) entryTick={entryTick} leadTimeMs={entryTick - now} gen={user.WalkGeneration}");
+            _ = SelfPaceWalk(user, (int)(entryTick - now), true, user.WalkGeneration, entryTick);
             return true;
         }
 
@@ -972,21 +994,17 @@ public class RoomUserManager
             // The joiner's entry edge starts from its CURRENT edge's goal.
             var preview = PathFinder.FindPath(user, _room.GetGameMap().DiagonalEnabled, _room.GetGameMap(),
                 new(user.SetX, user.SetY), new(user.GoalX, user.GoalY));
-            if (preview == null || preview.Count <= 1)
-            {
-                gateNotes.Add($"{reference.VirtualId}:no-route");
-                rejectReason ??= "no-route";
-                break;
-            }
-            var firstTo = preview[preview.Count - 2];
+            var firstTo = (preview != null && preview.Count > 1) ? preview[preview.Count - 2] : null;
 
-            var relation = 99;
-            if (user.SetX == reference.X && user.SetY == reference.Y && firstTo.X == reference.SetX && firstTo.Y == reference.SetY)
+            // Route matching is the relation LABEL; proximity alone anchors
+            // (same rationale as the fresh path). ALIGNED geometry stays
+            // suppressed mid-walk: converting it would need a +500ms stand.
+            var relation = 9;
+            if (firstTo != null && user.SetX == reference.X && user.SetY == reference.Y && firstTo.X == reference.SetX && firstTo.Y == reference.SetY)
                 relation = -1;
-            else if (reference.LookaheadCount >= 1 && user.SetX == reference.SetX && user.SetY == reference.SetY
+            else if (firstTo != null && reference.LookaheadCount >= 1 && user.SetX == reference.SetX && user.SetY == reference.SetY
                 && firstTo.X == reference.Look1X && firstTo.Y == reference.Look1Y)
             {
-                // Same-tile merge suppression - see the fresh-path note.
                 if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.formation.allow.aligned") != "1")
                 {
                     gateNotes.Add($"{reference.VirtualId}:aligned-suppressed");
@@ -995,15 +1013,9 @@ public class RoomUserManager
                 }
                 relation = 0;
             }
-            else if (reference.LookaheadCount >= 2 && user.SetX == reference.Look1X && user.SetY == reference.Look1Y
+            else if (firstTo != null && reference.LookaheadCount >= 2 && user.SetX == reference.Look1X && user.SetY == reference.Look1Y
                 && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
                 relation = 1;
-            else
-            {
-                gateNotes.Add($"{reference.VirtualId}:no-relation(entry=({user.SetX},{user.SetY})->({firstTo.X},{firstTo.Y}) refCur=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLook={reference.LookaheadCount})");
-                rejectReason ??= "no-route-relation";
-                continue;
-            }
 
             Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} joinerEntry=({user.SetX},{user.SetY})->({firstTo.X},{firstTo.Y}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) gapMs={gap}");
 
