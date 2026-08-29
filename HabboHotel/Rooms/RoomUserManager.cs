@@ -782,15 +782,25 @@ public class RoomUserManager
 
         var now = Environment.TickCount64;
         var rejectReason = (string)null;
+        var humansNearby = 0;
 
         foreach (var reference in GetUserList().ToList())
         {
             if (reference == null || reference == user || reference.IsBot || reference.IsPet) continue;
-            if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep) continue;
             if (Math.Max(Math.Abs(reference.X - user.X), Math.Abs(reference.Y - user.Y)) > 3) continue;
+            humansNearby++;
+            if (!reference.SelfPaced || !reference.IsWalking || !reference.SetStep)
+            {
+                rejectReason ??= "ref-not-walking";
+                continue;
+            }
 
             var delay = reference.NextBeatTick - now;
-            if (delay <= 0) continue;
+            if (delay <= 0)
+            {
+                rejectReason ??= "ref-beat-stale";
+                continue;
+            }
             if (delay > windowMs)
             {
                 rejectReason ??= $"window-exceeded delayMs={delay}";
@@ -836,12 +846,12 @@ public class RoomUserManager
             user.SelfPaced = true;
             user.WalkGeneration++;
             Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} relation={relation} entryTick={reference.NextBeatTick} leadTimeMs={delay} gen={user.WalkGeneration}");
-            _ = SelfPaceWalk(user, (int)delay, true, user.WalkGeneration);
+            _ = SelfPaceWalk(user, (int)delay, true, user.WalkGeneration, reference.NextBeatTick);
             return true;
         }
 
-        if (rejectReason != null)
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} reason={rejectReason}");
+        if (humansNearby > 0)
+            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} reason={rejectReason ?? "no-eligible-reference"} humansNearby={humansNearby}");
 
         return false;
     }
@@ -858,13 +868,19 @@ public class RoomUserManager
     // allowPreWalkFirstBeat: the first beat may fire for a unit that is not
     // walking yet but has a pending PathRecalcNeeded (the rate-capped click) —
     // that beat pathfinds and emits the first step itself.
-    private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat, long generation)
+    private async Task SelfPaceWalk(RoomUser user, int firstBeatDelayMs, bool allowPreWalkFirstBeat, long generation, long anchorTick = 0)
     {
         const int BeatMs = 500;
         try
         {
             var beat = 0;
-            var next = Environment.TickCount64 + firstBeatDelayMs;
+            // Formation admission passes the reference's ABSOLUTE boundary
+            // tick: re-deriving the anchor from "now + delay" here shifted the
+            // joiner's entire grid by the reservation-to-task latency, leaving
+            // a permanent few-ms offset from the reference. With the absolute
+            // anchor, every member's beat chain is anchor + 500k with the SAME
+            // anchor value - shared roomStepStart is exact (deltaMs = 0).
+            var next = (anchorTick > 0) ? anchorTick : (Environment.TickCount64 + firstBeatDelayMs);
             // pixelrp movement authority: STRICT 500ms metronome. Every beat
             // fires exactly BeatMs after the previous one, anchored at the
             // instant first step - no grid alignment, no slew, no variable
