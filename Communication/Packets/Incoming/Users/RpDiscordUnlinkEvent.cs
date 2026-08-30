@@ -16,12 +16,16 @@ internal class RpDiscordUnlinkEvent : IPacketEvent
         if (session.GetHabbo() == null)
             return Task.CompletedTask;
 
-        DiscordSyncUtility.Unlink(session.GetHabbo().Id);
+        // Unlink reports the resulting state itself. A second, unguarded
+        // read here would throw out of Parse on a DB blip, and PacketManager
+        // disconnects the session on a faulted Parse - a player must never
+        // be kicked from the game for clicking Disconnect.
+        var state = DiscordSyncUtility.Unlink(session.GetHabbo().Id);
 
-        // Answer with live state either way - an already-unlinked account and
-        // a failed write both correctly report the current truth.
-        var state = DiscordSyncUtility.GetLinkState(session.GetHabbo().Id);
-        session.Send(new RpDiscordStatusComposer(!string.IsNullOrEmpty(state.DiscordId), state.DiscordLinkedAt));
+        // Null means the state is genuinely unknown; say nothing rather than
+        // report a link status that might be wrong.
+        if (state != null)
+            session.Send(new RpDiscordStatusComposer(!string.IsNullOrEmpty(state.DiscordId), state.DiscordLinkedAt));
 
         return Task.CompletedTask;
     }

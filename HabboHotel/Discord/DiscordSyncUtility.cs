@@ -46,13 +46,25 @@ public static class DiscordSyncUtility
 
     /// <summary>
     /// Clears the link in-game and queues the Discord-side cleanup for the
-    /// CMS scheduler. Both writes share one transaction: `discord:sweep`
-    /// only reconciles users that are still linked, so a lost queue row
-    /// would strand the player's roles forever.
-    /// Returns false when nothing was linked.
+    /// CMS scheduler, returning the resulting state in the same round trip -
+    /// the caller must not follow up with a second, unguarded read of link
+    /// state. PacketManager disconnects the session on a faulted Parse, so a
+    /// DB blip on that second read would kick the player out of the game
+    /// for clicking Disconnect.
+    /// Both writes share one transaction: `discord:sweep` only reconciles
+    /// users that are still linked, so a lost queue row would strand the
+    /// player's roles forever.
+    ///
+    /// Returns the already-unlinked state on success or when nothing was
+    /// linked to begin with; the pre-read (still-linked) state if the write
+    /// failed after that row was read, since the clear may not have
+    /// committed - it must never be misreported as unlinked; or null if the
+    /// failure happened before any row could be read, meaning the state is
+    /// genuinely unknown.
     /// </summary>
-    public static bool Unlink(int userId)
+    public static DiscordLinkState? Unlink(int userId)
     {
+        DiscordLinkState? current = null;
         try
         {
             using var connection = PlusEnvironment.DatabaseManager.Connection();
@@ -60,14 +72,15 @@ public static class DiscordSyncUtility
 
             using var transaction = connection.BeginTransaction();
 
-            var discordId = connection.ExecuteScalar<string>(
-                "SELECT `discord_id` FROM `users` WHERE `id` = @userId LIMIT 1",
-                new { userId }, transaction);
+            current = connection.QueryFirstOrDefault<DiscordLinkState>(
+                "SELECT `discord_id` AS `DiscordId`, `discord_linked_at` AS `DiscordLinkedAt` " +
+                "FROM `users` WHERE `id` = @userId LIMIT 1",
+                new { userId }, transaction) ?? new DiscordLinkState();
 
-            if (string.IsNullOrEmpty(discordId))
+            if (string.IsNullOrEmpty(current.DiscordId))
             {
                 transaction.Rollback();
-                return false;
+                return current;
             }
 
             connection.Execute(
@@ -77,16 +90,16 @@ public static class DiscordSyncUtility
             connection.Execute(
                 "INSERT INTO `discord_sync_queue` (`user_id`, `discord_id`, `reason`, `created_at`) " +
                 "VALUES (@userId, @discordId, 'unlink', UNIX_TIMESTAMP())",
-                new { userId, discordId }, transaction);
+                new { userId, discordId = current.DiscordId }, transaction);
 
             transaction.Commit();
-            return true;
+            return new DiscordLinkState();
         }
         catch
         {
-            // Never let a disconnect attempt take the session down; the
-            // player sees the unchanged state and can retry.
-            return false;
+            // Never let a disconnect attempt take the session down; report
+            // the last truth we actually observed instead of guessing.
+            return current;
         }
     }
 }
