@@ -26,10 +26,67 @@ public static class DiscordSyncUtility
         }
     }
 
-    public static bool IsLinked(int userId)
+    /// <summary>
+    /// Link state for the Settings page. DiscordId is null when unlinked.
+    /// </summary>
+    public sealed class DiscordLinkState
+    {
+        public string? DiscordId { get; set; }
+        public int DiscordLinkedAt { get; set; }
+    }
+
+    public static DiscordLinkState GetLinkState(int userId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.ExecuteScalar<string>(
-            "SELECT `discord_id` FROM `users` WHERE `id` = @userId LIMIT 1", new { userId }) != null;
+        return connection.QueryFirstOrDefault<DiscordLinkState>(
+            "SELECT `discord_id` AS `DiscordId`, `discord_linked_at` AS `DiscordLinkedAt` " +
+            "FROM `users` WHERE `id` = @userId LIMIT 1",
+            new { userId }) ?? new DiscordLinkState();
+    }
+
+    /// <summary>
+    /// Clears the link in-game and queues the Discord-side cleanup for the
+    /// CMS scheduler. Both writes share one transaction: `discord:sweep`
+    /// only reconciles users that are still linked, so a lost queue row
+    /// would strand the player's roles forever.
+    /// Returns false when nothing was linked.
+    /// </summary>
+    public static bool Unlink(int userId)
+    {
+        try
+        {
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+            connection.Open();
+
+            using var transaction = connection.BeginTransaction();
+
+            var discordId = connection.ExecuteScalar<string>(
+                "SELECT `discord_id` FROM `users` WHERE `id` = @userId LIMIT 1",
+                new { userId }, transaction);
+
+            if (string.IsNullOrEmpty(discordId))
+            {
+                transaction.Rollback();
+                return false;
+            }
+
+            connection.Execute(
+                "UPDATE `users` SET `discord_id` = NULL, `discord_linked_at` = 0 WHERE `id` = @userId",
+                new { userId }, transaction);
+
+            connection.Execute(
+                "INSERT INTO `discord_sync_queue` (`user_id`, `discord_id`, `reason`, `created_at`) " +
+                "VALUES (@userId, @discordId, 'unlink', UNIX_TIMESTAMP())",
+                new { userId, discordId }, transaction);
+
+            transaction.Commit();
+            return true;
+        }
+        catch
+        {
+            // Never let a disconnect attempt take the session down; the
+            // player sees the unchanged state and can retry.
+            return false;
+        }
     }
 }
