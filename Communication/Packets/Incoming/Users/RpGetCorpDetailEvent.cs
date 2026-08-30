@@ -24,8 +24,8 @@ internal class RpGetCorpDetailEvent : IPacketEvent
         if (session.GetHabbo() == null)
             return Task.CompletedTask;
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        var corp = connection.QuerySingleOrDefault<(int Id, string Name, string Badge, string Description)>(
-            "SELECT `id`, `name`, `badge`, `description` FROM `rp_corporations` WHERE `id` = @corpId LIMIT 1",
+        var corp = connection.QuerySingleOrDefault<(int Id, string Name, string Badge, string Description, int Stock)>(
+            "SELECT `id`, `name`, `badge`, `description`, `stock` FROM `rp_corporations` WHERE `id` = @corpId LIMIT 1",
             new { corpId });
         if (corp.Id == 0)
             return Task.CompletedTask;
@@ -45,7 +45,7 @@ internal class RpGetCorpDetailEvent : IPacketEvent
                     employee.OnDuty == 1))
                 .ToList()))
             .ToList();
-        session.Send(new RpCorpDetailComposer(corp.Id, corp.Name, corp.Badge, corp.Description, rankPayload));
+        session.Send(new RpCorpDetailComposer(corp.Id, corp.Name, corp.Badge, corp.Description, corp.Stock, rankPayload));
         return Task.CompletedTask;
     }
 }

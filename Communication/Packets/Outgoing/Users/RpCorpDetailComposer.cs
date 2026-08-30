@@ -17,16 +17,18 @@ public class RpCorpDetailComposer : IServerPacket
     private readonly string _name;
     private readonly string _badge;
     private readonly string _description;
+    private readonly int _stock;
     private readonly List<Rank> _ranks;
 
     public uint MessageId => ServerPacketHeader.RpCorpDetailComposer;
 
-    public RpCorpDetailComposer(int corpId, string name, string badge, string description, List<Rank> ranks)
+    public RpCorpDetailComposer(int corpId, string name, string badge, string description, int stock, List<Rank> ranks)
     {
         _corpId = corpId;
         _name = name;
         _badge = badge;
         _description = description;
+        _stock = stock;
         _ranks = ranks;
     }
 
@@ -36,6 +38,8 @@ public class RpCorpDetailComposer : IServerPacket
         packet.WriteString(_name ?? "");
         packet.WriteString(_badge ?? "");
         packet.WriteString(_description ?? "");
+        // quantity the corporation holds; a placeholder 0 until farming lands
+        packet.WriteInteger(_stock);
         packet.WriteInteger(_ranks.Sum(rank => rank.Employees.Count));
         packet.WriteInteger(_ranks.Count);
         foreach (var rank in _ranks)
