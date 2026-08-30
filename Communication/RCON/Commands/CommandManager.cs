@@ -147,6 +147,18 @@ public class CommandManager : ICommandManager
                     parameters = new[] { userId, seconds };
                     break;
                 }
+                case "syncdiscord":
+                {
+                    if (!hasData || !TryGetPositionalString(data, "user_id", out var userId))
+                    {
+                        response = BuildResponse(1, "Invalid parameters for 'syncdiscord'");
+                        return false;
+                    }
+
+                    pluCommandKey = "reload_user_discord";
+                    parameters = new[] { userId };
+                    break;
+                }
                 default:
                     response = BuildResponse(1, $"Unknown RCON command '{cmsKey}'");
                     return false;
