@@ -37,11 +37,24 @@ public static class DiscordSyncUtility
 
     public static DiscordLinkState GetLinkState(int userId)
     {
-        using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.QueryFirstOrDefault<DiscordLinkState>(
-            "SELECT `discord_id` AS `DiscordId`, `discord_linked_at` AS `DiscordLinkedAt` " +
-            "FROM `users` WHERE `id` = @userId LIMIT 1",
-            new { userId }) ?? new DiscordLinkState();
+        try
+        {
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+            return connection.QueryFirstOrDefault<DiscordLinkState>(
+                "SELECT `discord_id` AS `DiscordId`, `discord_linked_at` AS `DiscordLinkedAt` " +
+                "FROM `users` WHERE `id` = @userId LIMIT 1",
+                new { userId }) ?? new DiscordLinkState();
+        }
+        catch
+        {
+            // This is on the page-open path, called straight from Parse with
+            // no caller-side try/catch - a faulted Parse gets the session
+            // disconnected. Never let a transient DB blip (or a hotel where
+            // the discord_linked_at column migration hasn't run yet) kick
+            // the player out of the game just for opening Settings. An
+            // empty state reads as "not linked", which is the safe default.
+            return new DiscordLinkState();
+        }
     }
 
     /// <summary>
