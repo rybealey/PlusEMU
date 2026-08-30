@@ -21,12 +21,15 @@ public class RoomManager : IRoomManager
 
     private readonly ConcurrentDictionary<uint, Room> _rooms;
 
-    // pixelrp: seeded at construction, not left at DateTime.MinValue. The first
-    // OnCycle otherwise measured ~2000 YEARS since "the previous" cycle, which
-    // both tripped the stall warning and — because an out-of-range double->int
-    // conversion yields int.MinValue on x64 — printed it as -2147483648ms. One
-    // bogus line per boot, sitting in the log next to the real stalls.
+    // pixelrp: there is no "previous cycle" before the first one, so the first
+    // OnCycle must not be measured against anything. Left at DateTime.MinValue
+    // it reported ~2000 YEARS and — because an out-of-range double->int
+    // conversion yields int.MinValue on x64 — printed -2147483648ms; seeded at
+    // construction it still reported the ~1.1s of boot between DI and the first
+    // tick. Either way it was one bogus stall warning per boot, sitting in the
+    // log next to the real ones. Skip the comparison entirely instead.
     private DateTime _cycleLastExecution = DateTime.Now;
+    private bool _cycleFirstRun = true;
 
 
     public RoomManager(ILogger<RoomManager> logger, IDatabase database, ILanguageManager languageManager)
@@ -54,10 +57,11 @@ public class RoomManager : IRoomManager
                 // freezing movement in every room at once.
                 // Clamped so a clock jump (NTP step, suspend/resume) reports a
                 // useless-but-sane number instead of overflowing the cast.
-                if (sinceLastTime.TotalMilliseconds > 750)
+                if (sinceLastTime.TotalMilliseconds > 750 && !_cycleFirstRun)
                     _logger.LogWarning("[stall] Room cycle fired {Ms}ms after the previous one (target 500ms)",
                         (int)Math.Clamp(sinceLastTime.TotalMilliseconds, 0, int.MaxValue));
                 _cycleLastExecution = DateTime.Now;
+                _cycleFirstRun = false;
                 foreach (var room in _rooms.Values.ToList())
                 {
                     if (room.IsCrashed)
