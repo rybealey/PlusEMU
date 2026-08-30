@@ -41,6 +41,13 @@ public class RoomUserManager
     ///     synchronous I/O that scaled with how many people were in the room — exactly matching
     ///     the "choppy when others are around" reports. Set ROOMAUTH_DEBUG=1 to bring them back
     ///     for a debugging session.
+    ///
+    ///     CORRECTION (2026-08-30): measured, these fire per CLICK and per walk boundary, not
+    ///     per beat - beta logged one line in 24 minutes with a user online. Gating them is a
+    ///     log-noise win, not the performance win first claimed; the genuinely quadratic logging
+    ///     was GameClient's per-outgoing-packet Debug line, since SerializeStatusUpdates
+    ///     broadcasts to every occupant every beat. The beat-late trace below is deliberately
+    ///     NOT gated - see its own comment.
     /// </summary>
     private static readonly bool RoomAuthDebug =
         Environment.GetEnvironmentVariable("ROOMAUTH_DEBUG") is "1" or "true" or "TRUE";
@@ -1108,8 +1115,15 @@ public class RoomUserManager
                     // pixelrp lag-hunt instrumentation: a beat firing late is
                     // an authoritative-packet gap the client cannot hide.
                     var lateMs = Environment.TickCount64 - next;
+                    // NOT behind RoomAuthDebug. This is the documented first
+                    // diagnosis lever for beat stalls - identical lateMs across
+                    // users at one scheduled tick means the emitting thread
+                    // stalled, not the network - and it is already gated on
+                    // lateMs > 100, so it stays silent in a healthy hotel and
+                    // costs nothing. It is also how we tell whether the
+                    // ThreadPool fix actually held.
                     if (lateMs > 100)
-                        if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-late lateMs={lateMs} beat={beat} scheduled={next} onGrid={onGrid} seq={user.MovementSeq} gen={generation}");
+                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-late lateMs={lateMs} beat={beat} scheduled={next} onGrid={onGrid} seq={user.MovementSeq} gen={generation}");
                     // Superseded by a newer loop? Exit without touching state —
                     // SelfPaced now belongs to the newer generation.
                     if (user.WalkGeneration != generation) return;
