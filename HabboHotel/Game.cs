@@ -56,10 +56,13 @@ public class Game : IGame
     private ISubscriptionManager _subscriptionManager;
     private readonly IDiamondsStoreManager _diamondsStoreManager;
     private ITalentTrackManager _talentTrackManager;
-    private bool _cycleActive;
+    // pixelrp: `volatile` because StopGameLoop and the cycle thread are
+    // different threads — without it the JIT may hoist the `while` read into a
+    // register and the loop never sees the stop request.
+    private volatile bool _cycleActive;
 
-    private bool _cycleEnded;
-    private Task _gameCycle;
+    private volatile bool _cycleEnded;
+    private Thread _gameCycle;
 
     public Game(
         IGameClientManager gameClientManager,
@@ -131,9 +134,29 @@ public class Game : IGame
 
     public void StartGameLoop()
     {
-        _gameCycle = new(GameCycle);
-        _gameCycle.Start();
+        // pixelrp: a DEDICATED thread, not a pooled Task. GameCycle never
+        // returns — it spins `while (_cycleActive)` with a 5ms sleep — so as a
+        // plain Task it permanently occupied one ThreadPool worker. The VPS has
+        // 2 cores, so the pool's default minimum is 2 workers and new ones are
+        // injected at only ~1-2/second: with the cycle holding one, a single
+        // blocking DB call on the other left `room.ProcessTask.Start()` sitting
+        // QUEUED. That is the "[stall] Room N tick skipped - ProcessRoom still
+        // running after 503ms" seen on beta with one user online and the CPU
+        // idle — the tick was never slow, it was never scheduled. A skipped
+        // tick sends no movement updates, which is the freeze players feel.
+        //
+        // _cycleActive must be set BEFORE Start(): a real thread can reach the
+        // `while` before this method returns, and would exit immediately.
         _cycleActive = true;
+        _gameCycle = new(GameCycle)
+        {
+            IsBackground = true,
+            Name = "PlusGameCycle",
+            // Above normal so the 500ms room beat wins over pooled work
+            // (packet handlers, position flushes) when both cores are busy.
+            Priority = ThreadPriority.AboveNormal
+        };
+        _gameCycle.Start();
     }
 
     private void GameCycle()

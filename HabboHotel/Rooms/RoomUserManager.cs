@@ -33,6 +33,19 @@ public class RoomUserManager
     private readonly object _cycleLock = new();
 
     /// <summary>
+    ///     Gate for the [ROOMAUTH_*] movement telemetry below. These are TEMP diagnostics for
+    ///     the pathfinder shared-clock work and they sit on the hottest path in the emulator:
+    ///     they run inside ProcessRoom on the 500ms room beat, some of them once per candidate
+    ///     PAIR (quadratic in room occupants). Console.WriteLine takes a process-wide lock and
+    ///     under Docker blocks on the json-file log pipe, so leaving them on spent tick time on
+    ///     synchronous I/O that scaled with how many people were in the room — exactly matching
+    ///     the "choppy when others are around" reports. Set ROOMAUTH_DEBUG=1 to bring them back
+    ///     for a debugging session.
+    /// </summary>
+    private static readonly bool RoomAuthDebug =
+        Environment.GetEnvironmentVariable("ROOMAUTH_DEBUG") is "1" or "true" or "TRUE";
+
+    /// <summary>
     /// How many 500ms ticks between position-persistence checks for a user whose tile changed.
     /// Four ticks (~2s) keeps the stored position close enough that a crash costs at most a
     /// couple of steps, without writing on every footfall.
@@ -706,7 +719,7 @@ public class RoomUserManager
 
                     // Otherwise the existing beat's ProcessUserMovement
                     // consumes PathRecalcNeeded seamlessly on the own grid.
-                    Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=redirect-owned-by-beat seq={user.MovementSeq}");
+                    if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=redirect-owned-by-beat seq={user.MovementSeq}");
                 }
                 return;
             }
@@ -720,8 +733,8 @@ public class RoomUserManager
                 {
                     user.SelfPaced = true;
                     user.WalkGeneration++;
-                    Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=rate-capped");
-                    Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=rate-capped-prewalk delayMs={Math.Max(1, 500 - (int)sinceLastMs)} seq={user.MovementSeq} gen={user.WalkGeneration}");
+                    if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=rate-capped");
+                    if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=rate-capped-prewalk delayMs={Math.Max(1, 500 - (int)sinceLastMs)} seq={user.MovementSeq} gen={user.WalkGeneration}");
                     _ = SelfPaceWalk(user, Math.Max(1, 500 - (int)sinceLastMs), true, user.WalkGeneration);
                 }
                 return;
@@ -760,7 +773,7 @@ public class RoomUserManager
                 // double-stepping ~30ms after this step.
                 user.SelfPaced = true;
                 user.WalkGeneration++;
-                Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=instant-first-step seq={user.MovementSeq} gen={user.WalkGeneration} tick={Environment.TickCount64}");
+                if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=instant-first-step seq={user.MovementSeq} gen={user.WalkGeneration} tick={Environment.TickCount64}");
                 _ = SelfPaceWalk(user, 500, false, user.WalkGeneration);
             }
         }
@@ -802,7 +815,7 @@ public class RoomUserManager
             windowMs = configured;
         if (windowMs < 0)
         {
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=window-disabled");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason=window-disabled");
             return false;
         }
 
@@ -905,7 +918,7 @@ public class RoomUserManager
                 }
             }
 
-            Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} relation={relation}({relationNote}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLookahead={reference.LookaheadCount} distance={bestDistance} delayMs={entryTick - now}");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} relation={relation}({relationNote}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) refLookahead={reference.LookaheadCount} distance={bestDistance} delayMs={entryTick - now}");
 
             user.FormationRefVirtualId = reference.VirtualId;
             user.FormationRefGeneration = reference.WalkGeneration;
@@ -913,12 +926,12 @@ public class RoomUserManager
             user.FormationEntryTick = entryTick;
             user.SelfPaced = true;
             user.WalkGeneration++;
-            Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} relation={relation}({relationNote}) entryTick={entryTick} leadTimeMs={entryTick - now} gen={user.WalkGeneration}");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} relation={relation}({relationNote}) entryTick={entryTick} leadTimeMs={entryTick - now} gen={user.WalkGeneration}");
             _ = SelfPaceWalk(user, (int)(entryTick - now), true, user.WalkGeneration, entryTick);
             return true;
         }
 
-        Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason={(humansNearby > 0 ? (rejectReason ?? "no-eligible-reference") : "no-human-nearby")} humansNearby={humansNearby} details={(gateNotes.Count > 0 ? string.Join("|", gateNotes) : "-")}");
+        if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=fresh reason={(humansNearby > 0 ? (rejectReason ?? "no-eligible-reference") : "no-human-nearby")} humansNearby={humansNearby} details={(gateNotes.Count > 0 ? string.Join("|", gateNotes) : "-")}");
 
         return false;
     }
@@ -942,12 +955,12 @@ public class RoomUserManager
             windowMs = configured;
         if (windowMs < 0)
         {
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=window-disabled");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=window-disabled");
             return false;
         }
         if (!user.SelfPaced || !user.SetStep)
         {
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=joiner-not-selfpaced(sp={user.SelfPaced},ss={user.SetStep})");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=joiner-not-selfpaced(sp={user.SelfPaced},ss={user.SetStep})");
             return false;
         }
 
@@ -955,7 +968,7 @@ public class RoomUserManager
         var ownBoundary = user.NextBeatTick;
         if (ownBoundary <= now)
         {
-            Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=own-beat-stale({ownBoundary - now}ms)");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason=own-beat-stale({ownBoundary - now}ms)");
             return false;
         }
 
@@ -1017,19 +1030,19 @@ public class RoomUserManager
                 && firstTo.X == reference.Look2X && firstTo.Y == reference.Look2Y)
                 relation = 1;
 
-            Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} joinerEntry=({user.SetX},{user.SetY})->({firstTo.X},{firstTo.Y}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) gapMs={gap}");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_CANDIDATE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} joinerEntry=({user.SetX},{user.SetY})->({firstTo.X},{firstTo.Y}) refCurrent=({reference.X},{reference.Y})->({reference.SetX},{reference.SetY}) gapMs={gap}");
 
             user.FormationRefVirtualId = reference.VirtualId;
             user.FormationRefGeneration = reference.WalkGeneration;
             user.FormationRelation = relation;
             user.FormationEntryTick = entryTick;
             user.WalkGeneration++;
-            Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} entryTick={entryTick} leadTimeMs={entryTick - now} gapMs={gap} gen={user.WalkGeneration}");
+            if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_RESERVE] user={user.VirtualId} ref={reference.VirtualId} kind=redirect relation={relation} entryTick={entryTick} leadTimeMs={entryTick - now} gapMs={gap} gen={user.WalkGeneration}");
             _ = SelfPaceWalk(user, 1, false, user.WalkGeneration, entryTick);
             return true;
         }
 
-        Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason={(humansNearby > 0 ? (rejectReason ?? "no-eligible-reference") : "no-human-nearby")} humansNearby={humansNearby} details={(gateNotes.Count > 0 ? string.Join("|", gateNotes) : "-")}");
+        if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_FORMATION_REJECT] user={user.VirtualId} kind=redirect reason={(humansNearby > 0 ? (rejectReason ?? "no-eligible-reference") : "no-human-nearby")} humansNearby={humansNearby} details={(gateNotes.Count > 0 ? string.Join("|", gateNotes) : "-")}");
 
         return false;
     }
@@ -1096,7 +1109,7 @@ public class RoomUserManager
                     // an authoritative-packet gap the client cannot hide.
                     var lateMs = Environment.TickCount64 - next;
                     if (lateMs > 100)
-                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-late lateMs={lateMs} beat={beat} scheduled={next} onGrid={onGrid} seq={user.MovementSeq} gen={generation}");
+                        if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-late lateMs={lateMs} beat={beat} scheduled={next} onGrid={onGrid} seq={user.MovementSeq} gen={generation}");
                     // Superseded by a newer loop? Exit without touching state —
                     // SelfPaced now belongs to the newer generation.
                     if (user.WalkGeneration != generation) return;
@@ -1118,7 +1131,7 @@ public class RoomUserManager
                         var formationRef = GetRoomUserByVirtualId(user.FormationRefVirtualId);
                         var refValid = (formationRef != null && formationRef.SelfPaced && formationRef.IsWalking
                             && formationRef.WalkGeneration == user.FormationRefGeneration);
-                        Console.WriteLine(refValid
+                        if (RoomAuthDebug) Console.WriteLine(refValid
                             ? $"[ROOMAUTH_FORMATION_ENTER] user={user.VirtualId} ref={user.FormationRefVirtualId} relation={user.FormationRelation} entryTick={user.FormationEntryTick} beatTick={next}"
                             : $"[ROOMAUTH_FORMATION_CANCEL] user={user.VirtualId} ref={user.FormationRefVirtualId} relation={user.FormationRelation} reason={(formationRef == null ? "ref-gone" : (!formationRef.IsWalking ? "ref-stopped" : "ref-repathed"))}");
                         user.FormationRefVirtualId = 0;
@@ -1136,10 +1149,10 @@ public class RoomUserManager
                     if (preWalkStart) user.LastInstantStep = DateTime.Now;
                     SerializeStatusUpdates();
                     if (user.IsWalking && !user.SetStep)
-                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-no-step beat={beat} seq={user.MovementSeq} gen={generation}");
+                        if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=beat-no-step beat={beat} seq={user.MovementSeq} gen={generation}");
                     if (removed || !user.IsWalking)
                     {
-                        Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=loop-exit reason={(removed ? "removed" : "arrived")} beat={beat} seq={user.MovementSeq} gen={generation} pathPending={user.PathRecalcNeeded}");
+                        if (RoomAuthDebug) Console.WriteLine($"[ROOMAUTH_SRV] user={user.VirtualId} event=loop-exit reason={(removed ? "removed" : "arrived")} beat={beat} seq={user.MovementSeq} gen={generation} pathPending={user.PathRecalcNeeded}");
                         if (!removed) SendWalkEndMarker(user, next);
                         user.SelfPaced = false;
                         return;

@@ -21,7 +21,12 @@ public class RoomManager : IRoomManager
 
     private readonly ConcurrentDictionary<uint, Room> _rooms;
 
-    private DateTime _cycleLastExecution;
+    // pixelrp: seeded at construction, not left at DateTime.MinValue. The first
+    // OnCycle otherwise measured ~2000 YEARS since "the previous" cycle, which
+    // both tripped the stall warning and — because an out-of-range double->int
+    // conversion yields int.MinValue on x64 — printed it as -2147483648ms. One
+    // bogus line per boot, sitting in the log next to the real stalls.
+    private DateTime _cycleLastExecution = DateTime.Now;
 
 
     public RoomManager(ILogger<RoomManager> logger, IDatabase database, ILanguageManager languageManager)
@@ -47,8 +52,11 @@ public class RoomManager : IRoomManager
                 // so firing much later than 500ms means the game-cycle thread
                 // itself stalled (GC pause or ClientManager.OnCycle blocking),
                 // freezing movement in every room at once.
+                // Clamped so a clock jump (NTP step, suspend/resume) reports a
+                // useless-but-sane number instead of overflowing the cast.
                 if (sinceLastTime.TotalMilliseconds > 750)
-                    _logger.LogWarning("[stall] Room cycle fired {Ms}ms after the previous one (target 500ms)", (int)sinceLastTime.TotalMilliseconds);
+                    _logger.LogWarning("[stall] Room cycle fired {Ms}ms after the previous one (target 500ms)",
+                        (int)Math.Clamp(sinceLastTime.TotalMilliseconds, 0, int.MaxValue));
                 _cycleLastExecution = DateTime.Now;
                 foreach (var room in _rooms.Values.ToList())
                 {

@@ -27,7 +27,23 @@ public static class Program
     public static async Task Main(string[] args)
     {
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
-        
+
+        // pixelrp: raise the ThreadPool floor. Almost every packet handler and
+        // the per-room ProcessTask do SYNCHRONOUS MySQL, so a pooled worker
+        // blocks on I/O rather than finishing quickly. The pool's default
+        // minimum is Environment.ProcessorCount (2 on the VPS) and past that it
+        // injects new workers at only ~1-2/second — so a couple of concurrent
+        // queries left `room.ProcessTask.Start()` queued for hundreds of ms and
+        // the 500ms room beat was skipped outright ("[stall] Room N tick
+        // skipped ... after 503ms" with the CPU idle). These threads are only
+        // created on demand; the floor just removes the injection delay.
+        // Override with PLUS_MIN_THREADS if a bigger box wants a different one.
+        var minThreads = int.TryParse(Environment.GetEnvironmentVariable("PLUS_MIN_THREADS"), out var configuredMinThreads) && configuredMinThreads > 0
+            ? configuredMinThreads
+            : Math.Max(64, Environment.ProcessorCount * 16);
+        ThreadPool.GetMinThreads(out var currentWorker, out var currentIo);
+        ThreadPool.SetMinThreads(Math.Max(minThreads, currentWorker), Math.Max(minThreads, currentIo));
+
         var services = new ServiceCollection();
         _defaultTypes[ServiceLifetime.Singleton] = typeof(Program).Assembly.GetTypes().Where(t => t.IsInterface && t.GetCustomAttributes<SingletonAttribute>().Any());
         _defaultTypes[ServiceLifetime.Scoped] = typeof(Program).Assembly.GetTypes().Where(t => t.IsInterface && t.GetCustomAttributes<ScopedAttribute>().Any());
@@ -58,10 +74,39 @@ public static class Program
 
         // Configuration
         LogManager.LoadConfiguration(Path.Join(Directory.GetCurrentDirectory(), "Config", "nlog.config"));
+
+        // pixelrp: PLUS_LOG_LEVEL overrides nlog.config's rules at startup, so
+        // turning debug logging back on is an env var and a restart rather than
+        // a rebuild. Applied here (not in the XML) because layout renderers are
+        // not reliably supported in a rule's minLevel attribute, and a parse
+        // failure there would take the whole emulator down at boot.
+        var nlogLevelName = Environment.GetEnvironmentVariable("PLUS_LOG_LEVEL");
+        if (!string.IsNullOrWhiteSpace(nlogLevelName))
+        {
+            try
+            {
+                var nlogLevel = NLog.LogLevel.FromString(nlogLevelName);
+                foreach (var rule in LogManager.Configuration.LoggingRules)
+                    rule.SetLoggingLevels(nlogLevel, NLog.LogLevel.Fatal);
+                LogManager.ReconfigExistingLoggers();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Ignoring PLUS_LOG_LEVEL='{nlogLevelName}': {e.Message}");
+            }
+        }
         services.AddLogging(loggingBuilder =>
         {
             loggingBuilder.ClearProviders();
-            loggingBuilder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+            // pixelrp: Information, not Trace. At Trace every LogDebug call site
+            // is evaluated (arguments boxed, messages formatted) before NLog can
+            // drop it — GameClient logs one per OUTGOING PACKET. nlog.config
+            // filters again on the NLog side; this gate is the cheaper one.
+            // PLUS_LOG_LEVEL=Debug|Trace re-enables it without a rebuild.
+            loggingBuilder.SetMinimumLevel(
+                Enum.TryParse<Microsoft.Extensions.Logging.LogLevel>(Environment.GetEnvironmentVariable("PLUS_LOG_LEVEL"), true, out var minLogLevel)
+                    ? minLogLevel
+                    : Microsoft.Extensions.Logging.LogLevel.Information);
             loggingBuilder.AddNLog();
         });
 

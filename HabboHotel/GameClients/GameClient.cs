@@ -167,7 +167,12 @@ public abstract class GameClient
         CreateHeader(memory, outgoingMessageId);
         args.SetBuffer(memory);
         SendCallback(args);
-        Log.Debug($"Send Packet: {composer.GetType().Name} (EmuId: {composer.MessageId}, ClientId: {outgoingMessageId})");
+        // pixelrp: guarded, and a structured template rather than $"...". This
+        // runs on EVERY outgoing packet: the interpolated form built the string
+        // (plus a reflection call for the type name) before NLog could drop it,
+        // so the cost was paid even with debug logging switched off.
+        if (Log.IsDebugEnabled)
+            Log.Debug("Send Packet: {Composer} (EmuId: {EmuId}, ClientId: {ClientId})", composer.GetType().Name, composer.MessageId, outgoingMessageId);
         stream.Dispose();
     }
 
