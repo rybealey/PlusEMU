@@ -1,4 +1,5 @@
 using Dapper;
+using Plus.HabboHotel.GameClients;
 using Plus.Communication.Packets.Outgoing.Users;
 
 namespace Plus.HabboHotel.Corporations;
@@ -36,6 +37,60 @@ public static class CorporationUtility
             "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
             "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
             "WHERE e.`user_id` IN @ids", new { ids }).ToList();
+    }
+
+    public record TargetUser(int Id, string Username, GameClient Client);
+
+    /// <summary>
+    /// pixelrp: resolve a username to a user id, online or offline. Client
+    /// is null when the player is offline (announcements should skip them).
+    /// </summary>
+    public static TargetUser ResolveUser(string username)
+    {
+        var client = PlusEnvironment.Game.ClientManager.GetClientByUsername(username);
+        if (client?.GetHabbo() != null)
+            return new TargetUser(client.GetHabbo().Id, client.GetHabbo().Username, client);
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var row = connection.QuerySingleOrDefault<(int Id, string Username)?>(
+            "SELECT `id`, `username` FROM `users` WHERE `username` = @username LIMIT 1", new { username });
+        return row == null ? null : new TargetUser(row.Value.Id, row.Value.Username, null);
+    }
+
+    public record ManagerContext(int CorpId, string CorpName, int RankOrder, int ManageRankOrder);
+
+    /// <summary>
+    /// pixelrp: the gate every corp-management command (:hire, :fire, future
+    /// promotions) passes through - the actor must be employed, at or above
+    /// their corporation's manage_rank_order, and clocked in. Whispers the
+    /// reason and returns null when the gate fails.
+    /// </summary>
+    public static ManagerContext RequireManager(GameClient session)
+    {
+        var userId = session.GetHabbo().Id;
+        ManagerContext context;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+            context = connection.QuerySingleOrDefault<ManagerContext>(
+                "SELECT c.`id` AS CorpId, c.`name` AS CorpName, r.`rank_order` AS RankOrder, c.`manage_rank_order` AS ManageRankOrder " +
+                "FROM `rp_corporation_employees` e " +
+                "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
+                "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+                "WHERE e.`user_id` = @userId LIMIT 1", new { userId });
+        if (context == null)
+        {
+            session.SendWhisper("You don't work for a corporation.");
+            return null;
+        }
+        if (context.RankOrder < context.ManageRankOrder)
+        {
+            session.SendWhisper("You're not senior enough to do that.");
+            return null;
+        }
+        if (!ShiftManager.IsOnDuty(userId))
+        {
+            session.SendWhisper("You must be on duty to do that.");
+            return null;
+        }
+        return context;
     }
 
     /// <summary>
