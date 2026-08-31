@@ -32,6 +32,9 @@ public static class ShiftManager
         public int PaidIntervals;
         // last minute boundary we acted on (whisper/flush/pay)
         public int LastMinute;
+        // consecutive minute boundaries spent with no CurrentRoom (hotel
+        // view); resets to 0 the moment the player is back in a room
+        public int NoRoomMinutes;
     }
 
     private static readonly ConcurrentDictionary<int, ShiftSession> Sessions = new();
@@ -116,14 +119,18 @@ public static class ShiftManager
     public static void InterruptForDisconnect(Habbo habbo)
     {
         if (habbo == null || !Sessions.TryRemove(habbo.Id, out var session)) return;
-        var elapsed = Elapsed(session);
-        while (PayProgress(session, elapsed) >= PayIntervalSeconds)
+        lock (session)
         {
-            session.PaidIntervals++;
-            habbo.Credits += session.RankPay;
+            var elapsed = Elapsed(session);
+            while (PayProgress(session, elapsed) >= PayIntervalSeconds)
+            {
+                session.PaidIntervals++;
+                habbo.Credits += session.RankPay;
+                PersistCredits(session.UserId, session.RankPay);
+            }
+            var paySeconds = PayProgress(session, elapsed);
+            Flush(session, elapsed, paySeconds, offDuty: true);
         }
-        var paySeconds = PayProgress(session, elapsed);
-        Flush(session, elapsed, paySeconds, offDuty: true);
     }
 
     // Disconnect path when only the user id is known (TickSession's null-client
@@ -171,11 +178,14 @@ public static class ShiftManager
     // pay through.
     private static int EndSession(ShiftSession session, GameClient client)
     {
-        var elapsed = Elapsed(session);
-        DrainCompletedIntervals(session, client, elapsed);
-        var paySeconds = PayProgress(session, elapsed);
-        Flush(session, elapsed, paySeconds, offDuty: true);
-        return paySeconds;
+        lock (session)
+        {
+            var elapsed = Elapsed(session);
+            DrainCompletedIntervals(session, client, elapsed);
+            var paySeconds = PayProgress(session, elapsed);
+            Flush(session, elapsed, paySeconds, offDuty: true);
+            return paySeconds;
+        }
     }
 
     private static void Flush(ShiftSession session, int elapsed, int paySeconds, bool offDuty)
@@ -218,19 +228,43 @@ public static class ShiftManager
             InterruptForDisconnect(session.UserId);
             return;
         }
-        var elapsed = Elapsed(session);
-        var minute = elapsed / 60;
-        if (minute <= session.LastMinute) return;
-        session.LastMinute = minute;
+        lock (session)
+        {
+            var elapsed = Elapsed(session);
+            var minute = elapsed / 60;
+            if (minute <= session.LastMinute) return;
+            session.LastMinute = minute;
 
-        var paidIntervalsBefore = session.PaidIntervals;
-        DrainCompletedIntervals(session, client, elapsed);
-        var paidThisMinute = session.PaidIntervals > paidIntervalsBefore;
+            if (client.GetHabbo().CurrentRoom == null)
+            {
+                session.NoRoomMinutes++;
+                // two consecutive room-less minute boundaries - clock out
+                // like InterruptForIdle. There's no room to whisper into,
+                // but SendWhisper is already a null-room no-op, so reusing
+                // the idle end-session path is safe and avoids duplicating
+                // the drain/flush logic.
+                if (session.NoRoomMinutes >= 2)
+                {
+                    Sessions.TryRemove(session.UserId, out _);
+                    var banked = EndSession(session, client);
+                    client.SendWhisper($"Your shift ended because you went idle. {FormatMinutes(banked)} banked toward your next pay.");
+                    return;
+                }
+            }
+            else
+            {
+                session.NoRoomMinutes = 0;
+            }
 
-        Flush(session, elapsed, PayProgress(session, elapsed), offDuty: false);
+            var paidIntervalsBefore = session.PaidIntervals;
+            DrainCompletedIntervals(session, client, elapsed);
+            var paidThisMinute = session.PaidIntervals > paidIntervalsBefore;
 
-        if (!paidThisMinute)
-            client.SendWhisper(PayMessage(RemainingSeconds(session, elapsed)));
+            Flush(session, elapsed, PayProgress(session, elapsed), offDuty: false);
+
+            if (!paidThisMinute)
+                client.SendWhisper(PayMessage(RemainingSeconds(session, elapsed)));
+        }
     }
 
     // Pays out every pay interval the session has completed as of `elapsed`,
@@ -245,8 +279,20 @@ public static class ShiftManager
         {
             session.PaidIntervals++;
             client.GetHabbo().Credits += session.RankPay;
+            PersistCredits(session.UserId, session.RankPay);
             client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
             client.SendWhisper($"Payday! You earned {session.RankPay}c.");
         }
+    }
+
+    // Crash hedge: writes the payout straight to the DB row alongside the
+    // in-memory credit bump, so a crash before the next absolute save (the
+    // disconnect save, or a later periodic one) doesn't lose a wage. The
+    // later save still writes the same in-memory total on top of this, so
+    // the two stay consistent.
+    private static void PersistCredits(int userId, int amount)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Execute("UPDATE `users` SET `credits` = `credits` + @amount WHERE `id` = @userId LIMIT 1", new { amount, userId });
     }
 }

@@ -33,20 +33,25 @@ internal class RpGetCorpDetailEvent : IPacketEvent
         var ranks = connection.Query<(int Id, int RankOrder, string Name, int Pay, int Tiers)>(
             "SELECT `id`, `rank_order` AS RankOrder, `name`, `pay`, `tiers` FROM `rp_corporation_ranks` " +
             "WHERE `corporation_id` = @corpId ORDER BY `rank_order`", new { corpId }).ToList();
-        var employees = connection.Query<(int UserId, int RankId, int Tier, int OnDuty, string Username, string Figure, int ShiftSeconds, int ShiftSecondsWeek)>(
-            "SELECT e.`user_id` AS UserId, e.`rank_id` AS RankId, e.`tier`, e.`on_duty` AS OnDuty, u.`username`, u.`look` AS Figure, " +
+        var employees = connection.Query<(int UserId, int RankId, int Tier, string Username, string Figure, int ShiftSeconds, int ShiftSecondsWeek)>(
+            "SELECT e.`user_id` AS UserId, e.`rank_id` AS RankId, e.`tier`, u.`username`, u.`look` AS Figure, " +
             "e.`shift_seconds` AS ShiftSeconds, e.`shift_seconds_week` AS ShiftSecondsWeek " +
             "FROM `rp_corporation_employees` e INNER JOIN `users` u ON u.`id` = e.`user_id` " +
             "WHERE e.`corporation_id` = @corpId ORDER BY e.`tier` DESC, u.`username`", new { corpId }).ToList();
         var rankPayload = ranks.Select(rank => new RpCorpDetailComposer.Rank(
             rank.Id, rank.RankOrder, rank.Name, rank.Pay, rank.Tiers,
             employees.Where(employee => employee.RankId == rank.Id)
-                .Select(employee => new RpCorpDetailComposer.Employee(
-                    employee.Username, employee.Figure, employee.Tier,
-                    _clientManager.GetClientByUserId(employee.UserId) != null,
-                    ShiftManager.IsOnDuty(employee.UserId),
-                    employee.ShiftSeconds + ShiftManager.LiveSessionSeconds(employee.UserId),
-                    employee.ShiftSecondsWeek + ShiftManager.LiveSessionSeconds(employee.UserId)))
+                .Select(employee =>
+                {
+                    var live = ShiftManager.LiveSessionSeconds(employee.UserId);
+                    var onDuty = ShiftManager.IsOnDuty(employee.UserId);
+                    return new RpCorpDetailComposer.Employee(
+                        employee.Username, employee.Figure, employee.Tier,
+                        _clientManager.GetClientByUserId(employee.UserId) != null,
+                        onDuty,
+                        employee.ShiftSeconds + live,
+                        employee.ShiftSecondsWeek + live);
+                })
                 .ToList()))
             .ToList();
         session.Send(new RpCorpDetailComposer(corp.Id, corp.Name, corp.Badge, corp.Description, corp.Stock, rankPayload));
