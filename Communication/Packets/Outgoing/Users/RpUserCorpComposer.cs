@@ -16,10 +16,13 @@ public class RpUserCorpComposer : IServerPacket
     private readonly string _corpName;
     private readonly string _rankName;
     private readonly int _tier;
+    private readonly int _shiftSeconds;
+    private readonly int _shiftSecondsWeek;
+    private readonly bool _onDuty;
 
     public uint MessageId => ServerPacketHeader.RpUserCorpComposer;
 
-    public RpUserCorpComposer(int userId, int corpId, string badge, string corpName, string rankName, int tier)
+    public RpUserCorpComposer(int userId, int corpId, string badge, string corpName, string rankName, int tier, int shiftSeconds, int shiftSecondsWeek, bool onDuty)
     {
         _userId = userId;
         _corpId = corpId;
@@ -27,6 +30,9 @@ public class RpUserCorpComposer : IServerPacket
         _corpName = corpName;
         _rankName = rankName;
         _tier = tier;
+        _shiftSeconds = shiftSeconds;
+        _shiftSecondsWeek = shiftSecondsWeek;
+        _onDuty = onDuty;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -37,5 +43,8 @@ public class RpUserCorpComposer : IServerPacket
         packet.WriteString(_corpName ?? "");
         packet.WriteString(_rankName ?? "");
         packet.WriteInteger(_tier);
+        packet.WriteInteger(_shiftSeconds);
+        packet.WriteInteger(_shiftSecondsWeek);
+        packet.WriteInteger(_onDuty ? 1 : 0);
     }
 }

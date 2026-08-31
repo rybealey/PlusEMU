@@ -1,5 +1,6 @@
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Users;
@@ -32,8 +33,9 @@ internal class RpGetCorpDetailEvent : IPacketEvent
         var ranks = connection.Query<(int Id, int RankOrder, string Name, int Pay, int Tiers)>(
             "SELECT `id`, `rank_order` AS RankOrder, `name`, `pay`, `tiers` FROM `rp_corporation_ranks` " +
             "WHERE `corporation_id` = @corpId ORDER BY `rank_order`", new { corpId }).ToList();
-        var employees = connection.Query<(int UserId, int RankId, int Tier, int OnDuty, string Username, string Figure)>(
-            "SELECT e.`user_id` AS UserId, e.`rank_id` AS RankId, e.`tier`, e.`on_duty` AS OnDuty, u.`username`, u.`look` AS Figure " +
+        var employees = connection.Query<(int UserId, int RankId, int Tier, int OnDuty, string Username, string Figure, int ShiftSeconds, int ShiftSecondsWeek)>(
+            "SELECT e.`user_id` AS UserId, e.`rank_id` AS RankId, e.`tier`, e.`on_duty` AS OnDuty, u.`username`, u.`look` AS Figure, " +
+            "e.`shift_seconds` AS ShiftSeconds, e.`shift_seconds_week` AS ShiftSecondsWeek " +
             "FROM `rp_corporation_employees` e INNER JOIN `users` u ON u.`id` = e.`user_id` " +
             "WHERE e.`corporation_id` = @corpId ORDER BY e.`tier` DESC, u.`username`", new { corpId }).ToList();
         var rankPayload = ranks.Select(rank => new RpCorpDetailComposer.Rank(
@@ -42,7 +44,9 @@ internal class RpGetCorpDetailEvent : IPacketEvent
                 .Select(employee => new RpCorpDetailComposer.Employee(
                     employee.Username, employee.Figure, employee.Tier,
                     _clientManager.GetClientByUserId(employee.UserId) != null,
-                    employee.OnDuty == 1))
+                    ShiftManager.IsOnDuty(employee.UserId),
+                    employee.ShiftSeconds + ShiftManager.LiveSessionSeconds(employee.UserId),
+                    employee.ShiftSecondsWeek + ShiftManager.LiveSessionSeconds(employee.UserId)))
                 .ToList()))
             .ToList();
         session.Send(new RpCorpDetailComposer(corp.Id, corp.Name, corp.Badge, corp.Description, corp.Stock, rankPayload));

@@ -9,7 +9,7 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// </summary>
 public class RpCorpDetailComposer : IServerPacket
 {
-    public record Employee(string Username, string Figure, int Tier, bool Online, bool OnDuty);
+    public record Employee(string Username, string Figure, int Tier, bool Online, bool OnDuty, int ShiftSeconds, int ShiftSecondsWeek);
 
     public record Rank(int Id, int Order, string Name, int Pay, int Tiers, List<Employee> Employees);
 
@@ -57,6 +57,8 @@ public class RpCorpDetailComposer : IServerPacket
                 packet.WriteInteger(employee.Tier);
                 packet.WriteInteger(employee.Online ? 1 : 0);
                 packet.WriteInteger(employee.OnDuty ? 1 : 0);
+                packet.WriteInteger(employee.ShiftSeconds);
+                packet.WriteInteger(employee.ShiftSecondsWeek);
             }
         }
     }
