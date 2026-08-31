@@ -351,7 +351,8 @@ public static class ShiftManager
 
             Flush(session, elapsed, PayProgress(session, elapsed), offDuty: false);
 
-            if (!paidThisMinute)
+            // countdown every OTHER minute - once a minute reads as spam
+            if (!paidThisMinute && (minute % 2 == 0))
                 client.SendWhisper(PayMessage(RemainingSeconds(session, elapsed)));
         }
     }
