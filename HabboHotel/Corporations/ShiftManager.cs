@@ -70,11 +70,11 @@ public static class ShiftManager
             client.SendWhisper("You're already on duty.");
             return;
         }
-        (int PaySeconds, int Pay, string CorpName, string RankName, int Tier, int Tiers)? job;
+        (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers)? job;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
-            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string RankName, int Tier, int Tiers)?>(
-                "SELECT e.`pay_seconds` AS PaySeconds, r.`pay` AS Pay, c.`name` AS CorpName, " +
+            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers)?>(
+                "SELECT e.`pay_seconds` AS PaySeconds, r.`pay` AS Pay, c.`name` AS CorpName, c.`acronym` AS Acronym, " +
                 "r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers " +
                 "FROM `rp_corporation_employees` e " +
                 "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
@@ -98,7 +98,11 @@ public static class ShiftManager
         var tierSuffix = ((job.Value.Tiers > 0 && job.Value.Tier >= 1)
             ? " " + TierNumerals[Math.Min(job.Value.Tier, TierNumerals.Length) - 1]
             : "");
-        session.WorkingMotto = $"[WORKING] {session.CorpName} · {job.Value.RankName}{tierSuffix}";
+        // Acronym on line one, rank on line two; the client's motto elements
+        // render the newline via white-space: pre-line. '' acronym falls back
+        // to the full name so the motto never renders blank.
+        var corpLabel = (string.IsNullOrEmpty(job.Value.Acronym) ? session.CorpName : job.Value.Acronym);
+        session.WorkingMotto = $"[WORKING] {corpLabel}\n{job.Value.RankName}{tierSuffix}";
         Sessions[userId] = session;
         client.SendWhisper($"You are now on duty at {session.CorpName}. {PayMessage(RemainingSeconds(session, 0))}");
         ApplyMotto(client, session.WorkingMotto);
