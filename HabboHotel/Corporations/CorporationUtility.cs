@@ -39,6 +39,24 @@ public static class CorporationUtility
     }
 
     /// <summary>
+    /// pixelrp: re-broadcast every employee of a corporation (0 = all corps)
+    /// hotel-wide. The trigger after corp-level DB edits (badge, name,
+    /// acronym, rank names) so infostands, profiles and corp windows update
+    /// in real-time. Returns the employee count synced.
+    /// </summary>
+    public static int BroadcastAllEmployments(int corpId = 0)
+    {
+        List<int> userIds;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+            userIds = connection.Query<int>(
+                "SELECT `user_id` FROM `rp_corporation_employees`" + (corpId > 0 ? " WHERE `corporation_id` = @corpId" : ""),
+                new { corpId }).ToList();
+        foreach (var userId in userIds)
+            BroadcastEmployment(userId);
+        return userIds.Count;
+    }
+
+    /// <summary>
     /// pixelrp: the one call every employment mutation (hire, fire, future
     /// promotions) makes - hotel-wide broadcast so every open Corporations
     /// window, profile and infostand updates in real-time, plus a live-shift
