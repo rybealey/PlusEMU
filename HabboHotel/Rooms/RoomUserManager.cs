@@ -1280,6 +1280,9 @@ public class RoomUserManager
                     {
                         user.IsAsleep = true;
                         _room.SendPacket(new SleepComposer(user, true));
+                        // pixelrp: going idle ends any active shift (progress banked)
+                        if (!user.IsBot && user.GetClient() != null)
+                            Corporations.ShiftManager.InterruptForIdle(user.GetClient());
                     }
                     if (user.CarryItemId > 0)
                     {

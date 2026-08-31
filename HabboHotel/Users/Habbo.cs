@@ -479,6 +479,8 @@ public class Habbo
         if (_disconnected)
             return;
 
+        Corporations.ShiftManager.InterruptForDisconnect(Id);
+
         Disconnected?.Invoke(this, EventArgs.Empty);
 
         try

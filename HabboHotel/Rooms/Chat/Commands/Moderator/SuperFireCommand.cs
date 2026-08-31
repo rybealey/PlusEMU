@@ -31,6 +31,9 @@ internal class SuperFireCommand : ITargetChatCommand
             session.SendWhisper($"{target.Username} isn't employed by any corporation.");
             return Task.CompletedTask;
         }
+        // end any live shift first - banks progress and clears on_duty
+        ShiftManager.InterruptForDisconnect(target.Id);
+
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             connection.Execute("DELETE FROM `rp_corporation_employees` WHERE `user_id` = @userId LIMIT 1", new { userId = target.Id });

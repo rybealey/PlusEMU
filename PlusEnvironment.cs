@@ -133,6 +133,9 @@ public class PlusEnvironment : IPlusEnvironment
             _nitroServer.Start();
 
             _itemDataManager.Init();
+            // pixelrp: shift tracking - clears stale on_duty flags and starts
+            // the payout timer; needs the database, which is already up here.
+            HabboHotel.Corporations.ShiftManager.Init();
             // Allow services to self initialize
             foreach (var task in _startableTasks)
                 await task.Start();
