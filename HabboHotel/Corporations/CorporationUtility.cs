@@ -38,6 +38,19 @@ public static class CorporationUtility
             "WHERE e.`user_id` IN @ids", new { ids }).ToList();
     }
 
+    /// <summary>
+    /// pixelrp: the one call every employment mutation (hire, fire, future
+    /// promotions) makes - hotel-wide broadcast so every open Corporations
+    /// window, profile and infostand updates in real-time, plus a live-shift
+    /// refresh so an on-duty player's wage and working motto follow.
+    /// </summary>
+    public static void BroadcastEmployment(int userId)
+    {
+        var employment = GetEmployment(userId);
+        PlusEnvironment.Game.ClientManager.SendPacket(ComposeFor(userId, employment));
+        ShiftManager.RefreshSession(userId);
+    }
+
     public static RpUserCorpComposer ComposeFor(int userId, Employment employment)
     {
         if (employment == null || employment.CorpId == 0)

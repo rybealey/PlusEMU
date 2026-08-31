@@ -95,16 +95,56 @@ public static class ShiftManager
             BasePaySeconds = job.Value.PaySeconds,
             StartedAt = UnixTimestamp.GetNow()
         };
-        var tierSuffix = ((job.Value.Tiers > 0 && job.Value.Tier >= 1)
-            ? " " + TierNumerals[Math.Min(job.Value.Tier, TierNumerals.Length) - 1]
-            : "");
-        // Acronym on line one, rank on line two; the client's motto elements
-        // render the newline via white-space: pre-line. '' acronym falls back
-        // to the full name so the motto never renders blank.
-        var corpLabel = (string.IsNullOrEmpty(job.Value.Acronym) ? session.CorpName : job.Value.Acronym);
-        session.WorkingMotto = $"[WORKING] {corpLabel}\n{job.Value.RankName}{tierSuffix}";
+        session.WorkingMotto = BuildWorkingMotto(session.CorpName, job.Value.Acronym, job.Value.RankName, job.Value.Tier, job.Value.Tiers);
         Sessions[userId] = session;
         client.SendWhisper($"You are now on duty at {session.CorpName}. {PayMessage(RemainingSeconds(session, 0))}");
+        ApplyMotto(client, session.WorkingMotto);
+        AnnounceShift(client, $"*has started their shift at {session.CorpName}*");
+    }
+
+    // Acronym on line one, rank on line two; the client's motto elements
+    // render the newline via white-space: pre-line. '' acronym falls back
+    // to the full name so the motto never renders blank.
+    private static string BuildWorkingMotto(string corpName, string acronym, string rankName, int tier, int tiers)
+    {
+        var tierSuffix = ((tiers > 0 && tier >= 1)
+            ? " " + TierNumerals[Math.Min(tier, TierNumerals.Length) - 1]
+            : "");
+        var corpLabel = (string.IsNullOrEmpty(acronym) ? corpName : acronym);
+        return $"[WORKING] {corpLabel}\n{rankName}{tierSuffix}";
+    }
+
+    // Room shout in the hired-target bubble (4) - clocking in/out is public.
+    private static void AnnounceShift(GameClient client, string message)
+    {
+        var habbo = client?.GetHabbo();
+        var roomUser = habbo?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        roomUser?.OnChat(4, message, true);
+    }
+
+    // A rank/tier/corp change while on duty: refresh the session's wage and
+    // working motto so the change shows immediately and the next payday pays
+    // the new rank. No-op off duty or when the employment row is gone.
+    public static void RefreshSession(int userId)
+    {
+        if (!Sessions.TryGetValue(userId, out var session)) return;
+        var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+        if (client == null) return;
+        (string CorpName, string Acronym, string RankName, int Tier, int Tiers, int Pay)? job;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+            job = connection.QuerySingleOrDefault<(string CorpName, string Acronym, string RankName, int Tier, int Tiers, int Pay)?>(
+                "SELECT c.`name` AS CorpName, c.`acronym` AS Acronym, r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers, r.`pay` AS Pay " +
+                "FROM `rp_corporation_employees` e " +
+                "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
+                "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+                "WHERE e.`user_id` = @userId LIMIT 1", new { userId });
+        if (job == null) return;
+        lock (session)
+        {
+            session.CorpName = job.Value.CorpName;
+            session.RankPay = job.Value.Pay;
+            session.WorkingMotto = BuildWorkingMotto(job.Value.CorpName, job.Value.Acronym, job.Value.RankName, job.Value.Tier, job.Value.Tiers);
+        }
         ApplyMotto(client, session.WorkingMotto);
     }
 
@@ -119,6 +159,7 @@ public static class ShiftManager
         var banked = EndSession(session, client);
         client.SendWhisper($"Off duty. {FormatMinutes(banked)} banked toward your next pay.");
         RevertMotto(client);
+        AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
     }
 
     public static void InterruptForIdle(GameClient client)
@@ -187,7 +228,9 @@ public static class ShiftManager
     private static string PayMessage(int remainingSeconds)
     {
         var minutes = Math.Max(1, (remainingSeconds + 59) / 60);
-        return (minutes == 1) ? "Next pay in 1 minute." : $"Next pay in {minutes} minutes.";
+        return (minutes == 1)
+            ? "You'll receive your next paycheck in 1 minute."
+            : $"You'll receive your next paycheck in {minutes} minutes.";
     }
 
     private static string FormatMinutes(int seconds) => $"{seconds / 60}m";

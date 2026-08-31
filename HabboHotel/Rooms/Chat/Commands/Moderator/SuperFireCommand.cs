@@ -39,16 +39,10 @@ internal class SuperFireCommand : ITargetChatCommand
             connection.Execute("DELETE FROM `rp_corporation_employees` WHERE `user_id` = @userId LIMIT 1", new { userId = target.Id });
         }
 
-        // Real-time clear: the target's room (infostand corp slots), the
-        // target themself, and the firing staff member's client.
-        var composer = CorporationUtility.ComposeFor(target.Id, null);
+        // Real-time clear: hotel-wide broadcast (corp windows, profiles,
+        // infostands everywhere). The shift was already interrupted above.
+        CorporationUtility.BroadcastEmployment(target.Id);
         var targetRoom = target.CurrentRoom;
-        if (targetRoom != null)
-            targetRoom.SendPacket(composer);
-        else
-            target.Client?.Send(composer);
-        if (session.GetHabbo().CurrentRoom?.Id != targetRoom?.Id)
-            session.Send(composer);
 
         var staffRoomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(session.GetHabbo().Id);
         staffRoomUser?.OnChat(23, $"*has fired {target.Username} from {employment.CorpName}*", true);

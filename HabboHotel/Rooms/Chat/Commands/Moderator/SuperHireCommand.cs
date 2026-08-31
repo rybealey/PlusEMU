@@ -94,17 +94,10 @@ internal class SuperHireCommand : ITargetChatCommand
             "ON DUPLICATE KEY UPDATE `corporation_id` = @corpId, `rank_id` = @rankId, `tier` = @tier, `hired_at` = UNIX_TIMESTAMP()",
             new { userId = target.Id, corpId = corp.Id, rankId = rank.Id, tier });
 
-        // Real-time updates: everyone in the target's room (infostand corp
-        // slot), the target themself, and the hiring staff member.
-        var employment = CorporationUtility.GetEmployment(target.Id);
-        var composer = CorporationUtility.ComposeFor(target.Id, employment);
+        // Real-time updates: hotel-wide broadcast (corp windows, profiles,
+        // infostands everywhere) + live-shift wage/motto refresh.
+        CorporationUtility.BroadcastEmployment(target.Id);
         var targetRoom = target.CurrentRoom;
-        if (targetRoom != null)
-            targetRoom.SendPacket(composer);
-        else
-            target.Client?.Send(composer);
-        if (session.GetHabbo().CurrentRoom?.Id != targetRoom?.Id)
-            session.Send(composer);
 
         // Announce theatrically: the staff member shouts the hire in their
         // room (bubble 23) and the new hire shouts in theirs (bubble 4).
