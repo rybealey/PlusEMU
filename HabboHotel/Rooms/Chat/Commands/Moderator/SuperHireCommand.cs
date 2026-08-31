@@ -39,14 +39,14 @@ internal class SuperHireCommand : ITargetChatCommand
             session.SendWhisper("Usage: :superhire <username> <corporation> [rank] [tier]");
             return Task.CompletedTask;
         }
-        var corpKey = parameters[0].ToLowerInvariant();
+        var acronym = parameters[0].ToUpperInvariant();
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         var corp = connection.QuerySingleOrDefault<(int Id, string Name)>(
-            "SELECT `id`, `name` FROM `rp_corporations` WHERE `corp_key` = @corpKey AND `corp_key` != '' LIMIT 1", new { corpKey });
+            "SELECT `id`, `name` FROM `rp_corporations` WHERE UPPER(`acronym`) = @acronym AND `acronym` != '' LIMIT 1", new { acronym });
         if (corp.Id == 0)
         {
-            var keys = connection.Query<string>("SELECT `corp_key` FROM `rp_corporations` WHERE `corp_key` != '' ORDER BY `sort_order`, `id`").ToList();
-            session.SendWhisper($"Unknown corporation '{corpKey}'. Available: {string.Join(", ", keys)}");
+            var keys = connection.Query<string>("SELECT `acronym` FROM `rp_corporations` WHERE `acronym` != '' ORDER BY `sort_order`, `id`").ToList();
+            session.SendWhisper($"Unknown corporation '{parameters[0]}'. Available: {string.Join(", ", keys)}");
             return Task.CompletedTask;
         }
         var rankOrder = 1;
