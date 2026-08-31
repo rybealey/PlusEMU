@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Corporations;
@@ -96,7 +97,7 @@ public static class ShiftManager
             client.SendWhisper("You're not on duty.");
             return;
         }
-        var banked = EndSession(session);
+        var banked = EndSession(session, client);
         client.SendWhisper($"Off duty. {FormatMinutes(banked)} banked toward your next pay.");
     }
 
@@ -104,14 +105,44 @@ public static class ShiftManager
     {
         var userId = client?.GetHabbo()?.Id ?? 0;
         if (userId == 0 || !Sessions.TryRemove(userId, out var session)) return;
-        var banked = EndSession(session);
+        var banked = EndSession(session, client);
         client.SendWhisper($"Your shift ended because you went idle. {FormatMinutes(banked)} banked toward your next pay.");
     }
 
+    // Disconnect path when the caller already holds the Habbo (Habbo.OnDisconnect).
+    // The connection is gone by this point, so payout is silent: no composer, no
+    // whisper - just the raw credit mutation, which the disconnect save that runs
+    // right after this hook persists along with everything else.
+    public static void InterruptForDisconnect(Habbo habbo)
+    {
+        if (habbo == null || !Sessions.TryRemove(habbo.Id, out var session)) return;
+        var elapsed = Elapsed(session);
+        while (PayProgress(session, elapsed) >= PayIntervalSeconds)
+        {
+            session.PaidIntervals++;
+            habbo.Credits += session.RankPay;
+        }
+        var paySeconds = PayProgress(session, elapsed);
+        Flush(session, elapsed, paySeconds, offDuty: true);
+    }
+
+    // Disconnect path when only the user id is known (TickSession's null-client
+    // fallback, SuperFireCommand). Resolves the client - if it's actually still
+    // around (e.g. the fired player is online) drain and notify normally through
+    // it; if nothing resolves there's no one to credit safely, so leave the
+    // overflow banked as pay_seconds (pre-existing behavior) for it to be paid
+    // out next tick or next shift.
     public static void InterruptForDisconnect(int userId)
     {
         if (!Sessions.TryRemove(userId, out var session)) return;
-        EndSession(session);
+        var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+        if (client != null)
+        {
+            EndSession(session, client);
+            return;
+        }
+        var elapsed = Elapsed(session);
+        Flush(session, elapsed, PayProgress(session, elapsed), offDuty: true);
     }
 
     private static int Elapsed(ShiftSession session)
@@ -132,11 +163,16 @@ public static class ShiftManager
 
     private static string FormatMinutes(int seconds) => $"{seconds / 60}m";
 
-    // Banks the session into the DB (delta counters, absolute pay_seconds),
-    // clears on_duty, returns the banked pay_seconds.
-    private static int EndSession(ShiftSession session)
+    // Drains any pay interval(s) the session completed before it ended, then
+    // banks the remainder into the DB (delta counters, absolute pay_seconds),
+    // clears on_duty, and returns the banked (sub-600) remainder. Used by
+    // StopShift/InterruptForIdle and the InterruptForDisconnect(int) path
+    // that resolved a live client - all three still have a connection to
+    // pay through.
+    private static int EndSession(ShiftSession session, GameClient client)
     {
         var elapsed = Elapsed(session);
+        DrainCompletedIntervals(session, client, elapsed);
         var paySeconds = PayProgress(session, elapsed);
         Flush(session, elapsed, paySeconds, offDuty: true);
         return paySeconds;
@@ -187,19 +223,30 @@ public static class ShiftManager
         if (minute <= session.LastMinute) return;
         session.LastMinute = minute;
 
-        var paidThisMinute = false;
-        while (PayProgress(session, elapsed) >= PayIntervalSeconds)
-        {
-            session.PaidIntervals++;
-            paidThisMinute = true;
-            client.GetHabbo().Credits += session.RankPay;
-            client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
-            client.SendWhisper($"Payday! You earned {session.RankPay}c.");
-        }
+        var paidIntervalsBefore = session.PaidIntervals;
+        DrainCompletedIntervals(session, client, elapsed);
+        var paidThisMinute = session.PaidIntervals > paidIntervalsBefore;
 
         Flush(session, elapsed, PayProgress(session, elapsed), offDuty: false);
 
         if (!paidThisMinute)
             client.SendWhisper(PayMessage(RemainingSeconds(session, elapsed)));
+    }
+
+    // Pays out every pay interval the session has completed as of `elapsed`,
+    // crediting the player and notifying them for each one. Shared by
+    // TickSession (still connected, polling every 10s) and EndSession
+    // (stopwork / idle) so a shift ending mid-interval still pays out
+    // whatever it completed instead of banking pay_seconds above the
+    // 600 cap.
+    private static void DrainCompletedIntervals(ShiftSession session, GameClient client, int elapsed)
+    {
+        while (PayProgress(session, elapsed) >= PayIntervalSeconds)
+        {
+            session.PaidIntervals++;
+            client.GetHabbo().Credits += session.RankPay;
+            client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
+            client.SendWhisper($"Payday! You earned {session.RankPay}c.");
+        }
     }
 }

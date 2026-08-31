@@ -479,7 +479,7 @@ public class Habbo
         if (_disconnected)
             return;
 
-        Corporations.ShiftManager.InterruptForDisconnect(Id);
+        Corporations.ShiftManager.InterruptForDisconnect(this);
 
         Disconnected?.Invoke(this, EventArgs.Empty);
 
