@@ -166,9 +166,9 @@ public static class ShiftManager
     {
         var userId = client?.GetHabbo()?.Id ?? 0;
         if (userId == 0 || !Sessions.TryRemove(userId, out var session)) return;
-        var banked = EndSession(session, client);
-        client.SendWhisper($"Your shift ended because you went idle. {FormatMinutes(banked)} banked toward your next pay.");
+        EndSession(session, client);
         RevertMotto(client);
+        AnnounceShift(client, "*has fallen asleep on duty*");
     }
 
     // Disconnect path when the caller already holds the Habbo (Habbo.OnDisconnect).
@@ -329,16 +329,13 @@ public static class ShiftManager
             if (client.GetHabbo().CurrentRoom == null)
             {
                 session.NoRoomMinutes++;
-                // two consecutive room-less minute boundaries - clock out
-                // like InterruptForIdle. There's no room to whisper into,
-                // but SendWhisper is already a null-room no-op, so reusing
-                // the idle end-session path is safe and avoids duplicating
-                // the drain/flush logic.
+                // Two consecutive room-less minute boundaries - clock out
+                // like InterruptForIdle. No message: there's no room for the
+                // asleep-on-duty shout (or a whisper) to render into.
                 if (session.NoRoomMinutes >= 2)
                 {
                     Sessions.TryRemove(session.UserId, out _);
-                    var banked = EndSession(session, client);
-                    client.SendWhisper($"Your shift ended because you went idle. {FormatMinutes(banked)} banked toward your next pay.");
+                    EndSession(session, client);
                     RevertMotto(client);
                     return;
                 }
