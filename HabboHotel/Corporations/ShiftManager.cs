@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.Utilities;
@@ -17,6 +18,8 @@ namespace Plus.HabboHotel.Corporations;
 public static class ShiftManager
 {
     public const int PayIntervalSeconds = 600;
+
+    private static readonly string[] TierNumerals = { "I", "II", "III", "IV", "V" };
 
     private sealed class ShiftSession
     {
@@ -35,6 +38,9 @@ public static class ShiftManager
         // consecutive minute boundaries spent with no CurrentRoom (hotel
         // view); resets to 0 the moment the player is back in a room
         public int NoRoomMinutes;
+        // in-memory only: shown on the infostand while on duty; the DB motto
+        // is never touched, so disconnect/crash revert for free
+        public string WorkingMotto = "";
     }
 
     private static readonly ConcurrentDictionary<int, ShiftSession> Sessions = new();
@@ -64,11 +70,12 @@ public static class ShiftManager
             client.SendWhisper("You're already on duty.");
             return;
         }
-        (int PaySeconds, int Pay, string CorpName)? job;
+        (int PaySeconds, int Pay, string CorpName, string RankName, int Tier, int Tiers)? job;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
-            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName)?>(
-                "SELECT e.`pay_seconds` AS PaySeconds, r.`pay` AS Pay, c.`name` AS CorpName " +
+            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string RankName, int Tier, int Tiers)?>(
+                "SELECT e.`pay_seconds` AS PaySeconds, r.`pay` AS Pay, c.`name` AS CorpName, " +
+                "r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers " +
                 "FROM `rp_corporation_employees` e " +
                 "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
                 "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
@@ -88,8 +95,13 @@ public static class ShiftManager
             BasePaySeconds = job.Value.PaySeconds,
             StartedAt = UnixTimestamp.GetNow()
         };
+        var tierSuffix = ((job.Value.Tiers > 0 && job.Value.Tier >= 1)
+            ? " " + TierNumerals[Math.Min(job.Value.Tier, TierNumerals.Length) - 1]
+            : "");
+        session.WorkingMotto = $"[WORKING] {session.CorpName} · {job.Value.RankName}{tierSuffix}";
         Sessions[userId] = session;
         client.SendWhisper($"You are now on duty at {session.CorpName}. {PayMessage(RemainingSeconds(session, 0))}");
+        ApplyMotto(client, session.WorkingMotto);
     }
 
     public static void StopShift(GameClient client)
@@ -102,6 +114,7 @@ public static class ShiftManager
         }
         var banked = EndSession(session, client);
         client.SendWhisper($"Off duty. {FormatMinutes(banked)} banked toward your next pay.");
+        RevertMotto(client);
     }
 
     public static void InterruptForIdle(GameClient client)
@@ -110,6 +123,7 @@ public static class ShiftManager
         if (userId == 0 || !Sessions.TryRemove(userId, out var session)) return;
         var banked = EndSession(session, client);
         client.SendWhisper($"Your shift ended because you went idle. {FormatMinutes(banked)} banked toward your next pay.");
+        RevertMotto(client);
     }
 
     // Disconnect path when the caller already holds the Habbo (Habbo.OnDisconnect).
@@ -146,6 +160,7 @@ public static class ShiftManager
         if (client != null)
         {
             EndSession(session, client);
+            RevertMotto(client);
             return;
         }
         lock (session)
@@ -207,6 +222,32 @@ public static class ShiftManager
             new { paySeconds, delta, userId = session.UserId });
     }
 
+    // Sets the in-memory motto and pushes it to the infostand (self + room).
+    // users.motto is deliberately never written: the DB always holds the real
+    // RP-managed motto, so any reload (relog, crash) self-heals.
+    private static void ApplyMotto(GameClient client, string motto)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null) return;
+        habbo.Motto = motto;
+        var room = habbo.CurrentRoom;
+        var roomUser = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        if (roomUser == null) return;
+        client.Send(new UserChangeComposer(roomUser, true));
+        room.SendPacket(new UserChangeComposer(roomUser, false));
+    }
+
+    private static void RevertMotto(GameClient client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null) return;
+        string motto;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+            motto = connection.QuerySingleOrDefault<string>(
+                "SELECT `motto` FROM `users` WHERE `id` = @userId LIMIT 1", new { userId = habbo.Id }) ?? "";
+        ApplyMotto(client, motto);
+    }
+
     private static void Tick()
     {
         foreach (var session in Sessions.Values)
@@ -251,6 +292,7 @@ public static class ShiftManager
                     Sessions.TryRemove(session.UserId, out _);
                     var banked = EndSession(session, client);
                     client.SendWhisper($"Your shift ended because you went idle. {FormatMinutes(banked)} banked toward your next pay.");
+                    RevertMotto(client);
                     return;
                 }
             }
