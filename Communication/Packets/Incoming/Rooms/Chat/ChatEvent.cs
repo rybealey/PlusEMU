@@ -1,4 +1,5 @@
 ﻿using Plus.Communication.Packets.Outgoing.Moderation;
+using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Core.Settings;
 using Plus.HabboHotel.GameClients;
@@ -108,6 +109,20 @@ public class ChatEvent : IPacketEvent
             message = _wordFilterManager.CheckMessage(message);
         _questManager.ProgressUserQuest(session, QuestType.SocialChat);
         user.OnChat(user.LastBubble, message, false);
+        // pixelrp: saying "67" plays the six-seven gesture (the client maps
+        // expression 67 to a built-in dance). Any enable is paused so the
+        // gesture is visible; the room cycle reapplies it two ticks later.
+        if (message.Trim() == "67")
+        {
+            if (user.DanceId > 0)
+                user.DanceId = 0;
+            if (session.GetHabbo().Effects.CurrentEffect > 0)
+            {
+                room.SendPacket(new AvatarEffectComposer(user.VirtualId, 0));
+                user.EffectReapplyTimer = 2;
+            }
+            room.SendPacket(new ActionComposer(user.VirtualId, 67));
+        }
         return;
     }
 }

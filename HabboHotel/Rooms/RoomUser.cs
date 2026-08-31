@@ -26,6 +26,9 @@ public class RoomUser
     public bool CanWalk;
     public int CarryItemId; //byte
     public int CarryTimer; //byte
+    // pixelrp: >0 while an enable is paused for the "67" gesture; the room
+    // cycle counts it down and reapplies the effect at zero.
+    public int EffectReapplyTimer;
     public int ChatSpamCount;
     public int ChatSpamTicks = 16;
     public ItemEffectType CurrentItemEffect;

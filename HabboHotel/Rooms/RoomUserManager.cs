@@ -1287,6 +1287,18 @@ public class RoomUserManager
                         if (user.CarryTimer <= 0)
                             user.CarryItem(0);
                     }
+                    // pixelrp: restore an enable paused by the "67" gesture once
+                    // the ~1s client animation has finished.
+                    if (user.EffectReapplyTimer > 0)
+                    {
+                        user.EffectReapplyTimer--;
+                        if (user.EffectReapplyTimer <= 0 && !user.IsDancing)
+                        {
+                            var effect = user.GetClient()?.GetHabbo()?.Effects?.CurrentEffect ?? 0;
+                            if (effect > 0)
+                                _room.SendPacket(new AvatarEffectComposer(user.VirtualId, effect));
+                        }
+                    }
                     if (_room.GotFreeze())
                         _room.GetFreeze().CycleUser(user);
                     var removed = false;
