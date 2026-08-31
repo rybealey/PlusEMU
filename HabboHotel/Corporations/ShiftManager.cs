@@ -148,8 +148,11 @@ public static class ShiftManager
             EndSession(session, client);
             return;
         }
-        var elapsed = Elapsed(session);
-        Flush(session, elapsed, PayProgress(session, elapsed), offDuty: true);
+        lock (session)
+        {
+            var elapsed = Elapsed(session);
+            Flush(session, elapsed, PayProgress(session, elapsed), offDuty: true);
+        }
     }
 
     private static int Elapsed(ShiftSession session)
