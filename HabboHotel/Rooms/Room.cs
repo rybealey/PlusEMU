@@ -514,6 +514,9 @@ public class Room : RoomData
         // room — the packet is tiny and the client hides the panel itself
         // via present=false (see RoomJukeboxManager.BuildState).
         GetJukeboxManager().SendState(session);
+        // pixelrp: an on-duty worker who just entered a room they may no
+        // longer work in is clocked out on the spot, not on the next tick.
+        Plus.HabboHotel.Corporations.ShiftManager.OnEnterRoom(session);
     }
 
     public void AddTent(uint tentId)

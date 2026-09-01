@@ -193,6 +193,25 @@ public static class ShiftManager
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
     }
 
+    // pixelrp: re-check the moment an on-duty worker enters a room, so an
+    // unworkable room clocks them out immediately instead of up to a minute
+    // later on the next tick. No-op for off-duty users (the common case) so
+    // room entry stays cheap. The EvaluateWork DB read is done before taking
+    // the session lock; TryRemove then gates against a concurrent tick.
+    public static void OnEnterRoom(GameClient client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null || !Sessions.TryGetValue(habbo.Id, out var session)) return;
+        if (CorporationUtility.EvaluateWork(habbo, isStart: false).Ok) return;
+        lock (session)
+        {
+            if (!Sessions.TryRemove(habbo.Id, out _)) return;
+            EndSession(session, client);
+            RevertMotto(client);
+            InterruptForLeftWork(client, session);
+        }
+    }
+
     // Disconnect path when the caller already holds the Habbo (Habbo.OnDisconnect).
     // The connection is gone by this point, so payout is silent: no composer, no
     // whisper - just the raw credit mutation, which the disconnect save that runs
