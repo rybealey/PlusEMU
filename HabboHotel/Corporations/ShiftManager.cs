@@ -183,12 +183,14 @@ public static class ShiftManager
         AnnounceShift(client, "*has fallen asleep on duty*");
     }
 
-    // pixelrp: a room shout when an HQ-gated worker is clocked out for no
-    // longer being in a room they may work in (left the workplace, rank
-    // deauthorized mid-shift, or the room's HQ was reassigned).
-    private static void InterruptForLeftWork(GameClient client)
+    // pixelrp: clocked out because they're no longer in a room they may
+    // work in (walked out, rank deauthorized mid-shift, or the room was
+    // (re)assigned as a headquarters). Shown exactly like a normal :stopwork
+    // - the same blue "has ended their shift" action shout - so it reads as
+    // a clean end of shift rather than a special interruption.
+    private static void InterruptForLeftWork(GameClient client, ShiftSession session)
     {
-        AnnounceShift(client, "*has clocked out - left the workplace*");
+        AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
     }
 
     // Disconnect path when the caller already holds the Habbo (Habbo.OnDisconnect).
@@ -374,7 +376,7 @@ public static class ShiftManager
                     Sessions.TryRemove(session.UserId, out _);
                     EndSession(session, client);
                     RevertMotto(client);
-                    InterruptForLeftWork(client);
+                    InterruptForLeftWork(client, session);
                     return;
                 }
             }
