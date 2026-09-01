@@ -52,7 +52,7 @@ internal class GiveUserBadgeBox : IWiredItem
         if (string.IsNullOrEmpty(StringData))
             return false;
         if (player.Inventory.Badges.HasBadge(StringData))
-            player.Client.Send(new WhisperComposer(user.VirtualId, "Oops, it appears you have already recieved this badge!", 0, user.LastBubble));
+            player.Client.Send(new WhisperComposer(user.VirtualId, "Oops, it appears you have already recieved this badge!", 0, 1));
         else
         {
             //player.Inventory.Badges.GiveBadge(StringData, true, player.GetClient());

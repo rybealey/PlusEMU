@@ -48,7 +48,7 @@ internal class MuteTriggererBox : IWiredItem
             return false;
         if (player.Permissions.HasRight("mod_tool") || Instance.OwnerId == player.Id)
         {
-            player.Client.Send(new WhisperComposer(user.VirtualId, "Wired Mute Exception: Unmutable Player", 0, 0));
+            player.Client.Send(new WhisperComposer(user.VirtualId, "Wired Mute Exception: Unmutable Player", 0, 1));
             return false;
         }
         var time = StringData != null ? int.Parse(StringData.Split(';')[0]) : 0;
