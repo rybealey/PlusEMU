@@ -301,6 +301,9 @@
     "RpJukeboxSkipEvent": 3921,
     "RpJukeboxReportEvent": 3922,
     "RpRoomZoneSaveEvent": 3923,
+    "RpSetRoomCorpEvent": 3958,
+    "RpSetHqRankEvent": 3962,
+    "RpSetEmergencyEvent": 3960,
     "RpPassiveCancelEvent": 3927,
     "GetDiamondsStoreEvent": 3929,
     "PurchaseDiamondsStoreItemEvent": 3930
@@ -589,6 +592,7 @@
     "RpPhotoListComposer": 3909,
     "RpJukeboxStateComposer": 3917,
     "RpRoomZoneComposer": 3924,
+    "RpRoomCorpComposer": 3957,
     "DiamondsStoreComposer": 3925,
     "DiamondsStorePurchaseResultComposer": 3931
   }

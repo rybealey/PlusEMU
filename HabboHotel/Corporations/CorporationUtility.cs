@@ -1,6 +1,8 @@
 using Dapper;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.Communication.Packets.Outgoing.Rooms.Settings;
 
 namespace Plus.HabboHotel.Corporations;
 
@@ -131,5 +133,27 @@ public static class CorporationUtility
         var live = ShiftManager.LiveSessionSeconds(userId);
         return new RpUserCorpComposer(employment.UserId, employment.CorpId, employment.Badge, employment.CorpName, employment.RankName, employment.Tier,
             employment.ShiftSeconds + live, employment.ShiftSecondsWeek + live, ShiftManager.IsOnDuty(userId));
+    }
+
+    // pixelrp: assembles the RpRoomCorpComposer for a room - its HQ corp's
+    // ranks with per-rank authorization plus the room's emergency flags.
+    public static RpRoomCorpComposer BuildRoomCorp(Room room)
+    {
+        var ranks = new List<RpRoomCorpComposer.RankRow>();
+        if (room.CorporationId > 0)
+        {
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+            var rows = connection.Query<(int Id, int RankOrder, string Name, int Authorized)>(
+                "SELECT r.`id` AS Id, r.`rank_order` AS RankOrder, r.`name` AS Name, " +
+                "(a.`rank_id` IS NOT NULL) AS Authorized " +
+                "FROM `rp_corporation_ranks` r " +
+                "LEFT JOIN `rp_hq_room_ranks` a ON a.`rank_id` = r.`id` AND a.`room_id` = @roomId " +
+                "WHERE r.`corporation_id` = @corpId ORDER BY r.`rank_order`",
+                new { roomId = room.Id, corpId = room.CorporationId });
+            foreach (var row in rows)
+                ranks.Add(new RpRoomCorpComposer.RankRow(row.Id, row.RankOrder, row.Name, row.Authorized == 1));
+        }
+        return new RpRoomCorpComposer((int)room.Id, room.CorporationId, ranks,
+            room.AllowMedical, room.AllowPolice, room.AllowStaff);
     }
 }

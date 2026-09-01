@@ -185,6 +185,8 @@ public static class ServerPacketHeader
     public const uint RpPhotoListComposer = 3909;
     public const uint RpJukeboxStateComposer = 3917;
     public const uint RpRoomZoneComposer = 3924;
+    // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
+    public const uint RpRoomCorpComposer = 43957; //3957
     public const uint DiamondsStoreComposer = 3925;
     public const uint DiamondsStorePurchaseResultComposer = 3931;
     public const uint RefreshFavouriteGroupComposer = 149; //382

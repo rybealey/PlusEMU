@@ -426,6 +426,14 @@ public static class ClientPacketHeader
     public const uint RpJukeboxSkipEvent = 3921;
     public const uint RpJukeboxReportEvent = 3922;
     public const uint RpRoomZoneSaveEvent = 3923;
+    // Internal 439xx / wire 39xx - see the album note above.
+    public const uint RpSetRoomCorpEvent = 43958; //3958
+    // 3959 is BURNED: it collides with the stock client's PHOTO_COMPETITION
+    // (client OutgoingHeader.ts), and 3961 collides with
+    // CHAT_REVIEW_GUIDE_VOTE - both checked against the client's stock
+    // header tables, not just our own revisions ledger. 3962 is clear.
+    public const uint RpSetHqRankEvent = 43962; //3962
+    public const uint RpSetEmergencyEvent = 43960; //3960
     public const uint RpPassiveCancelEvent = 3927;
     public const uint GetDiamondsStoreEvent = 3929;
     public const uint PurchaseDiamondsStoreItemEvent = 3930;
