@@ -426,7 +426,7 @@ public static class ShiftManager
             client.GetHabbo().Credits += session.RankPay;
             PersistCredits(session.UserId, session.RankPay);
             client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
-            client.SendWhisper($"Payday! You earned {session.RankPay}c.");
+            client.SendWhisper($"You have earned {session.RankPay}c for this shift.");
         }
     }
 
