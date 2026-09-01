@@ -41,6 +41,11 @@ public static class ShiftManager
         // in-memory only: shown on the infostand while on duty; the DB motto
         // is never touched, so disconnect/crash revert for free
         public string WorkingMotto = "";
+        // pixelrp: gating context so the minute tick can re-check permission
+        // without another employment lookup. HqGated == corp has >=1 HQ room.
+        public int CorpId;
+        public int RankId;
+        public bool HqGated;
     }
 
     private static readonly ConcurrentDictionary<int, ShiftSession> Sessions = new();
@@ -70,12 +75,19 @@ public static class ShiftManager
             client.SendWhisper("You're already on duty.");
             return;
         }
-        (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers)? job;
+        var permit = CorporationUtility.EvaluateWork(client.GetHabbo());
+        if (!permit.Ok)
+        {
+            client.SendWhisper(permit.Reason);
+            return;
+        }
+        (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId)? job;
+        bool hqGated;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
-            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers)?>(
+            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId)?>(
                 "SELECT e.`pay_seconds` AS PaySeconds, r.`pay` AS Pay, c.`name` AS CorpName, c.`acronym` AS Acronym, " +
-                "r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers " +
+                "r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers, e.`corporation_id` AS CorpId, e.`rank_id` AS RankId " +
                 "FROM `rp_corporation_employees` e " +
                 "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
                 "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
@@ -86,6 +98,8 @@ public static class ShiftManager
                 return;
             }
             connection.Execute("UPDATE `rp_corporation_employees` SET `on_duty` = 1 WHERE `user_id` = @userId LIMIT 1", new { userId });
+            hqGated = connection.QuerySingle<int>(
+                "SELECT COUNT(*) FROM `rooms` WHERE `corporation_id` = @corpId", new { corpId = job.Value.CorpId }) > 0;
         }
         var session = new ShiftSession
         {
@@ -93,7 +107,10 @@ public static class ShiftManager
             CorpName = job.Value.CorpName,
             RankPay = job.Value.Pay,
             BasePaySeconds = job.Value.PaySeconds,
-            StartedAt = UnixTimestamp.GetNow()
+            StartedAt = UnixTimestamp.GetNow(),
+            CorpId = job.Value.CorpId,
+            RankId = job.Value.RankId,
+            HqGated = hqGated
         };
         session.WorkingMotto = BuildWorkingMotto(session.CorpName, job.Value.Acronym, job.Value.RankName, job.Value.Tier, job.Value.Tiers);
         Sessions[userId] = session;
@@ -169,6 +186,14 @@ public static class ShiftManager
         EndSession(session, client);
         RevertMotto(client);
         AnnounceShift(client, "*has fallen asleep on duty*");
+    }
+
+    // pixelrp: a room shout when an HQ-gated worker is clocked out for no
+    // longer being in a room they may work in (left the workplace, rank
+    // deauthorized mid-shift, or the room's HQ was reassigned).
+    private static void InterruptForLeftWork(GameClient client)
+    {
+        AnnounceShift(client, "*has clocked out - left the workplace*");
     }
 
     // Disconnect path when the caller already holds the Habbo (Habbo.OnDisconnect).
@@ -343,6 +368,19 @@ public static class ShiftManager
             else
             {
                 session.NoRoomMinutes = 0;
+            }
+
+            if (session.HqGated)
+            {
+                var permit = CorporationUtility.EvaluateWork(client.GetHabbo());
+                if (!permit.Ok)
+                {
+                    Sessions.TryRemove(session.UserId, out _);
+                    EndSession(session, client);
+                    RevertMotto(client);
+                    InterruptForLeftWork(client);
+                    return;
+                }
             }
 
             var paidIntervalsBefore = session.PaidIntervals;

@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Users;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Communication.Packets.Outgoing.Rooms.Settings;
 
@@ -155,5 +156,46 @@ public static class CorporationUtility
         }
         return new RpRoomCorpComposer((int)room.Id, room.CorporationId, ranks,
             room.AllowMedical, room.AllowPolice, room.AllowStaff);
+    }
+
+    // pixelrp: may this employee be on the clock in the room they're
+    // standing in right now? A corp with no HQ works anywhere (unchanged).
+    // Otherwise: their HQ room with an authorized rank, OR a room that
+    // admits their corp's emergency service. Reason is whisper-ready.
+    public static (bool Ok, string Reason) EvaluateWork(Habbo habbo)
+    {
+        var room = habbo?.CurrentRoom;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var job = connection.QuerySingleOrDefault<(int CorpId, int RankId, string ServiceType)?>(
+            "SELECT e.`corporation_id` AS CorpId, e.`rank_id` AS RankId, c.`service_type` AS ServiceType " +
+            "FROM `rp_corporation_employees` e " +
+            "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+            "WHERE e.`user_id` = @userId LIMIT 1", new { userId = habbo.Id });
+        if (job == null) return (false, "You don't have a job. Get hired by a corporation first.");
+
+        var hqCount = connection.QuerySingle<int>(
+            "SELECT COUNT(*) FROM `rooms` WHERE `corporation_id` = @corpId", new { corpId = job.Value.CorpId });
+        if (hqCount == 0) return (true, "");           // no HQ anywhere -> work anywhere
+
+        if (room == null) return (false, "You can only work at your headquarters or an approved location.");
+
+        // At their own HQ: rank must be authorized.
+        if (room.CorporationId == job.Value.CorpId)
+        {
+            var authorized = connection.QuerySingleOrDefault<int?>(
+                "SELECT 1 FROM `rp_hq_room_ranks` WHERE `room_id` = @roomId AND `rank_id` = @rankId LIMIT 1",
+                new { roomId = room.Id, rankId = job.Value.RankId });
+            if (authorized != null) return (true, "");
+            return (false, "Your rank isn't cleared to work here.");
+        }
+
+        // Emergency service access to this room.
+        var svc = job.Value.ServiceType;
+        if ((svc == "medical" && room.AllowMedical) ||
+            (svc == "police" && room.AllowPolice) ||
+            (svc == "staff" && room.AllowStaff))
+            return (true, "");
+
+        return (false, "You can only work at your headquarters or an approved location.");
     }
 }
