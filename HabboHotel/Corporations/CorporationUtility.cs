@@ -159,9 +159,16 @@ public static class CorporationUtility
     }
 
     // pixelrp: may this employee be on the clock in the room they're
-    // standing in right now? A corp with no HQ works anywhere (unchanged).
-    // Otherwise: their HQ room with an authorized rank, OR a room that
-    // admits their corp's emergency service. Reason is whisper-ready.
+    // standing in right now?
+    //   - Their own corp's HQ: rank must be authorized (definitive).
+    //   - Any OTHER corp's HQ: only if their corp's emergency service is
+    //     admitted here - a headquarters is exclusive to its own corp plus
+    //     the emergency services it lets in. The no-HQ fallback does NOT
+    //     apply, so a corp with no HQ of its own still can't roam into
+    //     someone else's headquarters.
+    //   - A room that is nobody's HQ: their emergency service is admitted,
+    //     OR their corp has no HQ at all (fallback - unchanged).
+    // Reason is whisper-ready.
     public static (bool Ok, string Reason) EvaluateWork(Habbo habbo)
     {
         var room = habbo?.CurrentRoom;
@@ -173,13 +180,9 @@ public static class CorporationUtility
             "WHERE e.`user_id` = @userId LIMIT 1", new { userId = habbo.Id });
         if (job == null) return (false, "You don't have a job. Get hired by a corporation first.");
 
-        var hqCount = connection.QuerySingle<int>(
-            "SELECT COUNT(*) FROM `rooms` WHERE `corporation_id` = @corpId", new { corpId = job.Value.CorpId });
-        if (hqCount == 0) return (true, "");           // no HQ anywhere -> work anywhere
-
         if (room == null) return (false, "You can only work at your headquarters or an approved location.");
 
-        // At their own HQ: rank must be authorized.
+        // At their own corp's HQ: rank authorization is definitive.
         if (room.CorporationId == job.Value.CorpId)
         {
             var authorized = connection.QuerySingleOrDefault<int?>(
@@ -189,13 +192,26 @@ public static class CorporationUtility
             return (false, "Your rank isn't cleared to work here.");
         }
 
-        // Emergency service access to this room.
+        // Not their HQ. Emergency service admitted here? (works in any room,
+        // including another corp's HQ, that lets their service in.)
         var svc = job.Value.ServiceType;
         if ((svc == "medical" && room.AllowMedical) ||
             (svc == "police" && room.AllowPolice) ||
             (svc == "staff" && room.AllowStaff))
             return (true, "");
 
+        // Another corp's headquarters, and they're not an admitted service:
+        // excluded, even if their own corp has no HQ.
+        if (room.CorporationId != 0)
+            return (false, "You can only work at your headquarters or an approved location.");
+
+        // A room that is nobody's HQ: corps with no HQ of their own work
+        // anywhere (the rollout fallback).
+        var hqCount = connection.QuerySingle<int>(
+            "SELECT COUNT(*) FROM `rooms` WHERE `corporation_id` = @corpId", new { corpId = job.Value.CorpId });
+        if (hqCount == 0) return (true, "");
+
+        // A corp WITH an HQ can only work at its HQ or emergency rooms.
         return (false, "You can only work at your headquarters or an approved location.");
     }
 }
