@@ -52,7 +52,11 @@ public static class RoomFactory
                         ToBool(row["respect_notifications_enabled"]),
                         ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model)
                     {
-                        IsSafeZone = ToBool(row["is_safe_zone"])
+                        IsSafeZone = ToBool(row["is_safe_zone"]),
+                        CorporationId = Convert.ToInt32(row["corporation_id"]),
+                        AllowMedical = ToBool(row["allow_medical"]),
+                        AllowPolice = ToBool(row["allow_police"]),
+                        AllowStaff = ToBool(row["allow_staff"])
                     });
                 }
             }
@@ -96,6 +100,10 @@ public static class RoomFactory
                     ToBool(row["respect_notifications_enabled"]),
                     ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model);
                 data.IsSafeZone = ToBool(row["is_safe_zone"]);
+                data.CorporationId = Convert.ToInt32(row["corporation_id"]);
+                data.AllowMedical = ToBool(row["allow_medical"]);
+                data.AllowPolice = ToBool(row["allow_police"]);
+                data.AllowStaff = ToBool(row["allow_staff"]);
                 return true;
             }
         }

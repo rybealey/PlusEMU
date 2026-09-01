@@ -111,6 +111,10 @@ public class RoomData
         ReverseRollers = data.ReverseRollers;
         LayEnabled = data.LayEnabled;
         IsSafeZone = data.IsSafeZone;
+        CorporationId = data.CorporationId;
+        AllowMedical = data.AllowMedical;
+        AllowPolice = data.AllowPolice;
+        AllowStaff = data.AllowStaff;
         Model = data.Model;
     }
 
@@ -165,6 +169,16 @@ public class RoomData
     // everyone inside. Not a ctor arg (the positional ctor is unwieldy);
     // RoomFactory assigns it after construction from `is_safe_zone`.
     public bool IsSafeZone { get; set; }
+
+    // pixelrp: the corporation this room is the headquarters of (0 = none).
+    // RoomFactory assigns it after construction from `corporation_id`.
+    public int CorporationId { get; set; }
+
+    // pixelrp: which outside emergency services may work in this room.
+    // Default on; assigned by RoomFactory from allow_medical/police/staff.
+    public bool AllowMedical { get; set; }
+    public bool AllowPolice { get; set; }
+    public bool AllowStaff { get; set; }
 
 
     public RoomModel Model { get; set; }
