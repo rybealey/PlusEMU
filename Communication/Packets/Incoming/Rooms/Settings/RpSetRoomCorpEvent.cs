@@ -32,14 +32,20 @@ internal class RpSetRoomCorpEvent : IPacketEvent
                 if (exists == null)
                     corpId = 0;
             }
+
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+
             connection.Execute("UPDATE `rooms` SET `corporation_id` = @corpId WHERE `id` = @roomId LIMIT 1",
-                new { corpId, roomId = room.Id });
-            connection.Execute("DELETE FROM `rp_hq_room_ranks` WHERE `room_id` = @roomId", new { roomId = room.Id });
+                new { corpId, roomId = room.Id }, transaction);
+            connection.Execute("DELETE FROM `rp_hq_room_ranks` WHERE `room_id` = @roomId", new { roomId = room.Id }, transaction);
             if (corpId > 0)
                 connection.Execute(
                     "INSERT INTO `rp_hq_room_ranks` (`room_id`, `rank_id`) " +
                     "SELECT @roomId, `id` FROM `rp_corporation_ranks` WHERE `corporation_id` = @corpId",
-                    new { roomId = room.Id, corpId });
+                    new { roomId = room.Id, corpId }, transaction);
+
+            transaction.Commit();
         }
         room.CorporationId = corpId;
         session.Send(CorporationUtility.BuildRoomCorp(room));
