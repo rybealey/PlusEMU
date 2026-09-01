@@ -74,7 +74,7 @@ public static class ShiftManager
             client.SendWhisper("You're already on duty.");
             return;
         }
-        var permit = CorporationUtility.EvaluateWork(client.GetHabbo());
+        var permit = CorporationUtility.EvaluateWork(client.GetHabbo(), isStart: true);
         if (!permit.Ok)
         {
             client.SendWhisper(permit.Reason);
@@ -370,7 +370,7 @@ public static class ShiftManager
                 // emergency service switched off, or the room being (re)assigned
                 // as a headquarters all clock the worker out. Room-less minutes
                 // fall through to the 2-minute grace above instead.
-                var permit = CorporationUtility.EvaluateWork(client.GetHabbo());
+                var permit = CorporationUtility.EvaluateWork(client.GetHabbo(), isStart: false);
                 if (!permit.Ok)
                 {
                     Sessions.TryRemove(session.UserId, out _);

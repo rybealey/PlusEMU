@@ -159,28 +159,36 @@ public static class CorporationUtility
     }
 
     // pixelrp: may this employee be on the clock in the room they're
-    // standing in right now?
-    //   - Their own corp's HQ: rank must be authorized (definitive).
-    //   - Any OTHER corp's HQ: only if their corp's emergency service is
-    //     admitted here - a headquarters is exclusive to its own corp plus
-    //     the emergency services it lets in. The no-HQ fallback does NOT
-    //     apply, so a corp with no HQ of its own still can't roam into
-    //     someone else's headquarters.
-    //   - A room that is nobody's HQ: their emergency service is admitted,
-    //     OR their corp has no HQ at all (fallback - unchanged).
+    // standing in right now? `isStart` = clocking in (:startwork) vs the
+    // per-minute continue check.
+    //   - PixelRP Leadership (service 'staff'): works and starts anywhere.
+    //   - Their own corp's HQ: rank must be authorized (start + continue).
+    //   - Emergency service (Medical/Police): may only CONTINUE (never start)
+    //     in a room that admits their service and isn't their HQ, and only
+    //     for eligible ranks (Police any rank, Medical Paramedic and above -
+    //     rp_corporation_ranks.emergency_eligible). So they clock in at their
+    //     own HQ, then may keep working a scene elsewhere.
+    //   - A room that is nobody's HQ: their corp has no HQ at all → work
+    //     anywhere (rollout fallback). Another corp's HQ is otherwise
+    //     exclusive - the no-HQ fallback does not open it.
     // Reason is whisper-ready.
-    public static (bool Ok, string Reason) EvaluateWork(Habbo habbo)
+    public static (bool Ok, string Reason) EvaluateWork(Habbo habbo, bool isStart)
     {
         var room = habbo?.CurrentRoom;
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        var job = connection.QuerySingleOrDefault<(int CorpId, int RankId, string ServiceType)?>(
-            "SELECT e.`corporation_id` AS CorpId, e.`rank_id` AS RankId, c.`service_type` AS ServiceType " +
+        var job = connection.QuerySingleOrDefault<(int CorpId, int RankId, string ServiceType, int EmergencyEligible)?>(
+            "SELECT e.`corporation_id` AS CorpId, e.`rank_id` AS RankId, c.`service_type` AS ServiceType, " +
+            "r.`emergency_eligible` AS EmergencyEligible " +
             "FROM `rp_corporation_employees` e " +
             "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+            "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
             "WHERE e.`user_id` = @userId LIMIT 1", new { userId = habbo.Id });
         if (job == null) return (false, "You don't have a job. Get hired by a corporation first.");
 
         if (room == null) return (false, "You can only work at your headquarters or an approved location.");
+
+        // PixelRP Leadership works and starts anywhere.
+        if (job.Value.ServiceType == "staff") return (true, "");
 
         // At their own corp's HQ: rank authorization is definitive.
         if (room.CorporationId == job.Value.CorpId)
@@ -192,16 +200,18 @@ public static class CorporationUtility
             return (false, "Your rank isn't cleared to work here.");
         }
 
-        // Not their HQ. Emergency service admitted here? (works in any room,
-        // including another corp's HQ, that lets their service in.)
-        var svc = job.Value.ServiceType;
-        if ((svc == "medical" && room.AllowMedical) ||
-            (svc == "police" && room.AllowPolice) ||
-            (svc == "staff" && room.AllowStaff))
-            return (true, "");
+        // Emergency service (Medical/Police): CONTINUE only, never start, and
+        // only for eligible ranks.
+        if (!isStart && job.Value.EmergencyEligible == 1)
+        {
+            var svc = job.Value.ServiceType;
+            if ((svc == "medical" && room.AllowMedical) ||
+                (svc == "police" && room.AllowPolice))
+                return (true, "");
+        }
 
-        // Another corp's headquarters, and they're not an admitted service:
-        // excluded, even if their own corp has no HQ.
+        // Another corp's headquarters, not admitted here: excluded, even if
+        // their own corp has no HQ.
         if (room.CorporationId != 0)
             return (false, "You can only work at your headquarters or an approved location.");
 
@@ -211,7 +221,7 @@ public static class CorporationUtility
             "SELECT COUNT(*) FROM `rooms` WHERE `corporation_id` = @corpId", new { corpId = job.Value.CorpId });
         if (hqCount == 0) return (true, "");
 
-        // A corp WITH an HQ can only work at its HQ or emergency rooms.
+        // A corp WITH an HQ can only work at its HQ or (mid-shift) emergency rooms.
         return (false, "You can only work at your headquarters or an approved location.");
     }
 }
