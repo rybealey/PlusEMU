@@ -161,7 +161,7 @@ public static class CorporationUtility
     // pixelrp: may this employee be on the clock in the room they're
     // standing in right now? `isStart` = clocking in (:startwork) vs the
     // per-minute continue check.
-    //   - PixelRP Leadership (service 'staff'): works and starts anywhere.
+    //   - City Government (service 'staff'): works and starts anywhere.
     //   - Their own corp's HQ: rank must be authorized (start + continue).
     //   - Emergency service (Medical/Police): may only CONTINUE (never start)
     //     in a room that admits their service and isn't their HQ, and only
@@ -187,7 +187,7 @@ public static class CorporationUtility
 
         if (room == null) return (false, "You can only work at your headquarters or an approved location.");
 
-        // PixelRP Leadership works and starts anywhere.
+        // City Government (staff service) works and starts anywhere.
         if (job.Value.ServiceType == "staff") return (true, "");
 
         // At their own corp's HQ: rank authorization is definitive.
