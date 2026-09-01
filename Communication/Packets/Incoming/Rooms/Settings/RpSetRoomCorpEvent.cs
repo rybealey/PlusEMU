@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Settings;
 
@@ -11,11 +12,18 @@ namespace Plus.Communication.Packets.Incoming.Rooms.Settings;
 /// </summary>
 internal class RpSetRoomCorpEvent : IPacketEvent
 {
+    private readonly IRoomManager _roomManager;
+
+    public RpSetRoomCorpEvent(IRoomManager roomManager)
+    {
+        _roomManager = roomManager;
+    }
+
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        var roomId = packet.ReadUInt();
         var corpId = packet.ReadInt();
-        var room = session.GetHabbo()?.CurrentRoom;
-        if (room == null)
+        if (!_roomManager.TryLoadRoom(roomId, out var room))
             return Task.CompletedTask;
         if (!room.CheckRights(session, true))
             return Task.CompletedTask;

@@ -294,8 +294,15 @@ public class RoomManager : IRoomManager
         }
         // hidewall: true matches the DB default (SQL update 20) so a freshly
         // created room hides its walls before its first reload from the DB.
+        // allow_medical/police/staff default to '1' in the DB, so mirror that
+        // here too (corporation_id's default of 0 is already the int default).
         var data = new RoomData(roomId, name, model.Id, session.GetHabbo().Username, session.GetHabbo().Id, "", 0, "public", "open", 0, maxVisitors, category, description, string.Empty,
-            floor, landscape, true, true, false, true, wallthick, floorthick, wallpaper, 1, 1, 1, 1, 1, 1, 1, 8, tradeSettings, true, true, true, true, true, true, true, 0, 0, true, model);
+            floor, landscape, true, true, false, true, wallthick, floorthick, wallpaper, 1, 1, 1, 1, 1, 1, 1, 8, tradeSettings, true, true, true, true, true, true, true, 0, 0, true, model)
+        {
+            AllowMedical = true,
+            AllowPolice = true,
+            AllowStaff = true
+        };
         return data;
     }
 
