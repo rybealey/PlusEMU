@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+﻿using System.Collections.Concurrent;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 
@@ -34,6 +35,17 @@ internal class SlapCommand : ITargetChatCommand
     /// </summary>
     private const int FightBubble = 4;
 
+    /// <summary>Seconds a player must wait between slaps.</summary>
+    private const int CooldownSeconds = 5;
+
+    /// <summary>
+    /// Last successful slap per player id. Commands are DI singletons, so this
+    /// instance field is shared hotel-wide; concurrent because rooms tick on
+    /// their own threads. Only successful slaps are recorded, so one that missed
+    /// for range costs nothing.
+    /// </summary>
+    private readonly ConcurrentDictionary<int, DateTime> _lastSlap = new();
+
     // Missing username, an offline target and a target in another room are all
     // answered by CommandManager before Execute runs, so they are not repeated
     // here.
@@ -56,6 +68,20 @@ internal class SlapCommand : ITargetChatCommand
         if (thisUser == null)
             return Task.CompletedTask;
 
+        if (_lastSlap.TryGetValue(session.GetHabbo().Id, out var last))
+        {
+            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
+            if (elapsed < CooldownSeconds)
+            {
+                // Counts DOWN the seconds still to wait: [5/5] the instant you
+                // retry, [1/5] with under a second to go. Ceiling stops it ever
+                // reading [0/5] while the gate is still shut.
+                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
+                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
+                return Task.CompletedTask;
+            }
+        }
+
         // Same tile, or one step N/E/S/W - never diagonal.
         if (Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y) > 1)
         {
@@ -63,7 +89,12 @@ internal class SlapCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"slaps *{target.Username} across the face*", 0, FightBubble));
+        // Leading AND trailing "*" matter: the client only treats a style-4
+        // bubble as an action when the text is wrapped in them, and it then
+        // moves the opening marker ahead of the actor's name, rendering
+        // "*Actor slaps Target across the face*".
+        _lastSlap[session.GetHabbo().Id] = DateTime.UtcNow;
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*slaps {target.Username} across the face*", 0, FightBubble));
         return Task.CompletedTask;
     }
 }
