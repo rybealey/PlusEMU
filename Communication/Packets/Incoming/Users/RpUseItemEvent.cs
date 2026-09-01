@@ -6,6 +6,7 @@ using Plus.HabboHotel.DiamondsStore;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Subscriptions;
+using Plus.HabboHotel.Users;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -64,6 +65,9 @@ public class RpUseItemEvent : IPacketEvent
                 roomUser?.OnChat(5, "*consumes the Kylie Jeener smoothie, activating passive status*", true);
                 if (roomUser != null)
                     habbo.CurrentRoom.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 1, habbo.Rank >= 5 ? 1 : 0));
+                // pixelrp: wear the passive enable immediately on activation.
+                if (roomUser != null && habbo.Effects != null)
+                    habbo.Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
                 break;
             case "vip_token_31":
             case "vip_token_14":

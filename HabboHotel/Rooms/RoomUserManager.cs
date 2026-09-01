@@ -13,6 +13,7 @@ using Plus.HabboHotel.Rooms.AI;
 using Plus.HabboHotel.Rooms.Games.Teams;
 using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.HabboHotel.Rooms.Trading;
+using Plus.HabboHotel.Users;
 using Plus.Utilities;
 
 using Dapper;
@@ -307,6 +308,10 @@ public class RoomUserManager
         // Staff are no longer given a forced effect (102) on room entry.
         if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
             session.GetHabbo().Effects.ApplyEffect(178);
+        // pixelrp: passive players wear the passive enable on entry so there is
+        // no pop on room change; the per-tick helper is the safety net.
+        if (session.GetHabbo().RpPassiveSeconds > 0 && session.GetHabbo().Effects != null)
+            session.GetHabbo().Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
         foreach (var bot in _bots.Values.ToList())
         {
             if (bot == null || bot.BotAi == null)
@@ -1262,6 +1267,9 @@ public class RoomUserManager
                                 user.GetClient().SendWhisper("Your passive status has expired.");
                                 habboPas.SaveRpStats();
                                 _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0, habboPas.Rank >= 5 ? 1 : 0));
+                                // pixelrp: drop the passive enable if it is the shown effect.
+                                if (habboPas.Effects != null && habboPas.Effects.CurrentEffect == Habbo.PassiveEnableEffectId)
+                                    habboPas.Effects.ApplyEffect(0);
                             }
                             else if (afterMinutes < beforeMinutes)
                             {
@@ -1320,6 +1328,7 @@ public class RoomUserManager
                     else
                         userCounter++;
                     if (!updated) UpdateUserEffect(user, user.X, user.Y);
+                    UpdatePassiveEffect(user);
                     if (IsPositionSaveDue(user))
                         (dirtyPositions ??= new List<RoomUser>()).Add(user);
                 }
@@ -1945,6 +1954,35 @@ public class RoomUserManager
         catch (Exception e)
         {
             ExceptionLogger.LogException(e);
+        }
+    }
+
+    // pixelrp: the passive enable (Squad.nitro, id 248) is a resuming BASELINE
+    // effect worn while the player is passive. It is asserted only when the
+    // effect slot is free (0 or -1) and the player is not mid-dance, so a
+    // dance/ride/tile/item effect temporarily owns the slot and the enable
+    // comes back on the next tick once that transient effect clears. When the
+    // player is no longer passive, the enable (and only the enable) is cleared.
+    private void UpdatePassiveEffect(RoomUser user)
+    {
+        if (user == null || user.IsBot)
+            return;
+        var habbo = user.GetClient()?.GetHabbo();
+        if (habbo?.Effects == null)
+            return;
+
+        var cur = habbo.Effects.CurrentEffect;
+        if (habbo.RpPassiveSeconds > 0)
+        {
+            // Not while dancing (ApplyEffect stops the dance) and not while
+            // lying (LayCommand clears the effect to hold the lay pose; the
+            // enable resumes once the player stands).
+            if ((cur == 0 || cur == -1) && !user.IsDancing && !user.IsLying)
+                habbo.Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
+        }
+        else if (cur == Habbo.PassiveEnableEffectId)
+        {
+            habbo.Effects.ApplyEffect(0);
         }
     }
 
