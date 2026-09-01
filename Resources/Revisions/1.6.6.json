@@ -593,6 +593,7 @@
     "RpJukeboxStateComposer": 3917,
     "RpRoomZoneComposer": 3924,
     "RpRoomCorpComposer": 3957,
+    "RpOpenFloorplanComposer": 3963,
     "DiamondsStoreComposer": 3925,
     "DiamondsStorePurchaseResultComposer": 3931
   }
