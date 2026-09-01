@@ -213,6 +213,11 @@ public class Habbo
     // Stored as double so the per-tick decay can be fractional.
     public double RpAggression { get; set; }
 
+    // pixelrp: the "passive enable" avatar effect worn while RpPassiveSeconds > 0.
+    // Maps to nitro/assets/bundled/effect/Squad.nitro via EffectMap.json id 597
+    // (the canonical "Squad" effect id; matches the served EffectMap + clients).
+    public const int PassiveEnableEffectId = 597;
+
     // Passive status (consumable smoothie): remaining ONLINE seconds.
     // Persisted in user_rp_stats.passive_seconds; decremented by the room
     // tick while the player is in a room (see RoomUserManager.OnCycle).

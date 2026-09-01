@@ -1,5 +1,6 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -25,6 +26,9 @@ internal class RpPassiveCancelEvent : IPacketEvent
             return Task.CompletedTask;
         roomUser.OnChat(27, "*discovers newfound anger, eliminating their passive state*", true);
         habbo.CurrentRoom.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 0, habbo.Rank >= 5 ? 1 : 0));
+        // pixelrp: drop the passive enable if it (and only it) is showing.
+        if (habbo.Effects != null && habbo.Effects.CurrentEffect == Habbo.PassiveEnableEffectId)
+            habbo.Effects.ApplyEffect(0);
         return Task.CompletedTask;
     }
 }
