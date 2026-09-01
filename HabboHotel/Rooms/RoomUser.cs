@@ -29,6 +29,11 @@ public class RoomUser
     // pixelrp: >0 while an enable is paused for the "67" gesture; the room
     // cycle counts it down and reapplies the effect at zero.
     public int EffectReapplyTimer;
+    // pixelrp: >0 for the first few cycles after room entry; the cycle
+    // re-delivers this client's full room RP-stats view each tick until zero,
+    // so passive/aggression HUD tags survive the entry packets landing before
+    // the React HUD listener mounts. Set in OnUserEnter.
+    public int RpStatsResyncTicks;
     public int ChatSpamCount;
     public int ChatSpamTicks = 16;
     public ItemEffectType CurrentItemEffect;
