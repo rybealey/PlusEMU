@@ -106,19 +106,13 @@ public class Gamemap
         {
             for (var x = 0; x < GameMap.GetUpperBound(0); x++)
             {
-                if (StaticModel.DoorX != x && StaticModel.DoorY != y && GameMap[x, y] == 1)
+                if ((StaticModel.DoorX != x || StaticModel.DoorY != y) && GameMap[x, y] == 1)
                     walkableSquares.Add(new(x, y));
             }
         }
-        var randomNumber = Random.Shared.Next(0, walkableSquares.Count + 1);
-        var i = 0;
-        foreach (var coord in walkableSquares.ToList())
-        {
-            if (i == randomNumber)
-                return coord;
-            i++;
-        }
-        return new(0, 0);
+        if (walkableSquares.Count == 0)
+            return new(0, 0);
+        return walkableSquares[Random.Shared.Next(walkableSquares.Count)];
     }
 
 
