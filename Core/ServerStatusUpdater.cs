@@ -2,6 +2,7 @@
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 
 namespace Plus.Core;
 
@@ -48,7 +49,11 @@ public class ServerStatusUpdater : IDisposable, IServerStatusUpdater
     private void UpdateOnlineUsers()
     {
         var uptime = DateTime.Now - PlusEnvironment.ServerStarted;
-        var usersOnline = _gameClientManager.Count;
+        // pixelrp stress testing: :zombies clones count as online so load tests move
+        // the same number the CMS and console title report.
+        var zombieCount = _roomManager.GetRooms().ToList()
+            .Sum(r => r.GetRoomUserManager()?.GetUserList().Count(ZombiesCommand.IsZombie) ?? 0);
+        var usersOnline = _gameClientManager.Count + zombieCount;
         var roomCount = _roomManager.Count;
         Console.Title = $"Plus Emulator - {usersOnline} users online - {roomCount} rooms loaded - {uptime.Days} day(s) {uptime.Hours} hour(s) uptime";
         using var dbClient = _database.GetQueryReactor();

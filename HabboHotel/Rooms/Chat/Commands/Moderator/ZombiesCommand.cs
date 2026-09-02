@@ -28,7 +28,10 @@ internal class ZombiesCommand : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (parameters.Length == 0)
+        // CommandManager splits on ' ' without removing empties, so a
+        // trailing space (or a bare ":zombies ") yields ["", ...] rather
+        // than an empty array - treat that the same as no parameters.
+        if (parameters.All(string.IsNullOrEmpty))
         {
             DespawnAll(session, room);
             return;
@@ -54,15 +57,19 @@ internal class ZombiesCommand : IChatCommand
         }
         // Sharing one empty list is safe: RoomBot only reads it at construction.
         var emptySpeech = new List<RandomSpeech>();
+        // All zombies enter through the room's door tile, same as a real
+        // avatar walking in, then disperse on their own via freeroam AI.
+        var model = room.GetGameMap().Model;
         for (var i = 0; i < toSpawn; i++)
         {
-            // Spread spawns across the room so zombies don't stack on one tile.
-            var square = room.GetGameMap().GetRandomWalkableSquare();
             var bot = new RoomBot(Interlocked.Decrement(ref _nextZombieId), room.RoomId, "generic", "freeroam",
-                habbo.Username, "", habbo.Look, square.X, square.Y, 0, 0, 0, 0, 0, 0,
+                habbo.Username, "", habbo.Look, model.DoorX, model.DoorY, model.DoorZ, 0, 0, 0, 0, 0,
                 ref emptySpeech, habbo.Gender, 0, session.GetHabbo().Id, false, 0, false, 0);
+            // DeployBot can relocate a bot whose requested coords fail its
+            // bounds check, so register the map at the ACTUAL deployed
+            // position rather than the requested one.
             var zombie = room.GetRoomUserManager().DeployBot(bot, null);
-            room.GetGameMap().UpdateUserMovement(new(square.X, square.Y), new(square.X, square.Y), zombie);
+            room.GetGameMap().UpdateUserMovement(new(zombie.X, zombie.Y), new(zombie.X, zombie.Y), zombie);
         }
         var total = existing + toSpawn;
         session.SendWhisper(toSpawn < quantity
@@ -76,15 +83,31 @@ internal class ZombiesCommand : IChatCommand
             .Where(IsZombie)
             .ToList();
         foreach (var zombie in zombies)
+        {
+            // RemoveBot alone leaves a phantom occupant behind: it ends in
+            // OnRemove(user), which early-returns for bots (no GetClient()),
+            // so RemoveUserFromMap never runs and the tile stays blocked
+            // until room unload. Clear the map entry ourselves first, same
+            // as PickUpBotEvent.cs does for player-picked-up bots.
+            room.GetGameMap().RemoveUserFromMap(zombie, new(zombie.X, zombie.Y));
             room.GetRoomUserManager().RemoveBot(zombie.VirtualId, false);
-        session.SendWhisper(zombies.Count == 0
+        }
+        // RemoveBot can silently no-op (e.g. the user vanished from
+        // RoomUserManager between the snapshot above and now), so recount
+        // rather than trusting the pre-removal list length.
+        var removed = zombies.Count - CountZombies(room);
+        session.SendWhisper(removed == 0
             ? "No zombies in this room."
-            : $"Removed {zombies.Count} zombie{(zombies.Count == 1 ? "" : "s")}.");
+            : $"Removed {removed} zombie{(removed == 1 ? "" : "s")}.");
     }
 
     private static int CountZombies(Room room) =>
         room.GetRoomUserManager().GetUserList().ToList().Count(IsZombie);
 
-    private static bool IsZombie(RoomUser user) =>
+    /// <summary>
+    /// Also used by ServerStatusUpdater so zombie clones count toward the
+    /// hotel's reported online user total.
+    /// </summary>
+    internal static bool IsZombie(RoomUser user) =>
         user is { IsBot: true, IsPet: false, BotData.Id: < 0 };
 }
