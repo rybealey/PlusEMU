@@ -118,18 +118,11 @@ public class Gamemap
 
     public bool IsInMap(int x, int y)
     {
-        var walkableSquares = new List<Point>();
-        for (var dY = 0; dY < GameMap.GetUpperBound(1); dY++)
-        {
-            for (var dX = 0; dX < GameMap.GetUpperBound(0); dX++)
-            {
-                if (StaticModel.DoorX != dX && StaticModel.DoorY != dY && GameMap[dX, dY] == 1)
-                    walkableSquares.Add(new(dX, dY));
-            }
-        }
-        if (walkableSquares.Contains(new(x, y)))
-            return true;
-        return false;
+        if (x < 0 || y < 0 || x >= GameMap.GetLength(0) || y >= GameMap.GetLength(1))
+            return false;
+        if (StaticModel.DoorX == x && StaticModel.DoorY == y)
+            return false;
+        return GameMap[x, y] == 1;
     }
 
     public void AddToMap(Item item)
