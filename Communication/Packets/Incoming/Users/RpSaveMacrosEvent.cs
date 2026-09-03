@@ -27,7 +27,11 @@ public class RpSaveMacrosEvent : IPacketEvent
     private const int MaxPresets = 8;
     private const int MaxMacrosPerPreset = 40;
     private const int MaxPresetNameLength = 24;
-    private const int MaxBindingLength = 24;
+    // Long enough for a fully modified binding: "CTRL+SHIFT+ALT+META+" is 20
+    // characters before the key name, and key names can run to a dozen or more
+    // ("Mouse Middle", "ARROWRIGHT", "AudioVolumeUp"). At 24 a modified binding
+    // was truncated into one that could never match what the client sent back.
+    private const int MaxBindingLength = 48;
     private const int MaxCommandLength = 128;
 
     public Task Parse(GameClient session, IIncomingPacket packet)
