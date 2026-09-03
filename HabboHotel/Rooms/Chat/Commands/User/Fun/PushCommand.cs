@@ -1,9 +1,16 @@
-﻿using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+﻿using System.Collections.Concurrent;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fun;
 
+/// <summary>
+/// Shove another player one tile in the direction the pusher is facing.
+///
+/// Reach is the pusher's own tile plus the eight around it (Chebyshev distance
+/// &lt;= 1), the same rule :slap uses.
+/// </summary>
 internal class PushCommand : ITargetChatCommand
 {
     public string Key => "push";
@@ -26,6 +33,17 @@ internal class PushCommand : ITargetChatCommand
     /// </summary>
     private const int FightBubble = 4;
 
+    /// <summary>Seconds a player must wait between pushes.</summary>
+    private const int CooldownSeconds = 5;
+
+    /// <summary>
+    /// Last successful push per player id. Commands are DI singletons, so this
+    /// instance field is shared hotel-wide; concurrent because rooms tick on
+    /// their own threads. Only successful pushes are recorded, so one that
+    /// missed for range or had nowhere to go costs nothing.
+    /// </summary>
+    private readonly ConcurrentDictionary<int, DateTime> _lastPush = new();
+
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         if (!room.PushEnabled && !session.GetHabbo().Permissions.HasRight("room_override_custom_config"))
@@ -36,14 +54,14 @@ internal class PushCommand : ITargetChatCommand
 
         if (target == session.GetHabbo())
         {
-            session.SendWhisper("Come on, surely you don't want to push yourself!");
+            session.SendWhisper("Come on, surely you don't want to push yourself.");
             return Task.CompletedTask;
         }
 
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper("An error occoured whilst finding that user, maybe they're not online or in this room.");
+            session.SendWhisper("An error occurred whilst finding that user, maybe they're not online or in this room.");
             return Task.CompletedTask;
         }
 
@@ -52,49 +70,76 @@ internal class PushCommand : ITargetChatCommand
             session.SendWhisper("Oops, you cannot push a user whilst they have their teleport mode enabled.");
             return Task.CompletedTask;
         }
+
         var thisUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (thisUser == null)
             return Task.CompletedTask;
 
-        if (!(Math.Abs(targetUser.X - thisUser.X) >= 2 || Math.Abs(targetUser.Y - thisUser.Y) >= 2))
+        if (_lastPush.TryGetValue(session.GetHabbo().Id, out var last))
         {
-            if (targetUser.SetX - 1 == room.GetGameMap().Model.DoorX)
+            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
+            if (elapsed < CooldownSeconds)
             {
-                session.SendWhisper("Please don't push that user out of the room :(!");
+                // Counts DOWN the seconds still to wait, same as :slap.
+                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
+                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
                 return Task.CompletedTask;
             }
-            if (targetUser.RotBody == 4) targetUser.MoveTo(targetUser.X, targetUser.Y + 1);
-            if (thisUser.RotBody == 0) targetUser.MoveTo(targetUser.X, targetUser.Y - 1);
-            if (thisUser.RotBody == 6) targetUser.MoveTo(targetUser.X - 1, targetUser.Y);
-            if (thisUser.RotBody == 2) targetUser.MoveTo(targetUser.X + 1, targetUser.Y);
-            if (thisUser.RotBody == 3)
-            {
-                targetUser.MoveTo(targetUser.X + 1, targetUser.Y);
-                targetUser.MoveTo(targetUser.X, targetUser.Y + 1);
-            }
-            if (thisUser.RotBody == 1)
-            {
-                targetUser.MoveTo(targetUser.X + 1, targetUser.Y);
-                targetUser.MoveTo(targetUser.X, targetUser.Y - 1);
-            }
-            if (thisUser.RotBody == 7)
-            {
-                targetUser.MoveTo(targetUser.X - 1, targetUser.Y);
-                targetUser.MoveTo(targetUser.X, targetUser.Y - 1);
-            }
-            if (thisUser.RotBody == 5)
-            {
-                targetUser.MoveTo(targetUser.X - 1, targetUser.Y);
-                targetUser.MoveTo(targetUser.X, targetUser.Y + 1);
-            }
-            // The wrapping asterisks are what make the client treat a style-4
-            // bubble as an action, moving the opening marker ahead of the
-            // actor's name to render "*Actor pushes Target*".
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pushes {target.Username}*", 0, FightBubble));
         }
-        else
-            session.SendWhisper($"Oops, {target.Username} is not close enough.");
 
+        // Same tile, or one step in any direction including the diagonals.
+        if (Math.Abs(targetUser.X - thisUser.X) > 1 || Math.Abs(targetUser.Y - thisUser.Y) > 1)
+        {
+            session.SendWhisper($"Oops, {target.Username} is not close enough.");
+            return Task.CompletedTask;
+        }
+
+        // The shove goes wherever the PUSHER faces. RotBody runs clockwise from
+        // 0 = north, and north is -Y on the tile grid, so the odd rotations are
+        // the diagonals. One switch rather than a run of independent ifs: the
+        // old code tested each rotation separately, which let two of them fire
+        // for a single push, and it built its diagonals from two MoveTo calls
+        // that both read the target's UNMOVED position - so the second simply
+        // replaced the first and a diagonal push went straight.
+        var (offsetX, offsetY) = thisUser.RotBody switch
+        {
+            0 => (0, -1),
+            1 => (1, -1),
+            2 => (1, 0),
+            3 => (1, 1),
+            4 => (0, 1),
+            5 => (-1, 1),
+            6 => (-1, 0),
+            7 => (-1, -1),
+            _ => (0, 0)
+        };
+
+        if (offsetX == 0 && offsetY == 0)
+            return Task.CompletedTask;
+
+        var destinationX = (targetUser.X + offsetX);
+        var destinationY = (targetUser.Y + offsetY);
+
+        // IsInMap covers all three ways a destination can be unusable in one
+        // call: off the edge of the model, not a walkable square, or the door
+        // tile. It replaces a check that compared the target's CURRENT x (minus
+        // one) against DoorX alone and never looked at DoorY, so it both missed
+        // real pushes out of the door and blocked harmless ones anywhere along
+        // the door's column.
+        if (!room.GetGameMap().IsInMap(destinationX, destinationY))
+        {
+            session.SendWhisper($"Oops, there is no room to push {target.Username} that way.");
+            return Task.CompletedTask;
+        }
+
+        _lastPush[session.GetHabbo().Id] = DateTime.UtcNow;
+        targetUser.MoveTo(destinationX, destinationY);
+        // The wrapping asterisks are what make the client treat a style-4
+        // bubble as an action, moving the opening marker ahead of the actor's
+        // name to render "*Actor pushes Target*". Sent only once the push has
+        // actually been issued, so the room never sees a shove that did not
+        // happen.
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pushes {target.Username}*", 0, FightBubble));
         return Task.CompletedTask;
     }
 }
