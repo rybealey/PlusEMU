@@ -28,6 +28,9 @@ internal class SlapCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    /// <summary>Combat wording: you pick a target, you do not type a username.</summary>
+    public string NoTargetMessage => "No target selected.";
+
     /// <summary>
     /// Blue bubble. Combat actions share one style so they read as a single
     /// system at a glance, distinct from ordinary chat and from the white

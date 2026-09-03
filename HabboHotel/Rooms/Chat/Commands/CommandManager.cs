@@ -104,7 +104,7 @@ public class CommandManager : ICommandManager
             {
                 if (!parameters.Any())
                 {
-                    session.SendWhisper("No username specified.");
+                    session.SendWhisper(targetChatCommand.NoTargetMessage);
                     return true;
                 }
 

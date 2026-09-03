@@ -14,6 +14,9 @@ internal class PushCommand : ITargetChatCommand
     public string Description => "Push another user.";
     public bool MustBeInSameRoom => true;
 
+    /// <summary>Combat wording: you pick a target, you do not type a username.</summary>
+    public string NoTargetMessage => "No target selected.";
+
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         if (!room.PushEnabled && !session.GetHabbo().Permissions.HasRight("room_override_custom_config"))

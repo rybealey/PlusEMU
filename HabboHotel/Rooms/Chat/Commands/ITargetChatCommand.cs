@@ -11,6 +11,17 @@ public interface ITargetChatCommand : ICommandBase
     bool MustBeInSameRoom { get; }
 
     /// <summary>
+    /// Whisper sent when the command is used with no username at all.
+    /// CommandManager answers that case before Execute runs, so a command
+    /// cannot word it itself - it overrides this instead.
+    ///
+    /// The default is the moderation-flavoured wording every target command
+    /// used to share; the fighting commands override it to talk about a
+    /// "target" rather than a username typed out.
+    /// </summary>
+    string NoTargetMessage => "No username specified.";
+
+    /// <summary>
     /// Execute the command.
     /// </summary>
     /// <param name="session"><see cref="GameClient"/> session executing the command.</param>
