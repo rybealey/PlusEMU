@@ -17,6 +17,15 @@ internal class PushCommand : ITargetChatCommand
     /// <summary>Combat wording: you pick a target, you do not type a username.</summary>
     public string NoTargetMessage => "No target selected.";
 
+    /// <summary>
+    /// Blue bubble. Every combat action shares this one style so they read as a
+    /// single system at a glance, distinct from ordinary chat and from the white
+    /// star bubble the staff RP commands use. Kept in step with SlapCommand's
+    /// FightBubble - if a third command needs it, lift it somewhere shared
+    /// rather than adding a third copy.
+    /// </summary>
+    private const int FightBubble = 4;
+
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         if (!room.PushEnabled && !session.GetHabbo().Permissions.HasRight("room_override_custom_config"))
@@ -78,7 +87,10 @@ internal class PushCommand : ITargetChatCommand
                 targetUser.MoveTo(targetUser.X - 1, targetUser.Y);
                 targetUser.MoveTo(targetUser.X, targetUser.Y + 1);
             }
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pushes {target.Username}*", 0, thisUser.LastBubble));
+            // The wrapping asterisks are what make the client treat a style-4
+            // bubble as an action, moving the opening marker ahead of the
+            // actor's name to render "*Actor pushes Target*".
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pushes {target.Username}*", 0, FightBubble));
         }
         else
             session.SendWhisper($"Oops, {target.Username} is not close enough.");
