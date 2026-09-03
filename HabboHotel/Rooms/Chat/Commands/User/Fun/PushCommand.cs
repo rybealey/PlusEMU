@@ -6,10 +6,11 @@ using Plus.HabboHotel.Users;
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fun;
 
 /// <summary>
-/// Shove another player one tile in the direction the pusher is facing.
+/// Shove another player one tile directly away from the pusher.
 ///
 /// Reach is the pusher's own tile plus the eight around it (Chebyshev distance
-/// &lt;= 1), the same rule :slap uses.
+/// &lt;= 1), the same rule :slap uses. From the pusher's own tile there is no
+/// "away", so that one case falls back to the direction the pusher faces.
 /// </summary>
 internal class PushCommand : ITargetChatCommand
 {
@@ -94,28 +95,46 @@ internal class PushCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        // The shove goes wherever the PUSHER faces. RotBody runs clockwise from
-        // 0 = north, and north is -Y on the tile grid, so the odd rotations are
-        // the diagonals. One switch rather than a run of independent ifs: the
-        // old code tested each rotation separately, which let two of them fire
-        // for a single push, and it built its diagonals from two MoveTo calls
-        // that both read the target's UNMOVED position - so the second simply
-        // replaced the first and a diagonal push went straight.
-        var (offsetX, offsetY) = thisUser.RotBody switch
-        {
-            0 => (0, -1),
-            1 => (1, -1),
-            2 => (1, 0),
-            3 => (1, 1),
-            4 => (0, 1),
-            5 => (-1, 1),
-            6 => (-1, 0),
-            7 => (-1, -1),
-            _ => (0, 0)
-        };
+        // The shove goes directly AWAY from the pusher, not along whichever way
+        // the pusher's body happens to point. Nothing makes a player face the
+        // target before pushing, and after walking to a tile you face your
+        // direction of travel - so a facing-based push sent the target
+        // somewhere unrelated, and when the pusher faced away from the target
+        // the destination came out as the pusher's OWN tile, which reads as the
+        // command doing nothing at all.
+        //
+        // Reach is Chebyshev <= 1, so each delta is already -1, 0 or 1: its
+        // sign IS the tile direction, and no rotation table is needed.
+        var offsetX = Math.Sign(targetUser.X - thisUser.X);
+        var offsetY = Math.Sign(targetUser.Y - thisUser.Y);
 
+        // Standing on the same tile there is no "away", so fall back to the way
+        // the pusher faces. RotBody runs clockwise from 0 = north, and north is
+        // -Y on the tile grid, which makes the odd rotations the diagonals -
+        // the same mapping Rotation.Calculate produces in reverse.
         if (offsetX == 0 && offsetY == 0)
-            return Task.CompletedTask;
+        {
+            (offsetX, offsetY) = thisUser.RotBody switch
+            {
+                0 => (0, -1),
+                1 => (1, -1),
+                2 => (1, 0),
+                3 => (1, 1),
+                4 => (0, 1),
+                5 => (-1, 1),
+                6 => (-1, 0),
+                7 => (-1, -1),
+                _ => (0, 0)
+            };
+
+            // An out-of-range rotation leaves nowhere to push; say so rather
+            // than failing silently.
+            if (offsetX == 0 && offsetY == 0)
+            {
+                session.SendWhisper($"Oops, there is no room to push {target.Username} that way.");
+                return Task.CompletedTask;
+            }
+        }
 
         var destinationX = (targetUser.X + offsetX);
         var destinationY = (targetUser.Y + offsetY);
