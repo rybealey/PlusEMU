@@ -306,6 +306,37 @@ public class Habbo
         dbClient.RunQuery();
     }
 
+    // pixelrp macros: the player's key/mouse bindings as one JSON document
+    // (see 62_Macros.sql for the shape and why it is a blob). Empty string =
+    // "no macros saved", which the client reads as its own defaults. Lazily
+    // loaded like the UI settings; pushed at login by RpMacrosComposer and
+    // written by RpSaveMacrosEvent, which validates before this is ever set.
+    public bool RpMacrosLoaded { get; set; }
+    public string RpMacros { get; set; } = "";
+
+    public void EnsureRpMacrosLoaded()
+    {
+        if (RpMacrosLoaded)
+            return;
+        RpMacrosLoaded = true;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `data` FROM `user_macros` WHERE `user_id` = @id LIMIT 1");
+        dbClient.AddParameter("id", Id);
+        var row = dbClient.GetRow();
+        if (row == null)
+            return;
+        RpMacros = Convert.ToString(row["data"]) ?? "";
+    }
+
+    public void SaveRpMacros()
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("REPLACE INTO `user_macros` (`user_id`,`data`) VALUES (@id,@data)");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("data", RpMacros);
+        dbClient.RunQuery();
+    }
+
     // pixelrp RP inventory (backpack carry slots 1-10). No caching — reads
     // and writes go straight to user_rp_inventory; the client is refreshed
     // with RpInventoryComposer after every change.

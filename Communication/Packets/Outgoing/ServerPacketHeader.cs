@@ -166,6 +166,7 @@ public static class ServerPacketHeader
     // pixelrp custom packets (wire ids defined in revisions/1.6.6.json)
     public const uint RpStatsComposer = 3901;
     public const uint RpUiSettingsComposer = 3902;
+    public const uint RpMacrosComposer = 3964;
     public const uint RpInventoryComposer = 3904;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

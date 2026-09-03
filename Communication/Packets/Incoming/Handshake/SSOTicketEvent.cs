@@ -121,6 +121,10 @@ public class SsoTicketEvent : IPacketEvent
             session.GetHabbo().EnsureRpUiSettingsLoaded();
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor, session.GetHabbo().RpUiUsernameColor, session.GetHabbo().RpUiUsernameIcon, session.GetHabbo().RpUiUsernameIconColor));
             session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
+            // pixelrp: saved macros, so a player's bindings follow them to any
+            // browser instead of living in that browser's localStorage.
+            session.GetHabbo().EnsureRpMacrosLoaded();
+            session.Send(new RpMacrosComposer(session.GetHabbo().RpMacros));
             // pixelrp: current airplane-mode state, so the phone's toggle and
             // its request/DM gating reflect what's saved.
             session.Send(new RpAirplaneModeComposer(session.GetHabbo().AirplaneMode));
