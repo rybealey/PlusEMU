@@ -87,7 +87,7 @@ internal class PassiveCommand : IChatCommand
 
         if (slot == 0)
         {
-            session.SendWhisper("You do not have a passive smoothie. Go to The Muse to purchase one.");
+            session.SendWhisper("There's no Passive Smoothie in your backpack. Pick one up at The Muse.");
             return;
         }
 
