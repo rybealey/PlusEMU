@@ -78,7 +78,7 @@ internal class PushCommand : ITargetChatCommand
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pushes {target.Username}*", 0, thisUser.LastBubble));
         }
         else
-            session.SendWhisper($"Oops, {target.Username} is not close enough!");
+            session.SendWhisper($"Oops, {target.Username} is not close enough.");
 
         return Task.CompletedTask;
     }

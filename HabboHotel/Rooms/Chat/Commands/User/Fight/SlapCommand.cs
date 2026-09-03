@@ -13,9 +13,9 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// pushed to HUDs by RpStatsComposer, so wiring damage in later is a matter of
 /// adjusting that and re-broadcasting.
 ///
-/// Reach is the slapper's own tile plus the four orthogonal neighbours
-/// (Manhattan distance &lt;= 1). Diagonals are out of reach on purpose, which
-/// makes this stricter than :push (that one uses a Chebyshev check).
+/// Reach is the slapper's own tile plus the eight surrounding it (Chebyshev
+/// distance &lt;= 1 - the full 3x3 block, diagonals included). That is the same
+/// adjacency rule :push applies, so there is only one reach rule to learn.
 /// </summary>
 internal class SlapCommand : ITargetChatCommand
 {
@@ -82,10 +82,11 @@ internal class SlapCommand : ITargetChatCommand
             }
         }
 
-        // Same tile, or one step N/E/S/W - never diagonal.
-        if (Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y) > 1)
+        // Same tile, or one step in any direction including the diagonals.
+        // :push spells the same test inside-out (|dx| >= 2 || |dy| >= 2).
+        if (Math.Abs(targetUser.X - thisUser.X) > 1 || Math.Abs(targetUser.Y - thisUser.Y) > 1)
         {
-            session.SendWhisper($"{target.Username} is not close enough to slap.");
+            session.SendWhisper($"Oops, {target.Username} is not close enough.");
             return Task.CompletedTask;
         }
 
