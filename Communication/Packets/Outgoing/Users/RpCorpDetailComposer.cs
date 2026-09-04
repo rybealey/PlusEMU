@@ -9,7 +9,11 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// </summary>
 public class RpCorpDetailComposer : IServerPacket
 {
-    public record Employee(string Username, string Figure, int Tier, bool Online, bool OnDuty, int ShiftSeconds, int ShiftSecondsWeek);
+    // LastOnline is a unix timestamp, 0 when the player has never logged
+    // out (users.last_online is written on logout, so it is STALE for a
+    // player who is online right now - the client renders "Now" off the
+    // Online flag instead of reading this).
+    public record Employee(string Username, string Figure, int Tier, bool Online, bool OnDuty, int ShiftSeconds, int ShiftSecondsWeek, int LastOnline);
 
     public record Rank(int Id, int Order, string Name, int Pay, int Tiers, List<Employee> Employees);
 
@@ -59,6 +63,7 @@ public class RpCorpDetailComposer : IServerPacket
                 packet.WriteInteger(employee.OnDuty ? 1 : 0);
                 packet.WriteInteger(employee.ShiftSeconds);
                 packet.WriteInteger(employee.ShiftSecondsWeek);
+                packet.WriteInteger(employee.LastOnline);
             }
         }
     }
