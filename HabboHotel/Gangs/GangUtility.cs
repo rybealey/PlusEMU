@@ -14,7 +14,18 @@ namespace Plus.HabboHotel.Gangs;
 /// </summary>
 public static class GangUtility
 {
-    public record GangMembership(int GangId, string Name, int Colour1, int Colour2, int IsOwner);
+    // Property class, not a positional record: Dapper binds record
+    // constructors only when every column type matches exactly, and MySQL
+    // hands back groups.id / owner_id as UNSIGNED (uint) and the ownership
+    // comparison as BIGINT (long). Settable properties get type conversion.
+    public class GangMembership
+    {
+        public int GangId { get; set; }
+        public string Name { get; set; } = "";
+        public int Colour1 { get; set; }
+        public int Colour2 { get; set; }
+        public int IsOwner { get; set; }
+    }
 
     public static GangMembership GetGang(int userId)
     {

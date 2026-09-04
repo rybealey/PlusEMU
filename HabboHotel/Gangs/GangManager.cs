@@ -31,12 +31,63 @@ public static class GangManager
     public const int MaxRoles = 12;
     public const int MaxPendingInvites = 20;
 
-    public record GangRow(int Id, string Name, int Colour1, int Colour2, int OwnerId, int Created, int GangLevel, int GangXp);
-    public record RoleRow(int Id, string Name, int SortOrder, int CanInvite, int CanKick, int CanBank, int IsAdmin);
-    public record MemberRow(int UserId, string Username, string Figure, int? RoleId, int JoinedAt);
-    public record InviteRow(int UserId, string Username, string Figure, int InvitedBy, string InviterName, int ExpiresAt);
-    public record IncomingInviteRow(int GangId, string Name, int Colour1, int Colour2, string InviterName, int ExpiresAt);
+    public class GangRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public int Colour1 { get; set; }
+        public int Colour2 { get; set; }
+        public int OwnerId { get; set; }
+        public int Created { get; set; }
+        public int GangLevel { get; set; }
+        public int GangXp { get; set; }
+    }
 
+    public class RoleRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public int SortOrder { get; set; }
+        public int CanInvite { get; set; }
+        public int CanKick { get; set; }
+        public int CanBank { get; set; }
+        public int IsAdmin { get; set; }
+    }
+
+    public class MemberRow
+    {
+        public int UserId { get; set; }
+        public string Username { get; set; } = "";
+        public string Figure { get; set; } = "";
+        public int? RoleId { get; set; }
+        public int JoinedAt { get; set; }
+    }
+
+    public class InviteRow
+    {
+        public int UserId { get; set; }
+        public string Username { get; set; } = "";
+        public string Figure { get; set; } = "";
+        public int InvitedBy { get; set; }
+        public string InviterName { get; set; } = "";
+        public int ExpiresAt { get; set; }
+    }
+
+    public class IncomingInviteRow
+    {
+        public int GangId { get; set; }
+        public string Name { get; set; } = "";
+        public int Colour1 { get; set; }
+        public int Colour2 { get; set; }
+        public string InviterName { get; set; } = "";
+        public int ExpiresAt { get; set; }
+    }
+
+
+    // Row classes above are property classes, not positional records: Dapper
+    // binds record constructors only on an exact column-type match, and MySQL
+    // returns unsigned ids as uint and boolean expressions as long. Settable
+    // properties get converted.
     public record Snapshot(GangRow Gang, List<RoleRow> Roles, List<MemberRow> Members, List<InviteRow> Invites);
 
     public record Actor(int UserId, Snapshot Snapshot, int Permissions)
