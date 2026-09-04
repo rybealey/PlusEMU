@@ -11,6 +11,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 /// </summary>
 internal class CorporationAlertCommand : IChatCommand
 {
+    // corporation alerts get their own bubble so they read apart from gang
+    // alerts and plain system whispers
+    private const int AlertBubble = 11;
+
     private readonly IGameClientManager _gameClientManager;
 
     public string Key => "ca";
@@ -61,7 +65,7 @@ internal class CorporationAlertCommand : IChatCommand
                 continue;
             var client = _gameClientManager.GetClientByUserId(userId);
             if (client?.GetHabbo() != null)
-                client.SendWhisper(line);
+                client.SendWhisper(line, AlertBubble);
         }
     }
 }
