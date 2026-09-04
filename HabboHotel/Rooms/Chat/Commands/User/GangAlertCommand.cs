@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Gangs;
 
@@ -44,6 +45,8 @@ internal class GangAlertCommand : IChatCommand
         }
 
         var line = $"[{habbo.Username}]: {message}";
+        // the alert went out - the sender's chat box keeps the prefix for the next one
+        session.Send(new RpRetainChatPrefixComposer(":ga"));
         foreach (var member in GangManager.GetMembers(gang.GangId))
         {
             var client = _gameClientManager.GetClientByUserId(member.UserId);

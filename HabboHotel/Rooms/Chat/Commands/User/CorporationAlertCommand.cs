@@ -1,5 +1,6 @@
 using Dapper;
 using Plus.HabboHotel.Corporations;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
@@ -59,6 +60,8 @@ internal class CorporationAlertCommand : IChatCommand
         }
 
         var line = $"[{habbo.Username}]: {message}";
+        // the alert went out - the sender's chat box keeps the prefix for the next one
+        session.Send(new RpRetainChatPrefixComposer(":ca"));
         foreach (var userId in employeeIds)
         {
             if (!ShiftManager.IsOnDuty(userId))

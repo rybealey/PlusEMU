@@ -600,6 +600,7 @@
     "RpUserGangComposer": 3970,
     "RpGangDetailComposer": 3973,
     "RpGangInvitesComposer": 3974,
+    "RpRetainChatPrefixComposer": 3986,
     "RpInventoryComposer": 3904,
     "RpMessengerReceiptComposer": 3906,
     "RpMessengerFriendTypingComposer": 3932,
