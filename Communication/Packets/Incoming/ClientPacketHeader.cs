@@ -399,6 +399,16 @@ public static class ClientPacketHeader
     // internal 3971 is taken by SubmitBullyReportEvent; wire id (revisions json) stays 3971
     public const uint RpGetUserGangEvent = 43971; //3971
     public const uint RpBuyGangEvent = 3972;
+    public const uint RpGetGangDetailEvent = 3976;
+    public const uint RpGangInviteEvent = 3977;
+    public const uint RpGangCancelInviteEvent = 3978;
+    public const uint RpGangRespondInviteEvent = 3979;
+    public const uint RpGangLeaveEvent = 3980;
+    public const uint RpGangKickEvent = 3981;
+    public const uint RpGangSaveRoleEvent = 3982;
+    public const uint RpGangDeleteRoleEvent = 3983;
+    public const uint RpGangSetMemberRoleEvent = 3984;
+    public const uint RpGangReorderRolesEvent = 3985;
     public const uint RpUseItemEvent = 3905;
     public const uint RpMoveItemEvent = 43945; //3945
     public const uint RpGetCorpsEvent = 43948; //3948
