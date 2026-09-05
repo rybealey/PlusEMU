@@ -3,23 +3,23 @@ using Plus.HabboHotel.News;
 
 namespace Plus.Communication.Packets.Outgoing.Users;
 
-/// <summary>pixelrp: the News feed for one viewer - whether they may post, and the latest stories in full (pinned first, then newest).</summary>
+/// <summary>pixelrp: the News feed for one viewer - their staff level (0 reader, 1 staff, 2 senior) and the latest stories in full (pinned first, then newest).</summary>
 public class RpNewsComposer : IServerPacket
 {
-    private readonly bool _canPost;
+    private readonly int _staffLevel;
     private readonly List<NewsUtility.PostRow> _posts;
 
     public uint MessageId => ServerPacketHeader.RpNewsComposer;
 
-    public RpNewsComposer(bool canPost, List<NewsUtility.PostRow> posts)
+    public RpNewsComposer(int staffLevel, List<NewsUtility.PostRow> posts)
     {
-        _canPost = canPost;
+        _staffLevel = staffLevel;
         _posts = posts;
     }
 
     public void Compose(IOutgoingPacket packet)
     {
-        packet.WriteInteger(_canPost ? 1 : 0);
+        packet.WriteInteger(_staffLevel);
         packet.WriteInteger(_posts.Count);
         foreach (var p in _posts)
         {

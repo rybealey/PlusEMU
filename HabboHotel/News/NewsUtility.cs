@@ -80,7 +80,10 @@ public static class NewsUtility
             "FROM `rp_news_posts` p LEFT JOIN `users` u ON u.`id` = p.`author_id` WHERE p.`id` = @id", new { id });
     }
 
-    public static RpNewsComposer Compose(GameClient session, List<PostRow> posts) => new(IsStaff(session.GetHabbo()), posts);
+    /// <summary>0 = reader, 1 = staff (post, pin, own stories), 2 = senior (edit or delete anyone's).</summary>
+    public static int StaffLevel(Habbo habbo) => IsSenior(habbo) ? 2 : (IsStaff(habbo) ? 1 : 0);
+
+    public static RpNewsComposer Compose(GameClient session, List<PostRow> posts) => new(StaffLevel(session.GetHabbo()), posts);
 
     public static void SendNews(GameClient session) => session.Send(Compose(session, GetPosts()));
 
