@@ -6,6 +6,7 @@ using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.HabboHotel.Achievements;
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Commands;
@@ -217,6 +218,16 @@ public class Habbo
     // Maps to nitro/assets/bundled/effect/Squad.nitro via EffectMap.json id 597
     // (the canonical "Squad" effect id; matches the served EffectMap + clients).
     public const int PassiveEnableEffectId = 597;
+
+    // pixelrp: the enable City Government wears while clocked in. It beats
+    // every other enable for the shift (AvatarEffectActivatedEvent refuses
+    // changes; the room tick re-applies it) and comes off at clock-out.
+    public const int StaffDutyEffectId = 102;
+
+    // pixelrp: passive is EITHER a smoothie still running OR being on duty
+    // for City Government - staff are untouchable while working. Every
+    // passive check reads this so the two sources can never drift apart.
+    public bool IsRpPassive => RpPassiveSeconds > 0 || ShiftManager.IsStaffOnDuty(Id);
 
     // Passive status (consumable smoothie): remaining ONLINE seconds.
     // Persisted in user_rp_stats.passive_seconds; decremented by the room

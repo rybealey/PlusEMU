@@ -7,6 +7,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Permissions;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Core;
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.AI;
@@ -276,7 +277,7 @@ public class RoomUserManager
         // pixelrp RP stats: announce the entering player's health/energy to the
         // room (the enterer receives everyone else's in Room.SendObjects).
         session.GetHabbo().EnsureRpStatsLoaded();
-        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().RpPassiveSeconds > 0 ? 1 : 0, session.GetHabbo().Rank >= 5 ? 1 : 0));
+        _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().IsRpPassive ? 1 : 0, session.GetHabbo().Rank >= 5 ? 1 : 0));
         // pixelrp corporations: announce the entering player's employment.
         var enteringEmployment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(session.GetHabbo().Id);
         if (enteringEmployment != null)
@@ -310,7 +311,10 @@ public class RoomUserManager
             session.GetHabbo().Effects.ApplyEffect(178);
         // pixelrp: passive players wear the passive enable on entry so there is
         // no pop on room change; the per-tick helper is the safety net.
-        if (session.GetHabbo().RpPassiveSeconds > 0 && session.GetHabbo().Effects != null)
+        // pixelrp: City Government on duty wears the staff enable instead.
+        if (ShiftManager.IsStaffOnDuty(session.GetHabbo().Id) && session.GetHabbo().Effects != null)
+            session.GetHabbo().Effects.ApplyEffect(Habbo.StaffDutyEffectId);
+        else if (session.GetHabbo().RpPassiveSeconds > 0 && session.GetHabbo().Effects != null)
             session.GetHabbo().Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
         // pixelrp: the one-shot RP-stats sends above (this user to the room, and
         // SendObjects everyone to this user) can land before the React HUD has
@@ -1289,7 +1293,7 @@ public class RoomUserManager
                 if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
-                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.RpPassiveSeconds > 0 ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
+                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.IsRpPassive ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
                     }
                     if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
                     {
@@ -1984,7 +1988,14 @@ public class RoomUserManager
             return;
 
         var cur = habbo.Effects.CurrentEffect;
-        if (habbo.RpPassiveSeconds > 0)
+        // pixelrp: on duty for City Government the staff enable owns the slot
+        // (same dance/lay exceptions as the passive enable below).
+        if (ShiftManager.IsStaffOnDuty(habbo.Id))
+        {
+            if (cur != Habbo.StaffDutyEffectId && (cur == 0 || cur == -1 || cur == Habbo.PassiveEnableEffectId) && !user.IsDancing && !user.IsLying)
+                habbo.Effects.ApplyEffect(Habbo.StaffDutyEffectId);
+        }
+        else if (habbo.RpPassiveSeconds > 0)
         {
             // Not while dancing (ApplyEffect stops the dance) and not while
             // lying (LayCommand clears the effect to hold the lay pose; the
@@ -2014,7 +2025,7 @@ public class RoomUserManager
             var otherHabbo = other.GetClient()?.GetHabbo();
             if (otherHabbo == null)
                 continue;
-            session.Send(new RpStatsComposer(other.VirtualId, otherHabbo.RpHealth, otherHabbo.RpHealthMax, otherHabbo.RpEnergy, otherHabbo.RpEnergyMax, (int)Math.Round(otherHabbo.RpAggression), otherHabbo.RpPassiveSeconds > 0 ? 1 : 0, otherHabbo.Rank >= 5 ? 1 : 0));
+            session.Send(new RpStatsComposer(other.VirtualId, otherHabbo.RpHealth, otherHabbo.RpHealthMax, otherHabbo.RpEnergy, otherHabbo.RpEnergyMax, (int)Math.Round(otherHabbo.RpAggression), otherHabbo.IsRpPassive ? 1 : 0, otherHabbo.Rank >= 5 ? 1 : 0));
         }
     }
 

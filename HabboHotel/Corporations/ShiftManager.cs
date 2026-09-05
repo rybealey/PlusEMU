@@ -45,7 +45,13 @@ public static class ShiftManager
         // minute-tick permission re-check reads the live room instead).
         public int CorpId;
         public int RankId;
+        // pixelrp: City Government (rp_corporations.service_type 'staff'):
+        // passive, the staff enable and bubble 22 for the whole shift.
+        public bool IsStaffCorp;
     }
+
+    /// <summary>Chat bubble City Government wears while on duty.</summary>
+    public const int StaffDutyBubble = 22;
 
     private static readonly ConcurrentDictionary<int, ShiftSession> Sessions = new();
     private static System.Threading.Timer _timer;
@@ -60,6 +66,44 @@ public static class ShiftManager
     }
 
     public static bool IsOnDuty(int userId) => Sessions.ContainsKey(userId);
+
+    /// <summary>On duty AND the corporation is City Government.</summary>
+    public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
+
+    /// <summary>The bubble a chat line goes out in: 22 for City Government on duty, else the one chosen.</summary>
+    public static int ChatBubbleFor(Habbo habbo, int chosen) => (habbo != null && IsStaffOnDuty(habbo.Id)) ? StaffDutyBubble : chosen;
+
+    // Re-send the room this player's RP stats so the HUD's PASSIVE tag follows
+    // a clock-in/out immediately (IsRpPassive folds staff duty in).
+    private static void BroadcastRpStats(Habbo habbo)
+    {
+        var room = habbo?.CurrentRoom;
+        var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        if (user == null) return;
+        room.SendPacket(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
+            (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
+    }
+
+    // Clock-in for City Government: the staff enable goes on and the room sees
+    // them turn passive.
+    private static void ApplyStaffDuty(GameClient client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null) return;
+        habbo.Effects?.ApplyEffect(Habbo.StaffDutyEffectId);
+        BroadcastRpStats(habbo);
+    }
+
+    // Clock-out (session already removed): the staff enable comes off - back to
+    // the passive enable if a smoothie is still running - and passive lifts.
+    private static void RevertStaffDuty(GameClient client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null) return;
+        if (habbo.Effects != null && habbo.Effects.CurrentEffect == Habbo.StaffDutyEffectId)
+            habbo.Effects.ApplyEffect(habbo.RpPassiveSeconds > 0 ? Habbo.PassiveEnableEffectId : 0);
+        BroadcastRpStats(habbo);
+    }
 
     // Live seconds of the current session (0 off duty) - composers add this
     // to the persisted counters so viewers see ticking values.
@@ -80,12 +124,12 @@ public static class ShiftManager
             client.SendWhisper(permit.Reason);
             return;
         }
-        (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId)? job;
+        (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId, string ServiceType)? job;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
-            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId)?>(
+            job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId, string ServiceType)?>(
                 "SELECT e.`pay_seconds` AS PaySeconds, r.`pay` AS Pay, c.`name` AS CorpName, c.`acronym` AS Acronym, " +
-                "r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers, e.`corporation_id` AS CorpId, e.`rank_id` AS RankId " +
+                "r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers, e.`corporation_id` AS CorpId, e.`rank_id` AS RankId, c.`service_type` AS ServiceType " +
                 "FROM `rp_corporation_employees` e " +
                 "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
                 "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
@@ -105,10 +149,13 @@ public static class ShiftManager
             BasePaySeconds = job.Value.PaySeconds,
             StartedAt = UnixTimestamp.GetNow(),
             CorpId = job.Value.CorpId,
-            RankId = job.Value.RankId
+            RankId = job.Value.RankId,
+            IsStaffCorp = (job.Value.ServiceType == "staff")
         };
         session.WorkingMotto = BuildWorkingMotto(session.CorpName, job.Value.Acronym, job.Value.RankName, job.Value.Tier, job.Value.Tiers);
         Sessions[userId] = session;
+        if (session.IsStaffCorp)
+            ApplyStaffDuty(client);
         client.SendWhisper($"You are now on duty at {session.CorpName}. {PayMessage(RemainingSeconds(session, 0))}");
         ApplyMotto(client, session.WorkingMotto);
         AnnounceShift(client, $"*has started their shift at {session.CorpName}*");
@@ -284,14 +331,19 @@ public static class ShiftManager
     // pay through.
     private static int EndSession(ShiftSession session, GameClient client)
     {
+        int paySeconds;
         lock (session)
         {
             var elapsed = Elapsed(session);
             DrainCompletedIntervals(session, client, elapsed);
-            var paySeconds = PayProgress(session, elapsed);
+            paySeconds = PayProgress(session, elapsed);
             Flush(session, elapsed, paySeconds, offDuty: true);
-            return paySeconds;
         }
+        // the session is already out of Sessions by now, so IsStaffOnDuty is
+        // false and the revert sees the player as off duty
+        if (session.IsStaffCorp)
+            RevertStaffDuty(client);
+        return paySeconds;
     }
 
     private static void Flush(ShiftSession session, int elapsed, int paySeconds, bool offDuty)

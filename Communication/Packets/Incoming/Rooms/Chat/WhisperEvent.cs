@@ -2,6 +2,7 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Rooms.Chat.Commands;
 using Plus.Core.Settings;
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Moderation;
 using Plus.HabboHotel.Quests;
@@ -108,12 +109,12 @@ public class WhisperEvent : IPacketEvent
                 session.Disconnect();
                 return Task.CompletedTask;
             }
-            session.Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
+            session.Send(new WhisperComposer(user.VirtualId, message, 0, ShiftManager.ChatBubbleFor(session.GetHabbo(), user.LastBubble), usernameColor, usernameIcon, usernameIconColor));
             return Task.CompletedTask;
         }
         _questManager.ProgressUserQuest(session, QuestType.SocialChat);
         user.UnIdle();
-        user.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
+        user.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, ShiftManager.ChatBubbleFor(session.GetHabbo(), user.LastBubble), usernameColor, usernameIcon, usernameIconColor));
         if (!user2.IsBot && user2.UserId != user.UserId)
         {
             if (!user2.GetClient().GetHabbo().IgnoresComponent.IsIgnored(session.GetHabbo().Id))
