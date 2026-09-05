@@ -23,6 +23,35 @@ public class WiredComponent
         _wiredItems = new();
     }
 
+    /// <summary>
+    /// pixelrp Movement V2 (A9): does this room hold any wired box that reacts
+    /// to a user walking onto or off a tile?
+    ///
+    /// Read-only. Used by TileEffects to decide, at PLAN time, whether stepping
+    /// onto a tile must arm the movement barrier - a wired walk-on trigger can
+    /// reach TeleportUserBox and move the avatar mid-route, so that effect must
+    /// never execute one edge late.
+    ///
+    /// Deliberately a live scan of a small dictionary rather than a cached flag:
+    /// wired boxes are added and removed as furni is placed, and a stale "no
+    /// triggers" answer is the one failure this must not have.
+    /// </summary>
+    public bool HasMovementTriggers
+    {
+        get
+        {
+            foreach (var box in _wiredItems.Values)
+            {
+                if (box == null)
+                    continue;
+                if (box.Type == WiredBoxType.TriggerWalkOnFurni ||
+                    box.Type == WiredBoxType.TriggerWalkOffFurni)
+                    return true;
+            }
+            return false;
+        }
+    }
+
     public void OnCycle()
     {
         var start = DateTime.Now;

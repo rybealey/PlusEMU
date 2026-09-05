@@ -610,6 +610,16 @@ public class Room : RoomData
 
     public void Dispose()
     {
+        // pixelrp Movement V2 (A7): detach from the movement scheduler FIRST.
+        // Below, _gamemap.Dispose() nulls _userMap, GameMap, EffectMap, Model
+        // and more. The V2 scheduler is a SINGLE hotel-wide thread, so if it
+        // still held this room it would dereference that null and freeze
+        // movement in every room at once. Detach closes the room under its
+        // movement lock, drops it from the scheduler heap and clears its queued
+        // work, all before any resource here is torn down.
+        // No-op for rooms V2 never attached to, so this is safe with the flag off.
+        Movement.MovementRegistry.Detach(RoomId);
+
         SendPacket(new CloseConnectionComposer());
         if (!MDisposed)
         {
