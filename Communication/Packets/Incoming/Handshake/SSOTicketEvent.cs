@@ -10,6 +10,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Notifications;
+using Plus.HabboHotel.Rooms.Jukebox;
 using Plus.HabboHotel.Users.Birthdays;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Communication.Packets.Outgoing.Users;
@@ -122,6 +123,10 @@ public class SsoTicketEvent : IPacketEvent
             session.GetHabbo().EnsureRpUiSettingsLoaded();
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor, session.GetHabbo().RpUiUsernameColor, session.GetHabbo().RpUiUsernameIcon, session.GetHabbo().RpUiUsernameIconColor));
             session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
+            // pixelrp: the hotel station's state, so the phone's Music app can tune
+            // in before (or without) entering a room; room entry re-sends it with
+            // that room's has-jukebox flag.
+            session.Send(JukeboxStation.BuildState(false));
             // pixelrp: the hotel says happy birthday on the day (phone Settings >
             // Account; month + day only).
             var birthday = BirthdayUtility.GetBirthday(session.GetHabbo().Id);

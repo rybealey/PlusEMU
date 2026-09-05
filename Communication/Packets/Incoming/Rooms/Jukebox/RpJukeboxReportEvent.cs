@@ -1,4 +1,5 @@
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Jukebox;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Jukebox;
 
@@ -11,7 +12,7 @@ internal class RpJukeboxReportEvent : IPacketEvent
     {
         var durationSec = packet.ReadInt();
         var ended = packet.ReadInt() == 1;
-        session.GetHabbo()?.CurrentRoom?.GetJukeboxManager().Report(session, durationSec, ended);
+        if (session.GetHabbo() != null) JukeboxStation.Report(session, durationSec, ended);
         return Task.CompletedTask;
     }
 }

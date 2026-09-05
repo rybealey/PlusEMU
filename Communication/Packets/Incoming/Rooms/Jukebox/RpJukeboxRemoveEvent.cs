@@ -1,4 +1,5 @@
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Jukebox;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Jukebox;
 
@@ -9,7 +10,7 @@ internal class RpJukeboxRemoveEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var index = packet.ReadInt();
-        session.GetHabbo()?.CurrentRoom?.GetJukeboxManager().TryRemove(session, index);
+        if (session.GetHabbo() != null) JukeboxStation.TryRemove(session, index);
         return Task.CompletedTask;
     }
 }

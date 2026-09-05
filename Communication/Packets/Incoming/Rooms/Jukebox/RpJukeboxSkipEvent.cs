@@ -1,4 +1,5 @@
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Jukebox;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Jukebox;
 
@@ -8,7 +9,7 @@ internal class RpJukeboxSkipEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        session.GetHabbo()?.CurrentRoom?.GetJukeboxManager().TrySkip(session);
+        if (session.GetHabbo() != null) JukeboxStation.TrySkip(session);
         return Task.CompletedTask;
     }
 }
