@@ -46,12 +46,12 @@ public static class ShiftManager
         public int CorpId;
         public int RankId;
         // pixelrp: City Government (rp_corporations.service_type 'staff'):
-        // passive, the staff enable and bubble 22 for the whole shift.
+        // passive, the staff enable and bubble 23 for the whole shift.
         public bool IsStaffCorp;
     }
 
-    /// <summary>Chat bubble City Government wears while on duty.</summary>
-    public const int StaffDutyBubble = 22;
+    /// <summary>Chat bubble City Government wears while on duty - the staff bubble.</summary>
+    public const int StaffDutyBubble = 23;
 
     private static readonly ConcurrentDictionary<int, ShiftSession> Sessions = new();
     private static System.Threading.Timer _timer;
@@ -70,7 +70,7 @@ public static class ShiftManager
     /// <summary>On duty AND the corporation is City Government.</summary>
     public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
 
-    /// <summary>The bubble a chat line goes out in: 22 for City Government on duty, else the one chosen.</summary>
+    /// <summary>The bubble a chat line goes out in: 23 for City Government on duty, else the one chosen.</summary>
     public static int ChatBubbleFor(Habbo habbo, int chosen) => (habbo != null && IsStaffOnDuty(habbo.Id)) ? StaffDutyBubble : chosen;
 
     // Re-send the room this player's RP stats so the HUD's PASSIVE tag follows
