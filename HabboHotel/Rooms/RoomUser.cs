@@ -64,12 +64,23 @@ public class RoomUser
     // pixelrp :walk command - staff-forced patrol along one axis. null =
     // off; true = horizontal, false = vertical. Cleared the moment the
     // player clicks a tile of their own (MoveAvatarEvent).
-    public bool? ForcedWalkHorizontal;
+    /// <summary>
+    /// pixelrp :walk - the patrol lane, as a unit step. (1,0) and (0,1) are the
+    /// original horizontal and vertical lanes; (1,1) and (1,-1) are the two
+    /// diagonals. null means no patrol.
+    ///
+    /// A vector rather than a bool because a bool can only ever express two
+    /// axes, and the lane scan is identical for all four - only the step
+    /// differs. <see cref="ForcedWalkDirection"/> negates it, so the four axes
+    /// cover all eight headings.
+    /// </summary>
+    public Point? ForcedWalkAxis;
+
     public int ForcedWalkDirection = 1;
 
     /// <summary>
     /// pixelrp :wander - staff-forced random roaming. Mutually exclusive with
-    /// <see cref="ForcedWalkHorizontal"/>: a lane patrol and a random walk would
+    /// <see cref="ForcedWalkAxis"/>: a lane patrol and a random walk would
     /// fight over the same "not currently walking" tick.
     /// </summary>
     public bool ForcedWalkRandom;

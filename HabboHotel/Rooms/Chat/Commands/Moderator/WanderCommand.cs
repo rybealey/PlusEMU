@@ -1,4 +1,4 @@
-using Plus.HabboHotel.GameClients;
+﻿using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 
@@ -55,7 +55,7 @@ internal class WanderCommand : IChatCommand
 
         // The two forced modes are mutually exclusive - both act on the same
         // "not currently walking" tick and would otherwise fight for it.
-        target.ForcedWalkHorizontal = null;
+        target.ForcedWalkAxis = null;
         target.ForcedWalkRandom = true;
         target.WanderPauseTicks = 0;
         session.SendWhisper(

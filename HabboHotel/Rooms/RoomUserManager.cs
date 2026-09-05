@@ -844,13 +844,13 @@ public class RoomUserManager
                 // pixelrp :walk - staff-forced patrol. Re-evaluated every
                 // cycle so the user reverses at the lane end without pausing;
                 // the same lane scan the bot patrol uses (GenericBot).
-                if (!user.IsBot && user.ForcedWalkHorizontal is { } forcedHorizontal && !user.IsWalking && user.CanWalk)
+                if (!user.IsBot && user.ForcedWalkAxis is { } forcedAxis && !user.IsWalking && user.CanWalk)
                 {
-                    var lane = FindForcedWalkEnd(user.X, user.Y, forcedHorizontal, user.ForcedWalkDirection);
+                    var lane = FindForcedWalkEnd(user.X, user.Y, forcedAxis, user.ForcedWalkDirection);
                     if (lane.X == user.X && lane.Y == user.Y)
                     {
                         user.ForcedWalkDirection = -user.ForcedWalkDirection;
-                        lane = FindForcedWalkEnd(user.X, user.Y, forcedHorizontal, user.ForcedWalkDirection);
+                        lane = FindForcedWalkEnd(user.X, user.Y, forcedAxis, user.ForcedWalkDirection);
                     }
                     if (lane.X != user.X || lane.Y != user.Y)
                         user.MoveTo(lane.X, lane.Y);
@@ -1503,13 +1503,26 @@ public class RoomUserManager
         return new Point(x, y);
     }
 
-    private Point FindForcedWalkEnd(int x, int y, bool horizontal, int direction)
+    /// <summary>
+    /// Walk <paramref name="axis"/> (negated by <paramref name="direction"/>)
+    /// from the given tile until the next step would leave the room or hit
+    /// something, and return the last open tile.
+    ///
+    /// The scan is identical for orthogonal and diagonal lanes - only the step
+    /// vector differs - so diagonals need no special case here. The pathfinder
+    /// already walks diagonals (Neighbours8, and CornerPolicy.Off imposes no
+    /// corner restriction), so the returned tile is reachable the same way.
+    /// </summary>
+    private Point FindForcedWalkEnd(int x, int y, Point axis, int direction)
     {
         var map = _room.GetGameMap();
+        if (map == null)
+            return new Point(x, y);
+
         var end = new Point(x, y);
         while (true)
         {
-            var next = horizontal ? new Point(end.X + direction, end.Y) : new Point(end.X, end.Y + direction);
+            var next = new Point(end.X + axis.X * direction, end.Y + axis.Y * direction);
             if (!map.ValidTile(next.X, next.Y) || !map.SquareIsOpen(next.X, next.Y, false))
                 return end;
             end = next;

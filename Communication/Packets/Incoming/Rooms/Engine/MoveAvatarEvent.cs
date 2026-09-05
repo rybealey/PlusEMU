@@ -15,7 +15,7 @@ internal class MoveAvatarEvent : IPacketEvent
         if (user == null || !user.CanWalk)
             return Task.CompletedTask;
         // A player-initiated path ends any staff-forced :walk patrol or :wander.
-        user.ForcedWalkHorizontal = null;
+        user.ForcedWalkAxis = null;
         user.ForcedWalkRandom = false;
         var moveX = packet.ReadInt();
         var moveY = packet.ReadInt();
