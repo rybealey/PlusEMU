@@ -235,10 +235,26 @@ public static class MovementController
         w.EdgeToZ = map.SqAbsoluteHeight(next.X, next.Y);
         w.Facing = (byte)Rotation.Calculate(w.Tile.X, w.Tile.Y, next.X, next.Y);
 
-        // The movement-critical tile barrier (A9): committing ONTO a flagged
-        // tile must block the NEXT commit until Q2 has processed its effects.
-        if (TileEffects.IsMovementCritical(room, next))
-            w.AwaitingEventsThroughEdge = w.EdgeIndex;
+        // The movement-critical tile barrier (A9) is DELIBERATELY NOT ARMED yet.
+        //
+        // Two reasons, both discovered on the first beta test:
+        //
+        // 1. IT IS REDUNDANT IN THIS BUILD. ApplyMovementV2Frame mirrors V1 and
+        //    fires UserWalksOffFurni / UserWalksOnFurni inline under _cycleLock,
+        //    so tile effects already run in order with the commit. The Q2
+        //    handler body is still empty (effects move there at cutover), so
+        //    arming the barrier gates on events that do nothing.
+        //
+        // 2. ARMING IT HERE SELF-BLOCKS. Arming at PLAN time with w.EdgeIndex
+        //    means the scheduler's pre-commit check, BarrierBlocks(EdgeIndex+1),
+        //    is already true on the next beat - but the only thing that queues
+        //    edge k's tile event is CommitEdgeSilently, inside the very
+        //    AdvanceWalker call the barrier just blocked. The avatar freezes on
+        //    its first step and the room spins hot.
+        //
+        // When Q2 owns tile effects at cutover, arm it at COMMIT time (after
+        // EdgeIndex++ in CommitEdgeSilently) so the event is queued before the
+        // barrier can block anything, and re-check the drain-loop condition.
 
         StageEdge(room, w, immediate);
 

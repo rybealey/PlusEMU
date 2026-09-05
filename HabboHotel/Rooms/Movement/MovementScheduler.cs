@@ -25,6 +25,13 @@ public sealed class MovementScheduler
 {
     public static readonly MovementScheduler Instance = new();
 
+    /// <summary>
+    /// How long a barrier-blocked walker is deferred before it is reconsidered.
+    /// Large enough that a blocked walker cannot spin the scheduler, small
+    /// enough to be invisible against a 500ms edge.
+    /// </summary>
+    private const int BarrierRetryMs = 25;
+
     private readonly IndexedDueHeap<RoomMovement> _rooms = new(64);
     private readonly ConcurrentQueue<RoomMovement> _signalled = new();
     private readonly ManualResetEventSlim _wake = new(false);
@@ -249,10 +256,18 @@ public sealed class MovementScheduler
 
                 // The movement-critical tile barrier (A9): do not commit past an
                 // edge whose tile events are still being processed by Q2.
+                //
+                // MUST NOT simply `break` while leaving this walker at a due
+                // tick in the past: ComputeNextDue would return that past tick,
+                // the room would be instantly due again, and the scheduler
+                // would spin hot on a single thread - which starves the whole
+                // hotel, not just this room. Defer the blocked walker a little
+                // and keep draining the others instead.
                 if (walker.BarrierBlocks(walker.EdgeIndex + 1))
                 {
                     MovementCounters.BarrierWait();
-                    break;
+                    room.Walkers.InsertOrUpdate(walker, now + BarrierRetryMs);
+                    continue;
                 }
 
                 room.Walkers.Remove(walker);
