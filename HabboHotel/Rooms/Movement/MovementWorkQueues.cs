@@ -41,7 +41,22 @@ public readonly struct TileEventItem
 /// </summary>
 public static class MovementWorkQueues
 {
-    private const int WorkerCount = 2;
+    /// <summary>
+    /// ONE thread per queue, deliberately.
+    ///
+    /// This was 2, which broke the ordering guarantee this class is supposed to
+    /// provide: both threads pulled from the SAME queue with no per-room
+    /// affinity, so two frames for one room could be applied concurrently and
+    /// land out of order. An older frame applied after a newer one rewinds
+    /// user.X/Y and can clear "mv" - i.e. an avatar that freezes just after it
+    /// starts moving.
+    ///
+    /// A single consumer makes ordering a property of the queue rather than of
+    /// timing. Per-room affinity across several threads would also work and
+    /// would scale further, but movement frames are cheap (apply + one
+    /// broadcast) and correctness here matters far more than parallelism.
+    /// </summary>
+    private const int WorkerCount = 1;
 
     private static readonly ConcurrentQueue<(RoomMovement Room, PendingEdgeCommit[] Frame)> OutboundRooms = new();
     private static readonly ConcurrentQueue<RoomMovement> EventRooms = new();

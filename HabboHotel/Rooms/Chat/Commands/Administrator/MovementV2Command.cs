@@ -30,7 +30,7 @@ internal class MovementV2Command : IChatCommand
 {
     public string Key => "movementv2";
     public string PermissionRequired => "command_update";
-    public string Parameters => "[on|off]";
+    public string Parameters => "[on|off|stats]";
     public string Description => "Toggle Movement V2 (route + timing for human users) live, without a deploy.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
@@ -44,6 +44,19 @@ internal class MovementV2Command : IChatCommand
         }
 
         var arg = parameters[0].ToLower();
+
+        // Diagnostics. The first two beta tests both ended in "the avatar
+        // freezes" with no way to tell WHICH stage stopped, which turned
+        // debugging into guesswork against a server we cannot attach to.
+        // roomFaults is the decisive one: it is non-zero only if a room threw
+        // inside the scheduler, which permanently closes that room and freezes
+        // every walker in it.
+        if (arg is "stats" or "status" or "debug")
+        {
+            session.SendWhisper(MovementRegistry.Snapshot());
+            return;
+        }
+
         bool enable;
         switch (arg)
         {
