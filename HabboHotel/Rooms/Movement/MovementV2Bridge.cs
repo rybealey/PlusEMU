@@ -18,15 +18,12 @@ namespace Plus.HabboHotel.Rooms.Movement;
 public static class MovementV2Bridge
 {
     /// <summary>
-    /// True when V2 owns this user's movement.
-    ///
-    /// Bots and pets stay on V1 for the first beta test: making them
-    /// authoritative is a later phase, and keeping them on V1 shrinks the blast
-    /// radius of the first flip.
+    /// True when V2 has this unit enrolled. Bots and pets included - there is
+    /// no second engine for them to fall back to.
     /// </summary>
     public static bool Owns(RoomUser? user)
     {
-        if (user == null || user.IsBot || user.IsPet)
+        if (user == null)
             return false;
         if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
             return false;
@@ -42,10 +39,10 @@ public static class MovementV2Bridge
         MovementRegistry.Attach(room);
     }
 
-    /// <summary>Enrol a user. Bots and pets stay on V1.</summary>
+    /// <summary>Enrol a unit. Humans, bots and pets alike.</summary>
     public static void OnUserEnter(Room room, RoomUser user)
     {
-        if (room == null || user == null || user.IsBot || user.IsPet)
+        if (room == null || user == null)
             return;
 
         var movement = MovementRegistry.Attach(room);
@@ -83,16 +80,16 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
-    /// Route a walk request to V2. Returns TRUE when V2 handled it, in which
-    /// case the V1 path must not run.
+    /// Route a walk request to V2. Returns void: there is no fallback engine,
+    /// so an unroutable click is simply a no-op.
     /// </summary>
-    public static bool TryHandleMoveTo(RoomUser user, int targetX, int targetY)
+    public static void RequestMove(RoomUser user, int targetX, int targetY)
     {
         if (!Owns(user))
-            return false;
+            return;
 
         if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
-            return false;
+            return;
 
         var now = MovementScheduler.Instance.Clock.NowMs;
         var target = new Point(targetX, targetY);
@@ -104,9 +101,9 @@ public static class MovementV2Bridge
         lock (movement.MovementLock)
         {
             if (movement.Closed)
-                return false;
+                return;
             if (!movement.States.TryGetValue(user.VirtualId, out var state))
-                return false;
+                return;
 
             // Keep V2's idea of where the avatar stands in step with V1's, in
             // case anything else moved it (roller, teleport, room entry).
@@ -116,17 +113,14 @@ public static class MovementV2Bridge
                 state.TileZ = user.Z;
             }
 
-            var handled = state.Mode == MovementMode.Moving
-                ? MovementController.Redirect(movement, state, target, ctx, now)
-                : MovementController.StartWalk(movement, state, target, ctx, now);
-
-            if (!handled)
-                return true; // V2 owns this user; an unroutable click is a no-op, not a fallback to V1
+            if (state.Mode == MovementMode.Moving)
+                MovementController.Redirect(movement, state, target, ctx, now);
+            else
+                MovementController.StartWalk(movement, state, target, ctx, now);
         }
 
         // Latency path: wake the scheduler immediately rather than waiting for
         // its next due time.
         MovementScheduler.Instance.Signal(movement);
-        return true;
     }
 }

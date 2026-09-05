@@ -620,23 +620,13 @@ public class RoomUser
         if (GetRoom().GetGameMap().SquareHasUsers(pX, pY) && !pOverride && !GetRoom().RoomBlockingEnabled || Frozen)
             return;
         UnIdle();
-        // pixelrp Movement V2: when V2 owns this user it plans the route and
-        // owns the timeline, so the V1 goal/repath fields below are not set at
-        // all - leaving them set would let a later V1 tick re-plan the same walk.
-        // Returns false for bots, pets, and anyone V2 has not enrolled.
-        if (Movement.MovementV2Bridge.TryHandleMoveTo(this, pX, pY))
-        {
-            FreezeInteracting = false;
-            return;
-        }
-        GoalX = pX;
-        GoalY = pY;
-        PathRecalcNeeded = true;
         FreezeInteracting = false;
-        // pixelrp instant-first-step: emit the first walk step now instead of waiting
-        // up to 500ms for the next room tick. Walk speed is unaffected; only the
-        // first step is fast-pathed, subsequent steps stay on the tick.
-        GetRoom()?.GetRoomUserManager()?.TryInstantFirstStep(this);
+        // pixelrp Movement V2 is the ONLY movement engine. There is deliberately
+        // no V1 fallback here: if V2 cannot route this walk, nothing moves.
+        // A fallback is what let two engines touch one avatar, and that is what
+        // froze walkers on beta - V1's tick would find IsWalking with an empty
+        // V1 path and clear "mv" out from under V2.
+        Movement.MovementV2Bridge.RequestMove(this, pX, pY);
     }
 
     public void MoveTo(int pX, int pY)
