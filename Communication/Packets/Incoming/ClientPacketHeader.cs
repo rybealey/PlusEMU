@@ -414,6 +414,14 @@ public static class ClientPacketHeader
     public const uint RpGetCalendarEvent = 3994;
     public const uint RpSaveCalendarEventEvent = 3995;
     public const uint RpDeleteCalendarEventEvent = 3996;
+    public const uint RpGetNotesEvent = 4001;
+    public const uint RpSaveNoteEvent = 4002;
+    public const uint RpDeleteNoteEvent = 4003;
+    public const uint RpNoteOpenEvent = 4004;
+    public const uint RpNoteShareEvent = 4005;
+    public const uint RpSaveNoteFolderEvent = 4006;
+    public const uint RpMoveNoteEvent = 4007;
+    public const uint RpPinNoteEvent = 4008;
     public const uint RpUseItemEvent = 3905;
     public const uint RpMoveItemEvent = 43945; //3945
     public const uint RpGetCorpsEvent = 43948; //3948
