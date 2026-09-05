@@ -172,6 +172,7 @@ public static class ServerPacketHeader
     public const uint RpGangInvitesComposer = 3974;
     public const uint RpRetainChatPrefixComposer = 3986;
     public const uint RpBirthdayComposer = 3987;
+    public const uint RpCalendarComposer = 3993;
     public const uint RpInventoryComposer = 3904;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
