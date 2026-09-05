@@ -323,6 +323,9 @@ public class RoomUserManager
         // this client's full room-stats view for the next few cycles, by which
         // point the HUD is listening. See RpStatsResyncTicks in the room cycle.
         user.RpStatsResyncTicks = 6;
+        // pixelrp Movement V2: enrol this user with the movement scheduler.
+        // No-op while movement.v2.enabled is off.
+        Movement.MovementV2Bridge.OnUserEnter(_room, user);
         foreach (var bot in _bots.Values.ToList())
         {
             if (bot == null || bot.BotAi == null)
@@ -503,6 +506,9 @@ public class RoomUserManager
 
     private void RemoveRoomUser(RoomUser user)
     {
+        // pixelrp Movement V2: dequeue BEFORE the rest of teardown, so nothing
+        // can be staged or emitted for a unit that is already gone.
+        Movement.MovementV2Bridge.OnUserLeave(_room, user);
         // Only restore tile state on leave when room blocking is on. With pixelrp's
         // global tile-overlap (RoomBlockingEnabled always true) users never write
         // occupancy into the pathfinding map, so there is nothing to restore - and
@@ -691,6 +697,76 @@ public class RoomUserManager
         }
     }
 
+    /// <summary>
+    /// pixelrp Movement V2: apply one sealed movement frame to RoomUser and
+    /// broadcast it. Called by the Q1 outbound worker, NEVER by the movement
+    /// scheduler.
+    ///
+    /// Runs under _cycleLock - the same lock V1 uses to serialise
+    /// Statusses/UpdateNeeded writes against SerializeStatusUpdates - so there
+    /// is exactly one writer per lock and the Statusses dictionary is never
+    /// touched from two threads at once.
+    ///
+    /// The commit deliberately mirrors V1's commit (map occupancy, walk-off /
+    /// walk-on furni, UpdateUserStatus) so teleporters, hoppers, wired triggers
+    /// and effect tiles behave identically while V2 owns route and timing. The
+    /// Q2 barrier path in A9 takes these over at cutover; for the first beta
+    /// test, matching V1 exactly is the lower-risk choice.
+    ///
+    /// No packet 4110 is emitted: the UserUpdateComposer below is what carries
+    /// the movement, so a stock client renders V2 movement natively.
+    /// </summary>
+    public void ApplyMovementV2Frame(Movement.PendingEdgeCommit[] frame)
+    {
+        if (frame == null || frame.Length == 0)
+            return;
+        lock (_cycleLock)
+        {
+            foreach (var commit in frame)
+            {
+                var user = GetRoomUserByVirtualId(commit.VirtualId);
+                if (user == null || !IsValid(user))
+                    continue;
+
+                // 1. Arrival on the committed tile.
+                if (user.X != commit.Tile.X || user.Y != commit.Tile.Y)
+                {
+                    var previous = new Point(user.X, user.Y);
+                    _room.GetGameMap().UpdateUserMovement(previous, commit.Tile, user);
+                    foreach (var item in _room.GetGameMap().GetCoordinatedItems(previous).ToList())
+                        item.UserWalksOffFurni(user);
+
+                    user.X = commit.Tile.X;
+                    user.Y = commit.Tile.Y;
+                    user.Z = commit.TileZ;
+
+                    foreach (var item in _room.GetGameMap().GetCoordinatedItems(commit.Tile).ToList())
+                        item.UserWalksOnFurni(user);
+
+                    UpdateUserStatus(user, true);
+                }
+
+                // 2. The edge now in flight (or the stop).
+                if (commit.IsMoving)
+                {
+                    user.RotBody = commit.Facing;
+                    user.RotHead = commit.Facing;
+                    user.IsWalking = true;
+                    user.SetStatus("mv",
+                        $"{commit.EdgeTo.X},{commit.EdgeTo.Y},{TextHandling.GetString(commit.EdgeToZ)}");
+                }
+                else
+                {
+                    user.IsWalking = false;
+                    user.RemoveStatus("mv");
+                }
+                user.UpdateNeeded = true;
+            }
+
+            SerializeStatusUpdates();
+        }
+    }
+
     public void UpdateUserStatusses()
     {
         foreach (var user in GetUserList().ToList())
@@ -726,6 +802,9 @@ public class RoomUserManager
     // responsiveness stays consistent while the speed cap holds.
     public void TryInstantFirstStep(RoomUser user)
     {
+        // pixelrp Movement V2 owns this user's walk start; the V1 instant-step
+        // and its SelfPaceWalk metronome must not also run. Inert with the flag off.
+        if (Movement.MovementV2Bridge.Owns(user)) return;
         if (PlusEnvironment.SettingsManager.TryGetValue("pathfinder.instant.first.step.disabled") == "1") return;
         if (user == null || user.IsBot) return;
         lock (_cycleLock)
@@ -1324,7 +1403,12 @@ public class RoomUserManager
                     if (_room.GotFreeze())
                         _room.GetFreeze().CycleUser(user);
                     var removed = false;
-                    if (!user.SelfPaced)
+                    // pixelrp Movement V2: a user owned by V2 is skipped entirely
+                    // by the V1 tick. Ownership is exclusive - two systems
+                    // writing one avatar's position is the V1 defect V2 removes.
+                    // Owns() returns false immediately when movement.v2.enabled
+                    // is off, so with the flag down this is exactly the old path.
+                    if (!user.SelfPaced && !Movement.MovementV2Bridge.Owns(user))
                     {
                         var wasStepping = (user.IsWalking && user.SetStep);
                         updated = ProcessUserMovement(user, toRemove, out removed);

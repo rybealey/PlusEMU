@@ -620,6 +620,15 @@ public class RoomUser
         if (GetRoom().GetGameMap().SquareHasUsers(pX, pY) && !pOverride && !GetRoom().RoomBlockingEnabled || Frozen)
             return;
         UnIdle();
+        // pixelrp Movement V2: when V2 owns this user it plans the route and
+        // owns the timeline, so the V1 goal/repath fields below are not set at
+        // all - leaving them set would let a later V1 tick re-plan the same walk.
+        // Returns false instantly when movement.v2.enabled is off.
+        if (Movement.MovementV2Bridge.TryHandleMoveTo(this, pX, pY))
+        {
+            FreezeInteracting = false;
+            return;
+        }
         GoalX = pX;
         GoalY = pY;
         PathRecalcNeeded = true;

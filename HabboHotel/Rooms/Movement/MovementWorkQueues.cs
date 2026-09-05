@@ -43,7 +43,7 @@ public static class MovementWorkQueues
 {
     private const int WorkerCount = 2;
 
-    private static readonly ConcurrentQueue<RoomMovement> OutboundRooms = new();
+    private static readonly ConcurrentQueue<(RoomMovement Room, PendingEdgeCommit[] Frame)> OutboundRooms = new();
     private static readonly ConcurrentQueue<RoomMovement> EventRooms = new();
     private static readonly ConcurrentDictionary<uint, ConcurrentQueue<TileEventItem>> RoomEvents = new();
 
@@ -99,11 +99,11 @@ public static class MovementWorkQueues
     /// Called by the scheduler under the room lock after sealing a frame.
     /// Enqueue only - the scheduler never composes or sends.
     /// </summary>
-    public static void EnqueueOutbound(RoomMovement room)
+    public static void EnqueueOutbound(RoomMovement room, PendingEdgeCommit[] frame)
     {
-        if (room.Closed)
+        if (room.Closed || frame == null || frame.Length == 0)
             return;
-        OutboundRooms.Enqueue(room);
+        OutboundRooms.Enqueue((room, frame));
         OutboundWake.Set();
     }
 
@@ -114,17 +114,22 @@ public static class MovementWorkQueues
             OutboundWake.Wait(50);
             OutboundWake.Reset();
 
-            while (OutboundRooms.TryDequeue(out var room))
+            while (OutboundRooms.TryDequeue(out var item))
             {
+                var room = item.Room;
                 if (room.Closed)
                     continue;
                 try
                 {
-                    // Frame CONTENT is wired at cutover: the UserUpdate "mv"
-                    // entry followed by its 4110 record, composed ONCE per frame
-                    // and sent to each recipient. While V2 is inactive there is
-                    // nothing to send, so this only exercises the hand-off and
-                    // proves the scheduler never touches a socket itself.
+                    // Apply the frame to RoomUser and broadcast. This runs under
+                    // RoomUserManager's _cycleLock - the SAME lock V1 uses to
+                    // serialise Statusses/UpdateNeeded against the broadcast - so
+                    // there is exactly one writer per lock and no torn Dictionary.
+                    //
+                    // Packet 4110 is NOT emitted here. For the first beta test V2
+                    // owns route and timing while the existing UserUpdateComposer
+                    // carries the result, so a stock client renders it natively.
+                    room.Room.GetRoomUserManager()?.ApplyMovementV2Frame(item.Frame);
                     Interlocked.Increment(ref _framesHandedOff);
                 }
                 catch (Exception e)

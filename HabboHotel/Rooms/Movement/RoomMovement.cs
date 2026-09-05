@@ -50,6 +50,19 @@ public sealed class RoomMovement : IDueHeapNode
     public long NextFlushTick;
     public long NextWatchdogTick;
 
+    /// <summary>
+    /// Edge commits sealed into the current frame, waiting for the Q1 worker to
+    /// apply them to RoomUser and broadcast.
+    ///
+    /// The scheduler NEVER writes RoomUser itself. V1 serialises every
+    /// Statusses/UpdateNeeded write against SerializeStatusUpdates using
+    /// RoomUserManager's _cycleLock; a second thread writing those same fields
+    /// under a different lock would race a plain Dictionary. Staging here and
+    /// applying under _cycleLock on the worker keeps one writer per lock and
+    /// keeps I-5 intact (no socket work on the scheduler).
+    /// </summary>
+    public readonly List<PendingEdgeCommit> Staged = new();
+
     /// <summary>Set by Signal(); cleared when the scheduler picks the room up.</summary>
     private int _signalPending;
 

@@ -276,7 +276,16 @@ public sealed class MovementScheduler
                 room.HasStagedWork = false;
                 room.HasImmediateWork = false;
                 room.NextFlushTick = now + MovementSettings.FlushIntervalMs;
-                MovementWorkQueues.EnqueueOutbound(room);
+
+                // Hand the frame off by VALUE and clear staging, so the worker
+                // can apply it without holding the movement lock and the
+                // scheduler can keep beating meanwhile.
+                if (room.Staged.Count > 0)
+                {
+                    var frame = room.Staged.ToArray();
+                    room.Staged.Clear();
+                    MovementWorkQueues.EnqueueOutbound(room, frame);
+                }
             }
         }
     }

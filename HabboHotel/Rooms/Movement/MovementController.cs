@@ -297,6 +297,12 @@ public static class MovementController
             room.HasImmediateWork = true;
         if (w.EdgeIndex > w.EmittedThroughEdge)
             w.EmittedThroughEdge = w.EdgeIndex;
+
+        // Snapshot the RoomUser effect. Applied by the Q1 worker under
+        // _cycleLock - never written from this thread (see RoomMovement.Staged).
+        room.Staged.Add(new PendingEdgeCommit(
+            w.VirtualId, w.Tile, w.TileZ, w.EdgeTo, w.EdgeToZ, w.Facing,
+            w.Mode == MovementMode.Moving));
     }
 
     private static void StageCorrection(RoomMovement room, MovementState w, int fromEdgeIndex)
