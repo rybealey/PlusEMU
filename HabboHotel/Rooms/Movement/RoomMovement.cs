@@ -100,11 +100,41 @@ public sealed class RoomMovement : IDueHeapNode
         Walkers.Clear();
         HasStagedWork = false;
         HasImmediateWork = false;
+        Volatile.Write(ref _nextDueSnapshot, long.MaxValue);
+    }
+
+    /// <summary>
+    /// Last value <see cref="RefreshNextDue"/> published, readable WITHOUT the
+    /// movement lock.
+    ///
+    /// The scheduler re-queues a room from this instead of recomputing it.
+    /// Recomputing there read <see cref="Walkers"/> - a heap explicitly owned by
+    /// MovementLock - from the scheduler thread while a packet thread sifted it
+    /// under that lock inside RequestMove. PeekDue is `Count > 0 ? _items[0]`,
+    /// two non-atomic reads: a Count from before a Remove with an _items[0] from
+    /// after it dereferences null. That throw landed outside the per-room try in
+    /// ProcessRoomIsolated and terminated the hotel's only movement thread.
+    /// </summary>
+    private long _nextDueSnapshot;
+
+    public long NextDueSnapshot => Volatile.Read(ref _nextDueSnapshot);
+
+    /// <summary>
+    /// Recompute and publish the next due tick. CALLER MUST HOLD
+    /// <see cref="MovementLock"/> - it reads the walker heap.
+    /// </summary>
+    public long RefreshNextDue()
+    {
+        var due = ComputeNextDue();
+        Volatile.Write(ref _nextDueSnapshot, due);
+        return due;
     }
 
     /// <summary>
     /// Earliest tick at which this room needs the scheduler again, or
     /// long.MaxValue when it needs nothing.
+    ///
+    /// CALLER MUST HOLD <see cref="MovementLock"/>.
     ///
     /// The Staging term matters: without it, the last walker's deferred
     /// walk-end frame is stranded and the orphan watchdog stops running.
@@ -122,5 +152,6 @@ public sealed class RoomMovement : IDueHeapNode
         return due;
     }
 
+    /// <summary>Caller must hold <see cref="MovementLock"/>.</summary>
     public bool HasWork => !Closed && ComputeNextDue() != long.MaxValue;
 }

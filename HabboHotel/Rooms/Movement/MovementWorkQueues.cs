@@ -68,9 +68,36 @@ public static class MovementWorkQueues
     private static readonly List<Thread> Workers = new();
     private static volatile bool _running;
     private static long _framesHandedOff;
+    private static long _lastOutboundLoopMs;
+    private static long _lastEventLoopMs;
 
     /// <summary>Frames handed from the scheduler to Q1. Health metric only.</summary>
     public static long FramesHandedOff => Interlocked.Read(ref _framesHandedOff);
+
+    /// <summary>Frames sealed but not yet applied. Persistently &gt; 0 = Q1 is behind.</summary>
+    public static int OutboundDepth => OutboundRooms.Count;
+
+    /// <summary>ms since Q1 last completed a pass. Huge = the worker is wedged on _cycleLock.</summary>
+    public static long OutboundAgeMs => SystemMovementClock.Instance.NowMs - Interlocked.Read(ref _lastOutboundLoopMs);
+
+    /// <summary>ms since Q2 last completed a pass.</summary>
+    public static long EventAgeMs => SystemMovementClock.Instance.NowMs - Interlocked.Read(ref _lastEventLoopMs);
+
+    /// <summary>Both queue threads alive? A dead Q1 freezes every avatar in the hotel.</summary>
+    public static bool WorkersAlive
+    {
+        get
+        {
+            if (Workers.Count == 0)
+                return false;
+            foreach (var worker in Workers)
+            {
+                if (!worker.IsAlive)
+                    return false;
+            }
+            return true;
+        }
+    }
 
     public static void Start()
     {
@@ -126,33 +153,51 @@ public static class MovementWorkQueues
     {
         while (_running)
         {
-            OutboundWake.Wait(50);
-            OutboundWake.Reset();
-
-            while (OutboundRooms.TryDequeue(out var item))
+            try
             {
-                var room = item.Room;
-                if (room.Closed)
-                    continue;
-                try
-                {
-                    // Apply the frame to RoomUser and broadcast. This runs under
-                    // RoomUserManager's _cycleLock - the SAME lock V1 uses to
-                    // serialise Statusses/UpdateNeeded against the broadcast - so
-                    // there is exactly one writer per lock and no torn Dictionary.
-                    //
-                    // Packet 4110 is NOT emitted here. For the first beta test V2
-                    // owns route and timing while the existing UserUpdateComposer
-                    // carries the result, so a stock client renders it natively.
-                    room.Room.GetRoomUserManager()?.ApplyMovementFrame(item.Frame, item.ServerNowMs);
-                    Interlocked.Increment(ref _framesHandedOff);
-                }
-                catch (Exception e)
-                {
-                    ExceptionLogger.LogException(e);
-                }
+                OutboundPass();
+            }
+            catch (Exception e)
+            {
+                // Same rule as the scheduler: this thread is the hotel's only
+                // path from a sealed frame to the wire, so it must not be
+                // possible for it to exit.
+                ExceptionLogger.LogCriticalException(e);
+                Thread.Sleep(1);
             }
         }
+    }
+
+    private static void OutboundPass()
+    {
+        OutboundWake.Wait(50);
+        OutboundWake.Reset();
+
+        while (OutboundRooms.TryDequeue(out var item))
+        {
+            var room = item.Room;
+            if (room.Closed)
+                continue;
+            try
+            {
+                // Apply the frame to RoomUser and broadcast. This runs under
+                // RoomUserManager's _cycleLock - the SAME lock V1 used to
+                // serialise Statusses/UpdateNeeded against the broadcast - so
+                // there is exactly one writer per lock and no torn Dictionary.
+                //
+                // ApplyMovementFrame emits BOTH halves of the contract, in order:
+                // the UserUpdate carrying "mv" first, then this frame's 4110
+                // records with the authoritative timing the renderer needs.
+                room.Room.GetRoomUserManager()?.ApplyMovementFrame(item.Frame, item.ServerNowMs);
+                Interlocked.Increment(ref _framesHandedOff);
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+            }
+        }
+
+        Interlocked.Exchange(ref _lastOutboundLoopMs, SystemMovementClock.Instance.NowMs);
     }
 
     // ---- Q2: room / tile events ------------------------------------------
@@ -175,20 +220,35 @@ public static class MovementWorkQueues
     {
         while (_running)
         {
-            EventWake.Wait(50);
-            EventWake.Reset();
-
-            while (EventRooms.TryDequeue(out var room))
+            try
             {
-                if (room.Closed)
-                    continue;
-                if (!RoomEvents.TryGetValue(room.RoomId, out var queue))
-                    continue;
-
-                while (queue.TryDequeue(out var item))
-                    ProcessTileEvent(item);
+                EventPass();
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogCriticalException(e);
+                Thread.Sleep(1);
             }
         }
+    }
+
+    private static void EventPass()
+    {
+        EventWake.Wait(50);
+        EventWake.Reset();
+
+        while (EventRooms.TryDequeue(out var room))
+        {
+            if (room.Closed)
+                continue;
+            if (!RoomEvents.TryGetValue(room.RoomId, out var queue))
+                continue;
+
+            while (queue.TryDequeue(out var item))
+                ProcessTileEvent(item);
+        }
+
+        Interlocked.Exchange(ref _lastEventLoopMs, SystemMovementClock.Instance.NowMs);
     }
 
     /// <summary>

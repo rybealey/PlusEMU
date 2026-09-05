@@ -124,4 +124,88 @@ public static class MovementRegistry
         $"schedulerRunning={MovementScheduler.Instance.IsRunning} " +
         $"framesHandedOff={MovementWorkQueues.FramesHandedOff} " +
         $"{MovementCounters.StageSnapshot()} {MovementCounters.Snapshot()}";
+
+    // ---- live diagnostics -------------------------------------------------
+    // The emulator log is not reachable from the dev machine, so these exist to
+    // put the answer where it CAN be read: in a whisper, in game, at the moment
+    // an avatar is frozen. Read-only; nothing here mutates movement state.
+
+    /// <summary>
+    /// The three threads movement depends on, and whether each is alive and
+    /// beating. This is the first line to read during a freeze: it separates
+    /// "the beat stopped" from "the beat is fine and the wire stopped".
+    /// </summary>
+    public static string Health()
+    {
+        var scheduler = MovementScheduler.Instance;
+        var closed = 0;
+        foreach (var room in Rooms.Values)
+        {
+            if (room.Closed)
+                closed++;
+        }
+
+        return "[MV2/health] " +
+               $"sched(alive={scheduler.IsRunning} loopAge={scheduler.LoopAgeMs}ms " +
+               $"faults={MovementCounters.SchedulerFaults}) " +
+               $"queues(alive={MovementWorkQueues.WorkersAlive} " +
+               $"q1Age={MovementWorkQueues.OutboundAgeMs}ms q1Depth={MovementWorkQueues.OutboundDepth} " +
+               $"q2Age={MovementWorkQueues.EventAgeMs}ms " +
+               $"frames={MovementWorkQueues.FramesHandedOff}) " +
+               $"rooms={Rooms.Count} closedRooms={closed}";
+    }
+
+    /// <summary>Type and site of the last fault that escaped a scheduler beat.</summary>
+    public static string LastFault() =>
+        $"[MV2/lastFault] {MovementCounters.LastSchedulerFault}";
+
+    /// <summary>
+    /// One room's scheduling state plus every unit V2 knows about in it.
+    ///
+    /// dueIn is the decisive per-walker number: a Moving walker whose dueIn has
+    /// gone far negative is one the scheduler has stopped draining, and
+    /// queued=False on a Moving walker is the orphan the watchdog exists to fix.
+    /// </summary>
+    public static List<string> DescribeRoom(uint roomId)
+    {
+        var lines = new List<string>();
+        if (!Rooms.TryGetValue(roomId, out var room) || room == null)
+        {
+            lines.Add($"[MV2/room {roomId}] NOT ATTACHED - no movement state for this room.");
+            return lines;
+        }
+
+        var now = MovementScheduler.Instance.Clock.NowMs;
+
+        if (room.Closed)
+        {
+            // A closed room is permanently dead: Attach returns null, Owns is
+            // false, and every click in it is silently dropped.
+            lines.Add($"[MV2/room {roomId}] CLOSED - this room will never move again until it reloads.");
+            return lines;
+        }
+
+        lock (room.MovementLock)
+        {
+            lines.Add($"[MV2/room {roomId}] units={room.States.Count} queued={room.Walkers.Count} " +
+                      $"staged={room.Staged.Count} hasStaged={room.HasStagedWork} hasImmediate={room.HasImmediateWork} " +
+                      $"nextDueIn={room.ComputeNextDue() - now}ms snapshotIn={room.NextDueSnapshot - now}ms " +
+                      $"flushIn={room.NextFlushTick - now}ms watchdogIn={room.NextWatchdogTick - now}ms " +
+                      $"frame={room.FrameSequence}");
+
+            foreach (var walker in room.States.Values)
+            {
+                lines.Add($"[MV2/unit {walker.VirtualId}] mode={walker.Mode} " +
+                          $"session={walker.WalkSessionId} rev={walker.RouteRevision} edge={walker.EdgeIndex} " +
+                          $"emittedThrough={walker.EmittedThroughEdge} " +
+                          $"queued={walker.Queued} inHeap={room.Walkers.Contains(walker)} " +
+                          $"dueIn={(walker.Queued ? walker.DueTick - now : 0)}ms " +
+                          $"elapsing={walker.ElapsingEdgeIndex(now)} " +
+                          $"tile={walker.Tile.X},{walker.Tile.Y} -> {walker.EdgeTo.X},{walker.EdgeTo.Y} " +
+                          $"target={walker.Target.X},{walker.Target.Y} routeLeft={walker.Route.Length - walker.Route.Cursor}");
+            }
+        }
+
+        return lines;
+    }
 }

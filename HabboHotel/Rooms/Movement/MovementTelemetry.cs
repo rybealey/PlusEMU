@@ -83,6 +83,43 @@ public static class MovementCounters
     private static long _roomProcessed;
     private static long _drainedWalkers;
 
+    // The scheduler thread's own faults, as distinct from a room's. Before the
+    // per-iteration isolation these did not exist as a category: an exception
+    // outside the per-room try simply ended the thread, so the counter that
+    // would have named the freeze was never incremented and roomFaults - the
+    // only fault counter there was - stayed convincingly at zero.
+    private static long _schedulerFaults;
+    private static string _lastSchedulerFault = "none";
+    private static long _lastSchedulerFaultAtMs;
+
+    public static long SchedulerFaults => Interlocked.Read(ref _schedulerFaults);
+    public static string LastSchedulerFault => Volatile.Read(ref _lastSchedulerFault);
+    public static long LastSchedulerFaultAtMs => Interlocked.Read(ref _lastSchedulerFaultAtMs);
+
+    /// <summary>
+    /// Record a fault that escaped one scheduler beat. Keeps the type and the
+    /// first frame only: this is read over a whisper, not a log file.
+    /// </summary>
+    public static void SchedulerFault(Exception e)
+    {
+        Interlocked.Increment(ref _schedulerFaults);
+        Interlocked.Exchange(ref _lastSchedulerFaultAtMs, SystemMovementClock.Instance.NowMs);
+        try
+        {
+            var trace = e.StackTrace ?? string.Empty;
+            var cut = trace.IndexOf('\n');
+            var frame = (cut >= 0 ? trace.Substring(0, cut) : trace).Trim();
+            if (frame.Length > 160)
+                frame = frame.Substring(0, 160);
+            Volatile.Write(ref _lastSchedulerFault, $"{e.GetType().Name}: {e.Message} @ {frame}");
+        }
+        catch
+        {
+            Volatile.Write(ref _lastSchedulerFault, e.GetType().Name);
+        }
+        Plus.Core.ExceptionLogger.LogCriticalException(e);
+    }
+
     public static void WalkStart() => Interlocked.Increment(ref _walkStarts);
     public static void Redirect() => Interlocked.Increment(ref _redirects);
     public static void Advance() => Interlocked.Increment(ref _advances);
@@ -130,6 +167,7 @@ public static class MovementCounters
         $"maxBeatLatenessMs={Interlocked.Read(ref _maxBeatLatenessMs)} " +
         $"barrierWaits={Interlocked.Read(ref _barrierWaits)} " +
         $"roomFaults={Interlocked.Read(ref _roomFaults)} " +
+        $"schedulerFaults={Interlocked.Read(ref _schedulerFaults)} " +
         $"pathfind={Interlocked.Read(ref _pathfindCalls)} " +
         $"partial={Interlocked.Read(ref _pathfindPartial)} " +
         $"failed={Interlocked.Read(ref _pathfindFailed)}";

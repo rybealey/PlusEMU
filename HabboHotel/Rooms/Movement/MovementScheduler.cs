@@ -39,6 +39,9 @@ public sealed class MovementScheduler
     private Thread? _thread;
     private volatile bool _running;
 
+    /// <summary>Movement-clock tick of the last completed loop iteration.</summary>
+    private long _lastLoopMs;
+
     public IMovementClock Clock { get; private set; } = SystemMovementClock.Instance;
 
     private MovementScheduler() { }
@@ -46,7 +49,19 @@ public sealed class MovementScheduler
     /// <summary>Test seam: swap in a ManualMovementClock before Start().</summary>
     public void UseClock(IMovementClock clock) => Clock = clock;
 
-    public bool IsRunning => _running;
+    /// <summary>
+    /// TRUE ONLY IF THE THREAD IS ACTUALLY ALIVE.
+    ///
+    /// This used to return the _running flag alone, which is set once at Start()
+    /// and never cleared when the loop dies. A scheduler that had thrown its way
+    /// out of Loop() therefore still reported "running" while no avatar in the
+    /// hotel could move - the exact reading that made the beta freeze look like
+    /// a client bug. Liveness is now the thread's, not a flag's.
+    /// </summary>
+    public bool IsRunning => _running && _thread is { IsAlive: true };
+
+    /// <summary>Age in ms of the last completed loop iteration. Huge = wedged.</summary>
+    public long LoopAgeMs => Clock.NowMs - Volatile.Read(ref _lastLoopMs);
 
     public void Start()
     {
@@ -77,11 +92,22 @@ public sealed class MovementScheduler
 
     public void RegisterRoom(RoomMovement room)
     {
+        // ComputeNextDue reads the walker heap, which is owned by MovementLock.
+        // Take that lock FIRST and separately: holding _roomsLock while waiting
+        // for a packet thread's A* to finish would serialise every other room
+        // behind it. Order is _roomsLock -> MovementLock nowhere in this class.
+        long due;
+        lock (room.MovementLock)
+        {
+            if (room.Closed)
+                return;
+            due = room.RefreshNextDue();
+        }
+
         lock (_roomsLock)
         {
             if (room.Closed)
                 return;
-            var due = room.ComputeNextDue();
             if (due != long.MaxValue)
                 _rooms.InsertOrUpdate(room, due);
         }
@@ -118,6 +144,21 @@ public sealed class MovementScheduler
 
     // ---- main loop --------------------------------------------------------
 
+    /// <summary>
+    /// THE HOTEL-WIDE MOVEMENT BEAT. It must be impossible for this thread to
+    /// exit while _running is set.
+    ///
+    /// It previously had ONE try/catch wrapped around the whole `while`, so a
+    /// single escaped exception - from anywhere outside the per-room try - ended
+    /// the thread permanently. There is no supervisor and no restart path, so
+    /// that is a hotel-wide, unrecoverable movement death: every avatar in every
+    /// room freezes exactly where it stands, further clicks stage edges that are
+    /// never sealed, roomFaults stays 0 because the fault was never per-room,
+    /// and IsRunning still answered "true". That is the beta freeze.
+    ///
+    /// The isolation is now PER ITERATION. A fault costs one beat and is counted;
+    /// it can never cost the hotel its movement thread.
+    /// </summary>
     private void Loop()
     {
         MovementSchedulerGuard.MarkCurrentThreadAsScheduler();
@@ -125,49 +166,19 @@ public sealed class MovementScheduler
         {
             while (_running)
             {
-                var now = Clock.NowMs;
-                long nextDue;
-                lock (_roomsLock)
-                    nextDue = _rooms.PeekDue;
-
-                var waitMs = nextDue == long.MaxValue
-                    ? MovementSettings.MaxSleepMs
-                    : (int)Math.Clamp(nextDue - now, MovementSettings.MinSleepMs, MovementSettings.MaxSleepMs);
-
-                // A Signal cuts this short; MaxSleepMs is only the idle ceiling.
-                _wake.Wait(waitMs);
-                _wake.Reset();
-                if (!_running)
-                    break;
-
-                now = Clock.NowMs;
-
-                // 1. SIGNALLED ROOMS FIRST - this is the latency path.
-                while (_signalled.TryDequeue(out var signalledRoom))
+                try
                 {
-                    signalledRoom.ClearSignalPending();
-                    ProcessRoomIsolated(signalledRoom, now);
+                    LoopOnce();
                 }
-
-                // 2. TIME-DRIVEN ROOMS.
-                while (true)
+                catch (Exception e)
                 {
-                    RoomMovement? room;
-                    lock (_roomsLock)
-                    {
-                        if (_rooms.Count == 0 || _rooms.PeekDue > now + MovementSettings.TickSlackMs)
-                            break;
-                        room = _rooms.Pop();
-                    }
-                    if (room == null)
-                        break;
-                    ProcessRoomIsolated(room, now);
+                    // Never rethrow: surviving is the entire point.
+                    MovementCounters.SchedulerFault(e);
+                    // A pathological throw before the wait would otherwise spin
+                    // this AboveNormal thread against both cores.
+                    Thread.Sleep(1);
                 }
             }
-        }
-        catch (Exception e)
-        {
-            ExceptionLogger.LogCriticalException(e);
         }
         finally
         {
@@ -175,10 +186,69 @@ public sealed class MovementScheduler
         }
     }
 
+    /// <summary>One beat. Anything it throws costs this beat and nothing more.</summary>
+    private void LoopOnce()
+    {
+        var now = Clock.NowMs;
+        long nextDue;
+        lock (_roomsLock)
+            nextDue = _rooms.PeekDue;
+
+        var waitMs = nextDue == long.MaxValue
+            ? MovementSettings.MaxSleepMs
+            : (int)Math.Clamp(nextDue - now, MovementSettings.MinSleepMs, MovementSettings.MaxSleepMs);
+
+        // A Signal cuts this short; MaxSleepMs is only the idle ceiling.
+        _wake.Wait(waitMs);
+        _wake.Reset();
+        if (!_running)
+            return;
+
+        now = Clock.NowMs;
+
+        // 1. SIGNALLED ROOMS FIRST - this is the latency path.
+        while (_signalled.TryDequeue(out var signalledRoom))
+        {
+            signalledRoom.ClearSignalPending();
+            ProcessRoomIsolated(signalledRoom, now);
+        }
+
+        // 2. TIME-DRIVEN ROOMS.
+        while (true)
+        {
+            RoomMovement? room;
+            lock (_roomsLock)
+            {
+                if (_rooms.Count == 0 || _rooms.PeekDue > now + MovementSettings.TickSlackMs)
+                    break;
+                room = _rooms.Pop();
+            }
+            if (room == null)
+                break;
+            ProcessRoomIsolated(room, now);
+        }
+
+        // The heartbeat the diagnostics read. A stalled value means the beat is
+        // wedged on something; a fresh one with frozen avatars means the fault
+        // is downstream of the scheduler.
+        Volatile.Write(ref _lastLoopMs, Clock.NowMs);
+    }
+
     /// <summary>
     /// Per-room exception isolation (A7). One bad or disposed room must never
-    /// terminate the hotel-wide thread: it is closed, unregistered and logged,
-    /// and every other room keeps beating.
+    /// terminate the hotel-wide thread, and every other room keeps beating.
+    ///
+    /// A FAULT IS NOT AUTOMATICALLY A DEATH SENTENCE. This used to Close() the
+    /// room on the first exception of any kind, which is right for a room whose
+    /// Gamemap has been disposed and catastrophic for one that merely took a
+    /// transient throw: a closed room is permanent (Attach returns null, Owns is
+    /// false, RequestMove drops every click), so a single unlucky beat froze
+    /// every avatar in that room until it reloaded.
+    ///
+    /// The room is retired ONLY when it is genuinely unusable - its map is gone.
+    /// Otherwise the fault costs one beat, and a walker left out of the heap by
+    /// the throw is re-queued by the orphan watchdog within a second, which is
+    /// exactly the case I-12 put it there for.
     /// </summary>
     private void ProcessRoomIsolated(RoomMovement room, long now)
     {
@@ -196,16 +266,33 @@ public sealed class MovementScheduler
         catch (Exception e)
         {
             MovementCounters.RoomFault();
+            ExceptionLogger.LogException(e);
+
+            var unusable = room.Room?.GetGameMap() == null;
+            if (unusable)
+            {
+                try
+                {
+                    lock (room.MovementLock)
+                        room.Close();
+                }
+                catch { /* teardown must not throw twice */ }
+                lock (_roomsLock)
+                    _rooms.Remove(room);
+                return;
+            }
+
+            // Still usable. Re-queue it on the watchdog so RecoverOrphans runs
+            // and picks up any walker the throw left unscheduled.
             try
             {
                 lock (room.MovementLock)
-                    room.Close();
+                {
+                    room.NextWatchdogTick = now;
+                    room.RefreshNextDue();
+                }
             }
-            catch { /* teardown must not throw twice */ }
-            lock (_roomsLock)
-                _rooms.Remove(room);
-            ExceptionLogger.LogException(e);
-            return;
+            catch { /* fall through to the normal re-queue below */ }
         }
 
         lock (_roomsLock)
@@ -216,7 +303,14 @@ public sealed class MovementScheduler
             }
             else
             {
-                var due = room.ComputeNextDue();
+                // The SNAPSHOT taken inside ProcessRoom while MovementLock was
+                // held - never a fresh read of the walker heap from here. That
+                // read raced every click: RequestMove sifts the heap under
+                // MovementLock on a packet thread, so PeekDue could see Count
+                // from before a Remove and _items[0] from after it, and
+                // dereference null. The throw landed OUTSIDE the per-room try
+                // above and killed the scheduler thread outright.
+                var due = room.NextDueSnapshot;
                 if (due == long.MaxValue)
                     _rooms.Remove(room);
                 else
@@ -305,6 +399,11 @@ public sealed class MovementScheduler
                     MovementWorkQueues.EnqueueOutbound(room, frame, now);
                 }
             }
+
+            // D. PUBLISH THE NEXT DUE TICK while the movement lock is still
+            //    held. ProcessRoomIsolated re-queues the room from this value,
+            //    so the walker heap is only ever read by its owner.
+            room.RefreshNextDue();
         }
     }
 }

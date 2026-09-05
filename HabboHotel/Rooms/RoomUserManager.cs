@@ -654,32 +654,43 @@ public class RoomUserManager
         return pets;
     }
 
+    /// <summary>
+    /// Broadcast every user whose status changed since the last pass.
+    ///
+    /// TAKES _cycleLock ITSELF, and must. It reads user.Statusses - a plain
+    /// Dictionary - and clears UpdateNeeded, and since the V2 cutover the Q1
+    /// outbound worker writes both under _cycleLock from a different thread on
+    /// every movement frame. Room.ProcessRoom calls this from the room tick with
+    /// no lock of its own, so before this the tick could enumerate Statusses
+    /// while Q1 inserted "mv" into it. The lock is reentrant, so the callers
+    /// that already hold it (ApplyMovementFrame, ApplyRpKnockout, OnCycle) are
+    /// unaffected.
+    /// </summary>
     public void SerializeStatusUpdates()
     {
-        var users = new List<RoomUser>();
-        var roomUsers = GetUserList();
-        if (roomUsers == null)
-            return;
-        foreach (var user in roomUsers.ToList())
+        lock (_cycleLock)
         {
-            if (user == null || !user.UpdateNeeded || users.Contains(user))
-                continue;
-            user.UpdateNeeded = false;
-            users.Add(user);
-        }
-        if (users.Count > 0)
-        {
-            _room.SendPacket(new UserUpdateComposer(users));
-
-            // pixelrp movement authority: follow each freshly emitted step's
-            // "mv" status with its authoritative cycle timing. Seq-gated so a
-            // non-step status refresh never re-sends stale timing.
-            foreach (var user in users)
+            var users = new List<RoomUser>();
+            var roomUsers = GetUserList();
+            if (roomUsers == null)
+                return;
+            foreach (var user in roomUsers.ToList())
             {
-                if (user.IsPet || !user.SetStep || !user.IsWalking) continue;
-                if (user.MovementSeq == user.MovementSeqSent) continue;
-                user.MovementSeqSent = user.MovementSeq;
-                _room.SendPacket(new RpMovementCycleComposer(user));
+                if (user == null || !user.UpdateNeeded || users.Contains(user))
+                    continue;
+                user.UpdateNeeded = false;
+                users.Add(user);
+            }
+            if (users.Count > 0)
+            {
+                _room.SendPacket(new UserUpdateComposer(users));
+
+                // The V1 follow-up here sent RpMovementCycleComposer (3955) for
+                // freshly stepped walkers. It is GONE: 3955 is retired, the
+                // client no longer registers it, and the timing it carried is
+                // now in the 4110 record ApplyMovementFrame sends immediately
+                // after this broadcast. Its gate (user.SetStep) had no writer
+                // left either, so it was emitting nothing.
             }
         }
     }
