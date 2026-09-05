@@ -766,7 +766,15 @@ public class RoomUserManager
 
             // ... then the authoritative timing for each edge.
             foreach (var edge in frame)
+            {
                 _room.SendPacket(new RpMovementV2Composer(edge, serverNowMs));
+
+                // Diagnostic only, and off unless :movementtrace named this
+                // unit. Reported HERE rather than at stage time so what it
+                // prints is exactly what went on the wire.
+                if (Movement.MovementTrace.Enabled)
+                    Movement.MovementTrace.OnEdgeEmitted(edge, serverNowMs);
+            }
         }
     }
 
