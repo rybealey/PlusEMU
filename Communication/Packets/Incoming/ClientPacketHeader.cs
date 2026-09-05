@@ -423,6 +423,10 @@ public static class ClientPacketHeader
     public const uint RpMoveNoteEvent = 4007;
     public const uint RpPinNoteEvent = 4008;
     public const uint RpGetWeatherEvent = 4010;
+    public const uint RpGetNewsEvent = 4012;
+    public const uint RpSaveNewsPostEvent = 4013;
+    public const uint RpDeleteNewsPostEvent = 4014;
+    public const uint RpPinNewsPostEvent = 4015;
     public const uint RpUseItemEvent = 3905;
     public const uint RpMoveItemEvent = 43945; //3945
     public const uint RpGetCorpsEvent = 43948; //3948
