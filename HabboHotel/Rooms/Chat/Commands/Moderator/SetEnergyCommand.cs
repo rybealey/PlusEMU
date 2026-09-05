@@ -36,7 +36,7 @@ internal class SetEnergyCommand : ITargetChatCommand
             room.SendPacket(new RpStatsComposer(targetUser.VirtualId, target.RpHealth, target.RpHealthMax, target.RpEnergy, target.RpEnergyMax, (int)Math.Round(target.RpAggression), target.IsRpPassive ? 1 : 0, target.Rank >= 5 ? 1 : 0));
 
         var adminUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
-        adminUser?.OnChat(23, $"*{session.GetHabbo().Username} sets {target.Username}'s energy to {value}*", true);
+        adminUser?.OnChat(23, $"*sets {target.Username}'s energy to {value}*", true);
         return Task.CompletedTask;
     }
 }

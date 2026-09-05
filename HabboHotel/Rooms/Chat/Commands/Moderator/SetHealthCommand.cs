@@ -39,7 +39,7 @@ internal class SetHealthCommand : ITargetChatCommand
         }
 
         var adminUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
-        adminUser?.OnChat(23, $"*{session.GetHabbo().Username} sets {target.Username}'s health to {value}*", true);
+        adminUser?.OnChat(23, $"*sets {target.Username}'s health to {value}*", true);
         return Task.CompletedTask;
     }
 }
