@@ -1,4 +1,5 @@
-﻿using Plus.HabboHotel.Rooms.Movement;
+﻿using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Movement;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 
