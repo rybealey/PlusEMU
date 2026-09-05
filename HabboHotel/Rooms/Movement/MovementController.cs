@@ -56,6 +56,7 @@ public static class MovementController
         w.TileZ = tileZ;
         w.Mode = MovementMode.Moving;
 
+        MovementCounters.WalkStart();
         PlanNextEdge(room, w, map, ctx, nowMs, immediate: true);
         return w.Mode == MovementMode.Moving;
     }
@@ -108,6 +109,7 @@ public static class MovementController
             return false; // keep walking the existing route
 
         // 5/6/7. Route identity advances; the movement clock does not.
+        MovementCounters.Redirect();
         w.RouteRevision++;
         w.Target = target;
         w.LastRepathAtMs = nowMs;
@@ -150,6 +152,7 @@ public static class MovementController
         if (w.Mode != MovementMode.Moving)
             return false;
 
+        MovementCounters.Commit();
         var previous = w.Tile;
         w.Tile = w.EdgeTo;
         w.TileZ = w.EdgeToZ;
@@ -175,6 +178,7 @@ public static class MovementController
             return;
         }
 
+        MovementCounters.Advance();
         var lateMs = nowMs - scheduledTick;
         if (lateMs > MovementSettings.IntervalMs)
             MovementCounters.BeatLate(lateMs);
@@ -205,6 +209,7 @@ public static class MovementController
     {
         if (!w.Route.HasNext)
         {
+            MovementCounters.StopRouteEnd();
             StopWalk(room, w);
             return;
         }
@@ -217,11 +222,13 @@ public static class MovementController
         {
             // Blocked at commit: re-plan from the CURRENT tile (EdgeTo is
             // unusable) and bump the revision. Failure ends the walk cleanly.
+            MovementCounters.Replan();
             var replanned = AStarPathfinder.FindRoute(
                 map, room.Scratch, w.Route, w.Tile, w.Target, ctx,
                 baseIndex: w.EdgeIndex, allowPartial: true);
             if (replanned == PathResult.None || !w.Route.HasNext)
             {
+                MovementCounters.StopBlocked();
                 StopWalk(room, w);
                 return;
             }

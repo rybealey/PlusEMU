@@ -69,6 +69,41 @@ public static class MovementCounters
     private static long _pathfindPartial;
     private static long _pathfindFailed;
 
+    // Stage counters. Added after two beta freezes that could not be located
+    // from the outside: every aggregate looked healthy (no faults, no lateness,
+    // no orphans, frames flowing) while avatars still stopped. These pin down
+    // WHICH stage stops rather than proving the system is "fine" in aggregate.
+    private static long _walkStarts;
+    private static long _redirects;
+    private static long _advances;
+    private static long _commits;
+    private static long _stopsRouteEnd;
+    private static long _stopsBlocked;
+    private static long _replans;
+    private static long _roomProcessed;
+    private static long _drainedWalkers;
+
+    public static void WalkStart() => Interlocked.Increment(ref _walkStarts);
+    public static void Redirect() => Interlocked.Increment(ref _redirects);
+    public static void Advance() => Interlocked.Increment(ref _advances);
+    public static void Commit() => Interlocked.Increment(ref _commits);
+    public static void StopRouteEnd() => Interlocked.Increment(ref _stopsRouteEnd);
+    public static void StopBlocked() => Interlocked.Increment(ref _stopsBlocked);
+    public static void Replan() => Interlocked.Increment(ref _replans);
+    public static void RoomProcessed() => Interlocked.Increment(ref _roomProcessed);
+    public static void DrainedWalker() => Interlocked.Increment(ref _drainedWalkers);
+
+    public static string StageSnapshot() =>
+        $"starts={Interlocked.Read(ref _walkStarts)} " +
+        $"redirects={Interlocked.Read(ref _redirects)} " +
+        $"roomProcessed={Interlocked.Read(ref _roomProcessed)} " +
+        $"drained={Interlocked.Read(ref _drainedWalkers)} " +
+        $"advances={Interlocked.Read(ref _advances)} " +
+        $"commits={Interlocked.Read(ref _commits)} " +
+        $"replans={Interlocked.Read(ref _replans)} " +
+        $"stopEnd={Interlocked.Read(ref _stopsRouteEnd)} " +
+        $"stopBlocked={Interlocked.Read(ref _stopsBlocked)}";
+
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
     public static void DrainDeferred() => Interlocked.Increment(ref _drainDeferred);
     public static void BarrierWait() => Interlocked.Increment(ref _barrierWaits);

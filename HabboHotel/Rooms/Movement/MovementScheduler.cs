@@ -227,6 +227,7 @@ public sealed class MovementScheduler
 
     private void ProcessRoom(RoomMovement room, long now)
     {
+        MovementCounters.RoomProcessed();
         var started = Stopwatch.GetTimestamp();
         var budgetTicks = (long)(MovementSettings.DrainBudgetUs * (Stopwatch.Frequency / 1_000_000.0));
 
@@ -272,6 +273,7 @@ public sealed class MovementScheduler
                 room.Walkers.Remove(walker);
                 walker.Queued = false;
                 drained++;
+                MovementCounters.DrainedWalker();
 
                 MovementController.AdvanceWalker(room, walker, walker.DueTick, now);
             }

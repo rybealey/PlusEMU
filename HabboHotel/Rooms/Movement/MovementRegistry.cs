@@ -122,5 +122,6 @@ public static class MovementRegistry
     public static string Snapshot() =>
         $"[MOVEMENT_V2] rooms={Rooms.Count} " +
         $"schedulerRunning={MovementScheduler.Instance.IsRunning} " +
-        $"framesHandedOff={MovementWorkQueues.FramesHandedOff} {MovementCounters.Snapshot()}";
+        $"framesHandedOff={MovementWorkQueues.FramesHandedOff} " +
+        $"{MovementCounters.StageSnapshot()} {MovementCounters.Snapshot()}";
 }
