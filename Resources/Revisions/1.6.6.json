@@ -630,6 +630,7 @@
     "RpRoomCorpComposer": 3957,
     "RpOpenFloorplanComposer": 3963,
     "DiamondsStoreComposer": 3925,
-    "DiamondsStorePurchaseResultComposer": 3931
+    "DiamondsStorePurchaseResultComposer": 3931,
+    "RpMovementV2Composer": 4110
   }
 }

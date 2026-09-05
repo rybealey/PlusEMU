@@ -361,4 +361,9 @@ public static class ServerPacketHeader
 
     //Dressing booth
     public const uint InClientLinkComposer = 4106;
+
+    // pixelrp Movement V2. 3955 (RpMovementCycleComposer) is RETIRED and
+    // must never be reused - a V1 client would mis-parse a V2 payload sent
+    // there rather than reject it.
+    public const uint RpMovementV2Composer = 4110;
 }
