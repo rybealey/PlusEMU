@@ -6,11 +6,10 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// <summary>
 /// pixelrp Movement V2: the boundary between the existing hotel and V2.
 ///
-/// This is the ONLY place the rest of the emulator touches V2, and it is where
-/// the movement.v2.enabled flag is honoured. While the flag is false no room is
-/// ever attached and no walker is ever enrolled, so V1 keeps every avatar and
-/// beta behaves exactly as before - but the scheduler thread and the queues are
-/// still running and measurable, which is the whole point of this pass.
+/// This is the ONLY place the rest of the emulator touches V2. V2 is always on -
+/// there is no runtime kill switch - so rolling back means reverting the commit
+/// and deploying, which leaves the hotel in one unambiguous state rather than a
+/// mixed one.
 ///
 /// A7 LIFECYCLE ORDER (mandatory, and the reason a hotel-wide scheduler is safe):
 ///   1. acquire MovementLock
@@ -50,12 +49,12 @@ public static class MovementRegistry
     public static bool TryGet(uint roomId, out RoomMovement? room) => Rooms.TryGetValue(roomId, out room);
 
     /// <summary>
-    /// Attach V2 movement to a room. No-op while the flag is false, which is
-    /// what keeps V1 in charge during this pass.
+    /// Attach V2 movement to a room. Called lazily on first user entry, so a
+    /// room with nobody in it never enters the scheduler.
     /// </summary>
     public static RoomMovement? Attach(Room room)
     {
-        if (room == null || !MovementSettings.Enabled)
+        if (room == null)
             return null;
         EnsureStarted();
 
@@ -73,9 +72,8 @@ public static class MovementRegistry
     }
 
     /// <summary>
-    /// A7 teardown. Safe to call unconditionally - including for rooms V2 never
-    /// attached to - so the existing Room.Dispose path can call it without
-    /// caring whether the flag is on.
+    /// A7 teardown. Safe to call unconditionally, including for rooms V2 never
+    /// attached to, so Room.Dispose can call it without checking anything.
     /// </summary>
     public static void Detach(uint roomId)
     {
@@ -122,7 +120,7 @@ public static class MovementRegistry
     }
 
     public static string Snapshot() =>
-        $"[MOVEMENT_V2] enabled={MovementSettings.Enabled} rooms={Rooms.Count} " +
+        $"[MOVEMENT_V2] rooms={Rooms.Count} " +
         $"schedulerRunning={MovementScheduler.Instance.IsRunning} " +
         $"framesHandedOff={MovementWorkQueues.FramesHandedOff} {MovementCounters.Snapshot()}";
 }

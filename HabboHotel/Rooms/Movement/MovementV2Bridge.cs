@@ -5,11 +5,9 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// <summary>
 /// pixelrp Movement V2: the ONLY surface V1 code calls into.
 ///
-/// Every method here returns false / does nothing the instant
-/// <see cref="MovementSettings.Enabled"/> is false, so with the flag off every
-/// V1 call site behaves EXACTLY as before. That is the property that makes it
-/// safe to place these gates in live movement code before cutover: the flag is
-/// checked first, and nothing else is touched.
+/// V2 is always on - there is no runtime toggle. These methods are still the
+/// single choke point, so every V1 call site has exactly one place to consult
+/// about who owns a given avatar.
 ///
 /// Ownership rule: a user is owned by V2 or by V1, never both. When
 /// <see cref="Owns"/> is true, V1 must skip that user entirely (its tick
@@ -20,7 +18,7 @@ namespace Plus.HabboHotel.Rooms.Movement;
 public static class MovementV2Bridge
 {
     /// <summary>
-    /// True when V2 owns this user's movement. Fast false when disabled.
+    /// True when V2 owns this user's movement.
     ///
     /// Bots and pets stay on V1 for the first beta test: making them
     /// authoritative is a later phase, and keeping them on V1 shrinks the blast
@@ -28,8 +26,6 @@ public static class MovementV2Bridge
     /// </summary>
     public static bool Owns(RoomUser? user)
     {
-        if (!MovementSettings.Enabled)
-            return false;
         if (user == null || user.IsBot || user.IsPet)
             return false;
         if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
@@ -38,18 +34,18 @@ public static class MovementV2Bridge
             return movement.States.ContainsKey(user.VirtualId);
     }
 
-    /// <summary>Attach a room to the scheduler. No-op when disabled.</summary>
+    /// <summary>Attach a room to the scheduler.</summary>
     public static void OnRoomLoaded(Room room)
     {
-        if (!MovementSettings.Enabled || room == null)
+        if (room == null)
             return;
         MovementRegistry.Attach(room);
     }
 
-    /// <summary>Enrol a user. No-op when disabled or for bots/pets.</summary>
+    /// <summary>Enrol a user. Bots and pets stay on V1.</summary>
     public static void OnUserEnter(Room room, RoomUser user)
     {
-        if (!MovementSettings.Enabled || room == null || user == null || user.IsBot || user.IsPet)
+        if (room == null || user == null || user.IsBot || user.IsPet)
             return;
 
         var movement = MovementRegistry.Attach(room);

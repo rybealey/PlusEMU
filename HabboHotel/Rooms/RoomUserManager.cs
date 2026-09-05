@@ -324,7 +324,7 @@ public class RoomUserManager
         // point the HUD is listening. See RpStatsResyncTicks in the room cycle.
         user.RpStatsResyncTicks = 6;
         // pixelrp Movement V2: enrol this user with the movement scheduler.
-        // No-op while movement.v2.enabled is off.
+        // Bots and pets stay on V1, so this only enrols human users.
         Movement.MovementV2Bridge.OnUserEnter(_room, user);
         foreach (var bot in _bots.Values.ToList())
         {
@@ -1406,8 +1406,8 @@ public class RoomUserManager
                     // pixelrp Movement V2: a user owned by V2 is skipped entirely
                     // by the V1 tick. Ownership is exclusive - two systems
                     // writing one avatar's position is the V1 defect V2 removes.
-                    // Owns() returns false immediately when movement.v2.enabled
-                    // is off, so with the flag down this is exactly the old path.
+                    // Owns() is false for bots, pets and anyone not enrolled,
+                    // so V1 still drives everything V2 does not own.
                     if (!user.SelfPaced && !Movement.MovementV2Bridge.Owns(user))
                     {
                         var wasStepping = (user.IsWalking && user.SetStep);

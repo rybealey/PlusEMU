@@ -11,19 +11,22 @@
 public static class MovementSettings
 {
     /// <summary>
-    /// server_settings key: <c>movement.v2.enabled</c>.
+    /// V2 is ALWAYS ON. There is no runtime kill switch by design.
     ///
-    /// CAUTION - SettingsManager.TryGetValue returns the STRING "0" for a
-    /// MISSING key (Core/Settings/SettingsManager.cs:26). So "0" cannot be
-    /// distinguished from "absent", and the ONLY safe encoding for a
-    /// default-off flag is "enabled iff the value is exactly 1". Do not invert
-    /// this into a "disabled" key - that is the V1 trap that made
-    /// pathfinder.formation.window.ms unable to express "off".
+    /// It shipped behind `movement.v2.enabled` while the foundation was being
+    /// wired up, but a flag that can be half-on is its own hazard: it makes
+    /// "which system is actually moving this avatar?" a question you have to
+    /// answer before you can debug anything, and it leaves V1 and V2 both
+    /// reachable in the same build.
+    ///
+    /// ROLLING BACK now means reverting the emulator commit and deploying -
+    /// a few minutes, and it puts the hotel in one unambiguous state rather
+    /// than a mixed one.
+    ///
+    /// The legacy server_settings row is simply ignored; updates 69-72 are
+    /// left in place as history and are harmless.
     /// </summary>
-    public const string EnabledKey = "movement.v2.enabled";
-
-    /// <summary>Read live so the flag can be flipped without a restart.</summary>
-    public static bool Enabled => PlusEnvironment.SettingsManager.TryGetValue(EnabledKey) == "1";
+    public const bool Enabled = true;
 
     /// <summary>
     /// THE interval. One validated tile per 500ms, for every walker, always.

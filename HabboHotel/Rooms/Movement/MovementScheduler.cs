@@ -18,8 +18,7 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// a socket, a wired/furni callback, disconnect logic, or any blocking sink -
 /// see MovementSchedulerGuard, which asserts this in DEBUG.
 ///
-/// While MovementSettings.Enabled is false the thread still runs and is
-/// measurable, but no walker is ever enrolled, so V1 keeps every avatar.
+/// V2 is always on; there is no runtime kill switch to reason about.
 /// </summary>
 public sealed class MovementScheduler
 {
