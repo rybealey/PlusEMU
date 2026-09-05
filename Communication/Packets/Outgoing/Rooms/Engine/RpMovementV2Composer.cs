@@ -28,25 +28,31 @@ public class RpMovementV2Composer : IServerPacket
 {
     public const int FormatVersion = 2;
 
-    // flags
-    public const int FlagEdge = 0x0001;
-    public const int FlagWalkEnd = 0x0002;
-    public const int FlagDisplacement = 0x0004;
-    public const int FlagFinalEdge = 0x0020;
-    public const int FlagCorrection = 0x0040;
+    // Flag values live in RpMovementV2Flags, in the movement namespace, so the
+    // scheduler can classify an edge without depending on this layer.
 
     private readonly MovementEdgeRecord _edge;
+    private readonly long _serverNowMs;
 
     public uint MessageId => ServerPacketHeader.RpMovementV2Composer;
 
-    public RpMovementV2Composer(MovementEdgeRecord edge) => _edge = edge;
+    /// <summary>
+    /// serverNow is supplied at SEND time, not stored on the edge: it is a
+    /// property of this transmission, and sampling it when the frame is sealed
+    /// keeps the client's clock-offset estimate honest about real send latency.
+    /// </summary>
+    public RpMovementV2Composer(MovementEdgeRecord edge, long serverNowMs)
+    {
+        _edge = edge;
+        _serverNowMs = serverNowMs;
+    }
 
     public void Compose(IOutgoingPacket packet)
     {
         // serverNow is sampled at compose time so the client's clock-offset
         // estimate reflects real send latency; cycleStart rides as a small
         // signed delta because the monotonic tick does not fit an int.
-        var now = _edge.ServerNowMs;
+        var now = _serverNowMs;
 
         packet.WriteInteger(FormatVersion);          // 0
         packet.WriteInteger(_edge.VirtualId);        // 1

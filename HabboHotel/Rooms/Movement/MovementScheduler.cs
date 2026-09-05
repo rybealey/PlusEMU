@@ -300,7 +300,9 @@ public sealed class MovementScheduler
                 {
                     var frame = room.Staged.ToArray();
                     room.Staged.Clear();
-                    MovementWorkQueues.EnqueueOutbound(room, frame);
+                    // serverNow is sampled HERE, at seal time, so the client's
+                    // clock-offset estimate reflects real send latency.
+                    MovementWorkQueues.EnqueueOutbound(room, frame, now);
                 }
             }
         }

@@ -313,6 +313,14 @@ public static class MovementController
     // wired at cutover. While V2 is inactive these mark the room as having work
     // so the seal/flush path and its cadence can be exercised and measured.
 
+    /// <summary>
+    /// Seal one edge into an immutable wire record.
+    ///
+    /// This REPLACES the old V2 -> V1 bridge, which staged only enough to mirror
+    /// V1's RoomUser fields and then relied on V1's UserUpdate broadcast to
+    /// render. The record now carries the full 4110 contract - identity, absolute
+    /// timing and lookahead - so V2 owns rendering outright.
+    /// </summary>
     private static void StageEdge(RoomMovement room, MovementState w, bool immediate)
     {
         room.HasStagedWork = true;
@@ -321,13 +329,48 @@ public static class MovementController
         if (w.EdgeIndex > w.EmittedThroughEdge)
             w.EmittedThroughEdge = w.EdgeIndex;
 
-        // Snapshot the RoomUser effect. Applied by the Q1 worker under
-        // _cycleLock - never written from this thread (see RoomMovement.Staged).
-        room.Staged.Add(new PendingEdgeCommit(
-            w.VirtualId, w.Tile, w.TileZ, w.EdgeTo, w.EdgeToZ, w.Facing,
-            w.Mode == MovementMode.Moving));
+        var moving = w.Mode == MovementMode.Moving;
+        var flags = moving
+            ? RpMovementV2Flags.Edge
+            : RpMovementV2Flags.WalkEnd;
+        if (moving && !w.Route.HasNext)
+            flags |= RpMovementV2Flags.FinalEdge;
+
+        // Lookahead: the walker's next REAL route tiles. The cursor already sits
+        // past the edge being emitted, so these are genuinely future tiles, not
+        // a re-send of this one. Provisional by nature - a redirect supersedes
+        // them via RouteRevision.
+        var lookahead = System.Array.Empty<LookaheadTile>();
+        var lookCount = 0;
+        if (moving && w.Route.HasNext)
+        {
+            var map = room.Room.GetGameMap();
+            var max = System.Math.Min(MovementSettings.LookaheadMax, w.Route.Length - w.Route.Cursor);
+            if (max > 0 && map != null)
+            {
+                lookahead = new LookaheadTile[max];
+                for (var i = 0; i < max; i++)
+                {
+                    var tile = w.Route[w.Route.Cursor + i];
+                    lookahead[i] = new LookaheadTile(
+                        tile.X, tile.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(tile.X, tile.Y)));
+                }
+                lookCount = max;
+            }
+        }
+
+        room.Staged.Add(new MovementEdgeRecord(
+            w.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
+            MovementSettings.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
+            w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
+            w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
+            w.EdgeToZ, w.Facing, lookahead, lookCount));
     }
 
+    /// <summary>
+    /// A redirect replaced future geometry: re-emit from the first index the new
+    /// route describes. Indexes at or below the elapsing edge are never touched.
+    /// </summary>
     private static void StageCorrection(RoomMovement room, MovementState w, int fromEdgeIndex)
     {
         room.HasStagedWork = true;

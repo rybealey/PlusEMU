@@ -698,72 +698,77 @@ public class RoomUserManager
     }
 
     /// <summary>
-    /// pixelrp Movement V2: apply one sealed movement frame to RoomUser and
-    /// broadcast it. Called by the Q1 outbound worker, NEVER by the movement
-    /// scheduler.
+    /// pixelrp Movement V2: apply one sealed movement frame and emit it.
+    /// Called by the Q1 outbound worker, NEVER by the movement scheduler.
     ///
-    /// Runs under _cycleLock - the same lock V1 uses to serialise
-    /// Statusses/UpdateNeeded writes against SerializeStatusUpdates - so there
-    /// is exactly one writer per lock and the Statusses dictionary is never
-    /// touched from two threads at once.
+    /// Runs under _cycleLock so RoomUser and Statusses have exactly one writer.
     ///
-    /// The commit deliberately mirrors V1's commit (map occupancy, walk-off /
-    /// walk-on furni, UpdateUserStatus) so teleporters, hoppers, wired triggers
-    /// and effect tiles behave identically while V2 owns route and timing. The
-    /// Q2 barrier path in A9 takes these over at cutover; for the first beta
-    /// test, matching V1 exactly is the lower-risk choice.
+    /// WIRE ORDER IS PART OF THE CONTRACT: the UserUpdate carrying "mv" for an
+    /// edge must reach the client BEFORE that edge's 4110 record. "mv" drives
+    /// the walking posture and facing (native Nitro reads it for the animation);
+    /// 4110 carries only the authoritative timing the renderer interpolates on.
+    /// Sending 4110 first would briefly describe timing for a posture the client
+    /// has not been told about yet.
     ///
-    /// No packet 4110 is emitted: the UserUpdateComposer below is what carries
-    /// the movement, so a stock client renders V2 movement natively.
+    /// This is no longer the V1 bridge: 4110 is what actually renders movement,
+    /// and RoomUser is updated because it is SERVER TRUTH that the rest of the
+    /// hotel reads (chat range, furni, wired, occupancy) - not because V1 needs it.
     /// </summary>
-    public void ApplyMovementV2Frame(Movement.PendingEdgeCommit[] frame)
+    public void ApplyMovementFrame(Movement.MovementEdgeRecord[] frame, long serverNowMs)
     {
         if (frame == null || frame.Length == 0)
             return;
         lock (_cycleLock)
         {
-            foreach (var commit in frame)
+            foreach (var edge in frame)
             {
-                var user = GetRoomUserByVirtualId(commit.VirtualId);
+                var user = GetRoomUserByVirtualId(edge.VirtualId);
                 if (user == null || !IsValid(user))
                     continue;
 
-                // 1. Arrival on the committed tile.
-                if (user.X != commit.Tile.X || user.Y != commit.Tile.Y)
+                // 1. Server truth: the avatar has ARRIVED on this edge's from-tile
+                //    (the previous edge's terminal).
+                if (user.X != edge.FromX || user.Y != edge.FromY)
                 {
                     var previous = new Point(user.X, user.Y);
-                    _room.GetGameMap().UpdateUserMovement(previous, commit.Tile, user);
+                    var arrived = new Point(edge.FromX, edge.FromY);
+                    _room.GetGameMap().UpdateUserMovement(previous, arrived, user);
                     foreach (var item in _room.GetGameMap().GetCoordinatedItems(previous).ToList())
                         item.UserWalksOffFurni(user);
 
-                    user.X = commit.Tile.X;
-                    user.Y = commit.Tile.Y;
-                    user.Z = commit.TileZ;
+                    user.X = edge.FromX;
+                    user.Y = edge.FromY;
+                    user.Z = edge.FromZ100 / 100.0;
 
-                    foreach (var item in _room.GetGameMap().GetCoordinatedItems(commit.Tile).ToList())
+                    foreach (var item in _room.GetGameMap().GetCoordinatedItems(arrived).ToList())
                         item.UserWalksOnFurni(user);
 
                     UpdateUserStatus(user, true);
                 }
 
-                // 2. The edge now in flight (or the stop).
-                if (commit.IsMoving)
-                {
-                    user.RotBody = commit.Facing;
-                    user.RotHead = commit.Facing;
-                    user.IsWalking = true;
-                    user.SetStatus("mv",
-                        $"{commit.EdgeTo.X},{commit.EdgeTo.Y},{TextHandling.GetString(commit.EdgeToZ)}");
-                }
-                else
+                // 2. Posture/facing for the edge now in flight, or the stop.
+                if (edge.IsWalkEnd || edge.IsDisplacement)
                 {
                     user.IsWalking = false;
                     user.RemoveStatus("mv");
                 }
+                else
+                {
+                    user.RotBody = edge.Facing;
+                    user.RotHead = edge.Facing;
+                    user.IsWalking = true;
+                    user.SetStatus("mv",
+                        $"{edge.ToX},{edge.ToY},{TextHandling.GetString(edge.ToZ)}");
+                }
                 user.UpdateNeeded = true;
             }
 
+            // UserUpdate ("mv") FIRST ...
             SerializeStatusUpdates();
+
+            // ... then the authoritative timing for each edge.
+            foreach (var edge in frame)
+                _room.SendPacket(new RpMovementV2Composer(edge, serverNowMs));
         }
     }
 

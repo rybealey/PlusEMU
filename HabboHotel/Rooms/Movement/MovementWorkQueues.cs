@@ -58,7 +58,7 @@ public static class MovementWorkQueues
     /// </summary>
     private const int WorkerCount = 1;
 
-    private static readonly ConcurrentQueue<(RoomMovement Room, PendingEdgeCommit[] Frame)> OutboundRooms = new();
+    private static readonly ConcurrentQueue<(RoomMovement Room, MovementEdgeRecord[] Frame, long ServerNowMs)> OutboundRooms = new();
     private static readonly ConcurrentQueue<RoomMovement> EventRooms = new();
     private static readonly ConcurrentDictionary<uint, ConcurrentQueue<TileEventItem>> RoomEvents = new();
 
@@ -114,11 +114,11 @@ public static class MovementWorkQueues
     /// Called by the scheduler under the room lock after sealing a frame.
     /// Enqueue only - the scheduler never composes or sends.
     /// </summary>
-    public static void EnqueueOutbound(RoomMovement room, PendingEdgeCommit[] frame)
+    public static void EnqueueOutbound(RoomMovement room, MovementEdgeRecord[] frame, long serverNowMs)
     {
         if (room.Closed || frame == null || frame.Length == 0)
             return;
-        OutboundRooms.Enqueue((room, frame));
+        OutboundRooms.Enqueue((room, frame, serverNowMs));
         OutboundWake.Set();
     }
 
@@ -144,7 +144,7 @@ public static class MovementWorkQueues
                     // Packet 4110 is NOT emitted here. For the first beta test V2
                     // owns route and timing while the existing UserUpdateComposer
                     // carries the result, so a stock client renders it natively.
-                    room.Room.GetRoomUserManager()?.ApplyMovementV2Frame(item.Frame);
+                    room.Room.GetRoomUserManager()?.ApplyMovementFrame(item.Frame, item.ServerNowMs);
                     Interlocked.Increment(ref _framesHandedOff);
                 }
                 catch (Exception e)

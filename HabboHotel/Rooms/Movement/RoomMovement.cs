@@ -61,7 +61,7 @@ public sealed class RoomMovement : IDueHeapNode
     /// applying under _cycleLock on the worker keeps one writer per lock and
     /// keeps I-5 intact (no socket work on the scheduler).
     /// </summary>
-    public readonly List<PendingEdgeCommit> Staged = new();
+    public readonly List<MovementEdgeRecord> Staged = new();
 
     /// <summary>Set by Signal(); cleared when the scheduler picks the room up.</summary>
     private int _signalPending;

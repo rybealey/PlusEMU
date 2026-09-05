@@ -40,9 +40,6 @@ public readonly struct MovementEdgeRecord
     /// <summary>Absolute movement-clock tick at which this edge starts.</summary>
     public readonly long CycleStartMs;
 
-    /// <summary>Movement-clock tick sampled when the frame was sealed.</summary>
-    public readonly long ServerNowMs;
-
     public readonly int FromX;
     public readonly int FromY;
     public readonly int FromZ100;
@@ -59,12 +56,12 @@ public readonly struct MovementEdgeRecord
     /// <summary>Facing for this edge, for the commit.</summary>
     public readonly byte Facing;
 
-    public bool IsWalkEnd => (Flags & 0x0002) != 0;
-    public bool IsDisplacement => (Flags & 0x0004) != 0;
+    public bool IsWalkEnd => (Flags & RpMovementV2Flags.WalkEnd) != 0;
+    public bool IsDisplacement => (Flags & RpMovementV2Flags.Displacement) != 0;
 
     public MovementEdgeRecord(
         int virtualId, long walkSessionId, int routeRevision, int edgeIndex, int flags,
-        int intervalMs, long cycleStartMs, long serverNowMs,
+        int intervalMs, long cycleStartMs,
         int fromX, int fromY, int fromZ100,
         int toX, int toY, int toZ100, double toZ, byte facing,
         LookaheadTile[] lookahead, int lookaheadCount)
@@ -76,7 +73,6 @@ public readonly struct MovementEdgeRecord
         Flags = flags;
         IntervalMs = intervalMs;
         CycleStartMs = cycleStartMs;
-        ServerNowMs = serverNowMs;
         FromX = fromX;
         FromY = fromY;
         FromZ100 = fromZ100;
