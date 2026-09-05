@@ -36,11 +36,12 @@ internal class PassiveCommand : IChatCommand
     private const int PassiveSeconds = 3600;
 
     /// <summary>
-    /// Yellow bubble, the style a consumed backpack item announces itself with.
-    /// Wrapped in asterisks so the client renders it as an action - bold, with
-    /// the opening marker moved in front of the actor's username.
+    /// Blue action bubble (PushCommand.FightBubble): drinking the smoothie is
+    /// announced like every other action. Wrapped in asterisks so the client
+    /// renders it as one - bold, the opening marker moved in front of the
+    /// actor's username, no colon. Kept in step with RpUseItemEvent.
     /// </summary>
-    private const int ConsumeBubble = 5;
+    private const int ConsumeBubble = 4;
 
     /// <summary>
     /// Ending passive is announced like the other actions: the blue action
