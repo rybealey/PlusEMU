@@ -80,15 +80,20 @@ public static class MovementController
     /// Pick this walk's TimelineOrigin, joining the room's movement phase when
     /// that costs at most <see cref="MovementSettings.MaxStartDelayMs"/>.
     ///
-    /// OPPORTUNISTIC, NEVER MANDATORY. Snapping forward to the next boundary
-    /// unconditionally would cost up to 499ms of input latency on most clicks in
-    /// a busy room, which is the exact cost V2 was built to remove. Beyond the
-    /// ceiling the walk starts on its own timeline and simply does not join:
-    /// visibly imperfect, but never slow.
+    /// With the ceiling at IntervalMs this ALWAYS joins, because the distance to
+    /// the next boundary is 0..499 and therefore never exceeds it. Alignment is
+    /// then guaranteed rather than opportunistic, at a cost of up to 499ms of
+    /// input latency (~250ms average) on any walk begun while someone else is
+    /// already walking. Lowering the ceiling reverts to opportunistic with no
+    /// other change.
     ///
-    /// Snapping BACKWARD is not an option either: edge 0 would already be
-    /// part-elapsed when emitted, so the client would render the avatar
-    /// instantly a fraction of a tile along. Alignment must never move an avatar.
+    /// Snapping BACKWARD is not an option: edge 0 would already be part-elapsed
+    /// when emitted, so the client would render the avatar instantly a fraction
+    /// of a tile along. Alignment must never move an avatar.
+    ///
+    /// The boundary is honoured EXACTLY even when the scheduler runs early or
+    /// late, because edge 0's cycleStart is derived from TimelineOrigin rather
+    /// than from the tick the beat happened to fire on.
     ///
     /// Caller MUST hold MovementLock.
     /// </summary>

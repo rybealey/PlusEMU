@@ -48,14 +48,23 @@ public static class MovementSettings
     public const int TickSlackMs = 2;
 
     /// <summary>
-    /// Ceiling on how long a click may be held back to join the room's movement
-    /// phase. OPPORTUNISTIC BY DESIGN: if the next boundary is further away than
-    /// this, the walk starts immediately on its own timeline and simply does not
-    /// join. Alignment is worth having, but never at the cost of feeling slow -
-    /// V2 exists because V1 charged a full 500ms beat for exactly this kind of
-    /// bookkeeping.
+    /// Ceiling on how long a Standing-&gt;Moving click may be held back to join the
+    /// room's movement phase.
+    ///
+    /// AT <see cref="IntervalMs"/> ALIGNMENT IS GUARANTEED: the distance to the
+    /// next boundary is always 0..499, so it can never exceed the ceiling and a
+    /// real user's walk always joins. That is what makes "every concurrently
+    /// moving real user shares one cycleStart % 500" a property of the design
+    /// rather than a coincidence of timing.
+    ///
+    /// THE COST IS INPUT LATENCY: up to 499ms before the avatar moves, ~250ms on
+    /// average, on every walk started while somebody else is already walking.
+    /// Lowering this makes alignment opportunistic again - walks whose boundary
+    /// is further away start immediately and simply do not join, which trades
+    /// perfect alignment for responsiveness. Nothing else needs to change to
+    /// make that trade; PhaseDecision.Skipped already covers it.
     /// </summary>
-    public const int MaxStartDelayMs = 50;
+    public const int MaxStartDelayMs = IntervalMs;
 
     /// <summary>
     /// Ceiling on rooms processed in one scheduler pass, so the loop always

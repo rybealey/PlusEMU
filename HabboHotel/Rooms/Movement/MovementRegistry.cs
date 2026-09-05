@@ -189,11 +189,24 @@ public static class MovementRegistry
         {
             var interval = MovementSettings.IntervalMs;
             var holders = 0;
+
+            // inPhase IS THE SUCCESS CONDITION, evaluated directly: do all the
+            // real users currently holding the phase share one cycleStart % 500?
+            // Reading it off two unit lines by eye is exactly the kind of manual
+            // comparison that hides an intermittent failure.
+            var inPhase = true;
+            var observed = -1L;
             foreach (var unit in room.States.Values)
             {
-                if (unit.IsRealUser &&
-                    (unit.Mode == MovementMode.Moving || unit.Mode == MovementMode.Pending))
-                    holders++;
+                if (!unit.IsRealUser ||
+                    (unit.Mode != MovementMode.Moving && unit.Mode != MovementMode.Pending))
+                    continue;
+                holders++;
+                var unitPhase = ((unit.TimelineOrigin % interval) + interval) % interval;
+                if (observed < 0)
+                    observed = unitPhase;
+                else if (observed != unitPhase)
+                    inPhase = false;
             }
 
             // phase is the shared remainder every aligned walker's cycleStart
@@ -201,12 +214,14 @@ public static class MovementRegistry
             // next real walker establishes a fresh one.
             lines.Add($"[MV2/phase {roomId}] anchor={room.PhaseAnchor} " +
                       $"phase={((room.PhaseAnchor % interval) + interval) % interval} " +
-                      $"holders={holders} maxStartDelay={MovementSettings.MaxStartDelayMs}ms");
+                      $"holders={holders} inPhase={(holders > 1 ? inPhase.ToString() : "n/a")} " +
+                      $"maxStartDelay={MovementSettings.MaxStartDelayMs}ms");
 
             lines.Add($"[MV2/room {roomId}] units={room.States.Count} queued={room.Walkers.Count} " +
                       $"staged={room.Staged.Count} hasStaged={room.HasStagedWork} hasImmediate={room.HasImmediateWork} " +
                       $"nextDueIn={room.ComputeNextDue() - now}ms snapshotIn={room.NextDueSnapshot - now}ms " +
-                      $"flushIn={room.NextFlushTick - now}ms watchdogIn={room.NextWatchdogTick - now}ms " +
+                      $"flushIn={(room.HasStagedWork ? (room.NextFlushTick - now) + "ms" : "idle")} " +
+                      $"watchdogIn={room.NextWatchdogTick - now}ms " +
                       $"frame={room.FrameSequence}");
 
             foreach (var walker in room.States.Values)
@@ -216,7 +231,7 @@ public static class MovementRegistry
                           $"emittedThrough={walker.EmittedThroughEdge} " +
                           $"queued={walker.Queued} inHeap={room.Walkers.Contains(walker)} " +
                           $"dueIn={(walker.Queued ? walker.DueTick - now : 0)}ms " +
-                          $"elapsing={walker.ElapsingEdgeIndex(now)} " +
+                          $"elapsing={(walker.Mode == MovementMode.Moving || walker.Mode == MovementMode.Pending ? walker.ElapsingEdgeIndex(now).ToString() : "-")} " +
                           $"real={walker.IsRealUser} align={walker.LastPhaseDecision} " +
                           $"startDelay={walker.LastStartDelayMs}ms " +
                           $"cycleStartPhase={((walker.TimelineOrigin % MovementSettings.IntervalMs) + MovementSettings.IntervalMs) % MovementSettings.IntervalMs} " +
