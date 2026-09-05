@@ -31,7 +31,7 @@ internal class RpSaveBirthdayEvent : IPacketEvent
                 "ON DUPLICATE KEY UPDATE `month` = VALUES(`month`), `day` = VALUES(`day`)", new { userId = habbo.Id, month, day });
         }
 
-        BirthdayUtility.SendBirthday(session);
+        BirthdayUtility.SendBirthday(session, habbo.Id);
         return Task.CompletedTask;
     }
 }
