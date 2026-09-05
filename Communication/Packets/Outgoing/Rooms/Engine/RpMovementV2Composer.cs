@@ -83,5 +83,10 @@ public class RpMovementV2Composer : IServerPacket
             packet.WriteInteger(_edge.Lookahead[i].Y);
             packet.WriteInteger(_edge.Lookahead[i].Z100);
         }
+
+        // TEMPORARY DIAGNOSTIC, appended LAST so a client that does not know
+        // about it reads everything it expects and ignores the trailing int.
+        // Remove with the [MV2/JOIN] log.
+        packet.WriteInteger(_edge.StartDelayMs);
     }
 }

@@ -523,7 +523,7 @@ public static class MovementController
             MovementSettings.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
             w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
             w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
-            w.EdgeToZ, w.Facing, lookahead, lookCount));
+            w.EdgeToZ, w.Facing, lookahead, lookCount, w.LastStartDelayMs));
     }
 
     /// <summary>

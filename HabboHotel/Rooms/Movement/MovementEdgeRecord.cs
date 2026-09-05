@@ -56,6 +56,17 @@ public readonly struct MovementEdgeRecord
     /// <summary>Facing for this edge, for the commit.</summary>
     public readonly byte Facing;
 
+    /// <summary>
+    /// TEMPORARY DIAGNOSTIC. How long this walk waited in Pending to join the
+    /// room's movement phase; 0 when it started immediately.
+    ///
+    /// On the wire because the client cannot otherwise tell a phase join from a
+    /// normal start, and the question being investigated - does edge 0 arrive
+    /// already part-way through its own cycle - is only interesting for joins.
+    /// Remove with the [MV2/JOIN] log.
+    /// </summary>
+    public readonly int StartDelayMs;
+
     public bool IsWalkEnd => (Flags & RpMovementV2Flags.WalkEnd) != 0;
     public bool IsDisplacement => (Flags & RpMovementV2Flags.Displacement) != 0;
 
@@ -64,7 +75,7 @@ public readonly struct MovementEdgeRecord
         int intervalMs, long cycleStartMs,
         int fromX, int fromY, int fromZ100,
         int toX, int toY, int toZ100, double toZ, byte facing,
-        LookaheadTile[] lookahead, int lookaheadCount)
+        LookaheadTile[] lookahead, int lookaheadCount, int startDelayMs = 0)
     {
         VirtualId = virtualId;
         WalkSessionId = walkSessionId;
@@ -83,6 +94,7 @@ public readonly struct MovementEdgeRecord
         Facing = facing;
         Lookahead = lookahead;
         LookaheadCount = lookaheadCount;
+        StartDelayMs = startDelayMs;
     }
 
     public static int Z100(double z) => (int)Math.Round(z * 100);
