@@ -857,24 +857,26 @@ public class RoomUserManager
                 }
                 // pixelrp :wander - staff-forced random roaming. Unlike the h/v
                 // patrol there is no lane and no reversal: every leg picks a
-                // fresh tile at a random distance in a random direction, and a
-                // random pause between legs keeps the TIMING from reading as a
-                // pattern too. A fixed cadence is what makes scripted movement
-                // look scripted even when the direction is random.
-                if (!user.IsBot && user.ForcedWalkRandom && !user.IsWalking && user.CanWalk)
+                // fresh tile at a random distance in a random direction.
+                //
+                // NEVER STANDS STILL. The next leg is queued while the current
+                // one is still running, because waiting for IsWalking to go
+                // false would leave the avatar parked until the next 500ms tick
+                // noticed - up to a full beat of dead time between every leg.
+                // Re-targeting mid-walk is a V2 redirect, which keeps the
+                // timeline and the phase and plans from the terminal of the
+                // elapsing edge, so the avatar flows straight into the new leg
+                // without a pause and without a beat being lost.
+                if (!user.IsBot && user.ForcedWalkRandom && user.CanWalk)
                 {
-                    if (user.WanderPauseTicks > 0)
-                    {
-                        user.WanderPauseTicks--;
-                    }
-                    else
+                    var remaining = Movement.MovementV2Bridge.RemainingRouteTiles(user);
+                    // -1 = standing (start a leg); <= 1 = on the last tile or
+                    // two, so queue the next one now.
+                    if (remaining <= 1)
                     {
                         var spot = FindRandomWanderTile(user.X, user.Y);
                         if (spot.X != user.X || spot.Y != user.Y)
-                        {
                             user.MoveTo(spot.X, spot.Y);
-                            user.WanderPauseTicks = Random.Shared.Next(0, 4);
-                        }
                     }
                 }
                 if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpPassiveSeconds: > 0 } habboPas)

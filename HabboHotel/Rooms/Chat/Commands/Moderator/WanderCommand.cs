@@ -57,7 +57,6 @@ internal class WanderCommand : IChatCommand
         // "not currently walking" tick and would otherwise fight for it.
         target.ForcedWalkAxis = null;
         target.ForcedWalkRandom = true;
-        target.WanderPauseTicks = 0;
         session.SendWhisper(
             $"{target.GetUsername()} is now wandering randomly - they can break out by walking somewhere themselves.");
     }

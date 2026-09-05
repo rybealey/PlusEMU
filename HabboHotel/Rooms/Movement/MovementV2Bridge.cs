@@ -82,6 +82,33 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
+    /// Route tiles this unit has left to walk, or -1 when it is not moving.
+    ///
+    /// Exists so a caller can re-target BEFORE the current walk ends. A V2
+    /// redirect keeps the timeline and the phase and plans from the terminal of
+    /// the elapsing edge, so a new leg costs no beat and the avatar flows
+    /// straight into it. Waiting for the walk to finish instead would stand the
+    /// avatar still until the next 500ms tick noticed - up to a full beat of
+    /// dead time between legs.
+    /// </summary>
+    public static int RemainingRouteTiles(RoomUser? user)
+    {
+        if (user == null)
+            return -1;
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return -1;
+
+        lock (movement.MovementLock)
+        {
+            if (!movement.States.TryGetValue(user.VirtualId, out var state))
+                return -1;
+            if (state.Mode != MovementMode.Moving)
+                return -1;
+            return state.Route.Length - state.Route.Cursor;
+        }
+    }
+
+    /// <summary>
     /// Route a walk request to V2. Returns void: there is no fallback engine,
     /// so an unroutable click is simply a no-op.
     /// </summary>

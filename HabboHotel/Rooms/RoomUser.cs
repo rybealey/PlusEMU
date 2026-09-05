@@ -85,8 +85,6 @@ public class RoomUser
     /// </summary>
     public bool ForcedWalkRandom;
 
-    /// <summary>Cycles left to stand still before the next wander leg.</summary>
-    public int WanderPauseTicks;
     public int LastBubble = 0;
     public double LastInteraction;
     public Item LastItem = null;
