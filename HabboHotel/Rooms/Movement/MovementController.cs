@@ -44,21 +44,147 @@ public static class MovementController
         var tile = w.Tile;
         var tileZ = w.TileZ;
 
+        // THE ROOM ACTIVE PHASE ANCHOR. Caller holds MovementLock, so two
+        // simultaneous Standing->Moving requests cannot establish two phases.
+        var origin = ResolveStartOrigin(room, w, nowMs);
+
         w.WalkSessionId++;
         w.RouteRevision = 0;
         w.EdgeIndex = 0;
-        w.TimelineOrigin = nowMs;
+        w.TimelineOrigin = origin;
         w.EmittedThroughEdge = -1;
         w.AwaitingEventsThroughEdge = -1;
         w.EventsProcessedThroughEdge = -1;
         w.Target = target;
         w.Tile = tile;
         w.TileZ = tileZ;
-        w.Mode = MovementMode.Moving;
 
         MovementCounters.WalkStart();
+
+        if (origin > nowMs)
+        {
+            // Joining the phase. The route is planned, but NOTHING is emitted
+            // until the boundary arrives - see MovementMode.Pending.
+            w.Mode = MovementMode.Pending;
+            room.Walkers.InsertOrUpdate(w, origin);
+            w.Queued = true;
+            return true;
+        }
+
+        w.Mode = MovementMode.Moving;
         PlanNextEdge(room, w, map, ctx, nowMs, immediate: true);
         return w.Mode == MovementMode.Moving;
+    }
+
+    /// <summary>
+    /// Pick this walk's TimelineOrigin, joining the room's movement phase when
+    /// that costs at most <see cref="MovementSettings.MaxStartDelayMs"/>.
+    ///
+    /// OPPORTUNISTIC, NEVER MANDATORY. Snapping forward to the next boundary
+    /// unconditionally would cost up to 499ms of input latency on most clicks in
+    /// a busy room, which is the exact cost V2 was built to remove. Beyond the
+    /// ceiling the walk starts on its own timeline and simply does not join:
+    /// visibly imperfect, but never slow.
+    ///
+    /// Snapping BACKWARD is not an option either: edge 0 would already be
+    /// part-elapsed when emitted, so the client would render the avatar
+    /// instantly a fraction of a tile along. Alignment must never move an avatar.
+    ///
+    /// Caller MUST hold MovementLock.
+    /// </summary>
+    private static long ResolveStartOrigin(RoomMovement room, MovementState w, long nowMs)
+    {
+        w.LastStartDelayMs = 0;
+
+        // Bots and pets neither establish, hold nor follow a phase. A patrol bot
+        // is almost always moving, so letting one hold the phase would charge
+        // every player click the alignment wait, permanently.
+        if (!w.IsRealUser)
+        {
+            w.LastPhaseDecision = PhaseDecision.None;
+            return nowMs;
+        }
+
+        if (!HasLivePhase(room, w))
+        {
+            room.PhaseAnchor = nowMs;
+            w.LastPhaseDecision = PhaseDecision.Established;
+            return nowMs;
+        }
+
+        var interval = MovementSettings.IntervalMs;
+        var delta = ((room.PhaseAnchor - nowMs) % interval + interval) % interval;
+
+        if (delta == 0)
+        {
+            // Already exactly on the boundary: aligned at zero cost.
+            w.LastPhaseDecision = PhaseDecision.Aligned;
+            return nowMs;
+        }
+
+        if (delta <= MovementSettings.MaxStartDelayMs)
+        {
+            w.LastPhaseDecision = PhaseDecision.Aligned;
+            w.LastStartDelayMs = (int)delta;
+            return nowMs + delta;
+        }
+
+        w.LastPhaseDecision = PhaseDecision.Skipped;
+        return nowMs;
+    }
+
+    /// <summary>
+    /// Is any OTHER real user currently holding the room's phase?
+    ///
+    /// DERIVED BY SCANNING, never counted. A missed decrement on some exit from
+    /// Moving would clear the phase while avatars were still walking, and the
+    /// next walker would establish a different one - reintroducing the
+    /// misalignment intermittently, which is far harder to see than having it
+    /// all the time.
+    ///
+    /// Caller MUST hold MovementLock.
+    /// </summary>
+    private static bool HasLivePhase(RoomMovement room, MovementState self)
+    {
+        foreach (var other in room.States.Values)
+        {
+            if (ReferenceEquals(other, self) || !other.IsRealUser)
+                continue;
+            if (other.Mode == MovementMode.Moving || other.Mode == MovementMode.Pending)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A click that lands while the walker is still Pending. Nothing has been
+    /// emitted yet, so the route is replaced in place: the timeline, the session
+    /// and the phase boundary all stand.
+    /// </summary>
+    public static bool RepathPending(
+        RoomMovement room, MovementState w, Point target, in TraverseContext ctx, long nowMs)
+    {
+        if (room.Closed || w.Mode != MovementMode.Pending)
+            return false;
+
+        var map = room.Room.GetGameMap();
+        if (map == null)
+            return false;
+
+        var result = AStarPathfinder.FindRoute(
+            map, room.Scratch, w.Route, w.Tile, target, ctx,
+            baseIndex: 0, allowPartial: true);
+
+        if (result == PathResult.None || !w.Route.HasNext)
+        {
+            StopWalk(room, w);
+            return false;
+        }
+
+        w.Target = target;
+        w.LastRepathAtMs = nowMs;
+        w.LastRepathTarget = target;
+        return true;
     }
 
     /// <summary>
@@ -168,13 +294,24 @@ public static class MovementController
     /// </summary>
     public static void AdvanceWalker(RoomMovement room, MovementState w, long scheduledTick, long nowMs)
     {
-        if (room.Closed || w.Mode != MovementMode.Moving)
+        if (room.Closed || (w.Mode != MovementMode.Moving && w.Mode != MovementMode.Pending))
             return;
 
         var map = room.Room.GetGameMap();
         if (map == null)
         {
             StopWalk(room, w);
+            return;
+        }
+
+        // The Pending boundary has arrived: this is the walk's FIRST beat.
+        // Deliberately no commit - no edge was ever staged, so there is nothing
+        // to commit and nothing elapsed to reconcile against.
+        if (w.Mode == MovementMode.Pending)
+        {
+            w.Mode = MovementMode.Moving;
+            var startCtx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
+            PlanNextEdge(room, w, map, startCtx, nowMs, immediate: true);
             return;
         }
 
@@ -277,12 +414,20 @@ public static class MovementController
             room.Walkers.Remove(w);
             w.Queued = false;
         }
+
+        // A walker abandoned while still Pending never put anything on the wire,
+        // so there is nothing to close off. A walk-end here would tell the client
+        // to forget a unit it was never told about.
+        var neverEmitted = w.Mode == MovementMode.Pending && w.EmittedThroughEdge < 0;
+
         w.Mode = MovementMode.Standing;
         w.EdgeTo = w.Tile;
         w.EdgeToZ = w.TileZ;
         w.Route.Clear();
         w.AwaitingEventsThroughEdge = -1;
-        StageEdge(room, w, immediate: false); // walk-end marker slot
+
+        if (!neverEmitted)
+            StageEdge(room, w, immediate: false); // walk-end marker slot
     }
 
     /// <summary>
@@ -298,12 +443,21 @@ public static class MovementController
             return;
         foreach (var walker in MovementRegistry.WalkersOf(room))
         {
-            if (walker.Mode != MovementMode.Moving)
+            // PENDING IS COVERED TOO, and must be. A Pending walker that lost
+            // its scheduler entry has emitted nothing and can never emit
+            // anything, so without this it stands still forever with no symptom
+            // to read - the same unrecoverable shape this watchdog exists for.
+            if (walker.Mode != MovementMode.Moving && walker.Mode != MovementMode.Pending)
                 continue;
             if (room.Walkers.Contains(walker))
                 continue;
             MovementCounters.OrphanRecovered();
-            room.Walkers.InsertOrUpdate(walker, nowMs);
+
+            // Honour a boundary still in the future; never bring a start forward.
+            var due = walker.Mode == MovementMode.Pending
+                ? Math.Max(nowMs, walker.TimelineOrigin)
+                : nowMs;
+            room.Walkers.InsertOrUpdate(walker, due);
             walker.Queued = true;
         }
     }

@@ -48,6 +48,16 @@ public static class MovementSettings
     public const int TickSlackMs = 2;
 
     /// <summary>
+    /// Ceiling on how long a click may be held back to join the room's movement
+    /// phase. OPPORTUNISTIC BY DESIGN: if the next boundary is further away than
+    /// this, the walk starts immediately on its own timeline and simply does not
+    /// join. Alignment is worth having, but never at the cost of feeling slow -
+    /// V2 exists because V1 charged a full 500ms beat for exactly this kind of
+    /// bookkeeping.
+    /// </summary>
+    public const int MaxStartDelayMs = 50;
+
+    /// <summary>
     /// Ceiling on rooms processed in one scheduler pass, so the loop always
     /// returns to the top, re-reads the clock and updates its heartbeat.
     /// A pass that could run forever cannot be observed as stuck.

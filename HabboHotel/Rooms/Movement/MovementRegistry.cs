@@ -187,6 +187,22 @@ public static class MovementRegistry
 
         lock (room.MovementLock)
         {
+            var interval = MovementSettings.IntervalMs;
+            var holders = 0;
+            foreach (var unit in room.States.Values)
+            {
+                if (unit.IsRealUser &&
+                    (unit.Mode == MovementMode.Moving || unit.Mode == MovementMode.Pending))
+                    holders++;
+            }
+
+            // phase is the shared remainder every aligned walker's cycleStart
+            // must match; holders is what keeps it alive. holders=0 means the
+            // next real walker establishes a fresh one.
+            lines.Add($"[MV2/phase {roomId}] anchor={room.PhaseAnchor} " +
+                      $"phase={((room.PhaseAnchor % interval) + interval) % interval} " +
+                      $"holders={holders} maxStartDelay={MovementSettings.MaxStartDelayMs}ms");
+
             lines.Add($"[MV2/room {roomId}] units={room.States.Count} queued={room.Walkers.Count} " +
                       $"staged={room.Staged.Count} hasStaged={room.HasStagedWork} hasImmediate={room.HasImmediateWork} " +
                       $"nextDueIn={room.ComputeNextDue() - now}ms snapshotIn={room.NextDueSnapshot - now}ms " +
@@ -201,6 +217,9 @@ public static class MovementRegistry
                           $"queued={walker.Queued} inHeap={room.Walkers.Contains(walker)} " +
                           $"dueIn={(walker.Queued ? walker.DueTick - now : 0)}ms " +
                           $"elapsing={walker.ElapsingEdgeIndex(now)} " +
+                          $"real={walker.IsRealUser} align={walker.LastPhaseDecision} " +
+                          $"startDelay={walker.LastStartDelayMs}ms " +
+                          $"cycleStartPhase={((walker.TimelineOrigin % MovementSettings.IntervalMs) + MovementSettings.IntervalMs) % MovementSettings.IntervalMs} " +
                           $"tile={walker.Tile.X},{walker.Tile.Y} -> {walker.EdgeTo.X},{walker.EdgeTo.Y} " +
                           $"target={walker.Target.X},{walker.Target.Y} routeLeft={walker.Route.Length - walker.Route.Cursor}");
             }

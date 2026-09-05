@@ -15,7 +15,35 @@ public enum MovementMode : byte
     Blocked = 2,
 
     /// <summary>Transient: teleport / roller this pass; resolves to Standing.</summary>
-    Displaced = 3
+    Displaced = 3,
+
+    /// <summary>
+    /// Enrolled and routed, waiting for a phase boundary that is at most
+    /// MaxStartDelayMs away. NOTHING has been emitted: no "mv", no 4110, no
+    /// staged edge. The walker holds exactly one scheduler entry, due at
+    /// TimelineOrigin, and becomes Moving on that beat.
+    ///
+    /// Staging early with a future cycleStart would NOT work: ApplyMovementFrame
+    /// sets "mv" as soon as a frame is applied, and native Nitro would start
+    /// lerping the avatar while the V2 store still has no edge covering `now` -
+    /// so it would drift natively and then snap when V2 took over.
+    /// </summary>
+    Pending = 4
+}
+
+/// <summary>How a walk start resolved against the room's movement phase.</summary>
+public enum PhaseDecision : byte
+{
+    None = 0,
+
+    /// <summary>No live phase; this walk established one.</summary>
+    Established = 1,
+
+    /// <summary>Joined an existing phase, waiting up to MaxStartDelayMs.</summary>
+    Aligned = 2,
+
+    /// <summary>Boundary was too far off; started immediately, unaligned.</summary>
+    Skipped = 3
 }
 
 /// <summary>
@@ -99,6 +127,18 @@ public sealed class MovementState : IDueHeapNode
     // ---- bookkeeping ------------------------------------------------------
     public long LastRepathAtMs = long.MinValue;
     public Point LastRepathTarget;
+
+    /// <summary>
+    /// Real players only establish and hold the room phase. Bots and pets walk
+    /// on their own timelines and are ignored entirely for alignment: a patrol
+    /// bot is almost always moving, so letting one hold the phase would charge
+    /// every player click the alignment wait, permanently.
+    /// </summary>
+    public bool IsRealUser;
+
+    // ---- diagnostics: how the last walk start resolved --------------------
+    public PhaseDecision LastPhaseDecision;
+    public int LastStartDelayMs;
 
     /// <summary>Set while this walker has a live scheduler queue entry (I-1).</summary>
     public bool Queued;

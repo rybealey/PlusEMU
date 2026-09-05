@@ -54,6 +54,8 @@ public static class MovementV2Bridge
             if (movement.Closed)
                 return;
             var state = MovementRegistry.GetOrCreateState(movement, user.VirtualId);
+            // Only real players establish and hold the room's movement phase.
+            state.IsRealUser = !user.IsBot && !user.IsPet;
             state.Tile = new Point(user.X, user.Y);
             state.TileZ = user.Z;
             state.EdgeTo = state.Tile;
@@ -105,9 +107,10 @@ public static class MovementV2Bridge
             if (!movement.States.TryGetValue(user.VirtualId, out var state))
                 return;
 
-            // Keep V2's idea of where the avatar stands in step with V1's, in
-            // case anything else moved it (roller, teleport, room entry).
-            if (state.Mode != MovementMode.Moving)
+            // Keep V2's idea of where the avatar stands in step with anything
+            // else that moved it (roller, teleport, room entry). A Pending
+            // walker has not moved and its tile is already correct.
+            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
             {
                 state.Tile = new Point(user.X, user.Y);
                 state.TileZ = user.Z;
@@ -115,6 +118,11 @@ public static class MovementV2Bridge
 
             if (state.Mode == MovementMode.Moving)
                 MovementController.Redirect(movement, state, target, ctx, now);
+            else if (state.Mode == MovementMode.Pending)
+                // Still waiting on the phase boundary: swap the route, keep the
+                // timeline. Restarting here would re-run alignment and could
+                // push the boundary out again on every click.
+                MovementController.RepathPending(movement, state, target, ctx, now);
             else
                 MovementController.StartWalk(movement, state, target, ctx, now);
         }

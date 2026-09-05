@@ -75,6 +75,16 @@ public sealed class RoomMovement : IDueHeapNode
     /// <summary>Per-room monotonic frame counter. Debug/assert only - never on the wire.</summary>
     public long FrameSequence;
 
+    /// <summary>
+    /// The room's movement phase, as an absolute tick whose remainder mod
+    /// IntervalMs is the shared boundary. Meaningful ONLY while some real user
+    /// is Moving or Pending - liveness is derived by scanning States, never
+    /// counted, because a leaked decrement would clear the phase while avatars
+    /// were still walking and the next walker would establish a different one.
+    /// Guarded by MovementLock.
+    /// </summary>
+    public long PhaseAnchor;
+
     public RoomMovement(Room room)
     {
         Room = room;
