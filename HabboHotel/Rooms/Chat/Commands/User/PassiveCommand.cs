@@ -43,10 +43,12 @@ internal class PassiveCommand : IChatCommand
     private const int ConsumeBubble = 5;
 
     /// <summary>
-    /// The style the HUD's cancel uses. Deliberately NOT the action styles: an
-    /// action bubble is for doing something, and this reads as a state ending.
+    /// Ending passive is announced like the other actions: the blue action
+    /// bubble the fight commands use (PushCommand.FightBubble), so the
+    /// asterisk lands before the name and there is no colon. Kept in step
+    /// with RpPassiveCancelEvent (the HUD's cancel).
     /// </summary>
-    private const int CancelBubble = 27;
+    private const int CancelBubble = 4;
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {

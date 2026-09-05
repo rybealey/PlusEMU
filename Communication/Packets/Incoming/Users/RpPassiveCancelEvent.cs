@@ -24,7 +24,8 @@ internal class RpPassiveCancelEvent : IPacketEvent
         var roomUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
         if (roomUser == null)
             return Task.CompletedTask;
-        roomUser.OnChat(27, "*discovers newfound anger, eliminating their passive state*", true);
+        // blue action bubble, same as :passive off and the fight commands
+        roomUser.OnChat(4, "*discovers newfound anger, eliminating their passive state*", true);
         habbo.CurrentRoom.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 0, habbo.Rank >= 5 ? 1 : 0));
         // pixelrp: drop the passive enable if it (and only it) is showing.
         if (habbo.Effects != null && habbo.Effects.CurrentEffect == Habbo.PassiveEnableEffectId)
