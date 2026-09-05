@@ -409,6 +409,8 @@ public static class ClientPacketHeader
     public const uint RpGangDeleteRoleEvent = 3983;
     public const uint RpGangSetMemberRoleEvent = 3984;
     public const uint RpGangReorderRolesEvent = 3985;
+    public const uint RpSaveBirthdayEvent = 3989;
+    public const uint RpGetBirthdayEvent = 3992;
     public const uint RpUseItemEvent = 3905;
     public const uint RpMoveItemEvent = 43945; //3945
     public const uint RpGetCorpsEvent = 43948; //3948
