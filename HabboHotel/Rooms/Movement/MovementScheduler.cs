@@ -207,15 +207,32 @@ public sealed class MovementScheduler
         now = Clock.NowMs;
 
         // 1. SIGNALLED ROOMS FIRST - this is the latency path.
+        // Re-sampled for the same reason as the time-driven loop below: a room
+        // may be re-signalled by a Q2 worker while this drains, so the clock a
+        // room is processed against must be the current one, not the one this
+        // pass started with.
         while (_signalled.TryDequeue(out var signalledRoom))
         {
             signalledRoom.ClearSignalPending();
-            ProcessRoomIsolated(signalledRoom, now);
+            ProcessRoomIsolated(signalledRoom, Clock.NowMs);
         }
 
         // 2. TIME-DRIVEN ROOMS.
-        while (true)
+        //
+        // `now` IS RE-SAMPLED EVERY ITERATION, and that is not a refinement.
+        // This loop can pop the SAME room again the moment ProcessRoomIsolated
+        // re-queues it, so a `now` captured once outside the loop is a clock
+        // that never advances no matter how long the loop runs - and a room
+        // whose next due tick sits 1-2ms ahead is then permanently "due enough
+        // to pop, not due enough to work". That wedged the whole hotel: one
+        // room spun 92 million passes in six seconds while every other room's
+        // walkers sat overdue and undrained, because the single scheduler
+        // thread never got back to the top of LoopOnce.
+        var processed = 0;
+        while (processed < MovementSettings.MaxRoomsPerPass)
         {
+            now = Clock.NowMs;
+
             RoomMovement? room;
             lock (_roomsLock)
             {
@@ -225,6 +242,7 @@ public sealed class MovementScheduler
             }
             if (room == null)
                 break;
+            processed++;
             ProcessRoomIsolated(room, now);
         }
 
@@ -259,9 +277,10 @@ public sealed class MovementScheduler
             return;
         }
 
+        var progressed = false;
         try
         {
-            ProcessRoom(room, now);
+            progressed = ProcessRoom(room, now);
         }
         catch (Exception e)
         {
@@ -312,23 +331,58 @@ public sealed class MovementScheduler
                 // above and killed the scheduler thread outright.
                 var due = room.NextDueSnapshot;
                 if (due == long.MaxValue)
+                {
                     _rooms.Remove(room);
+                }
                 else
+                {
+                    // ZERO-WORK SPIN GUARD.
+                    //
+                    // A pass that did nothing and still wants to be due at an
+                    // already-expired tick is, by definition, asking to be
+                    // popped again immediately for another pass that will do
+                    // nothing. That is the busy-spin shape, and it costs the
+                    // WHOLE hotel, because one thread serves every room.
+                    //
+                    // With the slack now consistent inside ProcessRoom this
+                    // should be unreachable, so it is a counted assertion rather
+                    // than a retry: it names the room and shows up in
+                    // :movementstats as spinGuards, instead of silently
+                    // hammering the scheduler the way the last freeze did.
+                    if (!progressed && due <= now + MovementSettings.TickSlackMs)
+                    {
+                        MovementCounters.SpinGuard(room.RoomId);
+                        due = now + MovementSettings.TickSlackMs + 1;
+                    }
                     _rooms.InsertOrUpdate(room, due); // never a bare Push
+                }
             }
         }
     }
 
-    private void ProcessRoom(RoomMovement room, long now)
+    /// <summary>
+    /// One pass over one room. Returns TRUE if the pass actually did something -
+    /// drained a walker, ran the watchdog, or sealed a frame.
+    ///
+    /// THE INVARIANT: a room popped as due must advance at least one of the three
+    /// terms ComputeNextDue is the minimum of, or it will be re-queued at the
+    /// same expired tick and popped again immediately. Every "is it time yet?"
+    /// test below therefore uses the SAME TickSlackMs the pop used. When the pop
+    /// said "due" with 2ms of slack and the work tests said "not yet" without it,
+    /// the 1-2ms gap between them was a hole a room could fall into and never
+    /// climb out of.
+    /// </summary>
+    private bool ProcessRoom(RoomMovement room, long now)
     {
         MovementCounters.RoomProcessed();
         var started = Stopwatch.GetTimestamp();
         var budgetTicks = (long)(MovementSettings.DrainBudgetUs * (Stopwatch.Frequency / 1_000_000.0));
+        var progressed = false;
 
         lock (room.MovementLock)
         {
             if (room.Closed)
-                return;
+                return false;
 
             // A. DRAIN DUE COMMITS.
             var drained = 0;
@@ -361,27 +415,32 @@ public sealed class MovementScheduler
                 {
                     MovementCounters.BarrierWait();
                     room.Walkers.InsertOrUpdate(walker, now + BarrierRetryMs);
+                    progressed = true; // its due tick moved strictly forward
                     continue;
                 }
 
                 room.Walkers.Remove(walker);
                 walker.Queued = false;
                 drained++;
+                progressed = true;
                 MovementCounters.DrainedWalker();
 
                 MovementController.AdvanceWalker(room, walker, walker.DueTick, now);
             }
 
             // B. WATCHDOG - the direct fix for V1's unrecoverable frozen avatar.
-            if (now >= room.NextWatchdogTick)
+            if (now + MovementSettings.TickSlackMs >= room.NextWatchdogTick)
             {
                 room.NextWatchdogTick = now + MovementSettings.WatchdogIntervalMs;
                 MovementController.RecoverOrphans(room, now);
+                progressed = true;
             }
 
             // C. SEAL. Staging -> one frame; handed to Q1, never sent here.
-            if (room.HasImmediateWork || (now >= room.NextFlushTick && room.HasStagedWork))
+            if (room.HasImmediateWork ||
+                (now + MovementSettings.TickSlackMs >= room.NextFlushTick && room.HasStagedWork))
             {
+                progressed = true;
                 room.FrameSequence++;
                 room.HasStagedWork = false;
                 room.HasImmediateWork = false;
@@ -405,5 +464,7 @@ public sealed class MovementScheduler
             //    so the walker heap is only ever read by its owner.
             room.RefreshNextDue();
         }
+
+        return progressed;
     }
 }

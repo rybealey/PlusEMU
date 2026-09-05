@@ -47,6 +47,13 @@ public static class MovementSettings
     /// <summary>A due time within this window of now is treated as due.</summary>
     public const int TickSlackMs = 2;
 
+    /// <summary>
+    /// Ceiling on rooms processed in one scheduler pass, so the loop always
+    /// returns to the top, re-reads the clock and updates its heartbeat.
+    /// A pass that could run forever cannot be observed as stuck.
+    /// </summary>
+    public const int MaxRoomsPerPass = 256;
+
     /// <summary>Deferred (non-latency-critical) emission cadence per room.</summary>
     public const int FlushIntervalMs = 100;
 

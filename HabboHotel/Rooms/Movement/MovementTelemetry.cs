@@ -120,6 +120,23 @@ public static class MovementCounters
         Plus.Core.ExceptionLogger.LogCriticalException(e);
     }
 
+    // The busy-spin detector. A room popped as due must advance one of the three
+    // terms ComputeNextDue takes a minimum of; if it advances none and still
+    // wants an expired tick, it will be popped again at once and the single
+    // scheduler thread does nothing else for as long as that lasts. That is not
+    // a slow room, it is a wedged hotel, and it needs a name of its own.
+    private static long _spinGuards;
+    private static long _lastSpinRoomId;
+
+    public static long SpinGuards => Interlocked.Read(ref _spinGuards);
+    public static long LastSpinRoomId => Interlocked.Read(ref _lastSpinRoomId);
+
+    public static void SpinGuard(uint roomId)
+    {
+        Interlocked.Increment(ref _spinGuards);
+        Interlocked.Exchange(ref _lastSpinRoomId, roomId);
+    }
+
     public static void WalkStart() => Interlocked.Increment(ref _walkStarts);
     public static void Redirect() => Interlocked.Increment(ref _redirects);
     public static void Advance() => Interlocked.Increment(ref _advances);
@@ -168,6 +185,8 @@ public static class MovementCounters
         $"barrierWaits={Interlocked.Read(ref _barrierWaits)} " +
         $"roomFaults={Interlocked.Read(ref _roomFaults)} " +
         $"schedulerFaults={Interlocked.Read(ref _schedulerFaults)} " +
+        $"spinGuards={Interlocked.Read(ref _spinGuards)} " +
+        $"lastSpinRoom={Interlocked.Read(ref _lastSpinRoomId)} " +
         $"pathfind={Interlocked.Read(ref _pathfindCalls)} " +
         $"partial={Interlocked.Read(ref _pathfindPartial)} " +
         $"failed={Interlocked.Read(ref _pathfindFailed)}";
