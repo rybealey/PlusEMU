@@ -527,6 +527,8 @@ public class Habbo
             return;
 
         Corporations.ShiftManager.InterruptForDisconnect(this);
+        // pixelrp: drop this player from any shared note they had open
+        Notes.NotesUtility.ClearPresence(Id);
 
         Disconnected?.Invoke(this, EventArgs.Empty);
 
