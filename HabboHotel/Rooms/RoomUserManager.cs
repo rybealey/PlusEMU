@@ -855,6 +855,28 @@ public class RoomUserManager
                     if (lane.X != user.X || lane.Y != user.Y)
                         user.MoveTo(lane.X, lane.Y);
                 }
+                // pixelrp :wander - staff-forced random roaming. Unlike the h/v
+                // patrol there is no lane and no reversal: every leg picks a
+                // fresh tile at a random distance in a random direction, and a
+                // random pause between legs keeps the TIMING from reading as a
+                // pattern too. A fixed cadence is what makes scripted movement
+                // look scripted even when the direction is random.
+                if (!user.IsBot && user.ForcedWalkRandom && !user.IsWalking && user.CanWalk)
+                {
+                    if (user.WanderPauseTicks > 0)
+                    {
+                        user.WanderPauseTicks--;
+                    }
+                    else
+                    {
+                        var spot = FindRandomWanderTile(user.X, user.Y);
+                        if (spot.X != user.X || spot.Y != user.Y)
+                        {
+                            user.MoveTo(spot.X, spot.Y);
+                            user.WanderPauseTicks = Random.Shared.Next(0, 4);
+                        }
+                    }
+                }
                 if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpPassiveSeconds: > 0 } habboPas)
                 {
                     var nowTick = Environment.TickCount64;
@@ -1447,6 +1469,40 @@ public class RoomUserManager
     }
 
     // pixelrp :walk - furthest open tile along one axis from (x, y).
+    /// <summary>
+    /// A random destination for one wander leg, or the current tile when nothing
+    /// suitable turned up.
+    ///
+    /// Deliberately a handful of samples rather than a search. This runs on the
+    /// 500ms tick for every wandering user, and a leg that finds nothing simply
+    /// waits for the next cycle - scanning the room for the "best" tile would
+    /// cost far more than it is worth for something whose entire purpose is to
+    /// be arbitrary. Distance varies as well as direction, so legs do not all
+    /// come out the same length.
+    /// </summary>
+    private Point FindRandomWanderTile(int x, int y)
+    {
+        var map = _room.GetGameMap();
+        if (map == null)
+            return new Point(x, y);
+
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            var radius = Random.Shared.Next(2, 7);
+            var dx = Random.Shared.Next(-radius, radius + 1);
+            var dy = Random.Shared.Next(-radius, radius + 1);
+            if (dx == 0 && dy == 0)
+                continue;
+
+            var spot = new Point(x + dx, y + dy);
+            if (!map.ValidTile(spot.X, spot.Y) || !map.SquareIsOpen(spot.X, spot.Y, false))
+                continue;
+            return spot;
+        }
+
+        return new Point(x, y);
+    }
+
     private Point FindForcedWalkEnd(int x, int y, bool horizontal, int direction)
     {
         var map = _room.GetGameMap();

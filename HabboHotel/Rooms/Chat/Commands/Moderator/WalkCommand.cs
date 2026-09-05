@@ -1,4 +1,4 @@
-using Plus.HabboHotel.GameClients;
+﻿using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 
@@ -39,6 +39,7 @@ internal class WalkCommand : IChatCommand
         }
         target.ForcedWalkHorizontal = axis == "h";
         target.ForcedWalkDirection = 1;
+        target.ForcedWalkRandom = false; // a lane patrol replaces any wander
         session.SendWhisper($"{target.GetUsername()} is now walking {(axis == "h" ? "horizontally" : "vertically")} - they can break out by walking somewhere themselves.");
     }
 }

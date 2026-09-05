@@ -66,6 +66,16 @@ public class RoomUser
     // player clicks a tile of their own (MoveAvatarEvent).
     public bool? ForcedWalkHorizontal;
     public int ForcedWalkDirection = 1;
+
+    /// <summary>
+    /// pixelrp :wander - staff-forced random roaming. Mutually exclusive with
+    /// <see cref="ForcedWalkHorizontal"/>: a lane patrol and a random walk would
+    /// fight over the same "not currently walking" tick.
+    /// </summary>
+    public bool ForcedWalkRandom;
+
+    /// <summary>Cycles left to stand still before the next wander leg.</summary>
+    public int WanderPauseTicks;
     public int LastBubble = 0;
     public double LastInteraction;
     public Item LastItem = null;

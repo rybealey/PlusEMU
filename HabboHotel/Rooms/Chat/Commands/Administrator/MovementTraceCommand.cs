@@ -33,7 +33,7 @@ internal class MovementTraceCommand : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (parameters.Length >= 2 && parameters[1].Equals("off", StringComparison.OrdinalIgnoreCase))
+        if (parameters.Length >= 1 && parameters[0].Equals("off", StringComparison.OrdinalIgnoreCase))
         {
             MovementTrace.Stop();
             session.SendWhisper("Movement trace off.");
@@ -46,25 +46,25 @@ internal class MovementTraceCommand : IChatCommand
             return;
         }
 
-        if (parameters.Length < 3)
+        if (parameters.Length < 2)
         {
             session.SendWhisper("Usage: :movementtrace <userA> <userB>, or :movementtrace off.");
             return;
         }
 
         var manager = room.GetRoomUserManager();
-        var userA = manager?.GetRoomUserByHabbo(parameters[1]);
-        var userB = manager?.GetRoomUserByHabbo(parameters[2]);
+        var userA = manager?.GetRoomUserByHabbo(parameters[0]);
+        var userB = manager?.GetRoomUserByHabbo(parameters[1]);
 
         if (userA == null)
         {
-            session.SendWhisper($"{parameters[1]} is not in this room.");
+            session.SendWhisper($"{parameters[0]} is not in this room.");
             return;
         }
 
         if (userB == null)
         {
-            session.SendWhisper($"{parameters[2]} is not in this room.");
+            session.SendWhisper($"{parameters[1]} is not in this room.");
             return;
         }
 
