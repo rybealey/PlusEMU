@@ -30,6 +30,7 @@ public static class NewsUtility
         public int Id { get; set; }
         public int AuthorId { get; set; }
         public string AuthorName { get; set; } = "";
+        public string AuthorFigure { get; set; } = "";
         public string Category { get; set; } = "";
         public string Title { get; set; } = "";
         public string Body { get; set; } = "";
@@ -67,7 +68,7 @@ public static class NewsUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<PostRow>(
-            "SELECT p.`id` AS Id, p.`author_id` AS AuthorId, COALESCE(u.`username`, '') AS AuthorName, p.`category` AS Category, p.`title` AS Title, p.`body` AS Body, p.`image` AS Image, p.`pinned` AS Pinned, p.`created_at` AS CreatedAt, p.`updated_at` AS UpdatedAt " +
+            "SELECT p.`id` AS Id, p.`author_id` AS AuthorId, COALESCE(u.`username`, '') AS AuthorName, COALESCE(u.`look`, '') AS AuthorFigure, p.`category` AS Category, p.`title` AS Title, p.`body` AS Body, p.`image` AS Image, p.`pinned` AS Pinned, p.`created_at` AS CreatedAt, p.`updated_at` AS UpdatedAt " +
             "FROM `rp_news_posts` p LEFT JOIN `users` u ON u.`id` = p.`author_id` ORDER BY p.`pinned` DESC, p.`created_at` DESC LIMIT @limit",
             new { limit = MaxPosts }).ToList();
     }
@@ -76,7 +77,7 @@ public static class NewsUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.QueryFirstOrDefault<PostRow>(
-            "SELECT p.`id` AS Id, p.`author_id` AS AuthorId, COALESCE(u.`username`, '') AS AuthorName, p.`category` AS Category, p.`title` AS Title, p.`body` AS Body, p.`image` AS Image, p.`pinned` AS Pinned, p.`created_at` AS CreatedAt, p.`updated_at` AS UpdatedAt " +
+            "SELECT p.`id` AS Id, p.`author_id` AS AuthorId, COALESCE(u.`username`, '') AS AuthorName, COALESCE(u.`look`, '') AS AuthorFigure, p.`category` AS Category, p.`title` AS Title, p.`body` AS Body, p.`image` AS Image, p.`pinned` AS Pinned, p.`created_at` AS CreatedAt, p.`updated_at` AS UpdatedAt " +
             "FROM `rp_news_posts` p LEFT JOIN `users` u ON u.`id` = p.`author_id` WHERE p.`id` = @id", new { id });
     }
 

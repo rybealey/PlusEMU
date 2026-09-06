@@ -26,6 +26,7 @@ public class RpNewsComposer : IServerPacket
             packet.WriteInteger(p.Id);
             packet.WriteInteger(p.AuthorId);
             packet.WriteString(p.AuthorName ?? "");
+            packet.WriteString(p.AuthorFigure ?? "");
             packet.WriteString(p.Category ?? "");
             packet.WriteString(p.Title ?? "");
             packet.WriteString(p.Body ?? "");

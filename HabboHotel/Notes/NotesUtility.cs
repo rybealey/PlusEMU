@@ -30,6 +30,7 @@ public static class NotesUtility
         public int Id { get; set; }
         public int OwnerId { get; set; }
         public string OwnerName { get; set; } = "";
+        public string OwnerFigure { get; set; } = "";
         public int? FolderId { get; set; }
         public string Title { get; set; } = "";
         public string Body { get; set; } = "";
@@ -43,6 +44,7 @@ public static class NotesUtility
         public int Id { get; set; }
         public int OwnerId { get; set; }
         public string OwnerName { get; set; } = "";
+        public string OwnerFigure { get; set; } = "";
         public int? FolderId { get; set; }
         public string Title { get; set; } = "";
         public string Body { get; set; } = "";
@@ -52,7 +54,7 @@ public static class NotesUtility
         public string UpdatedBy { get; set; } = "";
     }
 
-    public class PersonRow { public int UserId { get; set; } public string Username { get; set; } = ""; }
+    public class PersonRow { public int UserId { get; set; } public string Username { get; set; } = ""; public string Figure { get; set; } = ""; }
 
     // noteId -> userId -> caret line, for everyone with the note open
     private static readonly ConcurrentDictionary<int, ConcurrentDictionary<int, int>> Open = new();
@@ -107,7 +109,7 @@ public static class NotesUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<NoteSummaryRow>(
-            "SELECT n.`id` AS Id, n.`owner_id` AS OwnerId, u.`username` AS OwnerName, " +
+            "SELECT n.`id` AS Id, n.`owner_id` AS OwnerId, u.`username` AS OwnerName, COALESCE(u.`look`, '') AS OwnerFigure, " +
             "CASE WHEN n.`owner_id` = @userId THEN n.`folder_id` ELSE s.`folder_id` END AS FolderId, " +
             "n.`title` AS Title, SUBSTRING(n.`body`, 1, 160) AS Body, n.`pinned` AS Pinned, n.`updated_at` AS UpdatedAt, " +
             "(SELECT COUNT(*) FROM `rp_note_shares` x WHERE x.`note_id` = n.`id`) AS ShareCount " +
@@ -139,7 +141,7 @@ public static class NotesUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.QueryFirstOrDefault<NoteRow>(
-            "SELECT n.`id` AS Id, n.`owner_id` AS OwnerId, u.`username` AS OwnerName, " +
+            "SELECT n.`id` AS Id, n.`owner_id` AS OwnerId, u.`username` AS OwnerName, COALESCE(u.`look`, '') AS OwnerFigure, " +
             "CASE WHEN n.`owner_id` = @viewerId THEN n.`folder_id` ELSE s.`folder_id` END AS FolderId, " +
             "n.`title` AS Title, n.`body` AS Body, n.`pinned` AS Pinned, n.`version` AS Version, n.`updated_at` AS UpdatedAt, COALESCE(b.`username`, '') AS UpdatedBy " +
             "FROM `rp_notes` n INNER JOIN `users` u ON u.`id` = n.`owner_id` " +
@@ -152,7 +154,7 @@ public static class NotesUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<PersonRow>(
-            "SELECT s.`user_id` AS UserId, u.`username` AS Username FROM `rp_note_shares` s INNER JOIN `users` u ON u.`id` = s.`user_id` WHERE s.`note_id` = @noteId ORDER BY u.`username`",
+            "SELECT s.`user_id` AS UserId, u.`username` AS Username, COALESCE(u.`look`, '') AS Figure FROM `rp_note_shares` s INNER JOIN `users` u ON u.`id` = s.`user_id` WHERE s.`note_id` = @noteId ORDER BY u.`username`",
             new { noteId }).ToList();
     }
 
@@ -160,7 +162,7 @@ public static class NotesUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<PersonRow>(
-            "SELECT u.`id` AS UserId, u.`username` AS Username FROM `users` u WHERE u.`id` IN " +
+            "SELECT u.`id` AS UserId, u.`username` AS Username, COALESCE(u.`look`, '') AS Figure FROM `users` u WHERE u.`id` IN " +
             "(SELECT `user_two_id` FROM `messenger_friendships` WHERE `user_one_id` = @userId UNION SELECT `user_one_id` FROM `messenger_friendships` WHERE `user_two_id` = @userId) " +
             "ORDER BY u.`username` LIMIT 50", new { userId }).ToList();
     }
@@ -172,11 +174,11 @@ public static class NotesUtility
         var open = Open.TryGetValue(noteId, out var openers) ? openers : null;
         var people = new List<RpNoteComposer.Person>();
         // owner first, then collaborators
-        people.Add(new RpNoteComposer.Person(note.OwnerId, note.OwnerName, IsOnline(note.OwnerId), open != null && open.ContainsKey(note.OwnerId), (open != null && open.TryGetValue(note.OwnerId, out var oc)) ? oc : -1));
+        people.Add(new RpNoteComposer.Person(note.OwnerId, note.OwnerName, note.OwnerFigure, IsOnline(note.OwnerId), open != null && open.ContainsKey(note.OwnerId), (open != null && open.TryGetValue(note.OwnerId, out var oc)) ? oc : -1));
         foreach (var c in GetCollaborators(noteId))
-            people.Add(new RpNoteComposer.Person(c.UserId, c.Username, IsOnline(c.UserId), open != null && open.ContainsKey(c.UserId), (open != null && open.TryGetValue(c.UserId, out var cc)) ? cc : -1));
+            people.Add(new RpNoteComposer.Person(c.UserId, c.Username, c.Figure, IsOnline(c.UserId), open != null && open.ContainsKey(c.UserId), (open != null && open.TryGetValue(c.UserId, out var cc)) ? cc : -1));
         var friends = (note.OwnerId == viewerId)
-            ? GetFriends(viewerId).Select(f => new RpNoteComposer.Person(f.UserId, f.Username, IsOnline(f.UserId), false, -1)).ToList()
+            ? GetFriends(viewerId).Select(f => new RpNoteComposer.Person(f.UserId, f.Username, f.Figure, IsOnline(f.UserId), false, -1)).ToList()
             : new List<RpNoteComposer.Person>();
         return new RpNoteComposer(note, people, friends);
     }

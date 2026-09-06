@@ -11,7 +11,7 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// </summary>
 public class RpNoteComposer : IServerPacket
 {
-    public record Person(int UserId, string Username, bool Online, bool Editing, int CaretLine);
+    public record Person(int UserId, string Username, string Figure, bool Online, bool Editing, int CaretLine);
 
     private readonly NotesUtility.NoteRow _note;
     private readonly List<Person> _people;
@@ -30,6 +30,7 @@ public class RpNoteComposer : IServerPacket
     {
         packet.WriteInteger(p.UserId);
         packet.WriteString(p.Username ?? "");
+        packet.WriteString(p.Figure ?? "");
         packet.WriteInteger(p.Online ? 1 : 0);
         packet.WriteInteger(p.Editing ? 1 : 0);
         packet.WriteInteger(p.CaretLine);
@@ -40,6 +41,7 @@ public class RpNoteComposer : IServerPacket
         packet.WriteInteger(_note.Id);
         packet.WriteInteger(_note.OwnerId);
         packet.WriteString(_note.OwnerName ?? "");
+        packet.WriteString(_note.OwnerFigure ?? "");
         packet.WriteInteger(_note.FolderId ?? 0);
         packet.WriteString(_note.Title ?? "");
         packet.WriteString(_note.Body ?? "");

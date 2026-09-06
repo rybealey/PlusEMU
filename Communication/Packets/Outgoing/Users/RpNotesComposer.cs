@@ -32,6 +32,7 @@ public class RpNotesComposer : IServerPacket
             packet.WriteInteger(n.Id);
             packet.WriteInteger(n.OwnerId);
             packet.WriteString(n.OwnerName ?? "");
+            packet.WriteString(n.OwnerFigure ?? "");
             packet.WriteInteger(n.FolderId ?? 0);
             packet.WriteString(n.Title ?? "");
             packet.WriteString(n.Body ?? "");
