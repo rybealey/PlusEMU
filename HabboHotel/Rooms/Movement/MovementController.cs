@@ -420,7 +420,14 @@ public static class MovementController
 
         w.Route.Advance();
         w.EdgeTo = next;
-        w.EdgeToZ = map.SqAbsoluteHeight(next.X, next.Y);
+        // THE height authority - the same query RoomUser.Z is derived from.
+        // The two-argument SqAbsoluteHeight consults _coordinatedItems and
+        // falls back to bare floor height, which reports 0 on a tile whose
+        // furniture it does not know about, while the avatar standing there is
+        // at the real walk height. An edge that disagrees with the avatar it
+        // describes makes V2 drop that avatar to the edge's Z the instant it
+        // takes ownership.
+        w.EdgeToZ = MovementHeights.Walk(map, next.X, next.Y);
         w.Facing = (byte)Rotation.Calculate(w.Tile.X, w.Tile.Y, next.X, next.Y);
 
         // The movement-critical tile barrier (A9) is DELIBERATELY NOT ARMED yet.
@@ -527,6 +534,36 @@ public static class MovementController
         if (w.EdgeIndex > w.EmittedThroughEdge)
             w.EmittedThroughEdge = w.EdgeIndex;
 
+        var stageMap = room.Room.GetGameMap();
+
+        // NEVER EMIT A SOURCE HEIGHT OF 0 UNLESS THE TILE REALLY IS AT 0.
+        //
+        // TileZ only advances through EdgeToZ on commit, so anything that
+        // changed the avatar's height without going through a V2 edge - a
+        // roller, a sit, furniture placed underneath, room entry - leaves it
+        // stale. Emitting a stale source height makes the client drop or lift
+        // the avatar the moment V2 takes ownership of the edge.
+        //
+        // Reconciled HERE, at stage time, which is before the edge exists on
+        // the wire. Once staged its geometry is immutable, so this can never
+        // change an edge already in flight.
+        if (stageMap != null)
+        {
+            var authoritative = MovementHeights.Walk(stageMap, w.Tile.X, w.Tile.Y);
+
+            if (MovementHeights.Disagrees(w.TileZ, authoritative))
+            {
+                MovementCounters.HeightReconciled();
+                w.TileZ = authoritative;
+
+                // A walk-end marker and a standing walker both carry EdgeTo ==
+                // Tile, so the destination height follows the source rather
+                // than keeping a value the source no longer agrees with.
+                if (w.EdgeTo == w.Tile)
+                    w.EdgeToZ = authoritative;
+            }
+        }
+
         var moving = w.Mode == MovementMode.Moving;
         var flags = moving
             ? RpMovementV2Flags.Edge
@@ -542,7 +579,7 @@ public static class MovementController
         var lookCount = 0;
         if (moving && w.Route.HasNext)
         {
-            var map = room.Room.GetGameMap();
+            var map = stageMap;
             var max = System.Math.Min(MovementSettings.LookaheadMax, w.Route.Length - w.Route.Cursor);
             if (max > 0 && map != null)
             {
@@ -551,7 +588,7 @@ public static class MovementController
                 {
                     var tile = w.Route[w.Route.Cursor + i];
                     lookahead[i] = new LookaheadTile(
-                        tile.X, tile.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(tile.X, tile.Y)));
+                        tile.X, tile.Y, MovementEdgeRecord.Z100(MovementHeights.Walk(map, tile.X, tile.Y)));
                 }
                 lookCount = max;
             }

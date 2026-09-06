@@ -140,6 +140,11 @@ public static class MovementV2Bridge
             if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
             {
                 state.Tile = new Point(user.X, user.Y);
+
+                // user.Z is authoritative for a standing avatar - it accounts
+                // for seats and beds, which a tile query alone does not - so
+                // it is preferred, with the tile authority as the fallback
+                // when it has not been established yet.
                 state.TileZ = user.Z;
             }
 

@@ -81,6 +81,7 @@ public static class MovementCounters
     private static long _stopsBlocked;
     private static long _replans;
     private static long _replansDeferred;
+    private static long _heightReconciled;
     private static long _roomProcessed;
     private static long _drainedWalkers;
 
@@ -153,6 +154,12 @@ public static class MovementCounters
     /// route under an avatar that is already walking it.
     /// </summary>
     public static void ReplanDeferred() => Interlocked.Increment(ref _replansDeferred);
+
+    /// <summary>
+    /// An edge staged with a source height that had drifted from the tile's
+    /// authoritative walk height, and was reconciled before going on the wire.
+    /// </summary>
+    public static void HeightReconciled() => Interlocked.Increment(ref _heightReconciled);
     public static void RoomProcessed() => Interlocked.Increment(ref _roomProcessed);
     public static void DrainedWalker() => Interlocked.Increment(ref _drainedWalkers);
 
@@ -165,6 +172,7 @@ public static class MovementCounters
         $"commits={Interlocked.Read(ref _commits)} " +
         $"replans={Interlocked.Read(ref _replans)} " +
         $"replansDeferred={Interlocked.Read(ref _replansDeferred)} " +
+        $"heightReconciled={Interlocked.Read(ref _heightReconciled)} " +
         $"stopEnd={Interlocked.Read(ref _stopsRouteEnd)} " +
         $"stopBlocked={Interlocked.Read(ref _stopsBlocked)}";
 
