@@ -27,6 +27,8 @@ internal class RpSaveNewsPostEvent : IPacketEvent
         var body = _wordFilterManager.CheckMessage(packet.ReadString()).Trim();
         var image = NewsUtility.CleanImage(packet.ReadString());
         var pinned = packet.ReadInt() == 1;
+        // published under the newsroom byline (Trina) rather than the writer's own name
+        var anonymous = packet.HasDataRemaining() ? packet.ReadInt() == 1 : true;
         var habbo = session.GetHabbo();
         if (!NewsUtility.IsStaff(habbo)) return Task.CompletedTask;
         if (title.Length == 0 || body.Length == 0)
@@ -51,15 +53,15 @@ internal class RpSaveNewsPostEvent : IPacketEvent
                 }
                 if (pinned) connection.Execute("UPDATE `rp_news_posts` SET `pinned` = 0 WHERE `pinned` = 1 AND `id` <> @id", new { id });
                 connection.Execute(
-                    "UPDATE `rp_news_posts` SET `category` = @category, `title` = @title, `body` = @body, `image` = @image, `pinned` = @pinned, `updated_at` = @now WHERE `id` = @id",
-                    new { id, category, title, body, image, pinned = pinned ? 1 : 0, now });
+                    "UPDATE `rp_news_posts` SET `category` = @category, `title` = @title, `body` = @body, `image` = @image, `pinned` = @pinned, `anonymous` = @anonymous, `updated_at` = @now WHERE `id` = @id",
+                    new { id, category, title, body, image, pinned = pinned ? 1 : 0, anonymous = anonymous ? 1 : 0, now });
             }
             else
             {
                 if (pinned) connection.Execute("UPDATE `rp_news_posts` SET `pinned` = 0 WHERE `pinned` = 1");
                 connection.Execute(
-                    "INSERT INTO `rp_news_posts` (`author_id`, `category`, `title`, `body`, `image`, `pinned`, `created_at`, `updated_at`) VALUES (@userId, @category, @title, @body, @image, @pinned, @now, @now)",
-                    new { userId = habbo.Id, category, title, body, image, pinned = pinned ? 1 : 0, now });
+                    "INSERT INTO `rp_news_posts` (`author_id`, `category`, `title`, `body`, `image`, `pinned`, `anonymous`, `created_at`, `updated_at`) VALUES (@userId, @category, @title, @body, @image, @pinned, @anonymous, @now, @now)",
+                    new { userId = habbo.Id, category, title, body, image, pinned = pinned ? 1 : 0, anonymous = anonymous ? 1 : 0, now });
             }
         }
 
