@@ -47,6 +47,9 @@ public static class JukeboxStation
 
     private static bool IsStaff(GameClient session) => session?.GetHabbo() != null && session.GetHabbo().Rank >= StaffRank;
 
+    /// <summary>The phone's Tunes app shows skip/remove-anyone to staff only (room rights don't travel with the phone).</summary>
+    public static bool IsStationStaff(GameClient session) => IsStaff(session);
+
     // Pre-flight checks only; the packet handler fetches metadata then calls Enqueue.
     // Works from anywhere - a room jukebox or the phone. One pending request per
     // player (staff excepted) plus a short cooldown.
@@ -114,27 +117,47 @@ public static class JukeboxStation
 
     public static bool TryRemove(GameClient session, int index)
     {
+        JukeboxTrack removed;
         lock (Lock)
         {
             if (index < 0 || index >= Queue.Count)
                 return false;
             if (!CanManage(session) && Queue[index].QueuedById != session.GetHabbo().Id)
                 return false;
+            removed = Queue[index];
             Queue.RemoveAt(index);
         }
         BroadcastState();
+        // the requester hears about it when someone else pulled their song
+        NotifyRequester(removed, session, "removed from the queue");
         return true;
     }
 
     public static bool TrySkip(GameClient session)
     {
+        JukeboxTrack skipped;
         lock (Lock)
         {
             if (_current == null || !CanManage(session))
                 return false;
+            skipped = _current;
         }
         StartNext();
+        NotifyRequester(skipped, session, "skipped");
         return true;
+    }
+
+    private static void NotifyRequester(JukeboxTrack track, GameClient actor, string what)
+    {
+        try
+        {
+            if (track == null || actor?.GetHabbo() == null || track.QueuedById == actor.GetHabbo().Id) return;
+            var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(track.QueuedById);
+            if (client?.GetHabbo() == null) return;
+            var title = string.IsNullOrEmpty(track.Title) ? "Your song" : $"'{track.Title}'";
+            client.SendWhisper($"{title} was {what} by staff.");
+        }
+        catch (Exception) { /* a notice, never worth failing the action */ }
     }
 
     // Clients report the player's real duration once loaded, and the ended signal.

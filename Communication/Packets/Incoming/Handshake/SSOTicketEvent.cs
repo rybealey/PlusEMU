@@ -127,6 +127,7 @@ public class SsoTicketEvent : IPacketEvent
             // in before (or without) entering a room; room entry re-sends it with
             // that room's has-jukebox flag.
             session.Send(JukeboxStation.BuildState(false));
+            session.Send(new Plus.Communication.Packets.Outgoing.Users.RpTunesAccessComposer(JukeboxStation.IsStationStaff(session)));
             // pixelrp: first login of the day starts the weather fetch loop so the phone opens warm
             Plus.HabboHotel.Weather.WeatherStation.Touch();
             // pixelrp: the hotel says happy birthday on the day (phone Settings >

@@ -177,6 +177,7 @@ public static class ServerPacketHeader
     public const uint RpNoteComposer = 3999;
     public const uint RpWeatherComposer = 4009;
     public const uint RpNewsComposer = 4011;
+    public const uint RpTunesAccessComposer = 4016;
     public const uint RpInventoryComposer = 3904;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
