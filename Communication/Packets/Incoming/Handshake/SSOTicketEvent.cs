@@ -30,8 +30,6 @@ using Plus.HabboHotel.Subscriptions;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Authentication;
 using Plus.HabboHotel.Users.Messenger.FriendBar;
-using Plus.HabboHotel.Catalog.Clothing;
-using Plus.HabboHotel.Users.Clothing;
 
 namespace Plus.Communication.Packets.Incoming.Handshake;
 
@@ -49,7 +47,6 @@ public class SsoTicketEvent : IPacketEvent
     private readonly ILanguageManager _languageManager;
     private readonly ISettingsManager _settingsManager;
     private readonly IRewardManager _rewardManager;
-    private readonly IClothingManager _clothingManager;
     private readonly ILogger _logger;
 
     public SsoTicketEvent(IAuthenticator authenticate,
@@ -63,7 +60,6 @@ public class SsoTicketEvent : IPacketEvent
         ILanguageManager languageManager,
         ISettingsManager settingsManager,
         IRewardManager rewardManager,
-        IClothingManager clothingManager,
         ILogger<SsoTicketEvent> logger)
     {
         _authenticate = authenticate;
@@ -77,7 +73,6 @@ public class SsoTicketEvent : IPacketEvent
         _languageManager = languageManager;
         _settingsManager = settingsManager;
         _rewardManager = rewardManager;
-        _clothingManager = clothingManager;
         _logger = logger;
     }
 
@@ -109,7 +104,7 @@ public class SsoTicketEvent : IPacketEvent
             session.Send(new AvatarEffectsComposer(session.GetHabbo().Effects.GetAllEffects));
             session.Send(new NavigatorSettingsComposer(session.GetHabbo().HomeRoom));
             session.Send(new FavouritesComposer(session.GetHabbo().FavoriteRooms));
-            session.Send(new FigureSetIdsComposer(FullWardrobeUtility.GetVisibleClothingParts(session.GetHabbo(), _clothingManager)));
+            session.Send(new FigureSetIdsComposer(session.GetHabbo().Clothing.GetClothingParts));
             session.Send(new UserRightsComposer(session.GetHabbo().IsVip ? 2 : 0, session.GetHabbo().Rank, session.GetHabbo().IsAmbassador));
             session.Send(new AvailabilityStatusComposer());
             session.Send(new AchievementScoreComposer(session.GetHabbo().HabboStats.AchievementPoints));
@@ -179,7 +174,7 @@ public class SsoTicketEvent : IPacketEvent
             if (!_cacheManager.ContainsUser(session.GetHabbo().Id))
                 _cacheManager.GenerateUser(session.GetHabbo().Id);
             // pixelrp: login never strips club parts (soft lapse) - only outfit saves validate club access.
-            session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, true);
+            session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true);
             session.GetHabbo().InitProcess();
             if (session.GetHabbo().Permissions.HasRight("mod_tickets"))
             {

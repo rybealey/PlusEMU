@@ -9,7 +9,7 @@ public class ClothingManager : IClothingManager
     private readonly IDatabase _database;
     private readonly ILogger<ClothingManager> _logger;
     // Replaced wholesale on every Init so readers never see a half-built
-    // shelf (FullWardrobeUtility and ProcessFigure enumerate it constantly).
+    // shelf (the clothing store and ProcessFigure enumerate it constantly).
     private Dictionary<int, ClothingItem> _clothing;
 
     public ClothingManager(IDatabase database, ILogger<ClothingManager> logger)
