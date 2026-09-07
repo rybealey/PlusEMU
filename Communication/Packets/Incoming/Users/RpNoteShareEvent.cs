@@ -1,10 +1,13 @@
 using Dapper;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Notes;
+using Plus.HabboHotel.Notifications;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
-/// <summary>pixelrp: the owner adds (1) or removes (0) a FRIEND on a note. userId 0 with remove = stop sharing with everyone.</summary>
+/// <summary>pixelrp: the owner adds (1) or removes (0) a FRIEND on a note. userId 0 with remove = stop sharing with everyone.
+/// Being added is a notification - the note appears under "Shared with you"
+/// and there is something new to read. Being removed is not.</summary>
 internal class RpNoteShareEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
@@ -39,6 +42,8 @@ internal class RpNoteShareEvent : IPacketEvent
         var after = NotesUtility.CollaboratorIds(id);
         NotesUtility.BroadcastNote(id);
         NotesUtility.SendNotesTo(before.Concat(after));
+        if (add)
+            NotificationUtility.Push(userId, NotificationUtility.Notes, "note_shared", NotesUtility.NoteTitle(id), habbo.Username, id);
         return Task.CompletedTask;
     }
 }

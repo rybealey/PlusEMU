@@ -181,6 +181,7 @@ public static class ServerPacketHeader
     public const uint RpClothingStoreComposer = 4018;
     public const uint RpBuyClothingResultComposer = 4019;
     public const uint RpOpenClothingStoreComposer = 4020;
+    public const uint RpNotificationComposer = 4021;
     public const uint RpInventoryComposer = 3904;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

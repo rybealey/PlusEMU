@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.News;
+using Plus.HabboHotel.Notifications;
 using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Users;
@@ -8,7 +9,11 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// <summary>
 /// pixelrp: staff create (id 0) or edit a story. Editing is the author's, or
 /// senior staff's. Pinning here unpins whatever was pinned before - one top
-/// story at a time. The feed goes to everyone afterwards.
+/// story at a time. The feed goes to everyone afterwards, and a brand-new
+/// story notifies the hotel - under the newsroom byline when it is published
+/// anonymously, so a notification never gives away a writer the feed itself
+/// keeps hidden. Editing a story notifies nobody: the headline people were
+/// told about is already on their phone.
 /// </summary>
 internal class RpSaveNewsPostEvent : IPacketEvent
 {
@@ -39,6 +44,8 @@ internal class RpSaveNewsPostEvent : IPacketEvent
         if (title.Length > NewsUtility.MaxTitle) title = title.Substring(0, NewsUtility.MaxTitle);
         if (body.Length > NewsUtility.MaxBody) body = body.Substring(0, NewsUtility.MaxBody);
         var now = NewsUtility.Now();
+        // set only when a story is created, so an edit notifies nobody
+        var postId = 0;
 
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
@@ -59,13 +66,16 @@ internal class RpSaveNewsPostEvent : IPacketEvent
             else
             {
                 if (pinned) connection.Execute("UPDATE `rp_news_posts` SET `pinned` = 0 WHERE `pinned` = 1");
-                connection.Execute(
-                    "INSERT INTO `rp_news_posts` (`author_id`, `category`, `title`, `body`, `image`, `pinned`, `anonymous`, `created_at`, `updated_at`) VALUES (@userId, @category, @title, @body, @image, @pinned, @anonymous, @now, @now)",
+                postId = connection.QuerySingle<int>(
+                    "INSERT INTO `rp_news_posts` (`author_id`, `category`, `title`, `body`, `image`, `pinned`, `anonymous`, `created_at`, `updated_at`) VALUES (@userId, @category, @title, @body, @image, @pinned, @anonymous, @now, @now); SELECT LAST_INSERT_ID();",
                     new { userId = habbo.Id, category, title, body, image, pinned = pinned ? 1 : 0, anonymous = anonymous ? 1 : 0, now });
             }
         }
 
         NewsUtility.BroadcastNews();
+        if (postId > 0)
+            NotificationUtility.PushAll(NotificationUtility.News, "story", title,
+                anonymous ? NewsUtility.GetByline().Username : habbo.Username, postId, exceptUserId: habbo.Id);
         return Task.CompletedTask;
     }
 }

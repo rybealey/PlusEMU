@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Notes;
+using Plus.HabboHotel.Notifications;
 using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Users;
@@ -9,10 +10,15 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// pixelrp: create (id 0, into folderId) or save a note. Last writer wins:
 /// the version bumps and the full note goes to every online collaborator;
 /// summaries follow so lists and previews stay current. caretLine keeps the
-/// editor's presence fresh.
+/// editor's presence fresh. Collaborators who are NOT looking at the note get
+/// a notification, throttled so a session of typing is one "Bella edited it".
 /// </summary>
 internal class RpSaveNoteEvent : IPacketEvent
 {
+    /// <summary>How long one editor's run of saves on a note counts as a
+    /// single edit for notification purposes.</summary>
+    private const int EditQuietSeconds = 300;
+
     private readonly IWordFilterManager _wordFilterManager;
 
     public RpSaveNoteEvent(IWordFilterManager wordFilterManager)
@@ -62,7 +68,15 @@ internal class RpSaveNoteEvent : IPacketEvent
 
         NotesUtility.SetOpen(id, habbo.Id, true, caretLine);
         NotesUtility.BroadcastNote(id);
-        NotesUtility.SendNotesTo(NotesUtility.CollaboratorIds(id));
+        var collaborators = NotesUtility.CollaboratorIds(id);
+        NotesUtility.SendNotesTo(collaborators);
+
+        // Anyone with the note open is watching the words appear; they need no
+        // telling. Everyone else on a shared note hears once per quiet period.
+        var watching = NotesUtility.OpenIds(id);
+        var audience = collaborators.Where(userId => userId != habbo.Id && !watching.Contains(userId)).ToList();
+        if (audience.Count > 0 && NotificationUtility.Debounce($"note_updated:{id}:{habbo.Id}", EditQuietSeconds))
+            NotificationUtility.PushTo(audience, NotificationUtility.Notes, "note_updated", title, habbo.Username, id);
         return Task.CompletedTask;
     }
 }

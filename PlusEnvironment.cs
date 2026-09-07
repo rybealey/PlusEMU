@@ -136,6 +136,9 @@ public class PlusEnvironment : IPlusEnvironment
             // pixelrp: shift tracking - clears stale on_duty flags and starts
             // the payout timer; needs the database, which is already up here.
             HabboHotel.Corporations.ShiftManager.Init();
+            // pixelrp: phone notifications - starts the sweep that spots an
+            // event about to begin. Everything else is pushed as it happens.
+            HabboHotel.Notifications.NotificationUtility.Init();
             // Allow services to self initialize
             foreach (var task in _startableTasks)
                 await task.Start();

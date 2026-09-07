@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Notifications;
 
 namespace Plus.Communication.Packets.Incoming.Camera;
 
@@ -8,7 +9,10 @@ namespace Plus.Communication.Packets.Incoming.Camera;
 /// pixelrp: add or remove a photo in an album. Adding requires album access
 /// (owner, or member of a shared album) and the photo must be the session
 /// user's own. Removing is allowed for the photo's contributor or the album
-/// owner. Replies with the album's refreshed photos + the album list (counts).
+/// owner. Replies with the album's refreshed photos + the album list (counts),
+/// and refreshes the list for the album's other members so a shared album
+/// fills up live. Adding to a shared album notifies them too; the phone
+/// collapses several into one "3 new photos in Rooftop Nights".
 /// </summary>
 internal class RpAlbumPhotoEvent : IPacketEvent
 {
@@ -27,11 +31,18 @@ internal class RpAlbumPhotoEvent : IPacketEvent
         var habbo = session.GetHabbo();
         if (habbo == null)
             return;
+        var albumName = "";
+        var shared = false;
+        var audience = new List<int>();
         using (var connection = _database.Connection())
         {
             var access = await RpAlbumLibrary.GetAlbumAccess(connection, albumId, habbo.Id);
             if (!access.CanView)
                 return;
+            shared = access.IsShared;
+            albumName = await connection.ExecuteScalarAsync<string>(
+                "SELECT `name` FROM `camera_web_albums` WHERE `id` = @albumId LIMIT 1", new { albumId }) ?? "";
+            audience = await RpAlbumLibrary.GetAudience(connection, albumId);
             if (add)
             {
                 var ownsPhoto = await connection.ExecuteScalarAsync<int>(
@@ -59,5 +70,14 @@ internal class RpAlbumPhotoEvent : IPacketEvent
         }
         await RpAlbumLibrary.SendAlbumPhotos(_database, session, albumId);
         await RpAlbumLibrary.SendAlbumList(_database, session);
+
+        // A private album has an audience of one - the person who just acted -
+        // so nothing to fan out and nobody to tell.
+        if (!shared)
+            return;
+        var others = audience.Where(id => id != habbo.Id).ToList();
+        await RpAlbumLibrary.SendAlbumListTo(_database, others);
+        if (add)
+            NotificationUtility.PushTo(others, NotificationUtility.Photos, "album_photo", albumName, habbo.Username, albumId);
     }
 }

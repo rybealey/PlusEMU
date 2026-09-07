@@ -87,6 +87,17 @@ public static class NotesUtility
             "SELECT 1 FROM `messenger_friendships` WHERE (`user_one_id` = @a AND `user_two_id` = @b) OR (`user_one_id` = @b AND `user_two_id` = @a) LIMIT 1", new { a, b }) != null;
     }
 
+    /// <summary>Who has the note open in the editor right now. They can see
+    /// every keystroke, so they are the people NOT to notify about an edit.</summary>
+    public static List<int> OpenIds(int noteId) => Open.TryGetValue(noteId, out var openers) ? openers.Keys.ToList() : new List<int>();
+
+    /// <summary>The note's title, for a notification that has to name it.</summary>
+    public static string NoteTitle(int noteId)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.QueryFirstOrDefault<string>("SELECT `title` FROM `rp_notes` WHERE `id` = @noteId LIMIT 1", new { noteId }) ?? "";
+    }
+
     public static List<int> CollaboratorIds(int noteId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
