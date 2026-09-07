@@ -30,7 +30,7 @@ internal class UpdateFigureDataEvent : IPacketEvent
         // pixelrp: staff keep club clothing access even without an active VIP subscription.
         // pixelrp: HC/club clothing is not VIP-gated - everyone passes the
         // club check (sellable-clothing ownership still applies).
-        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().HasFullWardrobe ? null : session.GetHabbo().Clothing.GetClothingParts, true);
+        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().Clothing.GetClothingParts, true);
         if (look == session.GetHabbo().Look)
             return Task.CompletedTask;
         if ((DateTime.Now - session.GetHabbo().LastClothingUpdateTime).TotalSeconds <= 2.0)

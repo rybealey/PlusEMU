@@ -5,7 +5,6 @@ using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Clothing;
 using Plus.HabboHotel.GameClients;
-using Plus.HabboHotel.Users.Clothing;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -35,7 +34,7 @@ internal class RpBuyClothingEvent : IPacketEvent
     }
 
     public static bool OwnsClothing(HabboHotel.Users.Habbo habbo, ClothingItem clothing)
-        => habbo.HasFullWardrobe || clothing.PartIds.All(partId => habbo.Clothing.TryGet(partId, out _));
+        => clothing.PartIds.All(partId => habbo.Clothing.TryGet(partId, out _));
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
@@ -126,7 +125,7 @@ internal class RpBuyClothingEvent : IPacketEvent
         }
 
         if (unlocked.Count > 0)
-            session.Send(new FigureSetIdsComposer(FullWardrobeUtility.GetVisibleClothingParts(habbo, _clothingManager)));
+            session.Send(new FigureSetIdsComposer(habbo.Clothing.GetClothingParts));
         if (tokens.Count > 0)
             session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
         session.Send(new RpClothingStoreComposer(_clothingManager.GetClothingAllParts));

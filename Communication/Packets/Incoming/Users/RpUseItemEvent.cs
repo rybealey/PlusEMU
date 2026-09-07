@@ -9,7 +9,6 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Subscriptions;
 using Plus.HabboHotel.Users;
-using Plus.HabboHotel.Users.Clothing;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -66,7 +65,7 @@ public class RpUseItemEvent : IPacketEvent
             }
             habbo.ConsumeRpItem(slot);
             habbo.Clothing.AddClothing(tokenClothing.ClothingName, tokenClothing.PartIds);
-            session.Send(new FigureSetIdsComposer(FullWardrobeUtility.GetVisibleClothingParts(habbo, _clothingManager)));
+            session.Send(new FigureSetIdsComposer(habbo.Clothing.GetClothingParts));
             session.SendNotification($"{tokenClothing.ShelfName} is yours to wear. Find it in Choose Your Looks.");
             session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
             return;
