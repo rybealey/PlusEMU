@@ -13,12 +13,13 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// nothing else. Health is Habbo.RpHealth, persisted, with no regen, so every
 /// point taken here stays taken until a staff :restore.
 ///
-/// A swing always happens. What decides the outcome is REACH: the four tiles
-/// sharing an edge with the attacker's own (Manhattan distance exactly 1). On
-/// one of those the punch lands for 3-5; anywhere else it is thrown and
+/// A swing always happens. What decides the outcome is REACH: the attacker's
+/// own tile plus the four sharing an edge with it (Manhattan distance &lt;= 1).
+/// On one of those the punch lands for 3-5; anywhere else it is thrown and
 /// missed, in public, for nothing. There is no dice roll - in range is always
-/// a hit. Note this is a TIGHTER reach than :slap and :push, which take the
-/// whole 3x3 block including the diagonals and the attacker's own tile.
+/// a hit. The shared tile counts because two players standing on one are as
+/// close as it gets. Note this is still TIGHTER than :slap and :push, which
+/// take the whole 3x3 block including the diagonals.
 ///
 /// Either way it is a fight, so it costs the cooldown and it makes the
 /// ATTACKER aggressive: 100, which the room tick then drains over 45 seconds
@@ -146,9 +147,9 @@ internal class HitCommand : ITargetChatCommand
         _lastHit[habbo.Id] = DateTime.UtcNow;
         habbo.RpAggression = AggressionOnSwing;
 
-        // The four tiles sharing an edge with the attacker's: exactly one step,
-        // no diagonals, and not the attacker's own tile.
-        var inReach = (Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y)) == 1;
+        // The attacker's own tile plus the four sharing an edge with it: at most
+        // one step, no diagonals. Nought covers two players on a shared tile.
+        var inReach = (Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y)) <= 1;
 
         // Leading AND trailing "*" matter: the client only treats a style-4
         // bubble as an action when the text is wrapped in them, and it then
