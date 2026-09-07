@@ -190,6 +190,49 @@ public static class PoliceState
     }
 
     /// <summary>
+    /// The captor has asked to walk somewhere: send the suspect off at the SAME
+    /// moment, to the tile just beyond the captor's destination in the
+    /// direction of travel.
+    ///
+    /// This is the whole trick, and it is how riding already works here - a
+    /// horse and its rider are both given the destination in the same breath
+    /// (see MoveAvatarEvent), so the two walks are scheduled together and the
+    /// client interpolates them side by side. Reacting to the captor's steps
+    /// one at a time cannot look glued however smooth each step is: the
+    /// suspect only learns where to go once the captor has arrived, so they
+    /// are always a step behind and always starting a fresh walk.
+    ///
+    /// The heading is taken from the captor's current tile to their
+    /// destination, which is exact for the straight walks that make up most
+    /// movement and close enough on a path that bends.
+    /// </summary>
+    public static void OnCaptorWalkRequest(Room room, RoomUser captor, int destX, int destY)
+    {
+        if (room == null || captor == null || captor.IsBot || EscortByCaptor.IsEmpty)
+            return;
+        if (!EscortByCaptor.TryGetValue(captor.UserId, out var suspectId))
+            return;
+        var suspect = room.GetRoomUserManager().GetRoomUserByHabbo(suspectId);
+        if (suspect == null || suspect.IsBot)
+            return;
+
+        var map = room.GetGameMap();
+        var dx = Math.Sign(destX - captor.X);
+        var dy = Math.Sign(destY - captor.Y);
+        var x = destX + dx;
+        var y = destY + dy;
+        // No heading, or nothing to stand on out in front: walk them onto the
+        // captor's own destination instead - players may share a tile here.
+        if ((dx == 0 && dy == 0) || !map.ValidTile(x, y) || !map.CanWalk(x, y, false))
+        {
+            x = destX;
+            y = destY;
+        }
+
+        suspect.MoveTo(x, y, true);
+    }
+
+    /// <summary>
     /// How far behind the suspect may fall before they are put down instead of
     /// walked. Reached only when something moved them without walking them - a
     /// roller, a teleport, a door - where walking back would mean a long
@@ -198,19 +241,11 @@ public static class PoliceState
     private const int SnapDistance = 4;
 
     /// <summary>
-    /// March the suspect along with the captor's step. They are driven onto the
-    /// tile one PAST the captor in the direction the captor is facing, so they
-    /// are shoved along in front rather than trailing behind, and they are
-    /// turned to face the captor's way whether or not they moved.
-    ///
-    /// They are WALKED, not placed. MoveTo routes into Movement V2, which emits
-    /// the timed edge records the client interpolates - that is what makes this
-    /// a walk on screen, with the walking posture and animation, instead of the
-    /// jump a SetPos gives. One tile at a time, so this is not a route being
-    /// planned across the room: it is the same single step the captor just took.
-    ///
-    /// V2 never consults CanWalk, which is what lets a suspect who cannot walk
-    /// for themselves still be driven.
+    /// Runs as the captor completes each tile. This is only the correction
+    /// pass - the suspect's actual walking is issued alongside the captor's in
+    /// OnCaptorWalkRequest, which is what keeps the two in step. Here we only
+    /// keep them facing the captor's way and rescue them if they have somehow
+    /// ended up far out of position.
     ///
     /// LOCK ORDER: this runs under RoomUserManager._cycleLock and MoveTo takes
     /// the room's MovementLock, so the order here is _cycleLock then
@@ -248,19 +283,21 @@ public static class PoliceState
         suspect.RotHead = captor.RotBody;
         suspect.UpdateNeeded = true;
 
+        // Deliberately NOT a walk request. The suspect's walking is issued
+        // with the captor's, in OnCaptorWalkRequest; re-targeting them here on
+        // every tile the captor completes would interrupt that walk once per
+        // step and put the stutter straight back.
         if (suspect.X == x && suspect.Y == y)
             return;
 
         if ((Math.Abs(suspect.X - x) + Math.Abs(suspect.Y - y)) > SnapDistance)
         {
+            // Far enough adrift that no walk explains it - a roller, a
+            // teleport, a door, or a captor who stopped somewhere the suspect
+            // could not follow. Put them back in front.
             suspect.ClearMovement(true);
             suspect.SetPos(x, y, map.SqAbsoluteHeight(x, y));
-            return;
         }
-
-        // pOverride so a destination that already holds the captor is not
-        // refused before the pathfinder is even asked.
-        suspect.MoveTo(x, y, true);
     }
 
     private static int RotationX(int rotation) => rotation switch
