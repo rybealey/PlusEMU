@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 
@@ -8,14 +9,22 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// <summary>
 /// pixelrp fighting system: slap another player.
 ///
-/// First of the combat actions and deliberately inert - it deals NO damage
-/// yet, it only emits the action bubble. Health lives on Habbo.RpHealth and is
-/// pushed to HUDs by RpStatsComposer, so wiring damage in later is a matter of
-/// adjusting that and re-broadcasting.
+/// The light end of combat: 1 damage, against :hit's 3-5, from the wider
+/// reach - the slapper's own tile plus the eight surrounding it (Chebyshev
+/// distance &lt;= 1, the full 3x3 block, diagonals included), which is the
+/// adjacency :push uses. :hit trades that away for the four edge-adjacent
+/// tiles only.
 ///
-/// Reach is the slapper's own tile plus the eight surrounding it (Chebyshev
-/// distance &lt;= 1 - the full 3x3 block, diagonals included). That is the same
-/// adjacency rule :push applies, so there is only one reach rule to learn.
+/// It only bites in an unsafe zone. In a safe one a slap is pure flavour: the
+/// bubble goes out, nobody loses health and nobody becomes aggressive. That
+/// last part matters - if a harmless slap still made you aggressive, two
+/// players could slap each other inside a safe zone to flag them both and so
+/// unlock :hit there, which is exactly what the zone is meant to prevent.
+///
+/// Where it does bite it behaves like the rest of combat: the slapper becomes
+/// aggressive (100, drained by the room tick over 45 seconds), passive
+/// players neither slap nor get slapped, and a target taken to 0 health drops
+/// into the same frozen lay :kill applies.
 /// </summary>
 internal class SlapCommand : ITargetChatCommand
 {
@@ -38,8 +47,15 @@ internal class SlapCommand : ITargetChatCommand
     /// </summary>
     private const int FightBubble = 4;
 
-    /// <summary>Seconds a player must wait between slaps.</summary>
+    /// <summary>Seconds a player must wait between slaps. Longer than :hit's
+    /// three: a slap reaches further and costs the target less.</summary>
     private const int CooldownSeconds = 5;
+
+    /// <summary>Health a slap takes off, in an unsafe zone.</summary>
+    private const int Damage = 1;
+
+    /// <summary>What a slap that lands sets the slapper's aggression to.</summary>
+    private const int AggressionOnSlap = 100;
 
     /// <summary>
     /// Last successful slap per player id. Commands are DI singletons, so this
@@ -71,6 +87,35 @@ internal class SlapCommand : ITargetChatCommand
         if (thisUser == null)
             return Task.CompletedTask;
 
+        // A slap only does anything where fighting is allowed; inside a safe
+        // zone it stays the harmless gesture it has always been.
+        var habbo = session.GetHabbo();
+        var hurts = !room.IsSafeZone;
+        if (hurts)
+        {
+            // Passive and health both live in user_rp_stats.
+            habbo.EnsureRpStatsLoaded();
+            target.EnsureRpStatsLoaded();
+
+            if (habbo.IsRpPassive)
+            {
+                session.SendWhisper("You cannot fight while you are passive.");
+                return Task.CompletedTask;
+            }
+
+            if (target.IsRpPassive)
+            {
+                session.SendWhisper($"{target.Username} is passive and cannot be fought.");
+                return Task.CompletedTask;
+            }
+
+            if (target.RpHealth <= 0)
+            {
+                session.SendWhisper($"{target.Username} is already out cold.");
+                return Task.CompletedTask;
+            }
+        }
+
         if (_lastSlap.TryGetValue(session.GetHabbo().Id, out var last))
         {
             var elapsed = (DateTime.UtcNow - last).TotalSeconds;
@@ -99,6 +144,23 @@ internal class SlapCommand : ITargetChatCommand
         // "*Actor slaps Target across the face*".
         _lastSlap[session.GetHabbo().Id] = DateTime.UtcNow;
         room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*slaps {target.Username} across the face*", 0, FightBubble));
+
+        if (!hurts)
+            return Task.CompletedTask;
+
+        target.RpHealth = Math.Max(0, target.RpHealth - Damage);
+        target.SaveRpStats();
+        habbo.RpAggression = AggressionOnSlap;
+        SendStats(room, targetUser, target);
+        SendStats(room, thisUser, habbo);
+
+        if (target.RpHealth <= 0)
+            room.GetRoomUserManager().ApplyRpKnockout(targetUser);
+
         return Task.CompletedTask;
     }
+
+    private static void SendStats(Room room, RoomUser user, Habbo habbo) =>
+        room.SendPacket(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
+            (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
 }
