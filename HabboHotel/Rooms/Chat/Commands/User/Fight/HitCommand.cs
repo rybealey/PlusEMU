@@ -20,18 +20,20 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// a hit. Note this is a TIGHTER reach than :slap and :push, which take the
 /// whole 3x3 block including the diagonals and the attacker's own tile.
 ///
-/// Either way it is a fight, so it costs the cooldown and it makes both
-/// players aggressive: 100, which the room tick then drains over 45 seconds
-/// (see RoomUserManager.OnCycle). Flagging the TARGET as well as the attacker
-/// is what makes the safe-zone rule below mean anything - otherwise the only
-/// aggressive player in a chase is the one doing the chasing.
+/// Either way it is a fight, so it costs the cooldown and it makes the
+/// ATTACKER aggressive: 100, which the room tick then drains over 45 seconds
+/// (see RoomUserManager.OnCycle). Only the attacker - throwing a punch is what
+/// makes you aggressive, being hit is not.
 ///
 /// Safe zones (rooms.is_safe_zone, owner-set under Room settings > Roleplay >
 /// Zoning) are where fighting stops - with one exception: two players who are
-/// both still aggressive can carry on there until it runs out. So a fight
-/// started outside can be chased through a safe zone for as long as the
-/// aggression lasts, but nobody standing in one calmly can be dragged into a
-/// fight, and an aggressive player cannot walk in and start one.
+/// both still aggressive can carry on there until it runs out. Because only
+/// swinging earns aggression, that exception needs a MUTUAL fight: both have
+/// thrown a punch, so both are flagged, and they can take the brawl through a
+/// safe zone until it drains. A one-sided aggressor cannot chase someone who
+/// never swung back into one, nobody standing in a safe zone calmly can be
+/// dragged into a fight, and an aggressive player cannot walk in and start
+/// one.
 ///
 /// Passive players (a smoothie, or City Government on duty) neither hit nor
 /// get hit - the untouchable that IsRpPassive has always promised and that
@@ -62,7 +64,7 @@ internal class HitCommand : ITargetChatCommand
     private const int MinDamage = 3;
     private const int MaxDamage = 5;
 
-    /// <summary>What a swing sets both players' aggression to.</summary>
+    /// <summary>What a swing sets the attacker's aggression to.</summary>
     private const int AggressionOnSwing = 100;
 
     /// <summary>
@@ -139,11 +141,10 @@ internal class HitCommand : ITargetChatCommand
             }
         }
 
-        // Past here the punch is thrown, so it costs the cooldown and makes
-        // both of them aggressive whether or not it connects.
+        // Past here the punch is thrown, so it costs the cooldown and makes the
+        // attacker aggressive whether or not it connects.
         _lastHit[habbo.Id] = DateTime.UtcNow;
         habbo.RpAggression = AggressionOnSwing;
-        target.RpAggression = AggressionOnSwing;
 
         // The four tiles sharing an edge with the attacker's: exactly one step,
         // no diagonals, and not the attacker's own tile.
@@ -159,13 +160,14 @@ internal class HitCommand : ITargetChatCommand
             target.RpHealth = Math.Max(0, target.RpHealth - damage);
             target.SaveRpStats();
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
+            // the only thing that moved on the target is their health
+            SendStats(room, targetUser, target);
         }
         else
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, but misses*", 0, FightBubble));
 
-        // Aggression moved on both, and the target's health may have too.
+        // The attacker's aggression moved either way.
         SendStats(room, thisUser, habbo);
-        SendStats(room, targetUser, target);
 
         // Out of health is out of the fight: the same frozen lay :kill applies.
         if (target.RpHealth <= 0)
