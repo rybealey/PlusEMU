@@ -142,8 +142,9 @@ public static class PoliceState
 
     /// <summary>
     /// Take a suspect into custody. The suspect stops being able to walk for
-    /// themselves - from here their movement is whatever the captor's steps
-    /// give them. False when either side is already in an escort.
+    /// themselves - from here they go wherever the captor goes, sharing the
+    /// captor's tile and their walks. False when either side is already in an
+    /// escort.
     /// </summary>
     public static bool StartEscort(int captorId, int suspectId, RoomUser suspectUser)
     {
@@ -202,9 +203,14 @@ public static class PoliceState
     /// suspect only learns where to go once the captor has arrived, so they
     /// are always a step behind and always starting a fresh walk.
     ///
-    /// The heading is taken from the captor's current tile to their
-    /// destination, which is exact for the straight walks that make up most
-    /// movement and close enough on a path that bends.
+    /// The suspect is sent to the captor's OWN destination, not to a tile
+    /// beyond it. Two avatars may share a tile here, and the client draws the
+    /// second one slightly in front of the first - which is exactly what
+    /// "being marched in front of the officer" looks like. Giving them a tile
+    /// of their own put a gap between the pair and, worse, gave them a
+    /// different path to walk: two routes of their own timing that drift apart
+    /// on every corner. One destination means one path, one duration, and a
+    /// pair that moves as a single object.
     /// </summary>
     public static void OnCaptorWalkRequest(Room room, RoomUser captor, int destX, int destY)
     {
@@ -216,20 +222,7 @@ public static class PoliceState
         if (suspect == null || suspect.IsBot)
             return;
 
-        var map = room.GetGameMap();
-        var dx = Math.Sign(destX - captor.X);
-        var dy = Math.Sign(destY - captor.Y);
-        var x = destX + dx;
-        var y = destY + dy;
-        // No heading, or nothing to stand on out in front: walk them onto the
-        // captor's own destination instead - players may share a tile here.
-        if ((dx == 0 && dy == 0) || !map.ValidTile(x, y) || !map.CanWalk(x, y, false))
-        {
-            x = destX;
-            y = destY;
-        }
-
-        suspect.MoveTo(x, y, true);
+        suspect.MoveTo(destX, destY, true);
     }
 
     /// <summary>
@@ -244,8 +237,8 @@ public static class PoliceState
     /// Runs as the captor completes each tile. This is only the correction
     /// pass - the suspect's actual walking is issued alongside the captor's in
     /// OnCaptorWalkRequest, which is what keeps the two in step. Here we only
-    /// keep them facing the captor's way and rescue them if they have somehow
-    /// ended up far out of position.
+    /// keep them facing the captor's way and put them back on the captor's
+    /// tile if they have somehow ended up far off it.
     ///
     /// LOCK ORDER: this runs under RoomUserManager._cycleLock and MoveTo takes
     /// the room's MovementLock, so the order here is _cycleLock then
@@ -264,18 +257,9 @@ public static class PoliceState
         if (suspect == null || suspect.IsBot)
             return;
 
-        var map = room.GetGameMap();
-        var dx = RotationX(captor.RotBody);
-        var dy = RotationY(captor.RotBody);
-        var x = captor.X + dx;
-        var y = captor.Y + dy;
-        // Nowhere to be shoved (no facing, a wall, the edge of the room): the
-        // captor's own tile will do - players may share one here.
-        if ((dx == 0 && dy == 0) || !map.ValidTile(x, y) || !map.CanWalk(x, y, false))
-        {
-            x = captor.X;
-            y = captor.Y;
-        }
+        // The captor's own tile is where the suspect belongs.
+        var x = captor.X;
+        var y = captor.Y;
 
         // Facing goes with the captor every time, so a suspect already standing
         // on the right tile still turns when their captor does.
@@ -296,23 +280,9 @@ public static class PoliceState
             // teleport, a door, or a captor who stopped somewhere the suspect
             // could not follow. Put them back in front.
             suspect.ClearMovement(true);
-            suspect.SetPos(x, y, map.SqAbsoluteHeight(x, y));
+            suspect.SetPos(x, y, room.GetGameMap().SqAbsoluteHeight(x, y));
         }
     }
-
-    private static int RotationX(int rotation) => rotation switch
-    {
-        1 or 2 or 3 => 1,
-        5 or 6 or 7 => -1,
-        _ => 0
-    };
-
-    private static int RotationY(int rotation) => rotation switch
-    {
-        3 or 4 or 5 => 1,
-        7 or 0 or 1 => -1,
-        _ => 0
-    };
 
     // ---- leaving -----------------------------------------------------------
 
