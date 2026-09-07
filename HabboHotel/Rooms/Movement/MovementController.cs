@@ -687,6 +687,15 @@ public static class MovementController
             from = s.EdgeTo;
             to = FrontTile(map, w.EdgeTo, w.Facing);
             s.Facing = w.Facing;
+            if (from == to)
+            {
+                // The captor is stepping onto the suspect's tile and the tile
+                // beyond is blocked: there is nothing to walk. Rest for the
+                // beat rather than animate a walk to nowhere; the next real
+                // edge picks the unit up again in the same session.
+                moving = false;
+                flags = RpMovementV2Flags.WalkEnd;
+            }
         }
         else
         {

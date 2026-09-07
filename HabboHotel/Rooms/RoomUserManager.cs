@@ -749,6 +749,12 @@ public class RoomUserManager
                     user.X = edge.FromX;
                     user.Y = edge.FromY;
                     user.Z = edge.FromZ100 / 100.0;
+                    // A knocked-out unit lies 0.35 below floor height
+                    // (UpdateRpKnockoutState) and UpdateUserStatus leaves a
+                    // lying unit alone, so the offset has to travel with them.
+                    // Only an escort close-out or displacement ever moves one.
+                    if (user.RpKnockedOut)
+                        user.Z -= 0.35;
 
                     foreach (var item in _room.GetGameMap().GetCoordinatedItems(arrived).ToList())
                         item.UserWalksOnFurni(user);

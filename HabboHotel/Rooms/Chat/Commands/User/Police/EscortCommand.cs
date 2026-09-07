@@ -76,6 +76,15 @@ internal class EscortCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
+        // An escort ends the moment its suspect is knocked out, so it cannot
+        // begin on one either - nobody marches lying down.
+        target.EnsureRpStatsLoaded();
+        if (target.RpHealth <= 0)
+        {
+            session.SendWhisper($"{target.Username} is out cold and cannot be escorted.");
+            return Task.CompletedTask;
+        }
+
         // Hands-on, like the cuff itself.
         if (Math.Abs(targetUser.X - thisUser.X) > 1 || Math.Abs(targetUser.Y - thisUser.Y) > 1)
         {
