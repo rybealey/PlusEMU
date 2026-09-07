@@ -216,7 +216,10 @@ public static class Program
     private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs args)
     {
         var e = (Exception)args.ExceptionObject;
-        //Logger.LogCriticalException("SYSTEM CRITICAL EXCEPTION: " + e);
+        // pixelrp: say WHAT killed the hotel before the goodbye countdown -
+        // an unlogged crash loop is undiagnosable from the outside.
+        Console.Error.WriteLine($"SYSTEM CRITICAL EXCEPTION: {e}");
+        try { Plus.Core.ExceptionLogger.LogException(e); } catch { }
         PlusEnvironment.PerformShutDown();
     }
 }
