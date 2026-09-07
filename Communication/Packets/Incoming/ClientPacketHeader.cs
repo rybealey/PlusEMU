@@ -428,6 +428,8 @@ public static class ClientPacketHeader
     public const uint RpDeleteNewsPostEvent = 4014;
     public const uint RpPinNewsPostEvent = 4015;
     public const uint RpGetTunesAccessEvent = 4017;
+    public const uint RpGetClothingStoreEvent = 4018;
+    public const uint RpBuyClothingEvent = 4019;
     public const uint RpUseItemEvent = 3905;
     public const uint RpMoveItemEvent = 43945; //3945
     public const uint RpGetCorpsEvent = 43948; //3948
