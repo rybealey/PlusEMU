@@ -337,6 +337,9 @@ public class RoomUserManager
             if (session.GetHabbo().TentId > 0)
                 session.GetHabbo().TentId = 0;
             session.GetHabbo().CurrentRoom = null;
+            // pixelrp police: a stun, a cuff and an escort are all things that
+            // happen in a room - none of them follow anyone out of it.
+            Chat.Commands.User.Police.PoliceState.Forget(session.GetHabbo().Id);
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
@@ -918,7 +921,9 @@ public class RoomUserManager
                         }
                     }
                 }
-                if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
+                    // pixelrp police: lift a stun whose few seconds are up.
+                    Chat.Commands.User.Police.PoliceState.TickStun(user);
+                    if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
                         _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.IsRpPassive ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
@@ -1312,6 +1317,10 @@ public class RoomUserManager
                 user.Z -= 0.35;
                 user.UpdateNeeded = true;
             }
+            // pixelrp police escort: a captor's step drags their suspect along.
+            // Here rather than on a timer of its own, so the suspect moves with
+            // the step instead of catching up to it.
+            Chat.Commands.User.Police.PoliceState.DragSuspect(_room, user);
             if (cyclegameitems)
             {
                 if (_room.GotSoccer())
