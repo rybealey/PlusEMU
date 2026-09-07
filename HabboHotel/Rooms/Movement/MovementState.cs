@@ -109,6 +109,25 @@ public sealed class MovementState : IDueHeapNode
     // ---- route ------------------------------------------------------------
     public readonly RouteBuffer Route = new();
 
+    // ---- escort shadow (pixelrp police) -----------------------------------
+    /// <summary>
+    /// VirtualId of the unit this walker marches one tile ahead of itself, or 0.
+    /// The shadow has NO route of its own: every edge this walker stages, a
+    /// matching one is staged for the shadow with identical timing (see
+    /// MovementController.StageShadow). That is what keeps an escorted suspect
+    /// in lockstep - the pathfinder is never consulted for them at all.
+    /// Guarded by MovementLock like every other field here.
+    /// </summary>
+    public int ShadowVirtualId;
+
+    /// <summary>
+    /// VirtualId of the walker this unit is the shadow of, or 0. While set, this
+    /// unit's own walk requests are refused at RequestMove - nothing may give a
+    /// shadowed unit a route while something else is deciding where it goes.
+    /// </summary>
+    public int ShadowedBy;
+
+
     // ---- promises ---------------------------------------------------------
     /// <summary>
     /// Highest edge index already PROMISED on the wire for the current

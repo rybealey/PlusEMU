@@ -38,7 +38,7 @@ internal class UnescortCommand : IChatCommand
         }
 
         var suspectUser = room.GetRoomUserManager().GetRoomUserByHabbo(suspectId);
-        PoliceState.EndEscort(habbo.Id, suspectUser);
+        PoliceState.EndEscort(room, habbo.Id, suspectUser);
 
         var thisUser = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
         if (thisUser == null)

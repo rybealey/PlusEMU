@@ -133,6 +133,11 @@ public static class MovementV2Bridge
                 return;
             if (!movement.States.TryGetValue(user.VirtualId, out var state))
                 return;
+            // pixelrp police escort: a shadowed suspect goes where their captor
+            // goes and nowhere else. CanWalk only gates the client's own click
+            // (MoveAvatarEvent); this closes every server-side path too.
+            if (state.ShadowedBy != 0)
+                return;
 
             // Keep V2's idea of where the avatar stands in step with anything
             // else that moved it (roller, teleport, room entry). A Pending
@@ -156,6 +161,176 @@ public static class MovementV2Bridge
 
         // Latency path: wake the scheduler immediately rather than waiting for
         // its next due time.
+        MovementScheduler.Instance.Signal(movement);
+    }
+
+    /// <summary>
+    /// Stop a unit's walk where it stands and close it out on the wire.
+    /// RoomUser.ClearMovement only clears V1's own fields, so on its own a
+    /// "frozen" avatar would finish its route while flagged unable to walk.
+    /// </summary>
+    public static void Halt(RoomUser? user)
+    {
+        if (user == null)
+            return;
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return;
+            if (!movement.States.TryGetValue(user.VirtualId, out var state))
+                return;
+            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
+                return;
+            MovementController.StopWalk(movement, state);
+        }
+        MovementScheduler.Instance.Signal(movement);
+    }
+
+    // ---- police escort ----------------------------------------------------
+    // The suspect is the captor's SHADOW: they stop being a walker and, for
+    // every record the captor puts on the wire, the controller stages one for
+    // them one tile in front (MovementController.StageShadow). Nothing here
+    // pathfinds for the suspect and nothing ever will while the link stands -
+    // RequestMove refuses them outright. Pair/Unpair/Turn run on command and
+    // packet threads holding only MovementLock, like RequestMove.
+
+    /// <summary>
+    /// Make <paramref name="suspect"/> the shadow of <paramref name="captor"/>.
+    /// Any walk of the suspect's own is closed out, then they are displaced to
+    /// the tile in front of the captor - in front of where the captor is
+    /// heading if they are mid-walk - facing the captor's way. False when
+    /// either unit is unknown to V2 or already in a pair.
+    /// </summary>
+    public static bool Pair(Room? room, RoomUser? captor, RoomUser? suspect)
+    {
+        if (room == null || captor == null || suspect == null || captor == suspect)
+            return false;
+        if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
+            return false;
+
+        var map = room.GetGameMap();
+        var now = MovementScheduler.Instance.Clock.NowMs;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return false;
+            if (!movement.States.TryGetValue(captor.VirtualId, out var c) ||
+                !movement.States.TryGetValue(suspect.VirtualId, out var s))
+                return false;
+            if (c.ShadowVirtualId != 0 || c.ShadowedBy != 0 || s.ShadowedBy != 0 || s.ShadowVirtualId != 0)
+                return false;
+
+            Point anchor;
+            byte facing;
+            if (c.Mode == MovementMode.Moving)
+            {
+                anchor = c.EdgeTo;
+                facing = c.Facing;
+            }
+            else
+            {
+                // Standing (or Pending, which has not moved): server truth is
+                // where the avatar is and which way it faces - Facing here is
+                // only refreshed by walks and turns, RotBody by everything.
+                if (c.Mode != MovementMode.Pending)
+                {
+                    c.Tile = new Point(captor.X, captor.Y);
+                    c.TileZ = captor.Z;
+                }
+                anchor = c.Tile;
+                facing = (byte)captor.RotBody;
+                c.Facing = facing;
+            }
+
+            c.ShadowVirtualId = s.VirtualId;
+            s.ShadowedBy = c.VirtualId;
+            MovementController.StageDisplacement(movement, s, MovementController.FrontTile(map, anchor, facing), facing, map, now);
+        }
+        MovementScheduler.Instance.Signal(movement);
+        return true;
+    }
+
+    /// <summary>
+    /// Break a pair from whichever side is known. The shadow is closed out
+    /// with a walk-end on the tile it was last heading to, so a suspect let go
+    /// mid-walk stops there instead of keeping a walking posture forever.
+    /// Safe with either user null or already gone.
+    /// </summary>
+    public static void Unpair(Room? room, RoomUser? captor, RoomUser? suspect)
+    {
+        if (room == null || (captor == null && suspect == null))
+            return;
+        if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+
+        var map = room.GetGameMap();
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return;
+            MovementState? c = null;
+            MovementState? s = null;
+            if (captor != null)
+                movement.States.TryGetValue(captor.VirtualId, out c);
+            if (suspect != null)
+                movement.States.TryGetValue(suspect.VirtualId, out s);
+            // Follow the link for whichever side the caller could not name.
+            if (c == null && s != null && s.ShadowedBy != 0)
+                movement.States.TryGetValue(s.ShadowedBy, out c);
+            if (s == null && c != null && c.ShadowVirtualId != 0)
+                movement.States.TryGetValue(c.ShadowVirtualId, out s);
+
+            if (c != null)
+                c.ShadowVirtualId = 0;
+            if (s != null && s.ShadowedBy != 0)
+            {
+                s.ShadowedBy = 0;
+                MovementController.StageShadowEnd(movement, s, map);
+            }
+        }
+        MovementScheduler.Instance.Signal(movement);
+    }
+
+    /// <summary>
+    /// The captor turned on the spot. Facing is otherwise only set by walks,
+    /// so record it, and move the shadow round to the new front. Ignored while
+    /// the captor is mid-walk - the edge owns their facing then, and the
+    /// client does not send LookTo for a walking avatar anyway.
+    /// </summary>
+    public static void Turn(Room? room, RoomUser? captor, byte facing)
+    {
+        if (room == null || captor == null)
+            return;
+        if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+
+        var map = room.GetGameMap();
+        var now = MovementScheduler.Instance.Clock.NowMs;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return;
+            if (!movement.States.TryGetValue(captor.VirtualId, out var c))
+                return;
+            if (c.Mode == MovementMode.Moving)
+                return;
+            c.Facing = facing;
+            if (c.ShadowVirtualId == 0)
+                return;
+            if (!movement.States.TryGetValue(c.ShadowVirtualId, out var s) || s.ShadowedBy != c.VirtualId)
+            {
+                c.ShadowVirtualId = 0;
+                return;
+            }
+            if (c.Mode != MovementMode.Pending)
+            {
+                c.Tile = new Point(captor.X, captor.Y);
+                c.TileZ = captor.Z;
+            }
+            MovementController.StageDisplacement(movement, s, MovementController.FrontTile(map, c.Tile, facing), facing, map, now);
+        }
         MovementScheduler.Instance.Signal(movement);
     }
 }

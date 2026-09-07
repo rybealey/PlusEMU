@@ -156,6 +156,15 @@ public class RoomUserManager
             user.UpdateRpKnockoutState();
             SerializeStatusUpdates();
         }
+        // Out cold means down where you fell: UpdateRpKnockoutState only clears
+        // V1's fields, so the V2 walk is stopped here too. And nobody marches,
+        // or is marched, while out cold - an escort involving them ends.
+        // Outside _cycleLock: both take the room's MovementLock.
+        if (user.RpKnockedOut)
+        {
+            Movement.MovementV2Bridge.Halt(user);
+            Chat.Commands.User.Police.PoliceState.OnKnockout(_room, user);
+        }
     }
 
     public bool AddAvatarToRoom(GameClient session)
@@ -339,7 +348,7 @@ public class RoomUserManager
             session.GetHabbo().CurrentRoom = null;
             // pixelrp police: a stun, a cuff and an escort are all things that
             // happen in a room - none of them follow anyone out of it.
-            Chat.Commands.User.Police.PoliceState.Forget(session.GetHabbo().Id);
+            Chat.Commands.User.Police.PoliceState.Forget(_room, session.GetHabbo().Id);
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
@@ -752,6 +761,14 @@ public class RoomUserManager
                 {
                     user.IsWalking = false;
                     user.RemoveStatus("mv");
+                    // A displacement is the one record that repositions a
+                    // standing unit, and it has to turn them too: the escort's
+                    // suspect is displaced to face the way their captor faces.
+                    if (edge.IsDisplacement)
+                    {
+                        user.RotBody = edge.Facing;
+                        user.RotHead = edge.Facing;
+                    }
                 }
                 else
                 {
@@ -1317,10 +1334,6 @@ public class RoomUserManager
                 user.Z -= 0.35;
                 user.UpdateNeeded = true;
             }
-            // pixelrp police escort: a captor's step drags their suspect along.
-            // Here rather than on a timer of its own, so the suspect moves with
-            // the step instead of catching up to it.
-            Chat.Commands.User.Police.PoliceState.DragSuspect(_room, user);
             if (cyclegameitems)
             {
                 if (_room.GotSoccer())

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.Rooms.Movement;
 using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
@@ -21,9 +22,11 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// tasks. Arcturus armed a ScheduledFuture per stun and ran the escort off its
 /// own 250ms timer; pixelrp already ticks every room at 500ms and already
 /// drives the knockout, passive and aggression clocks from there, so the stun
-/// clock rides the room tick (<see cref="TickStun"/>) and the escort drag rides
-/// the step the captor actually takes (<see cref="DragSuspect"/>). No timer to
-/// cancel, nothing to leak, and no second thread touching a RoomUser.
+/// clock rides the room tick (<see cref="TickStun"/>), and the escort is not a
+/// clock at all: the suspect becomes the captor's shadow inside the movement
+/// engine (<see cref="MovementV2Bridge.Pair"/>), staged one tile in front on
+/// every step the captor takes. No timer to cancel, nothing to leak, and no
+/// second thread touching a RoomUser.
 /// </summary>
 public static class PoliceState
 {
@@ -68,8 +71,18 @@ public static class PoliceState
             return;
         Stunned[user.UserId] = DateTime.UtcNow.AddSeconds(seconds);
         // Halt an in-flight walk on the spot instead of letting it finish the
-        // path, then block new clicks for the duration.
-        user.ClearMovement(true);
+        // path, then block new clicks for the duration. ClearMovement is V1's;
+        // the walk itself belongs to V2 and has to be stopped there too.
+        // Not for a shadowed suspect: they have no walk of their own, and
+        // their "mv" is written by the escort's records each beat - clearing
+        // it here would only strip the walking posture for a beat while they
+        // keep sliding. (:stun refuses them anyway; this covers any other
+        // caller.)
+        if (!IsBeingEscorted(user.UserId))
+        {
+            user.ClearMovement(true);
+            MovementV2Bridge.Halt(user);
+        }
         user.CanWalk = false;
         user.ApplyEffect(StunEffectId);
         user.UpdateNeeded = true;
@@ -141,15 +154,18 @@ public static class PoliceState
     public static int CaptorOf(int suspectId) => EscortBySuspect.TryGetValue(suspectId, out var id) ? id : 0;
 
     /// <summary>
-    /// Take a suspect into custody. The suspect stops being able to walk for
-    /// themselves - from here they go wherever the captor goes, sharing the
-    /// captor's tile and their walks. False when either side is already in an
-    /// escort.
+    /// Take a suspect into custody. From here the suspect does not walk: the
+    /// movement engine makes them the captor's shadow, so every step the
+    /// captor takes is mirrored onto them one tile in front, facing the same
+    /// way, on the same beat (<see cref="MovementV2Bridge.Pair"/>). False when
+    /// either side is already in an escort or the pair could not be made.
     /// </summary>
-    public static bool StartEscort(int captorId, int suspectId, RoomUser suspectUser)
+    public static bool StartEscort(Room room, RoomUser captor, RoomUser suspect)
     {
-        if (captorId == suspectId)
+        if (room == null || captor == null || suspect == null || captor == suspect)
             return false;
+        var captorId = captor.UserId;
+        var suspectId = suspect.UserId;
         if (IsEscorting(captorId) || IsBeingEscorted(suspectId) || IsEscorting(suspectId) || IsBeingEscorted(captorId))
             return false;
         if (!EscortByCaptor.TryAdd(captorId, suspectId))
@@ -159,24 +175,34 @@ public static class PoliceState
             EscortByCaptor.TryRemove(captorId, out _);
             return false;
         }
-        if (suspectUser != null)
+        if (!MovementV2Bridge.Pair(room, captor, suspect))
         {
-            suspectUser.ClearMovement(true);
-            suspectUser.CanWalk = false;
-            suspectUser.UpdateNeeded = true;
+            EscortByCaptor.TryRemove(captorId, out _);
+            EscortBySuspect.TryRemove(suspectId, out _);
+            return false;
         }
+        suspect.CanWalk = false;
+        suspect.UpdateNeeded = true;
         return true;
     }
 
     /// <summary>
-    /// End an escort, from either side. Returns the suspect's id, or 0 when
-    /// there was no escort to end.
+    /// End an escort, from either side. Breaks the shadow link (the suspect
+    /// comes to rest where their last mirrored step ended) and hands walking
+    /// back unless something else holds it. Returns the suspect's id, or 0
+    /// when there was no escort to end. Either user may already have left.
     /// </summary>
-    public static int EndEscort(int captorId, RoomUser suspectUser)
+    public static int EndEscort(Room room, int captorId, RoomUser? suspectUser)
     {
         if (!EscortByCaptor.TryRemove(captorId, out var suspectId))
             return 0;
         EscortBySuspect.TryRemove(suspectId, out _);
+
+        var manager = room?.GetRoomUserManager();
+        var captorUser = manager?.GetRoomUserByHabbo(captorId);
+        suspectUser ??= manager?.GetRoomUserByHabbo(suspectId);
+        MovementV2Bridge.Unpair(room, captorUser, suspectUser);
+
         if (suspectUser != null)
         {
             // A suspect who is knocked out or still stunned keeps standing
@@ -191,114 +217,49 @@ public static class PoliceState
     }
 
     /// <summary>
-    /// The captor has asked to walk somewhere: send the suspect off at the SAME
-    /// moment, to the tile just beyond the captor's destination in the
-    /// direction of travel.
-    ///
-    /// This is the whole trick, and it is how riding already works here - a
-    /// horse and its rider are both given the destination in the same breath
-    /// (see MoveAvatarEvent), so the two walks are scheduled together and the
-    /// client interpolates them side by side. Reacting to the captor's steps
-    /// one at a time cannot look glued however smooth each step is: the
-    /// suspect only learns where to go once the captor has arrived, so they
-    /// are always a step behind and always starting a fresh walk.
-    ///
-    /// The suspect is sent to the captor's OWN destination, not to a tile
-    /// beyond it. Two avatars may share a tile here, and the client draws the
-    /// second one slightly in front of the first - which is exactly what
-    /// "being marched in front of the officer" looks like. Giving them a tile
-    /// of their own put a gap between the pair and, worse, gave them a
-    /// different path to walk: two routes of their own timing that drift apart
-    /// on every corner. One destination means one path, one duration, and a
-    /// pair that moves as a single object.
+    /// The captor turned on the spot (LookTo). The suspect is kept one tile in
+    /// FRONT, so they have to come round to the new front and face the same
+    /// way. Cheap for everyone else: one dictionary probe on an empty set.
     /// </summary>
-    public static void OnCaptorWalkRequest(Room room, RoomUser captor, int destX, int destY)
+    public static void OnCaptorTurn(Room room, RoomUser captor, int rot)
     {
-        if (room == null || captor == null || captor.IsBot || EscortByCaptor.IsEmpty)
+        if (room == null || captor == null || EscortByCaptor.IsEmpty || !EscortByCaptor.ContainsKey(captor.UserId))
             return;
-        if (!EscortByCaptor.TryGetValue(captor.UserId, out var suspectId))
-            return;
-        var suspect = room.GetRoomUserManager().GetRoomUserByHabbo(suspectId);
-        if (suspect == null || suspect.IsBot)
-            return;
-
-        suspect.MoveTo(destX, destY, true);
+        MovementV2Bridge.Turn(room, captor, (byte)rot);
     }
 
     /// <summary>
-    /// How far behind the suspect may fall before they are put down instead of
-    /// walked. Reached only when something moved them without walking them - a
-    /// roller, a teleport, a door - where walking back would mean a long
-    /// pathfind across the room.
+    /// Somebody has just been knocked out. Nobody marches, or is marched,
+    /// while out cold: an escort involving them ends. The cuffs stay on.
     /// </summary>
-    private const int SnapDistance = 4;
-
-    /// <summary>
-    /// Runs as the captor completes each tile. This is only the correction
-    /// pass - the suspect's actual walking is issued alongside the captor's in
-    /// OnCaptorWalkRequest, which is what keeps the two in step. Here we only
-    /// keep them facing the captor's way and put them back on the captor's
-    /// tile if they have somehow ended up far off it.
-    ///
-    /// LOCK ORDER: this runs under RoomUserManager._cycleLock and MoveTo takes
-    /// the room's MovementLock, so the order here is _cycleLock then
-    /// MovementLock. That is safe only because nothing goes the other way - the
-    /// scheduler holds MovementLock and never touches _cycleLock, and the Q1
-    /// outbound worker takes _cycleLock without holding MovementLock. Keep it
-    /// that way.
-    /// </summary>
-    public static void DragSuspect(Room room, RoomUser captor)
+    public static void OnKnockout(Room room, RoomUser user)
     {
-        if (room == null || captor == null || captor.IsBot || EscortByCaptor.IsEmpty)
+        if (room == null || user == null || (EscortByCaptor.IsEmpty && EscortBySuspect.IsEmpty))
             return;
-        if (!EscortByCaptor.TryGetValue(captor.UserId, out var suspectId))
-            return;
-        var suspect = room.GetRoomUserManager().GetRoomUserByHabbo(suspectId);
-        if (suspect == null || suspect.IsBot)
-            return;
-
-        // The captor's own tile is where the suspect belongs.
-        var x = captor.X;
-        var y = captor.Y;
-
-        // Facing goes with the captor every time, so a suspect already standing
-        // on the right tile still turns when their captor does.
-        suspect.RotBody = captor.RotBody;
-        suspect.RotHead = captor.RotBody;
-        suspect.UpdateNeeded = true;
-
-        // Deliberately NOT a walk request. The suspect's walking is issued
-        // with the captor's, in OnCaptorWalkRequest; re-targeting them here on
-        // every tile the captor completes would interrupt that walk once per
-        // step and put the stutter straight back.
-        if (suspect.X == x && suspect.Y == y)
-            return;
-
-        if ((Math.Abs(suspect.X - x) + Math.Abs(suspect.Y - y)) > SnapDistance)
-        {
-            // Far enough adrift that no walk explains it - a roller, a
-            // teleport, a door, or a captor who stopped somewhere the suspect
-            // could not follow. Put them back in front.
-            suspect.ClearMovement(true);
-            suspect.SetPos(x, y, room.GetGameMap().SqAbsoluteHeight(x, y));
-        }
+        if (IsEscorting(user.UserId))
+            EndEscort(room, user.UserId, null);
+        var captorId = CaptorOf(user.UserId);
+        if (captorId != 0)
+            EndEscort(room, captorId, user);
     }
 
     // ---- leaving -----------------------------------------------------------
 
     /// <summary>
-    /// Forget everything about a player who has gone. Called when a user
-    /// leaves a room: a stun or a cuff is a moment in a room, and an escort
-    /// cannot outlive either party being there.
+    /// Forget everything about a player who has gone. Called as a user leaves
+    /// a room, while both RoomUsers are still resolvable: a stun or a cuff is a
+    /// moment in a room, and an escort cannot outlive either party being there
+    /// - the one staying behind is let go properly.
     /// </summary>
-    public static void Forget(int habboId)
+    public static void Forget(Room room, int habboId)
     {
         Stunned.TryRemove(habboId, out _);
         Cuffed.TryRemove(habboId, out _);
-        if (EscortByCaptor.TryRemove(habboId, out var suspectId))
-            EscortBySuspect.TryRemove(suspectId, out _);
-        if (EscortBySuspect.TryRemove(habboId, out var captorId))
-            EscortByCaptor.TryRemove(captorId, out _);
+        if (IsEscorting(habboId))
+            EndEscort(room, habboId, null);
+        var captorId = CaptorOf(habboId);
+        if (captorId != 0)
+            EndEscort(room, captorId, null);
     }
 
     /// <summary>Push a player's stats to the room's HUDs after aggression moved.</summary>

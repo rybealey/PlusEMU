@@ -108,6 +108,14 @@ internal class StunCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
+        // Likewise someone already in custody: the escort owns their movement
+        // outright, so a stun could neither freeze them nor add anything.
+        if (PoliceState.IsBeingEscorted(target.Id))
+        {
+            session.SendWhisper($"{target.Username} is already in custody.");
+            return Task.CompletedTask;
+        }
+
         if (_lastShot.TryGetValue(habbo.Id, out var last))
         {
             var elapsed = (DateTime.UtcNow - last).TotalSeconds;
