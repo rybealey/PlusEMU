@@ -24,7 +24,7 @@ internal class RoomKickCommand : IChatCommand
             if (roomUser == null || roomUser.IsBot || roomUser.GetClient() == null || roomUser.GetClient().GetHabbo() == null ||
                 roomUser.GetClient().GetHabbo().Permissions.HasRight("mod_tool") || roomUser.GetClient().GetHabbo().Id == session.GetHabbo().Id)
                 continue;
-            roomUser.GetClient().SendNotification($"You have been kicked by a moderator: {message}");
+            roomUser.GetClient().SendPopup($"You have been kicked by a moderator: {message}");
             room.GetRoomUserManager().RemoveUserFromRoom(roomUser.GetClient(), true);
         }
         session.SendWhisper("Successfully kicked all users from the room.");

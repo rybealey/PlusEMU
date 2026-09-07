@@ -60,7 +60,7 @@ internal class RpBuyGangEvent : IPacketEvent
         }
         if (GangUtility.GangNameTaken(name))
         {
-            session.Send(new BroadcastMessageAlertComposer($"A gang named '{name}' already exists - pick another name."));
+            session.SendNotification($"A gang named '{name}' already exists - pick another name.");
             Refresh();
             return Task.CompletedTask;
         }
@@ -68,7 +68,7 @@ internal class RpBuyGangEvent : IPacketEvent
         var cost = GangUtility.GangCost();
         if (habbo.Credits < cost)
         {
-            session.Send(new BroadcastMessageAlertComposer($"Founding a gang costs {cost} credits - you only have {habbo.Credits}."));
+            session.SendNotification($"Founding a gang costs {cost} credits - you only have {habbo.Credits}.");
             Refresh();
             return Task.CompletedTask;
         }

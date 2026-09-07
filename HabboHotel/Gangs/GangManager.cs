@@ -280,7 +280,7 @@ public static class GangManager
     {
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
         if (client?.GetHabbo() != null)
-            client.Send(new BroadcastMessageAlertComposer(message));
+            client.SendNotification(message);
     }
 
     /// <summary>

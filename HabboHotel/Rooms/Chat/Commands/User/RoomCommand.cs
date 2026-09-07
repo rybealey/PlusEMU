@@ -48,7 +48,7 @@ internal class RoomCommand : IChatCommand
                 list.AppendLine($"Super Push: {(room.SuperPushEnabled ? "enabled" : "disabled")}");
                 list.AppendLine($"Respect: {(room.RespectNotificationsEnabled ? "enabled" : "disabled")}");
                 list.AppendLine($"Enables: {(room.EnablesEnabled ? "enabled" : "disabled")}");
-                session.SendNotification(list.ToString());
+                session.SendPopup(list.ToString());
                 break;
             }
             case "push":

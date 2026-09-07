@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Inventory.Trading;
 using Plus.Communication.Packets.Outgoing.Moderation;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
 namespace Plus.HabboHotel.Rooms.Trading;
@@ -118,7 +119,8 @@ public sealed class Trade
             var I = roomUserOne.GetClient().GetHabbo().Inventory.Furniture.GetItem(item.Id);
             if (I == null)
             {
-                SendPacket(new BroadcastMessageAlertComposer("Error! Trading Failed!"));
+                roomUserOne.GetClient().SendNotification("Error! Trading Failed!");
+                roomUserTwo.GetClient().SendNotification("Error! Trading Failed!");
                 return;
             }
         }
@@ -127,7 +129,8 @@ public sealed class Trade
             var I = roomUserTwo.GetClient().GetHabbo().Inventory.Furniture.GetItem(item.Id);
             if (I == null)
             {
-                SendPacket(new BroadcastMessageAlertComposer("Error! Trading Failed!"));
+                roomUserOne.GetClient().SendNotification("Error! Trading Failed!");
+                roomUserTwo.GetClient().SendNotification("Error! Trading Failed!");
                 return;
             }
         }

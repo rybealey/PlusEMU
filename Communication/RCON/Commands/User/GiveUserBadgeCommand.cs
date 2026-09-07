@@ -34,7 +34,7 @@ internal class GiveUserBadgeCommand : IRconCommand
         if (!client.GetHabbo().Inventory.Badges.HasBadge(badge))
         {
             await _badgeManager.GiveBadge(client.GetHabbo(), badge);
-            client.Send(new BroadcastMessageAlertComposer("You have been given a new badge!"));
+            client.SendNotification("You have been given a new badge!");
         }
         return true;
     }

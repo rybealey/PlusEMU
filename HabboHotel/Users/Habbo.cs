@@ -651,7 +651,7 @@ public class Habbo
         }
         if (room.IsCrashed)
         {
-            Client.SendNotification("This room has crashed! :(");
+            Client.SendPopup("This room has crashed! :(");
             Client.Send(new CloseConnectionComposer());
             return;
         }

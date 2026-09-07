@@ -26,7 +26,7 @@ internal class JoinGroupEvent : IPacketEvent
         var groups = _groupManager.GetGroupsForUser(session.GetHabbo().Id);
         if (groups.Count >= 1500)
         {
-            session.Send(new BroadcastMessageAlertComposer("Oops, it appears that you've hit the group membership limit! You can only join upto 1,500 groups."));
+            session.SendNotification("Oops, it appears that you've hit the group membership limit! You can only join upto 1,500 groups.");
             return Task.CompletedTask;
         }
         group.AddMember(session.GetHabbo().Id);
