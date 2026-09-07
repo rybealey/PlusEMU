@@ -87,9 +87,25 @@ internal class SlapCommand : ITargetChatCommand
         if (thisUser == null)
             return Task.CompletedTask;
 
+        var habbo = session.GetHabbo();
+
+        // Restrained: cuffs stop you slapping anywhere, safe zone or not. A
+        // passive player may still throw the harmless version below, because
+        // passive is protection you chose - cuffs are restraint put on you.
+        if (Police.PoliceState.IsCuffed(habbo.Id))
+        {
+            session.SendWhisper("You cannot fight while you are cuffed.");
+            return Task.CompletedTask;
+        }
+
+        if (Police.PoliceState.IsBeingEscorted(habbo.Id))
+        {
+            session.SendWhisper("You cannot fight while you are being escorted.");
+            return Task.CompletedTask;
+        }
+
         // A slap only does anything where fighting is allowed; inside a safe
         // zone it stays the harmless gesture it has always been.
-        var habbo = session.GetHabbo();
         var hurts = !room.IsSafeZone;
         if (hurts)
         {

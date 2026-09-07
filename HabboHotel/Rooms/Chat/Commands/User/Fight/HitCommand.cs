@@ -108,6 +108,20 @@ internal class HitCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
+        // Restrained: cuffs stop you fighting, and so does being marched
+        // somewhere by whoever put them on you.
+        if (Police.PoliceState.IsCuffed(habbo.Id))
+        {
+            session.SendWhisper("You cannot fight while you are cuffed.");
+            return Task.CompletedTask;
+        }
+
+        if (Police.PoliceState.IsBeingEscorted(habbo.Id))
+        {
+            session.SendWhisper("You cannot fight while you are being escorted.");
+            return Task.CompletedTask;
+        }
+
         if (target.IsRpPassive)
         {
             session.SendWhisper($"{target.Username} is passive and cannot be fought.");
