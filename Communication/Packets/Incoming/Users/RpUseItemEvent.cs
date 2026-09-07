@@ -1,12 +1,15 @@
 using Plus.Communication.Packets.Outgoing.Handshake;
+using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.Badges;
+using Plus.HabboHotel.Catalog.Clothing;
 using Plus.HabboHotel.DiamondsStore;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Subscriptions;
 using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Clothing;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -22,14 +25,16 @@ public class RpUseItemEvent : IPacketEvent
     private readonly IPermissionManager _permissionManager;
     private readonly ISubscriptionManager _subscriptionManager;
     private readonly IBadgeManager _badgeManager;
+    private readonly IClothingManager _clothingManager;
 
     public RpUseItemEvent(IDiamondsStoreManager storeManager, IPermissionManager permissionManager,
-        ISubscriptionManager subscriptionManager, IBadgeManager badgeManager)
+        ISubscriptionManager subscriptionManager, IBadgeManager badgeManager, IClothingManager clothingManager)
     {
         _storeManager = storeManager;
         _permissionManager = permissionManager;
         _subscriptionManager = subscriptionManager;
         _badgeManager = badgeManager;
+        _clothingManager = clothingManager;
     }
 
     public async Task Parse(GameClient session, IIncomingPacket packet)
@@ -42,6 +47,30 @@ public class RpUseItemEvent : IPacketEvent
         var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
         if (string.IsNullOrEmpty(item))
             return;
+        // pixelrp Clothing Store: a limited-edition token ("clothing:<id>:<edition>")
+        // unlocks its set like a bought piece. Owning it already leaves the token
+        // alone (it can still be traded on); a set the shelf no longer knows is
+        // left alone too rather than burned.
+        if (item.StartsWith(RpBuyClothingEvent.TokenPrefix))
+        {
+            var fields = item.Split(':');
+            if (fields.Length < 2 || !int.TryParse(fields[1], out var clothingId) || !_clothingManager.TryGetClothing(clothingId, out var tokenClothing))
+            {
+                session.SendWhisper("That token doesn't match anything in the store any more.");
+                return;
+            }
+            if (RpBuyClothingEvent.OwnsClothing(habbo, tokenClothing))
+            {
+                session.SendWhisper($"You already own {tokenClothing.ShelfName} - keep the token or trade it on.");
+                return;
+            }
+            habbo.ConsumeRpItem(slot);
+            habbo.Clothing.AddClothing(tokenClothing.ClothingName, tokenClothing.PartIds);
+            session.Send(new FigureSetIdsComposer(FullWardrobeUtility.GetVisibleClothingParts(habbo, _clothingManager)));
+            session.SendNotification($"{tokenClothing.ShelfName} is yours to wear. Find it in Choose Your Looks.");
+            session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
+            return;
+        }
         switch (item)
         {
             case "smoothie":
