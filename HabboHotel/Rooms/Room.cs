@@ -437,7 +437,7 @@ public class Room : RoomData
             {
                 if (user == null || user.GetClient() == null)
                     continue;
-                user.GetClient().SendNotification("Sorry, it appears that room has crashed!"); //Unhandled exception in room: " + e);
+                user.GetClient().SendPopup("Sorry, it appears that room has crashed!"); //Unhandled exception in room: " + e);
                 try
                 {
                     GetRoomUserManager().RemoveUserFromRoom(user.GetClient(), true);

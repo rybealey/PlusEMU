@@ -178,7 +178,7 @@ public class PurchaseFromCatalogAsGiftEvent : IPacketEvent
                 case InteractionType.BadgeDisplay:
                     if (!session.GetHabbo().Inventory.Badges.HasBadge(data))
                     {
-                        session.Send(new BroadcastMessageAlertComposer("Oops, it appears that you do not own this badge."));
+                        session.SendNotification("Oops, it appears that you do not own this badge.");
                         return Task.CompletedTask;
                     }
                     itemExtraData = $"{data}{Convert.ToChar(9)}{session.GetHabbo().Username}{Convert.ToChar(9)}{DateTime.Now.Day}-{DateTime.Now.Month}-{DateTime.Now.Year}";

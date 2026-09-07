@@ -46,7 +46,7 @@ internal class UpdateFigureDataEvent : IPacketEvent
         string[] allowedGenders = { "M", "F" };
         if (!allowedGenders.Contains(gender))
         {
-            session.Send(new BroadcastMessageAlertComposer("Sorry, you chose an invalid gender."));
+            session.SendNotification("Sorry, you chose an invalid gender.");
             return Task.CompletedTask;
         }
         _questManager.ProgressUserQuest(session, QuestType.ProfileChangeLook);

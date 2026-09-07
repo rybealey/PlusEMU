@@ -27,6 +27,6 @@ internal class StatsCommand : IChatCommand
         habboInfo.Append($"Online Time: {onlineTime} Hour{s}\r");
         habboInfo.Append($"Respects: {session.GetHabbo().HabboStats.Respect}\r");
         habboInfo.Append($"GOTW Points: {session.GetHabbo().GotwPoints}\r\r");
-        session.SendNotification(habboInfo.ToString());
+        session.SendPopup(habboInfo.ToString());
     }
 }

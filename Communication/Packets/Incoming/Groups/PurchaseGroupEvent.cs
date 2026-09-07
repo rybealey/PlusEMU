@@ -34,7 +34,7 @@ internal class PurchaseGroupEvent : IPacketEvent
         var groupCost = Convert.ToInt32(_settingsManager.TryGetValue("catalog.group.purchase.cost"));
         if (session.GetHabbo().Credits < groupCost)
         {
-            session.Send(new BroadcastMessageAlertComposer($"A group costs {groupCost} credits! You only have {session.GetHabbo().Credits}!"));
+            session.SendNotification($"A group costs {groupCost} credits! You only have {session.GetHabbo().Credits}!");
             return Task.CompletedTask;
         }
         session.GetHabbo().Credits -= groupCost;

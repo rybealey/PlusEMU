@@ -94,6 +94,6 @@ internal class UserInfoCommand : IChatCommand
                 habboInfo.Append($"Current Visitors: {targetClient.GetHabbo().CurrentRoom.UserCount}/{targetClient.GetHabbo().CurrentRoom.UsersMax}");
             }
         }
-        session.SendNotification(habboInfo.ToString());
+        session.SendPopup(habboInfo.ToString());
     }
 }

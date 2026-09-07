@@ -25,12 +25,12 @@ internal class SetRelationshipEvent : IPacketEvent
         var friend = session.GetHabbo().Messenger.GetFriend(user);
         if (friend == null)
         {
-            session.Send(new BroadcastMessageAlertComposer("Oops, you can only set a relationship where a friendship exists."));
+            session.SendNotification("Oops, you can only set a relationship where a friendship exists.");
             return;
         }
         if (type < 0 || type > 3)
         {
-            session.Send(new BroadcastMessageAlertComposer("Oops, you've chosen an invalid relationship type."));
+            session.SendNotification("Oops, you've chosen an invalid relationship type.");
             return;
         }
 
