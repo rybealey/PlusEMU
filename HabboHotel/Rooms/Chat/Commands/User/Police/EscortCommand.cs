@@ -13,11 +13,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 ///
 /// The suspect has to be cuffed - that is the whole basis for the escort, and
 /// the last link in the stun -> cuff -> escort chain. From the moment it
-/// starts they cannot walk for themselves: every tile they cover is one the
-/// captor's own steps give them, shoved along one tile in front (see
-/// PoliceState.DragSuspect). Starting an escort cancels any stun still
-/// running on them, so the drag can move them at once rather than waiting out
-/// a freeze.
+/// starts they cannot walk for themselves: the movement engine mirrors every
+/// step the captor takes onto them, one tile in front and facing the same
+/// way, on the same beat (see MovementV2Bridge.Pair). Starting an escort
+/// cancels any stun still running on them - the escort holds them now.
 ///
 /// It ends on :unescort, on :uncuff, or when either of them leaves the room.
 /// </summary>
@@ -84,7 +83,7 @@ internal class EscortCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (!PoliceState.StartEscort(habbo.Id, target.Id, targetUser))
+        if (!PoliceState.StartEscort(room, thisUser, targetUser))
         {
             session.SendWhisper($"{target.Username} is already being escorted.");
             return Task.CompletedTask;

@@ -577,9 +577,9 @@ public static class MovementController
         // them via RouteRevision.
         var lookahead = System.Array.Empty<LookaheadTile>();
         var lookCount = 0;
+        var map = stageMap;
         if (moving && w.Route.HasNext)
         {
-            var map = stageMap;
             var max = System.Math.Min(MovementSettings.LookaheadMax, w.Route.Length - w.Route.Cursor);
             if (max > 0 && map != null)
             {
@@ -600,6 +600,213 @@ public static class MovementController
             w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
             w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             w.EdgeToZ, w.Facing, lookahead, lookCount, w.LastStartDelayMs));
+
+        // pixelrp police escort: the captor's shadow rides in the same frame.
+        StageShadow(room, w, map, moving, flags);
+    }
+
+    // ---- escort shadow (pixelrp police) -----------------------------------
+    // A suspect being escorted is not a walker. They have no route and never
+    // will while shadowed: for every record the captor stages, one is staged
+    // for them with IDENTICAL identity and timing and geometry one tile in front
+    // of the captor's. That is what "dragged along like an image" costs - the
+    // pathfinder is simply not consulted for them. Everything here is state
+    // mutation, map reads and staging: exactly what the scheduler thread is
+    // allowed to do (MovementSchedulerGuard, invariant I-5).
+
+    /// <summary>The (dx, dy) of one step in a facing - the inverse of Rotation.Calculate.</summary>
+    private static Point FacingDelta(byte facing) => facing switch
+    {
+        0 => new Point(0, -1),
+        1 => new Point(1, -1),
+        2 => new Point(1, 0),
+        3 => new Point(1, 1),
+        4 => new Point(0, 1),
+        5 => new Point(-1, 1),
+        6 => new Point(-1, 0),
+        7 => new Point(-1, -1),
+        _ => new Point(0, 0),
+    };
+
+    /// <summary>
+    /// The tile one step in front of <paramref name="from"/> in <paramref name="facing"/>
+    /// when a unit could walk onto it mid-route, else <paramref name="from"/>
+    /// itself. The fallback is what happens when the captor walks face-first up
+    /// to a wall or a desk: the suspect shares their tile for that beat rather
+    /// than being put on something nobody can stand on, and reclaims the lead
+    /// the moment there is somewhere to lead to. Evaluated as a NON-final step
+    /// on purpose: tiles that are legal only as a route's last tile (the door)
+    /// are not places to park somebody who did not choose to go there.
+    /// Occupancy is deliberately not consulted - this hotel lets players share
+    /// tiles (I-10).
+    /// </summary>
+    public static Point FrontTile(Gamemap map, Point from, byte facing)
+    {
+        var d = FacingDelta(facing);
+        if (map == null || (d.X == 0 && d.Y == 0))
+            return from;
+        var tile = new Point(from.X + d.X, from.Y + d.Y);
+        if (!CanTraverse.InBounds(map, tile.X, tile.Y))
+            return from;
+        var ctx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
+        return CanTraverse.IsPassable(CanTraverse.Evaluate(map, from, tile, isFinalStep: false, ctx), false) ? tile : from;
+    }
+
+    /// <summary>
+    /// Stage the shadow's record for the captor record just staged. Same
+    /// session, revision, edge index and start tick, so both units switch
+    /// edges on the same client frame. The shadow's edge runs from wherever
+    /// its previous edge ended to the tile in front of the captor's new
+    /// destination: on a straight that is one tile like the captor's; on a
+    /// bend the front tile swings with the facing and the suspect slides to it
+    /// in the same beat, which is exactly what the Arcturus original produced
+    /// (setLocation to "to + dir" with the client tweening from wherever the
+    /// suspect was). Every shadow edge is therefore contiguous with the last -
+    /// no jumps for the client to paper over.
+    ///
+    /// Staging is strictly one record per edge per beat (Redirect restages
+    /// nothing; the next beat's PlanNextEdge carries the new revision), so
+    /// "where the previous edge ended" is always the shadow's own EdgeTo.
+    /// </summary>
+    private static void StageShadow(RoomMovement room, MovementState w, Gamemap? map, bool moving, int flags)
+    {
+        if (w.ShadowVirtualId == 0)
+            return;
+        if (!room.States.TryGetValue(w.ShadowVirtualId, out var s) || s.ShadowedBy != w.VirtualId)
+        {
+            // The suspect has gone (or been unpaired from their side); heal the link.
+            w.ShadowVirtualId = 0;
+            return;
+        }
+        if (map == null)
+            return;
+
+        Point from, to;
+        if (moving)
+        {
+            from = s.EdgeTo;
+            to = FrontTile(map, w.EdgeTo, w.Facing);
+            s.Facing = w.Facing;
+        }
+        else
+        {
+            // Walk end: the suspect comes to rest in front of wherever the
+            // captor actually stopped. For a walk that ran its course that is
+            // the tile the last shadow edge was already heading to; for one
+            // halted mid-step (a stun, a block) the captor snaps back to Tile
+            // and the suspect is put in front of THAT rather than left two
+            // tiles ahead.
+            from = FrontTile(map, w.Tile, w.Facing);
+            to = from;
+            s.Facing = w.Facing;
+        }
+        var fromZ = MovementHeights.Walk(map, from.X, from.Y);
+        var toZ = MovementHeights.Walk(map, to.X, to.Y);
+        s.Tile = from;
+        s.TileZ = fromZ;
+        s.EdgeTo = to;
+        s.EdgeToZ = toZ;
+        // Mirror the wire identity onto the shadow's state so a later close-out
+        // (Unpair) can be written in the same session the client is holding.
+        s.WalkSessionId = System.Math.Max(s.WalkSessionId, w.WalkSessionId);
+        s.RouteRevision = w.RouteRevision;
+        s.EdgeIndex = w.EdgeIndex;
+        s.TimelineOrigin = w.TimelineOrigin;
+        s.Mode = MovementMode.Standing;
+
+        var lookahead = System.Array.Empty<LookaheadTile>();
+        var lookCount = 0;
+        if (moving && w.Route.HasNext)
+        {
+            var max = System.Math.Min(MovementSettings.LookaheadMax, w.Route.Length - w.Route.Cursor);
+            if (max > 0)
+            {
+                // The same provisional chain the captor advertises, each tile
+                // pushed one step ahead along the direction it is entered in.
+                // Provisional exactly as the captor's is: a redirect supersedes
+                // both units' chains in the same beat via RouteRevision.
+                lookahead = new LookaheadTile[max];
+                var prev = w.EdgeTo;
+                for (var i = 0; i < max; i++)
+                {
+                    var tile = w.Route[w.Route.Cursor + i];
+                    var f = (byte)Rotation.Calculate(prev.X, prev.Y, tile.X, tile.Y);
+                    var ahead = FrontTile(map, tile, f);
+                    lookahead[i] = new LookaheadTile(ahead.X, ahead.Y, MovementEdgeRecord.Z100(MovementHeights.Walk(map, ahead.X, ahead.Y)));
+                    prev = tile;
+                }
+                lookCount = max;
+            }
+        }
+
+        room.Staged.Add(new MovementEdgeRecord(
+            s.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
+            MovementSettings.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
+            from.X, from.Y, MovementEdgeRecord.Z100(fromZ),
+            to.X, to.Y, MovementEdgeRecord.Z100(toZ),
+            toZ, s.Facing, lookahead, lookCount, w.LastStartDelayMs));
+    }
+
+    /// <summary>
+    /// Put a unit on a tile, facing a way, as a hard reset the client jumps to
+    /// at once. This is the first thing on this server to produce the
+    /// Displacement flag; the client has always handled it (it drops the unit's
+    /// timed state and takes the next UserUpdate at face value). Used to seat a
+    /// suspect in front of their captor when the escort begins and whenever the
+    /// captor turns on the spot. Caller holds MovementLock.
+    /// </summary>
+    public static void StageDisplacement(RoomMovement room, MovementState s, Point tile, byte facing, Gamemap? map, long nowMs)
+    {
+        if (s.Mode == MovementMode.Moving || s.Mode == MovementMode.Pending)
+            StopWalk(room, s);
+        if (s.Queued)
+        {
+            room.Walkers.Remove(s);
+            s.Queued = false;
+        }
+        s.WalkSessionId++; // "++ on every displacement" - the field's own contract
+        s.RouteRevision = 0;
+        s.EdgeIndex = 0;
+        s.Mode = MovementMode.Standing;
+        s.Route.Clear();
+        s.Tile = tile;
+        s.EdgeTo = tile;
+        s.TileZ = map != null ? MovementHeights.Walk(map, tile.X, tile.Y) : s.TileZ;
+        s.EdgeToZ = s.TileZ;
+        s.Facing = facing;
+        s.EmittedThroughEdge = -1;
+        var z100 = MovementEdgeRecord.Z100(s.TileZ);
+        room.Staged.Add(new MovementEdgeRecord(
+            s.VirtualId, s.WalkSessionId, 0, 0, RpMovementV2Flags.Displacement,
+            MovementSettings.IntervalMs, nowMs,
+            tile.X, tile.Y, z100, tile.X, tile.Y, z100, s.TileZ, facing,
+            System.Array.Empty<LookaheadTile>(), 0));
+        room.HasStagedWork = true;
+        room.HasImmediateWork = true;
+    }
+
+    /// <summary>
+    /// Close out a shadow that is being released: a walk-end in the session
+    /// the client is holding for it, resting on the tile its last edge ended
+    /// on. Without this a suspect let go mid-walk keeps the walking posture
+    /// server-side and the client's unit starves rather than being forgotten.
+    /// Caller holds MovementLock.
+    /// </summary>
+    public static void StageShadowEnd(RoomMovement room, MovementState s, Gamemap? map)
+    {
+        s.Tile = s.EdgeTo;
+        s.TileZ = map != null ? MovementHeights.Walk(map, s.Tile.X, s.Tile.Y) : s.EdgeToZ;
+        s.EdgeToZ = s.TileZ;
+        s.Mode = MovementMode.Standing;
+        s.Route.Clear();
+        var z100 = MovementEdgeRecord.Z100(s.TileZ);
+        room.Staged.Add(new MovementEdgeRecord(
+            s.VirtualId, s.WalkSessionId, s.RouteRevision, s.EdgeIndex + 1, RpMovementV2Flags.WalkEnd,
+            MovementSettings.IntervalMs, s.EdgeStartTick(s.EdgeIndex + 1),
+            s.Tile.X, s.Tile.Y, z100, s.Tile.X, s.Tile.Y, z100, s.TileZ, s.Facing,
+            System.Array.Empty<LookaheadTile>(), 0));
+        room.HasStagedWork = true;
+        room.HasImmediateWork = true;
     }
 
     /// <summary>

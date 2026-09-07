@@ -54,7 +54,7 @@ internal class UncuffCommand : ITargetChatCommand
         // The cuffs were what justified the escort.
         var captorId = PoliceState.CaptorOf(target.Id);
         if (captorId != 0)
-            PoliceState.EndEscort(captorId, targetUser);
+            PoliceState.EndEscort(room, captorId, targetUser);
 
         room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*unlocks {target.Username}'s cuffs*", 0, FightBubble));
         return Task.CompletedTask;
