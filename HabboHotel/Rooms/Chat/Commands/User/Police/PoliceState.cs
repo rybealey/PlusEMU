@@ -57,6 +57,18 @@ public static class PoliceState
     private static readonly ConcurrentDictionary<int, int> EscortByCaptor = new();
     private static readonly ConcurrentDictionary<int, int> EscortBySuspect = new();
 
+    /// <summary>
+    /// Serialises starting and ending an escort. Each is two steps - the
+    /// registry above and the movement link (MovementV2Bridge.Pair/Unpair) -
+    /// and commands from different players run on different threads. Without
+    /// this, an :uncuff landing between a captor's registration and their
+    /// Pair would clear the registry, find no link yet to break, and leave
+    /// the pair standing with nothing left that could undo it.
+    /// Order: EscortSync -> MovementLock, never the reverse. Callers that
+    /// arrive under _cycleLock (RemoveUserFromRoom) keep _cycleLock first.
+    /// </summary>
+    private static readonly object EscortSync = new();
+
     // ---- stun --------------------------------------------------------------
 
     public static bool IsStunned(int habboId) => Stunned.ContainsKey(habboId);
@@ -166,24 +178,27 @@ public static class PoliceState
             return false;
         var captorId = captor.UserId;
         var suspectId = suspect.UserId;
-        if (IsEscorting(captorId) || IsBeingEscorted(suspectId) || IsEscorting(suspectId) || IsBeingEscorted(captorId))
-            return false;
-        if (!EscortByCaptor.TryAdd(captorId, suspectId))
-            return false;
-        if (!EscortBySuspect.TryAdd(suspectId, captorId))
+        lock (EscortSync)
         {
-            EscortByCaptor.TryRemove(captorId, out _);
-            return false;
+            if (IsEscorting(captorId) || IsBeingEscorted(suspectId) || IsEscorting(suspectId) || IsBeingEscorted(captorId))
+                return false;
+            if (!EscortByCaptor.TryAdd(captorId, suspectId))
+                return false;
+            if (!EscortBySuspect.TryAdd(suspectId, captorId))
+            {
+                EscortByCaptor.TryRemove(captorId, out _);
+                return false;
+            }
+            if (!MovementV2Bridge.Pair(room, captor, suspect))
+            {
+                EscortByCaptor.TryRemove(captorId, out _);
+                EscortBySuspect.TryRemove(suspectId, out _);
+                return false;
+            }
+            suspect.CanWalk = false;
+            suspect.UpdateNeeded = true;
+            return true;
         }
-        if (!MovementV2Bridge.Pair(room, captor, suspect))
-        {
-            EscortByCaptor.TryRemove(captorId, out _);
-            EscortBySuspect.TryRemove(suspectId, out _);
-            return false;
-        }
-        suspect.CanWalk = false;
-        suspect.UpdateNeeded = true;
-        return true;
     }
 
     /// <summary>
@@ -194,26 +209,29 @@ public static class PoliceState
     /// </summary>
     public static int EndEscort(Room room, int captorId, RoomUser? suspectUser)
     {
-        if (!EscortByCaptor.TryRemove(captorId, out var suspectId))
-            return 0;
-        EscortBySuspect.TryRemove(suspectId, out _);
-
-        var manager = room?.GetRoomUserManager();
-        var captorUser = manager?.GetRoomUserByHabbo(captorId);
-        suspectUser ??= manager?.GetRoomUserByHabbo(suspectId);
-        MovementV2Bridge.Unpair(room, captorUser, suspectUser);
-
-        if (suspectUser != null)
+        lock (EscortSync)
         {
-            // A suspect who is knocked out or still stunned keeps standing
-            // still - those states own the flag and clear it themselves.
-            var habbo = suspectUser.GetClient()?.GetHabbo();
-            var down = habbo != null && habbo.RpHealth <= 0;
-            if (!down && !IsStunned(suspectId))
-                suspectUser.CanWalk = true;
-            suspectUser.UpdateNeeded = true;
+            if (!EscortByCaptor.TryRemove(captorId, out var suspectId))
+                return 0;
+            EscortBySuspect.TryRemove(suspectId, out _);
+
+            var manager = room?.GetRoomUserManager();
+            var captorUser = manager?.GetRoomUserByHabbo(captorId);
+            suspectUser ??= manager?.GetRoomUserByHabbo(suspectId);
+            MovementV2Bridge.Unpair(room, captorUser, suspectUser);
+
+            if (suspectUser != null)
+            {
+                // A suspect who is knocked out or still stunned keeps standing
+                // still - those states own the flag and clear it themselves.
+                var habbo = suspectUser.GetClient()?.GetHabbo();
+                var down = habbo != null && habbo.RpHealth <= 0;
+                if (!down && !IsStunned(suspectId))
+                    suspectUser.CanWalk = true;
+                suspectUser.UpdateNeeded = true;
+            }
+            return suspectId;
         }
-        return suspectId;
     }
 
     /// <summary>

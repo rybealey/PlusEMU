@@ -23,12 +23,16 @@ internal class LookToEvent : RoomPacketEvent
         if (HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.IsBeingEscorted(user.UserId))
             return Task.CompletedTask;
         var rot = Rotation.Calculate(user.X, user.Y, x, y);
+        var bodyBefore = user.RotBody;
         user.SetRot(rot, false);
         user.UpdateNeeded = true;
         // pixelrp police escort: the suspect is kept one tile in FRONT, so when
         // the captor turns on the spot the suspect has to move round to the new
-        // front and face the same way. Packet thread, no locks held.
-        HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.OnCaptorTurn(room, user, rot);
+        // front and face the same way. Only when the BODY actually turned, and
+        // to where it turned: a 45-degree look moves the head alone, and a
+        // seated or lying captor does not turn at all. Packet thread, no locks.
+        if (user.RotBody != bodyBefore)
+            HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.OnCaptorTurn(room, user, user.RotBody);
         if (user.RidingHorse)
         {
             var horse = session.GetHabbo().CurrentRoom.GetRoomUserManager().GetRoomUserByVirtualId(user.HorseId);
