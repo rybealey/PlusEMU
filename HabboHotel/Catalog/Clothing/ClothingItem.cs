@@ -6,7 +6,7 @@ public class ClothingItem
     {
         Id = id;
         ClothingName = name;
-        PartIds = partIds.Split(",").Select(int.Parse).ToList();
+        PartIds = partIds.Split(',').Select(part => part.Trim()).Where(part => part.Length > 0).Select(int.Parse).ToList();
         DisplayName = displayName ?? string.Empty;
         Price = price;
         LtdTotal = ltdTotal;

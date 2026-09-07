@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Extensions.Logging;
 using Plus.Database;
 
 namespace Plus.HabboHotel.Catalog.Clothing;
@@ -6,36 +7,68 @@ namespace Plus.HabboHotel.Catalog.Clothing;
 public class ClothingManager : IClothingManager
 {
     private readonly IDatabase _database;
-    private readonly Dictionary<int, ClothingItem> _clothing;
+    private readonly ILogger<ClothingManager> _logger;
+    // Replaced wholesale on every Init so readers never see a half-built
+    // shelf (FullWardrobeUtility and ProcessFigure enumerate it constantly).
+    private Dictionary<int, ClothingItem> _clothing;
 
-    public ClothingManager(IDatabase database)
+    public ClothingManager(IDatabase database, ILogger<ClothingManager> logger)
     {
         _database = database;
+        _logger = logger;
         _clothing = new();
     }
 
     public ICollection<ClothingItem> GetClothingAllParts => _clothing.Values;
 
-    public async void Init()
+    // pixelrp: synchronous and fully guarded. This used to be async void; an
+    // exception there is unhandled and takes the whole emulator down, so a
+    // bad row or a schema slip must only cost the shelf, never the hotel.
+    public void Init()
     {
-        _clothing.Clear();
-        using var connection = _database.Connection();
-        // pixelrp: the store columns ride along, plus the classname of the
-        // purchasable_clothing furni that used to sell this set (its catalog
-        // icon is the LTD token's art in the backpack). Read into a property
-        // class, not a positional record - display_name and the furni name are
-        // nullable and Dapper cannot map those positionally.
-        var data = await connection.QueryAsync<ClothingRow>(
-            "SELECT c.`id` AS Id, c.`clothing_name` AS ClothingName, c.`clothing_parts` AS PartIds, c.`display_name` AS DisplayName, " +
-            "c.`price` AS Price, c.`ltd_total` AS LtdTotal, c.`ltd_sold` AS LtdSold, " +
-            "(SELECT MIN(f.`item_name`) FROM `furniture` f WHERE f.`interaction_type` = 'purchasable_clothing' AND f.`behaviour_data` = c.`id`) AS Icon " +
-            "FROM `catalog_clothing` c");
-        foreach (var row in data)
+        var loaded = new Dictionary<int, ClothingItem>();
+        try
         {
-            if (string.IsNullOrWhiteSpace(row.PartIds))
-                continue;
-            _clothing.Add(row.Id, new(row.Id, row.ClothingName, row.PartIds, row.DisplayName, row.Price, row.LtdTotal, row.LtdSold, row.Icon));
+            using var connection = _database.Connection();
+            var rows = connection.Query<ClothingRow>(
+                "SELECT `id` AS Id, `clothing_name` AS ClothingName, `clothing_parts` AS PartIds, `display_name` AS DisplayName, " +
+                "`price` AS Price, `ltd_total` AS LtdTotal, `ltd_sold` AS LtdSold FROM `catalog_clothing`").ToList();
+            // the purchasable_clothing furni that used to sell each set: its
+            // catalog icon is the token's art in the backpack
+            var icons = new Dictionary<int, string>();
+            try
+            {
+                foreach (var icon in connection.Query<IconRow>(
+                    "SELECT `behaviour_data` AS ClothingId, MIN(`item_name`) AS ItemName FROM `furniture` " +
+                    "WHERE `interaction_type` = 'purchasable_clothing' GROUP BY `behaviour_data`"))
+                    icons.TryAdd(icon.ClothingId, icon.ItemName ?? string.Empty);
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Clothing store: could not read furni icons");
+            }
+            foreach (var row in rows)
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(row.PartIds))
+                        continue;
+                    icons.TryGetValue(row.Id, out var icon);
+                    loaded[row.Id] = new(row.Id, row.ClothingName, row.PartIds, row.DisplayName, row.Price, row.LtdTotal, row.LtdSold, icon);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Clothing store: skipping catalog_clothing row {Id} ({Name})", row.Id, row.ClothingName);
+                }
+            }
         }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Clothing store: failed to load catalog_clothing");
+            return;
+        }
+        _clothing = loaded;
+        _logger.LogInformation("Clothing store: {Count} sets loaded", loaded.Count);
     }
 
     public bool TryGetClothing(int itemId, out ClothingItem clothing) => _clothing.TryGetValue(itemId, out clothing);
@@ -43,25 +76,32 @@ public class ClothingManager : IClothingManager
     /// <summary>pixelrp: claims one copy of a limited edition. The UPDATE is
     /// guarded by the stock count so two buyers racing for the last copy
     /// cannot both get it. Returns the edition number claimed, or 0 when the
-    /// edition is sold out.</summary>
+    /// edition is sold out (or the claim failed).</summary>
     public int TrySellLtd(ClothingItem clothing)
     {
         if (clothing == null || !clothing.IsLtd)
             return 0;
-        using var connection = _database.Connection();
-        var claimed = connection.Execute(
-            "UPDATE `catalog_clothing` SET `ltd_sold` = `ltd_sold` + 1 WHERE `id` = @id AND `ltd_sold` < `ltd_total`",
-            new { id = clothing.Id });
-        if (claimed == 0)
+        try
+        {
+            using var connection = _database.Connection();
+            var claimed = connection.Execute(
+                "UPDATE `catalog_clothing` SET `ltd_sold` = `ltd_sold` + 1 WHERE `id` = @id AND `ltd_sold` < `ltd_total`",
+                new { id = clothing.Id });
+            if (claimed == 0)
+                return 0;
+            var edition = connection.QuerySingle<int>("SELECT `ltd_sold` FROM `catalog_clothing` WHERE `id` = @id", new { id = clothing.Id });
+            clothing.LtdSold = edition;
+            return edition;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Clothing store: LTD claim failed for {Id}", clothing.Id);
             return 0;
-        var edition = connection.QuerySingle<int>("SELECT `ltd_sold` FROM `catalog_clothing` WHERE `id` = @id", new { id = clothing.Id });
-        clothing.LtdSold = edition;
-        return edition;
+        }
     }
 }
 
-// Dapper row for catalog_clothing joined to its furni; a plain property
-// class so the nullable display_name / furni name map cleanly.
+// Dapper rows: plain property classes so the nullable columns map cleanly.
 internal sealed class ClothingRow
 {
     public int Id { get; set; }
@@ -71,5 +111,10 @@ internal sealed class ClothingRow
     public int Price { get; set; }
     public int LtdTotal { get; set; }
     public int LtdSold { get; set; }
-    public string Icon { get; set; }
+}
+
+internal sealed class IconRow
+{
+    public int ClothingId { get; set; }
+    public string ItemName { get; set; }
 }
