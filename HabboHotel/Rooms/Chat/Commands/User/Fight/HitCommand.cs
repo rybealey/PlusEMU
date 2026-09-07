@@ -18,8 +18,8 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// On one of those the punch lands for 3-5; anywhere else it is thrown and
 /// missed, in public, for nothing. There is no dice roll - in range is always
 /// a hit. The shared tile counts because two players standing on one are as
-/// close as it gets. Note this is still TIGHTER than :slap and :push, which
-/// take the whole 3x3 block including the diagonals.
+/// close as it gets. :slap reaches identically - one rule for how close a
+/// fight has to be - while :push still takes the whole 3x3 with diagonals.
 ///
 /// Either way it is a fight, so it costs the cooldown and it makes the
 /// ATTACKER aggressive: 100, which the room tick then drains over 45 seconds

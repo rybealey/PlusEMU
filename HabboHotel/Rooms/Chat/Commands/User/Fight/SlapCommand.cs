@@ -9,11 +9,11 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// <summary>
 /// pixelrp fighting system: slap another player.
 ///
-/// The light end of combat: 1 damage, against :hit's 3-5, from the wider
-/// reach - the slapper's own tile plus the eight surrounding it (Chebyshev
-/// distance &lt;= 1, the full 3x3 block, diagonals included), which is the
-/// adjacency :push uses. :hit trades that away for the four edge-adjacent
-/// tiles only.
+/// The light end of combat: 1 damage against :hit's 3-5, over the same reach
+/// - the slapper's own tile plus the four sharing an edge with it (Manhattan
+/// distance &lt;= 1, no diagonals). The two attacks deliberately reach alike so
+/// there is one rule for how close a fight has to be; what separates them is
+/// what they cost the target. Note :push still uses the wider 3x3.
 ///
 /// It only bites in an unsafe zone. In a safe one a slap is pure flavour: the
 /// bubble goes out, nobody loses health and nobody becomes aggressive. That
@@ -48,7 +48,7 @@ internal class SlapCommand : ITargetChatCommand
     private const int FightBubble = 4;
 
     /// <summary>Seconds a player must wait between slaps. Longer than :hit's
-    /// three: a slap reaches further and costs the target less.</summary>
+    /// three, to go with the lighter damage.</summary>
     private const int CooldownSeconds = 5;
 
     /// <summary>Health a slap takes off, in an unsafe zone.</summary>
@@ -130,9 +130,10 @@ internal class SlapCommand : ITargetChatCommand
             }
         }
 
-        // Same tile, or one step in any direction including the diagonals.
-        // :push spells the same test inside-out (|dx| >= 2 || |dy| >= 2).
-        if (Math.Abs(targetUser.X - thisUser.X) > 1 || Math.Abs(targetUser.Y - thisUser.Y) > 1)
+        // The slapper's own tile plus the four sharing an edge with it, exactly
+        // as :hit reaches. Not :push's wider 3x3 any more - the diagonals are
+        // out of reach for both attacks.
+        if ((Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y)) > 1)
         {
             session.SendWhisper($"Oops, {target.Username} is not close enough.");
             return Task.CompletedTask;
