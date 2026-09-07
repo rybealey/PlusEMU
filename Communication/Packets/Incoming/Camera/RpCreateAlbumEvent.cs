@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Notifications;
 
 namespace Plus.Communication.Packets.Incoming.Camera;
 
@@ -8,7 +9,9 @@ namespace Plus.Communication.Packets.Incoming.Camera;
 /// pixelrp: create a photo album from the phone's Photos app. Shared albums
 /// carry an initial member list - every claimed member must be a friend of
 /// the creator (anything else is silently dropped). Replies with the
-/// refreshed album list.
+/// refreshed album list, and gives the members theirs plus a notification -
+/// being put in a shared album at creation reads the same to them as being
+/// invited to one later.
 /// </summary>
 internal class RpCreateAlbumEvent : IPacketEvent
 {
@@ -44,6 +47,7 @@ internal class RpCreateAlbumEvent : IPacketEvent
             ? claimedMemberIds.Distinct().Where(id => (id != habbo.Id) && (habbo.Messenger.GetFriend(id) != null)).ToList()
             : new List<int>());
 
+        var newAlbumId = 0;
         using (var connection = _database.Connection())
         {
             var albumCount = await connection.ExecuteScalarAsync<int>(
@@ -57,14 +61,18 @@ internal class RpCreateAlbumEvent : IPacketEvent
                 new { userId = habbo.Id, name, shared, createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() });
             if (memberIds.Count > 0)
             {
-                var albumId = await connection.ExecuteScalarAsync<long>(
+                newAlbumId = (int)await connection.ExecuteScalarAsync<long>(
                     "SELECT `id` FROM `camera_web_albums` WHERE `owner_id` = @userId ORDER BY `id` DESC LIMIT 1",
                     new { userId = habbo.Id });
                 await connection.ExecuteAsync(
                     "INSERT IGNORE INTO `camera_web_album_members` (`album_id`, `user_id`) VALUES (@albumId, @memberId)",
-                    memberIds.Select(memberId => new { albumId, memberId }));
+                    memberIds.Select(memberId => new { albumId = newAlbumId, memberId }));
             }
         }
         await RpAlbumLibrary.SendAlbumList(_database, session);
+        if (newAlbumId <= 0)
+            return;
+        await RpAlbumLibrary.SendAlbumListTo(_database, memberIds);
+        NotificationUtility.PushTo(memberIds, NotificationUtility.Photos, "album_invite", name, habbo.Username, newAlbumId);
     }
 }

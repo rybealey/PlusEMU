@@ -33,6 +33,40 @@ internal static class RpAlbumLibrary
         return new AlbumAccess(true, false, isMember, album.Shared);
     }
 
+    /// <summary>
+    /// Everyone an album belongs to: its owner, plus the members of a shared
+    /// one. Used both to notify them and to refresh their album lists, so an
+    /// invite or a new photo shows up without reopening the app.
+    /// </summary>
+    public static async Task<List<int>> GetAudience(IDbConnection connection, int albumId)
+    {
+        var ownerId = await connection.ExecuteScalarAsync<int>(
+            "SELECT `owner_id` FROM `camera_web_albums` WHERE `id` = @albumId LIMIT 1", new { albumId });
+        if (ownerId <= 0)
+            return new List<int>();
+        var audience = new List<int> { ownerId };
+        audience.AddRange(await connection.QueryAsync<int>(
+            "SELECT `user_id` FROM `camera_web_album_members` WHERE `album_id` = @albumId", new { albumId }));
+        return audience.Distinct().ToList();
+    }
+
+    /// <summary>
+    /// The refreshed album list for several players at once. Album mutations
+    /// only ever replied to whoever made them, which left everyone else's
+    /// Collections tab stale until they reopened it.
+    /// </summary>
+    public static async Task SendAlbumListTo(IDatabase database, IEnumerable<int> userIds)
+    {
+        if (userIds == null)
+            return;
+        foreach (var userId in userIds.Distinct())
+        {
+            var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+            if (client?.GetHabbo() != null)
+                await SendAlbumList(database, client);
+        }
+    }
+
     public static async Task SendAlbumList(IDatabase database, GameClient session)
     {
         var userId = session.GetHabbo().Id;
