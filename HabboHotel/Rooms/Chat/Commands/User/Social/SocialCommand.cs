@@ -14,8 +14,9 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Social;
 /// bubble (16) so they never read as a fight.
 ///
 /// Reach is the actor's own tile plus the eight around it (Chebyshev distance
-/// &lt;= 1, diagonals included) - the same adjacency :slap and :push use, so
-/// there is only one reach rule in the hotel to learn.
+/// &lt;= 1, diagonals included) - the same adjacency :push uses. The fighting
+/// commands are deliberately stricter: :slap and :hit both drop the diagonals,
+/// because landing a punch should ask more of you than hugging someone does.
 ///
 /// The text is sent WITHOUT the actor's name and wrapped in asterisks: the
 /// client moves the opening marker ahead of the username, rendering
