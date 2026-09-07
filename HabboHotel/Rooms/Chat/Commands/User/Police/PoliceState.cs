@@ -190,15 +190,34 @@ public static class PoliceState
     }
 
     /// <summary>
-    /// Drag the suspect along with the captor's step: they are placed one tile
-    /// PAST the captor in the direction the captor just walked, facing the same
-    /// way - shoved along in front rather than trailing behind, which is how
-    /// the original read. When that tile will not take them (a wall, the edge
-    /// of the room, someone standing there) they are put on the captor's own
-    /// tile instead, so a drag never strands them across the room.
+    /// How far behind the suspect may fall before they are put down instead of
+    /// walked. Reached only when something moved them without walking them - a
+    /// roller, a teleport, a door - where walking back would mean a long
+    /// pathfind across the room.
+    /// </summary>
+    private const int SnapDistance = 4;
+
+    /// <summary>
+    /// March the suspect along with the captor's step. They are driven onto the
+    /// tile one PAST the captor in the direction the captor is facing, so they
+    /// are shoved along in front rather than trailing behind, and they are
+    /// turned to face the captor's way whether or not they moved.
     ///
-    /// Called from RoomUserManager.UpdateUserStatus, so it runs on the captor's
-    /// step rather than on a timer of its own.
+    /// They are WALKED, not placed. MoveTo routes into Movement V2, which emits
+    /// the timed edge records the client interpolates - that is what makes this
+    /// a walk on screen, with the walking posture and animation, instead of the
+    /// jump a SetPos gives. One tile at a time, so this is not a route being
+    /// planned across the room: it is the same single step the captor just took.
+    ///
+    /// V2 never consults CanWalk, which is what lets a suspect who cannot walk
+    /// for themselves still be driven.
+    ///
+    /// LOCK ORDER: this runs under RoomUserManager._cycleLock and MoveTo takes
+    /// the room's MovementLock, so the order here is _cycleLock then
+    /// MovementLock. That is safe only because nothing goes the other way - the
+    /// scheduler holds MovementLock and never touches _cycleLock, and the Q1
+    /// outbound worker takes _cycleLock without holding MovementLock. Keep it
+    /// that way.
     /// </summary>
     public static void DragSuspect(Room room, RoomUser captor)
     {
@@ -207,28 +226,41 @@ public static class PoliceState
         if (!EscortByCaptor.TryGetValue(captor.UserId, out var suspectId))
             return;
         var suspect = room.GetRoomUserManager().GetRoomUserByHabbo(suspectId);
-        if (suspect == null)
+        if (suspect == null || suspect.IsBot)
             return;
 
-        // The captor's facing is the direction they walked; rotation 0 is north
-        // and each step round the compass is 45 degrees clockwise.
+        var map = room.GetGameMap();
         var dx = RotationX(captor.RotBody);
         var dy = RotationY(captor.RotBody);
         var x = captor.X + dx;
         var y = captor.Y + dy;
-        if (dx == 0 && dy == 0)
-            return;
-        if (!room.GetGameMap().ValidTile(x, y) || !room.GetGameMap().CanWalk(x, y, false))
+        // Nowhere to be shoved (no facing, a wall, the edge of the room): the
+        // captor's own tile will do - players may share one here.
+        if ((dx == 0 && dy == 0) || !map.ValidTile(x, y) || !map.CanWalk(x, y, false))
         {
             x = captor.X;
             y = captor.Y;
         }
 
-        suspect.ClearMovement(true);
-        suspect.SetPos(x, y, room.GetGameMap().SqAbsoluteHeight(x, y));
-        suspect.SetRot(captor.RotBody, false);
-        suspect.CanWalk = false;
+        // Facing goes with the captor every time, so a suspect already standing
+        // on the right tile still turns when their captor does.
+        suspect.RotBody = captor.RotBody;
+        suspect.RotHead = captor.RotBody;
         suspect.UpdateNeeded = true;
+
+        if (suspect.X == x && suspect.Y == y)
+            return;
+
+        if ((Math.Abs(suspect.X - x) + Math.Abs(suspect.Y - y)) > SnapDistance)
+        {
+            suspect.ClearMovement(true);
+            suspect.SetPos(x, y, map.SqAbsoluteHeight(x, y));
+            return;
+        }
+
+        // pOverride so a destination that already holds the captor is not
+        // refused before the pathfinder is even asked.
+        suspect.MoveTo(x, y, true);
     }
 
     private static int RotationX(int rotation) => rotation switch
