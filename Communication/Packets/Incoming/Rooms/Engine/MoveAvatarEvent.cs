@@ -1,4 +1,5 @@
 ﻿using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Engine;
 
@@ -27,6 +28,12 @@ internal class MoveAvatarEvent : IPacketEvent
             if (horse != null)
                 horse.MoveTo(moveX, moveY);
         }
+        // pixelrp police escort: an escorted suspect is walked in the same
+        // breath as their captor, exactly as a horse is walked with its rider
+        // above. Both walks are then scheduled together and the client
+        // interpolates them side by side, which is what keeps the suspect
+        // pinned in front instead of trailing a step behind.
+        PoliceState.OnCaptorWalkRequest(room, user, moveX, moveY);
         user.MoveTo(moveX, moveY);
         return Task.CompletedTask;
     }
