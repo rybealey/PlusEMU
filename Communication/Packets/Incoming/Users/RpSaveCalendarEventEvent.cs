@@ -29,6 +29,8 @@ internal class RpSaveCalendarEventEvent : IPacketEvent
         var roomId = Math.Max(0, packet.ReadInt());
         var colour = CalendarUtility.CleanColour(packet.ReadString());
         var hostName = packet.ReadString().Trim();
+        // trailing, optional: 1 = all-day (the client sends the day's bounds as the times)
+        var allDay = packet.HasDataRemaining() && packet.ReadInt() == 1;
 
         var habbo = session.GetHabbo();
         if (!CalendarUtility.IsStaff(habbo))
@@ -46,14 +48,14 @@ internal class RpSaveCalendarEventEvent : IPacketEvent
         {
             if (id <= 0)
                 connection.Execute(
-                    "INSERT INTO `rp_events` (`title`, `description`, `starts_at`, `ends_at`, `room_id`, `colour`, `host_name`, `created_by`, `created_at`) " +
-                    "VALUES (@title, @description, @startsAt, @endsAt, @roomId, @colour, @hostName, @createdBy, @now)",
-                    new { title, description, startsAt, endsAt, roomId, colour, hostName, createdBy = habbo.Id, now = (int)UnixTimestamp.GetNow() });
+                    "INSERT INTO `rp_events` (`title`, `description`, `starts_at`, `ends_at`, `all_day`, `room_id`, `colour`, `host_name`, `created_by`, `created_at`) " +
+                    "VALUES (@title, @description, @startsAt, @endsAt, @allDay, @roomId, @colour, @hostName, @createdBy, @now)",
+                    new { title, description, startsAt, endsAt, allDay = allDay ? 1 : 0, roomId, colour, hostName, createdBy = habbo.Id, now = (int)UnixTimestamp.GetNow() });
             else
                 connection.Execute(
-                    "UPDATE `rp_events` SET `title` = @title, `description` = @description, `starts_at` = @startsAt, `ends_at` = @endsAt, " +
+                    "UPDATE `rp_events` SET `title` = @title, `description` = @description, `starts_at` = @startsAt, `ends_at` = @endsAt, `all_day` = @allDay, " +
                     "`room_id` = @roomId, `colour` = @colour, `host_name` = @hostName WHERE `id` = @id",
-                    new { id, title, description, startsAt, endsAt, roomId, colour, hostName });
+                    new { id, title, description, startsAt, endsAt, allDay = allDay ? 1 : 0, roomId, colour, hostName });
         }
 
         CalendarUtility.BroadcastCalendar();

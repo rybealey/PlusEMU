@@ -33,6 +33,8 @@ public static class CalendarUtility
         public string Description { get; set; } = "";
         public int StartsAt { get; set; }
         public int EndsAt { get; set; }
+        // all-day: sits in the day's all-day row instead of the timeline
+        public bool AllDay { get; set; }
         public int RoomId { get; set; }
         public string RoomName { get; set; } = "";
         public string Colour { get; set; } = DefaultColour;
@@ -56,7 +58,7 @@ public static class CalendarUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<EventRow>(
-            "SELECT e.`id` AS Id, e.`title` AS Title, e.`description` AS Description, e.`starts_at` AS StartsAt, e.`ends_at` AS EndsAt, " +
+            "SELECT e.`id` AS Id, e.`title` AS Title, e.`description` AS Description, e.`starts_at` AS StartsAt, e.`ends_at` AS EndsAt, e.`all_day` AS AllDay, " +
             "e.`room_id` AS RoomId, COALESCE(r.`caption`, '') AS RoomName, e.`colour` AS Colour, e.`host_name` AS HostName, COALESCE(u.`username`, '') AS PostedBy " +
             "FROM `rp_events` e " +
             "LEFT JOIN `rooms` r ON r.`id` = e.`room_id` " +

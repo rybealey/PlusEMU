@@ -39,6 +39,7 @@ public class RpCalendarComposer : IServerPacket
             packet.WriteString(e.Colour ?? "");
             packet.WriteString(e.HostName ?? "");
             packet.WriteString(e.PostedBy ?? "");
+            packet.WriteInteger(e.AllDay ? 1 : 0);
         }
         packet.WriteInteger(_birthdays.Count);
         foreach (var b in _birthdays)
