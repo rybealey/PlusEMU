@@ -65,7 +65,12 @@ public class CatalogManager : ICatalogManager, IStartable
 
         using var connection = _database.Connection();
 
-        var items = await connection.QueryAsync<CatalogItem>("SELECT `id`,`item_id`,`catalog_name`,`cost_credits`,`cost_pixels`,`cost_diamonds`,`amount`,`page_id`,`limited_sells`,`limited_stack`,`offer_active`,`extradata`,`badge`,`offer_id` FROM `catalog_items`");
+        // pixelrp: `offer_active` is what CatalogItem calls HaveOffer, and it was
+        // never selected - so every catalog row loaded with HaveOffer false, which
+        // is the flag CanSelectAmount and the purchase handler both read. The
+        // client was told no offer allows an amount, and any amount that did
+        // arrive was reset to 1.
+        var items = await connection.QueryAsync<CatalogItem>("SELECT `id`,`item_id`,`catalog_name`,`cost_credits`,`cost_pixels`,`cost_diamonds`,`amount`,`page_id`,`limited_sells`,`limited_stack`,`offer_active` AS `haveoffer`,`extradata`,`badge`,`offer_id` FROM `catalog_items`");
         foreach(CatalogItem item in items)
         {
             if (item.Amount <= 0)
@@ -84,6 +89,9 @@ public class CatalogManager : ICatalogManager, IStartable
                 _itemOffers.Add(item.OfferId, item.PageId);
 
             item.Definition = definition;
+            // Derived, never stored: without it a limited edition looks like
+            // ordinary stock and CanSelectAmount would offer it by the dozen.
+            item.IsLimited = item.LimitedEditionStack > 0;
             _items[item.PageId].Add(item.Id, item);
         }
 
