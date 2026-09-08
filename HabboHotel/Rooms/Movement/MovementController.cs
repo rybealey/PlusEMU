@@ -594,12 +594,12 @@ public static class MovementController
     /// </summary>
     private static void StageShadow(RoomMovement room, MovementState w, Gamemap? map, bool moving, int flags)
     {
-        if (w.ShadowVirtualId == 0)
+        if (w.ShadowVirtualId == MovementState.NoShadow)
             return;
         if (!room.States.TryGetValue(w.ShadowVirtualId, out var s) || s.ShadowedBy != w.VirtualId)
         {
             // The suspect has gone (or been unpaired from their side); heal the link.
-            w.ShadowVirtualId = 0;
+            w.ShadowVirtualId = MovementState.NoShadow;
             return;
         }
         if (map == null)

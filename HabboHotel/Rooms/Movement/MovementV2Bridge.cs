@@ -136,7 +136,7 @@ public static class MovementV2Bridge
             // pixelrp police escort: a shadowed suspect goes where their captor
             // goes and nowhere else. CanWalk only gates the client's own click
             // (MoveAvatarEvent); this closes every server-side path too.
-            if (state.ShadowedBy != 0)
+            if (state.ShadowedBy != MovementState.NoShadow)
                 return;
 
             // Keep V2's idea of where the avatar stands in step with anything
@@ -219,7 +219,8 @@ public static class MovementV2Bridge
             if (!movement.States.TryGetValue(captor.VirtualId, out var c) ||
                 !movement.States.TryGetValue(suspect.VirtualId, out var s))
                 return false;
-            if (c.ShadowVirtualId != 0 || c.ShadowedBy != 0 || s.ShadowedBy != 0 || s.ShadowVirtualId != 0)
+            if (c.ShadowVirtualId != MovementState.NoShadow || c.ShadowedBy != MovementState.NoShadow ||
+                s.ShadowedBy != MovementState.NoShadow || s.ShadowVirtualId != MovementState.NoShadow)
                 return false;
 
             Point anchor;
@@ -277,16 +278,16 @@ public static class MovementV2Bridge
             if (suspect != null)
                 movement.States.TryGetValue(suspect.VirtualId, out s);
             // Follow the link for whichever side the caller could not name.
-            if (c == null && s != null && s.ShadowedBy != 0)
+            if (c == null && s != null && s.ShadowedBy != MovementState.NoShadow)
                 movement.States.TryGetValue(s.ShadowedBy, out c);
-            if (s == null && c != null && c.ShadowVirtualId != 0)
+            if (s == null && c != null && c.ShadowVirtualId != MovementState.NoShadow)
                 movement.States.TryGetValue(c.ShadowVirtualId, out s);
 
             if (c != null)
-                c.ShadowVirtualId = 0;
-            if (s != null && s.ShadowedBy != 0)
+                c.ShadowVirtualId = MovementState.NoShadow;
+            if (s != null && s.ShadowedBy != MovementState.NoShadow)
             {
-                s.ShadowedBy = 0;
+                s.ShadowedBy = MovementState.NoShadow;
                 MovementController.StageShadowEnd(movement, s, map);
             }
         }
@@ -317,11 +318,11 @@ public static class MovementV2Bridge
             if (c.Mode == MovementMode.Moving)
                 return;
             c.Facing = facing;
-            if (c.ShadowVirtualId == 0)
+            if (c.ShadowVirtualId == MovementState.NoShadow)
                 return;
             if (!movement.States.TryGetValue(c.ShadowVirtualId, out var s) || s.ShadowedBy != c.VirtualId)
             {
-                c.ShadowVirtualId = 0;
+                c.ShadowVirtualId = MovementState.NoShadow;
                 return;
             }
             if (c.Mode != MovementMode.Pending)

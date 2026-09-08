@@ -119,10 +119,10 @@ public static class MovementRegistry
         // pixelrp police escort: unlink either side of a shadow pairing, so a
         // suspect is never left frozen behind a captor who has gone, and a
         // captor never keeps staging edges for a suspect who has.
-        if (state.ShadowVirtualId != 0 && room.States.TryGetValue(state.ShadowVirtualId, out var shadow) && shadow.ShadowedBy == virtualId)
-            shadow.ShadowedBy = 0;
-        if (state.ShadowedBy != 0 && room.States.TryGetValue(state.ShadowedBy, out var captor) && captor.ShadowVirtualId == virtualId)
-            captor.ShadowVirtualId = 0;
+        if (state.ShadowVirtualId != MovementState.NoShadow && room.States.TryGetValue(state.ShadowVirtualId, out var shadow) && shadow.ShadowedBy == virtualId)
+            shadow.ShadowedBy = MovementState.NoShadow;
+        if (state.ShadowedBy != MovementState.NoShadow && room.States.TryGetValue(state.ShadowedBy, out var captor) && captor.ShadowVirtualId == virtualId)
+            captor.ShadowVirtualId = MovementState.NoShadow;
         room.States.Remove(virtualId);
     }
 

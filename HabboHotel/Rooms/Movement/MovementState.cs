@@ -111,21 +111,37 @@ public sealed class MovementState : IDueHeapNode
 
     // ---- escort shadow (pixelrp police) -----------------------------------
     /// <summary>
-    /// VirtualId of the unit this walker marches one tile ahead of itself, or 0.
+    /// "No shadow", for both fields below.
+    ///
+    /// It is NOT zero, and that is the whole point: RoomUserManager hands out
+    /// virtual ids from 0 upwards (_primaryPrivateUserId++), so unit 0 is a
+    /// real avatar - whoever walked into the room first. While 0 doubled as
+    /// the empty value, escorting that avatar wrote ShadowVirtualId = 0 onto
+    /// their captor, StageShadow read it as "this walker has no shadow" and
+    /// bailed on its first line, and the suspect was seated, frozen and never
+    /// moved again. It looked like a client bug for exactly as long as nobody
+    /// noticed which avatar had entered the room first.
+    /// </summary>
+    public const int NoShadow = -1;
+
+    /// <summary>
+    /// VirtualId of the unit this walker marches one tile ahead of itself, or
+    /// <see cref="NoShadow"/>.
     /// The shadow has NO route of its own: every edge this walker stages, a
     /// matching one is staged for the shadow with identical timing (see
     /// MovementController.StageShadow). That is what keeps an escorted suspect
     /// in lockstep - the pathfinder is never consulted for them at all.
     /// Guarded by MovementLock like every other field here.
     /// </summary>
-    public int ShadowVirtualId;
+    public int ShadowVirtualId = NoShadow;
 
     /// <summary>
-    /// VirtualId of the walker this unit is the shadow of, or 0. While set, this
+    /// VirtualId of the walker this unit is the shadow of, or
+    /// <see cref="NoShadow"/>. While set, this
     /// unit's own walk requests are refused at RequestMove - nothing may give a
     /// shadowed unit a route while something else is deciding where it goes.
     /// </summary>
-    public int ShadowedBy;
+    public int ShadowedBy = NoShadow;
 
 
     // ---- promises ---------------------------------------------------------
