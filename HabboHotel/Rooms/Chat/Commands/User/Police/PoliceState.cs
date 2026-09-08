@@ -243,9 +243,12 @@ public static class PoliceState
     }
 
     /// <summary>
-    /// The captor turned on the spot (LookTo). The suspect is kept one tile in
-    /// FRONT, so they have to come round to the new front and face the same
-    /// way. Cheap for everyone else: one dictionary probe on an empty set.
+    /// The captor turned on the spot (LookTo). The suspect is NOT moved: a turn
+    /// is not a step, and an officer looking around or clicking someone across
+    /// the room would otherwise drag their captive round with them. All this
+    /// does now is keep V2's idea of the captor's facing and tile honest, so
+    /// their next real step starts from the truth. Cheap for everyone else:
+    /// one dictionary probe on an empty set.
     /// </summary>
     public static void OnCaptorTurn(Room room, RoomUser captor, int rot)
     {

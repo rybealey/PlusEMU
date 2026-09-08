@@ -296,9 +296,17 @@ public static class MovementV2Bridge
 
     /// <summary>
     /// The captor turned on the spot. Facing is otherwise only set by walks,
-    /// so record it, and move the shadow round to the new front. Ignored while
-    /// the captor is mid-walk - the edge owns their facing then, and the
-    /// client does not send LookTo for a walking avatar anyway.
+    /// so record it. Ignored while the captor is mid-walk - the edge owns their
+    /// facing then, and the client does not send LookTo for a walking avatar
+    /// anyway.
+    ///
+    /// THE SUSPECT DOES NOT MOVE. A turn is not a step: an officer who clicks
+    /// someone across the room to talk to them, or just looks around, would
+    /// otherwise drag their captive round a tile at a time without ever walking
+    /// anywhere. The suspect stays where they are, facing as they were; the
+    /// next real step picks them up from there, contiguous as always, because
+    /// StageShadow reads their own EdgeTo rather than assuming they are already
+    /// in front.
     /// </summary>
     public static void Turn(Room? room, RoomUser? captor, byte facing)
     {
@@ -307,8 +315,6 @@ public static class MovementV2Bridge
         if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
             return;
 
-        var map = room.GetGameMap();
-        var now = MovementScheduler.Instance.Clock.NowMs;
         lock (movement.MovementLock)
         {
             if (movement.Closed)
@@ -318,6 +324,8 @@ public static class MovementV2Bridge
             if (c.Mode == MovementMode.Moving)
                 return;
             c.Facing = facing;
+            // Heal a link whose other side has gone, as StageShadow does - a
+            // turn is as good a moment as any to notice.
             if (c.ShadowVirtualId == MovementState.NoShadow)
                 return;
             if (!movement.States.TryGetValue(c.ShadowVirtualId, out var s) || s.ShadowedBy != c.VirtualId)
@@ -325,13 +333,14 @@ public static class MovementV2Bridge
                 c.ShadowVirtualId = MovementState.NoShadow;
                 return;
             }
+            // Keep V2's idea of where the captor stands honest - a turn is one
+            // of the few moments their tile can drift from ours without a walk
+            // - and leave the suspect exactly as they are.
             if (c.Mode != MovementMode.Pending)
             {
                 c.Tile = new Point(captor.X, captor.Y);
                 c.TileZ = captor.Z;
             }
-            MovementController.StageDisplacement(movement, s, MovementController.FrontTile(map, c.Tile, facing), facing, map, now);
         }
-        MovementScheduler.Instance.Signal(movement);
     }
 }

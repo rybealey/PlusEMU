@@ -685,8 +685,9 @@ public static class MovementController
     /// at once. This is the first thing on this server to produce the
     /// Displacement flag; the client has always handled it (it drops the unit's
     /// timed state and takes the next UserUpdate at face value). Used to seat a
-    /// suspect in front of their captor when the escort begins and whenever the
-    /// captor turns on the spot. Caller holds MovementLock.
+    /// suspect in front of their captor when the escort begins - and only then;
+    /// a captor turning on the spot no longer moves them. Caller holds
+    /// MovementLock.
     /// </summary>
     public static void StageDisplacement(RoomMovement room, MovementState s, Point tile, byte facing, Gamemap? map, long nowMs)
     {
