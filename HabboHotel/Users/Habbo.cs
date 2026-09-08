@@ -525,6 +525,15 @@ public class Habbo
         Corporations.ShiftManager.InterruptForDisconnect(this);
         // pixelrp: drop this player from any shared note they had open
         Notes.NotesUtility.ClearPresence(Id);
+        // pixelrp police: a cuff, a stun and an escort are all session state, and
+        // reloading the client ends the session - so the cuffs come off with it.
+        // Done here rather than left to the room-leave path below because that
+        // path is conditional (Dispose only runs it while CurrentRoom is set) and
+        // the registry is not: it is keyed by player id and lives as long as the
+        // emulator, so anything missed follows the player into their next session.
+        // CurrentRoom is still set at this point, which is what lets the escort
+        // unpair properly; a session that has already lost its room clears anyway.
+        Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.Forget(CurrentRoom, Id);
 
         Disconnected?.Invoke(this, EventArgs.Empty);
 

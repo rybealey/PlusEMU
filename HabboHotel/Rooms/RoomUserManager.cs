@@ -505,6 +505,15 @@ public class RoomUserManager
 
     private void RemoveRoomUser(RoomUser user)
     {
+        // pixelrp police: RemoveUserFromRoom clears these before it gets here, but
+        // OnCycle calls this method directly to sweep a user whose session has
+        // already died - the reload case - and that route would otherwise leave a
+        // player cuffed for good. Ahead of the dequeue below, so both sides of an
+        // escort are still known to V2 and the pair can be broken cleanly. Bots are
+        // excluded: this registry is keyed by player id, and a bot id comes from a
+        // different space, so a bot could otherwise clear a real player's cuffs.
+        if (!user.IsBot)
+            Chat.Commands.User.Police.PoliceState.Forget(_room, user.HabboId);
         // pixelrp Movement V2: dequeue BEFORE the rest of teardown, so nothing
         // can be staged or emitted for a unit that is already gone.
         Movement.MovementV2Bridge.OnUserLeave(_room, user);

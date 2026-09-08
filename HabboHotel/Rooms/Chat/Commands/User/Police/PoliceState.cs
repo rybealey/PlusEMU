@@ -215,7 +215,7 @@ public static class PoliceState
     /// back unless something else holds it. Returns the suspect's id, or 0
     /// when there was no escort to end. Either user may already have left.
     /// </summary>
-    public static int EndEscort(Room room, int captorId, RoomUser? suspectUser)
+    public static int EndEscort(Room? room, int captorId, RoomUser? suspectUser)
     {
         lock (EscortSync)
         {
@@ -279,8 +279,23 @@ public static class PoliceState
     /// a room, while both RoomUsers are still resolvable: a stun or a cuff is a
     /// moment in a room, and an escort cannot outlive either party being there
     /// - the one staying behind is let go properly.
+    ///
+    /// Called from EVERY way a player can go, not only the tidy one: the room
+    /// leave above, the low-level RemoveRoomUser the room cycle uses to sweep a
+    /// user whose session has already died, and the disconnect itself. That
+    /// spread is deliberate. These registries are process-global and keyed by
+    /// player id, so one missed call does not expire - the player stays cuffed,
+    /// unable to throw a punch, for the rest of the emulator's uptime, with
+    /// nothing but :uncuff or a restart to clear it. The escort is worse still:
+    /// a suspect left in EscortBySuspect can never be handed CanWalk back, and
+    /// :unescort only works from the captor's side, who may be long gone.
+    /// Overlapping calls cost a few dictionary probes and nothing else.
+    ///
+    /// <paramref name="room"/> may be null, for a session that has already lost
+    /// its room reference. The registries clear either way; only breaking the
+    /// movement pair needs a room, and a player with no room has no pair left.
     /// </summary>
-    public static void Forget(Room room, int habboId)
+    public static void Forget(Room? room, int habboId)
     {
         Stunned.TryRemove(habboId, out _);
         Cuffed.TryRemove(habboId, out _);
