@@ -36,6 +36,9 @@ public static class ItemLoader
                         UniqueNumber = Convert.ToUInt32(row["limited_number"]),
                         UniqueSeries = Convert.ToUInt32(row["limited_stack"]),
                         WallCoordinates = Convert.ToString(row["wall_pos"]),
+                        // Defensive: a server whose 87_FurniAlpha has not run
+                        // yet should load its rooms, not fail to.
+                        Alpha = row.Table.Columns.Contains("alpha") ? Convert.ToInt32(row["alpha"]) : 100,
                         RoomId = roomId
                     });
                 }

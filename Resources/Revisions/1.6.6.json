@@ -339,6 +339,7 @@
     "RpSetRoomCorpEvent": 3958,
     "RpSetHqRankEvent": 3962,
     "RpSetEmergencyEvent": 3960,
+    "RpSetFurniAlphaEvent": 3926,
     "RpPassiveCancelEvent": 3927,
     "GetDiamondsStoreEvent": 3929,
     "PurchaseDiamondsStoreItemEvent": 3930
@@ -644,6 +645,7 @@
     "RpPhotoListComposer": 3909,
     "RpJukeboxStateComposer": 3917,
     "RpRoomZoneComposer": 3924,
+    "RpFurniAlphaComposer": 3926,
     "RpRoomCorpComposer": 3957,
     "RpOpenFloorplanComposer": 3963,
     "DiamondsStoreComposer": 3925,

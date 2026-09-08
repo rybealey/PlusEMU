@@ -3,6 +3,7 @@ using System.Drawing;
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Core;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
@@ -573,7 +574,13 @@ public class RoomItemHandling
             else if (item.IsWallItem && !_wallItems.ContainsKey(item.Id))
                 _wallItems.TryAdd(item.Id, item);
             if (sendMessage)
+            {
                 _room.SendPacket(new ObjectAddComposer(item));
+                // pixelrp: a faded item is re-placed opaque unless the
+                // opacity it remembers rides along behind the object.
+                if (item.Alpha < 100)
+                    _room.SendPacket(new RpFurniAlphaComposer(item));
+            }
             // pixelrp jukebox: only a genuinely new placement, not a
             // move/rotate re-entry into this same `if (newItem)` branch.
             if (item.Definition.ItemName == "jukebox*1")

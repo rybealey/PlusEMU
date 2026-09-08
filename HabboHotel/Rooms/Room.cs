@@ -2,6 +2,7 @@
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Core;
 using Plus.HabboHotel.GameClients;
@@ -509,6 +510,12 @@ public class Room : RoomData
         }
         session.Send(new UserUpdateComposer(_roomUserManager.GetUserList().ToList()));
         session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));
+        // Opacity rides after the objects themselves, so the client has
+        // something to apply it to. Only faded items travel; a room nobody
+        // has built in sends a count of zero.
+        var fadedItems = GetRoomItemHandler().GetFloor.Where(item => item.Alpha < 100).ToList();
+        if (fadedItems.Count > 0)
+            session.Send(new RpFurniAlphaComposer(fadedItems));
         session.Send(new ItemsComposer(GetRoomItemHandler().GetWall.ToArray(), this));
         // pixelrp jukebox: sent unconditionally, even with no jukebox in the
         // room — the packet is tiny and the client hides the panel itself

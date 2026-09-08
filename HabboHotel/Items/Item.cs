@@ -21,6 +21,13 @@ public class Item
     public uint RoomId { get; set; }
     public ItemDefinition Definition { get; set; }
     public IFurniObjectData ExtraData { get; set; } = FurniObjectData.Empty;
+    /// <summary>
+    /// How see-through this item is, 10-100, set from the infostand's build
+    /// tools. 100 is opaque and is what every item that has never been faded
+    /// carries, so the wire cost is zero for rooms nobody has built in.
+    /// </summary>
+    public int Alpha { get; set; } = 100;
+
     public uint UniqueNumber { get; set; }
     public uint UniqueSeries { get; set; }
     public string WallCoordinates = string.Empty;

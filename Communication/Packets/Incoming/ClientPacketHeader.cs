@@ -470,6 +470,7 @@ public static class ClientPacketHeader
     // header tables, not just our own revisions ledger. 3962 is clear.
     public const uint RpSetHqRankEvent = 43962; //3962
     public const uint RpSetEmergencyEvent = 43960; //3960
+    public const uint RpSetFurniAlphaEvent = 3926;
     public const uint RpPassiveCancelEvent = 3927;
     public const uint GetDiamondsStoreEvent = 3929;
     public const uint PurchaseDiamondsStoreItemEvent = 3930;
