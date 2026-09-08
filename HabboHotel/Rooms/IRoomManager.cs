@@ -15,9 +15,7 @@ public interface IRoomManager
     List<Room> SearchGroupRooms(string query);
     List<Room> SearchTaggedRooms(string query);
     List<Room> GetPopularRooms(int category, int amount = 50);
-    List<Room> GetRecommendedRooms(int amount = 50, int currentRoomId = 0);
     List<Room> GetPopularRatedRooms(int amount = 50);
-    List<Room> GetRoomsByCategory(int category, int amount = 50);
     List<Room> GetOnGoingRoomPromotions(int mode, int amount = 50);
     List<Room> GetPromotedRooms(int categoryId, int amount = 50);
     List<Room> GetGroupRooms(int amount = 50);

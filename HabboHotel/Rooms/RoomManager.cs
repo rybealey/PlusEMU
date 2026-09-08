@@ -225,19 +225,9 @@ public class RoomManager : IRoomManager
         return _rooms.Values.Where(x => x.UsersNow > 0 && x.Access != RoomAccess.Invisible).OrderByDescending(x => x.UsersNow).Take(amount).ToList();
     }
 
-    public List<Room> GetRecommendedRooms(int amount = 50, int currentRoomId = 0)
-    {
-        return _rooms.Values.Where(x => x.Id != currentRoomId && x.Access != RoomAccess.Invisible).OrderByDescending(x => x.UsersNow).OrderByDescending(x => x.Score).Take(amount).ToList();
-    }
-
     public List<Room> GetPopularRatedRooms(int amount = 50)
     {
         return _rooms.Values.Where(x => x.Access != RoomAccess.Invisible).OrderByDescending(x => x.Score).OrderByDescending(x => x.UsersNow).Take(amount).ToList();
-    }
-
-    public List<Room> GetRoomsByCategory(int category, int amount = 50)
-    {
-        return _rooms.Values.Where(x => x.Category == category && x.Access != RoomAccess.Invisible && x.UsersNow > 0).OrderByDescending(x => x.UsersNow).Take(amount).ToList();
     }
 
     public List<Room> GetOnGoingRoomPromotions(int mode, int amount = 50)

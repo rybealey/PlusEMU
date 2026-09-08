@@ -115,7 +115,10 @@ internal static class NavigatorHandler
             }
             case NavigatorCategoryType.Recommended:
             {
-                var recommendedRooms = PlusEnvironment.Game.RoomManager.GetRecommendedRooms(limit);
+                // Database-backed, like the category listing: a room that has
+                // been empty for a minute is unloaded, and it should still be
+                // recommendable.
+                var recommendedRooms = RoomFactory.GetRoomsDataRecommended(limit);
                 packet.WriteInteger(recommendedRooms.Count);
                 foreach (RoomData data in recommendedRooms.ToList()) RoomAppender.WriteRoom(packet, data, data.Promotion);
                 recommendedRooms = null;
@@ -123,7 +126,10 @@ internal static class NavigatorHandler
             }
             case NavigatorCategoryType.Category:
             {
-                var getRoomsByCategory = PlusEnvironment.Game.RoomManager.GetRoomsByCategory(result.Id, limit);
+                // From the database, not RoomManager: a room unloads once it has
+                // been empty for a minute, and listing loaded rooms only meant it
+                // vanished from its category until somebody walked back in.
+                var getRoomsByCategory = RoomFactory.GetRoomsDataByCategory(result.Id, limit);
                 packet.WriteInteger(getRoomsByCategory.Count);
                 foreach (RoomData data in getRoomsByCategory.ToList()) RoomAppender.WriteRoom(packet, data, data.Promotion);
                 getRoomsByCategory = null;
