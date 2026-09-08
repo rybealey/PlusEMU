@@ -70,7 +70,16 @@ public class CatalogManager : ICatalogManager, IStartable
         // is the flag CanSelectAmount and the purchase handler both read. The
         // client was told no offer allows an amount, and any amount that did
         // arrive was reset to 1.
-        var items = await connection.QueryAsync<CatalogItem>("SELECT `id`,`item_id`,`catalog_name`,`cost_credits`,`cost_pixels`,`cost_diamonds`,`amount`,`page_id`,`limited_sells`,`limited_stack`,`offer_active` AS `haveoffer`,`extradata`,`badge`,`offer_id` FROM `catalog_items`");
+        //
+        // Compared in SQL rather than selected raw: the column is enum('0','1'),
+        // which MySqlConnector hands back as a STRING, and Dapper maps that to
+        // bool through Convert.ToBoolean - which parses "True"/"False" and throws
+        // FormatException on "0". The comparison yields an integer instead, which
+        // converts cleanly. That throw took the whole hotel down once: Init() runs
+        // AFTER the socket listener starts (PlusEnvironment.Start), so the emulator
+        // kept accepting connections it could never answer and every client sat at
+        // the loading bar.
+        var items = await connection.QueryAsync<CatalogItem>("SELECT `id`,`item_id`,`catalog_name`,`cost_credits`,`cost_pixels`,`cost_diamonds`,`amount`,`page_id`,`limited_sells`,`limited_stack`,(`offer_active` = '1') AS `haveoffer`,`extradata`,`badge`,`offer_id` FROM `catalog_items`");
         foreach(CatalogItem item in items)
         {
             if (item.Amount <= 0)
