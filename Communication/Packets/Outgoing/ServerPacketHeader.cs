@@ -188,6 +188,7 @@ public static class ServerPacketHeader
     public const uint RpAirplaneModeComposer = 3935;
     public const uint RpCorpsComposer = 3946;
     public const uint RpCorpDetailComposer = 3947;
+    public const uint RpStocksComposer = 3972;
     public const uint RpUserCorpComposer = 3950;
     public const uint RpDiscordStatusComposer = 3952;
     // 3954 is BURNED: it collides with the stock client incoming header

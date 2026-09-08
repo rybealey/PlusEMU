@@ -434,6 +434,7 @@ public static class ClientPacketHeader
     public const uint RpMoveItemEvent = 43945; //3945
     public const uint RpGetCorpsEvent = 43948; //3948
     public const uint RpGetCorpDetailEvent = 43949; //3949
+    public const uint RpGetStocksEvent = 43972; //3972
     public const uint RpGetUserCorpEvent = 43951; //3951
     public const uint RpGetDiscordStatusEvent = 43953; //3953
     public const uint RpDiscordUnlinkEvent = 43956; //3956

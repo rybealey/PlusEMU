@@ -136,6 +136,10 @@ public class PlusEnvironment : IPlusEnvironment
             // pixelrp: shift tracking - clears stale on_duty flags and starts
             // the payout timer; needs the database, which is already up here.
             HabboHotel.Corporations.ShiftManager.Init();
+            // pixelrp: the stock ledger - samples every corporation's stock on
+            // a 15 minute interval and purges past 90 days, which is the whole
+            // history behind the phone's Stocks app.
+            HabboHotel.Corporations.StockLedger.Init();
             // pixelrp: phone notifications - starts the sweep that spots an
             // event about to begin. Everything else is pushed as it happens.
             HabboHotel.Notifications.NotificationUtility.Init();
