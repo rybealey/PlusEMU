@@ -640,6 +640,7 @@ public class RoomUser
             return;
         UnIdle();
         FreezeInteracting = false;
+        StandUpForWalk();
         // pixelrp Movement V2 is the ONLY movement engine. There is deliberately
         // no V1 fallback here: if V2 cannot route this walk, nothing moves.
         // A fallback is what let two engines touch one avatar, and that is what
@@ -651,6 +652,56 @@ public class RoomUser
     public void MoveTo(int pX, int pY)
     {
         MoveTo(pX, pY, false);
+    }
+
+    /// <summary>
+    /// pixelrp: a walk stands you up.
+    ///
+    /// :sit and the sit toggle set IsSitting and drop Z by 0.35; :lay does the
+    /// same with IsLying. NOTHING on the walking path used to clear either one.
+    /// V1's tick was what reset posture, and V1 is deleted, so a player who sat
+    /// down once stayed flagged as sitting for the rest of their session.
+    ///
+    /// That is worse than a stuck pose, because UpdateUserStatus returns early
+    /// for a sitting or lying user (RoomUserManager) and therefore never
+    /// recomputes Z. The avatar's height stopped being reconciled against the
+    /// tile it stands on, and V2 then carried the stale value forward through
+    /// every edge it planned - RequestMove latches state.TileZ from Z, each
+    /// commit moves TileZ on through EdgeToZ, and the walk-end marker rests the
+    /// avatar at whatever that chain last held. The result is an avatar sitting
+    /// in mid-air on a tile whose real height it no longer agrees with, and it
+    /// does not correct itself: the loop never asks the map again.
+    ///
+    /// Cleared HERE, after the early returns that can still refuse the walk and
+    /// before RequestMove reads Z, so the first edge is planned from the
+    /// standing height rather than the seated one. The 0.35 is added back the
+    /// same way :stand does it.
+    ///
+    /// A KNOCKOUT LAY IS NOT CLEARED. It is held by RpHealth, owns the same
+    /// 0.35 offset, and UpdateRpKnockoutState is the only thing allowed to lift
+    /// it - the same guard :stand uses. A knocked-out player cannot walk anyway
+    /// (CanWalk is false), so this only matters for anything that moves them
+    /// without asking, like an escort close-out.
+    /// </summary>
+    private void StandUpForWalk()
+    {
+        if (RpKnockedOut)
+            return;
+
+        if (IsSitting)
+        {
+            Statusses.Remove("sit");
+            Z += 0.35;
+            IsSitting = false;
+            UpdateNeeded = true;
+        }
+        else if (IsLying)
+        {
+            Statusses.Remove("lay");
+            Z += 0.35;
+            IsLying = false;
+            UpdateNeeded = true;
+        }
     }
 
     public void UnlockWalking()
