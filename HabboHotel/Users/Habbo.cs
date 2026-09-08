@@ -344,6 +344,40 @@ public class Habbo
         dbClient.RunQuery();
     }
 
+    // pixelrp phone: the two documents behind the phone - preferences and the
+    // Notification Center's history - as JSON the client owns (91_PhoneState.sql).
+    // Same shape as the macros: '' = never saved, lazily loaded, pushed at login
+    // by RpPhoneStateComposer, written by RpSavePhoneStateEvent after it has
+    // checked the payload is JSON of the right kind.
+    public bool RpPhoneLoaded { get; set; }
+    public string RpPhonePrefs { get; set; } = "";
+    public string RpPhoneNotifications { get; set; } = "";
+
+    public void EnsureRpPhoneLoaded()
+    {
+        if (RpPhoneLoaded)
+            return;
+        RpPhoneLoaded = true;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `prefs`, `notifications` FROM `user_phone` WHERE `user_id` = @id LIMIT 1");
+        dbClient.AddParameter("id", Id);
+        var row = dbClient.GetRow();
+        if (row == null)
+            return;
+        RpPhonePrefs = Convert.ToString(row["prefs"]) ?? "";
+        RpPhoneNotifications = Convert.ToString(row["notifications"]) ?? "";
+    }
+
+    public void SaveRpPhone()
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("REPLACE INTO `user_phone` (`user_id`,`prefs`,`notifications`) VALUES (@id,@prefs,@notifications)");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("prefs", RpPhonePrefs);
+        dbClient.AddParameter("notifications", RpPhoneNotifications);
+        dbClient.RunQuery();
+    }
+
     // pixelrp RP inventory (backpack carry slots 1-10). No caching — reads
     // and writes go straight to user_rp_inventory; the client is refreshed
     // with RpInventoryComposer after every change.

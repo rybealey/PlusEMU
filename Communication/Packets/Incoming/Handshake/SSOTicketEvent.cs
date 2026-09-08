@@ -136,6 +136,10 @@ public class SsoTicketEvent : IPacketEvent
             // browser instead of living in that browser's localStorage.
             session.GetHabbo().EnsureRpMacrosLoaded();
             session.Send(new RpMacrosComposer(session.GetHabbo().RpMacros));
+            // pixelrp: the phone's saved state - layout, settings, notification
+            // history - so a player's phone is theirs on any machine.
+            session.GetHabbo().EnsureRpPhoneLoaded();
+            session.Send(new RpPhoneStateComposer(session.GetHabbo().RpPhonePrefs, session.GetHabbo().RpPhoneNotifications));
             // pixelrp: current airplane-mode state, so the phone's toggle and
             // its request/DM gating reflect what's saved.
             session.Send(new RpAirplaneModeComposer(session.GetHabbo().AirplaneMode));
