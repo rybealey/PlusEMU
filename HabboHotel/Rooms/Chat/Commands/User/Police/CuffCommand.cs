@@ -18,11 +18,22 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// Reach is hands-on: anywhere in the eight tiles around you, or your own,
 /// unlike :stun's firing line.
 ///
+/// The stun is the way IN, not something the cuff leans on afterwards: the
+/// moment the cuffs land the freeze ends and its visual goes with it, exactly
+/// as an escort taking over does. What holds the player from here is the cuff,
+/// and a cuff has no clock - it lasts until :uncuff. That is deliberate. A
+/// stun expiring used to be what quietly ended the arrest window, so whether
+/// an officer got :escort typed in time came down to how fast they type;
+/// keying the escort to the cuff alone takes the stopwatch out of it.
+///
 /// Being cuffed does two things. It stops the cuffed player throwing a punch
 /// (see HitCommand and SlapCommand), and it is what :escort needs to take
-/// someone into custody. It has no visual: the original drew a custom overhead
-/// handcuff effect built from its own PNG frames, and neither that bundle nor
-/// its sources exist here.
+/// someone into custody - for as long as the cuffs are on, and by any player,
+/// not only whoever put them there. It does not stop them walking: a cuffed
+/// player is restrained, not rooted, and an officer who wants them moved to a
+/// tile of their choosing has :escort for that. It has no visual: the original
+/// drew a custom overhead handcuff effect built from its own PNG frames, and
+/// neither that bundle nor its sources exist here.
 /// </summary>
 internal class CuffCommand : ITargetChatCommand
 {
@@ -83,6 +94,11 @@ internal class CuffCommand : ITargetChatCommand
             session.SendWhisper($"{target.Username} is already cuffed.");
             return Task.CompletedTask;
         }
+
+        // The freeze got the cuffs on; the cuffs hold them now. Ending it here
+        // hands walking back and clears the stun's visual, so a cuffed player
+        // reads as cuffed rather than as still being tased.
+        PoliceState.CancelStun(targetUser);
 
         room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*cuffs {target.Username}, restraining them*", 0, FightBubble));
         return Task.CompletedTask;

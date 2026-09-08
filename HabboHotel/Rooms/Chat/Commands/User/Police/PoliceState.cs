@@ -18,6 +18,11 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// the original did too: being stunned or cuffed is a moment, not a property of
 /// an account.
 ///
+/// Only ONE of the three runs on a clock: the stun. A cuff lasts until :uncuff
+/// and an escort until it is ended, so once a player is cuffed the arrest does
+/// not quietly time out from under the officer working it - any player can
+/// escort them, for as long as the cuffs are on.
+///
 /// The one deliberate departure from the original: there are no scheduled
 /// tasks. Arcturus armed a ScheduledFuture per stun and ran the escort off its
 /// own 250ms timer; pixelrp already ticks every room at 500ms and already
@@ -116,8 +121,11 @@ public static class PoliceState
     }
 
     /// <summary>
-    /// End a stun early - what starting an escort on a stunned suspect does,
-    /// so the drag can move them immediately instead of waiting out the freeze.
+    /// End a stun early. Both of the steps that follow a stun do this, because
+    /// each one takes over from it: a cuff going on ends the freeze that made
+    /// the cuff possible (:cuff), and an escort starting can then move the
+    /// suspect immediately instead of waiting one out (:escort). Nothing about
+    /// either state is left depending on a stun that is still ticking.
     /// </summary>
     public static void CancelStun(RoomUser user)
     {
