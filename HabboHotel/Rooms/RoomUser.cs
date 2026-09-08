@@ -677,6 +677,11 @@ public class RoomUser
     /// standing height rather than the seated one. The 0.35 is added back the
     /// same way :stand does it.
     ///
+    /// A SEAT FURNI is a different thing and is handled separately below: its
+    /// status is added without IsSitting, and its height comes from item.GetZ
+    /// outright rather than from an offset, so there is nothing to undo - the
+    /// standing height has to be re-derived from the tile.
+    ///
     /// A KNOCKOUT LAY IS NOT CLEARED. It is held by RpHealth, owns the same
     /// 0.35 offset, and UpdateRpKnockoutState is the only thing allowed to lift
     /// it - the same guard :stand uses. A knocked-out player cannot walk anyway
@@ -700,6 +705,27 @@ public class RoomUser
             Statusses.Remove("lay");
             Z += 0.35;
             IsLying = false;
+            UpdateNeeded = true;
+        }
+        else if (HasStatus("sit") || HasStatus("lay"))
+        {
+            // Seated by a seat furni or a bed rather than by :sit. There is no
+            // 0.35 to give back: UpdateUserStatus set Z from item.GetZ, the
+            // height of someone SITTING on the piece. Re-derive the height of
+            // someone STANDING on that tile, which is the value that same
+            // method computes just before its seat branch overrides it.
+            //
+            // Done here, before RequestMove latches state.TileZ from Z, so the
+            // first edge of the walk leaves from standing height instead of
+            // descending out of the seat across a whole tile.
+            RemoveStatus("sit");
+            RemoveStatus("lay");
+
+            var map = GetRoom().GetGameMap();
+
+            if (map != null)
+                Z = map.SqAbsoluteHeight(X, Y, map.GetAllRoomItemForSquare(X, Y));
+
             UpdateNeeded = true;
         }
     }

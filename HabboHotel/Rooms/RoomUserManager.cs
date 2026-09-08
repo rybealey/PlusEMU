@@ -790,6 +790,28 @@ public class RoomUserManager
                     user.RotBody = edge.Facing;
                     user.RotHead = edge.Facing;
                     user.IsWalking = true;
+                    // A UNIT CARRYING "mv" IS NOT SEATED.
+                    //
+                    // A seat furni's "sit" is added by UpdateUserStatus and
+                    // cleared by it too - but only on an ARRIVAL, which is the
+                    // gate at the top of this loop. The first edge of a walk
+                    // leaves from the tile the unit is already standing on, so
+                    // there is no arrival for it, and "sit" used to go out in
+                    // the very same UserUpdate as this "mv". That is one tile
+                    // of sliding along in the sit pose before the second edge
+                    // finally strips it.
+                    //
+                    // Cleared here because this is the single writer, and it
+                    // runs before SerializeStatusUpdates puts the frame on the
+                    // wire. A knockout lay is left alone: RpHealth owns it and
+                    // UpdateRpKnockoutState is the only thing allowed to lift
+                    // it (a displacement, which is how a knocked-out unit gets
+                    // moved, takes the other branch anyway).
+                    if (!user.RpKnockedOut)
+                    {
+                        user.RemoveStatus("sit");
+                        user.RemoveStatus("lay");
+                    }
                     user.SetStatus("mv",
                         $"{edge.ToX},{edge.ToY},{TextHandling.GetString(edge.ToZ)}");
                 }
