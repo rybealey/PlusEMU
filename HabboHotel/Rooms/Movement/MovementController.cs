@@ -362,21 +362,60 @@ public static class MovementController
 
         if (!CanTraverse.IsPassable(verdict, isFinal))
         {
-            // Blocked at commit: re-plan from the CURRENT tile (EdgeTo is
-            // unusable) and bump the revision. Failure ends the walk cleanly.
-            MovementCounters.Replan();
-            var replanned = AStarPathfinder.FindRoute(
-                map, room.Scratch, w.Route, w.Tile, w.Target, ctx,
-                baseIndex: w.EdgeIndex, allowPartial: true);
-            if (replanned == PathResult.None || !w.Route.HasNext)
+            // ONCE AN EDGE HAS BEGUN, ITS GEOMETRY IS IMMUTABLE.
+            //
+            // This re-plan stages from w.EdgeIndex and bumps RouteRevision.
+            // That index is normally still in the future: CommitEdgeSilently
+            // advanced it moments ago and StageEdge emits it with an absolute
+            // EdgeStartTick derived from TimelineOrigin. But the start tick is
+            // wall-clock, not "now" - so when this beat runs LATE (the case
+            // already counted by BeatLate above), that index has ALREADY
+            // STARTED on the client, which has been rendering it since its
+            // cycleStart from the lookahead previously advertised for it.
+            //
+            // Re-planning then emits the SAME edge index at a higher revision
+            // with different from/to, and the client - correctly trusting the
+            // newer revision - swaps geometry underneath an avatar that is
+            // part-way along the tile. That is a teleport, and it was observed
+            // as exactly that: index 34, revision 14 -> 15, 12,3->13,3
+            // replaced by 12,3->11,4 at phase 0.023.
+            //
+            // So the elapsing index is derived from the authoritative timeline
+            // and compared against the index about to be staged. Edge e
+            // finishes on the geometry already promised; the new route begins
+            // at e + 1, planned on the next beat when that index is genuinely
+            // fresh. Nothing about timing, alignment or the interval changes -
+            // only WHICH index a re-plan is allowed to rewrite.
+            var elapsing = w.ElapsingEdgeIndex(nowMs);
+
+            if (w.EdgeIndex <= elapsing)
             {
-                MovementCounters.StopBlocked();
-                StopWalk(room, w);
-                return;
+                // Already begun. Honour what was advertised for this index and
+                // stage it unchanged; the block is re-evaluated next beat from
+                // a fresh index. One edge completes onto a tile that has since
+                // become impassable, which is a race stock Habbo loses too -
+                // and is bounded, unlike rewriting a moving avatar's position.
+                MovementCounters.ReplanDeferred();
             }
-            w.RouteRevision++;
-            next = w.Route.PeekNext();
-            isFinal = w.Route.IsLast;
+            else
+            {
+                // Not yet started: rewriting this index is legal, because the
+                // client cannot have begun rendering an edge whose cycleStart
+                // is still in the future.
+                MovementCounters.Replan();
+                var replanned = AStarPathfinder.FindRoute(
+                    map, room.Scratch, w.Route, w.Tile, w.Target, ctx,
+                    baseIndex: w.EdgeIndex, allowPartial: true);
+                if (replanned == PathResult.None || !w.Route.HasNext)
+                {
+                    MovementCounters.StopBlocked();
+                    StopWalk(room, w);
+                    return;
+                }
+                w.RouteRevision++;
+                next = w.Route.PeekNext();
+                isFinal = w.Route.IsLast;
+            }
         }
 
         w.Route.Advance();

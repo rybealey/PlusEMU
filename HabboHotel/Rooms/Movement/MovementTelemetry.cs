@@ -80,6 +80,7 @@ public static class MovementCounters
     private static long _stopsRouteEnd;
     private static long _stopsBlocked;
     private static long _replans;
+    private static long _replansDeferred;
     private static long _roomProcessed;
     private static long _drainedWalkers;
 
@@ -144,6 +145,14 @@ public static class MovementCounters
     public static void StopRouteEnd() => Interlocked.Increment(ref _stopsRouteEnd);
     public static void StopBlocked() => Interlocked.Increment(ref _stopsBlocked);
     public static void Replan() => Interlocked.Increment(ref _replans);
+
+    /// <summary>
+    /// A blocked-at-commit re-plan that was DEFERRED because the edge it would
+    /// have restaged had already begun. Once an edge has started its geometry
+    /// is immutable, so the re-plan waits one beat rather than changing the
+    /// route under an avatar that is already walking it.
+    /// </summary>
+    public static void ReplanDeferred() => Interlocked.Increment(ref _replansDeferred);
     public static void RoomProcessed() => Interlocked.Increment(ref _roomProcessed);
     public static void DrainedWalker() => Interlocked.Increment(ref _drainedWalkers);
 
@@ -155,6 +164,7 @@ public static class MovementCounters
         $"advances={Interlocked.Read(ref _advances)} " +
         $"commits={Interlocked.Read(ref _commits)} " +
         $"replans={Interlocked.Read(ref _replans)} " +
+        $"replansDeferred={Interlocked.Read(ref _replansDeferred)} " +
         $"stopEnd={Interlocked.Read(ref _stopsRouteEnd)} " +
         $"stopBlocked={Interlocked.Read(ref _stopsBlocked)}";
 
