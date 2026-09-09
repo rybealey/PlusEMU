@@ -138,6 +138,63 @@ public static class MovementCounters
         Interlocked.Exchange(ref _lastSpinRoomId, roomId);
     }
 
+    // ---- ACTIVE-EDGE REWRITE EXPOSURE (measurement only) ------------------
+    // A redirect stages from e + 1, and at the instant it is planned that is
+    // correct: edge e + 1 has not started. But the CLIENT begins an edge from
+    // LOOKAHEAD the moment its cycleStart passes - before this server has
+    // emitted any record for that index - and the correction is still in
+    // flight then. If the boundary is nearer than the flight time, the client
+    // has already begun the very edge being restaged, and its geometry changes
+    // under a live phase. That is the crossing/following hitch, measured on
+    // beta as edge 103 turning from 8,16->8,17 into 8,16->7,15 at phase 0.128.
+    //
+    // These counters exist to size that exposure BEFORE anything is changed to
+    // avoid it: how near the boundary redirects actually land, and how often.
+    // Nothing here alters behaviour - they are interlocked increments on the
+    // click path, not the tick.
+    private static long _redirectMarginUnder50;
+    private static long _redirectMarginUnder100;
+    private static long _redirectMarginUnder250;
+    private static long _minRedirectMarginMs = long.MaxValue;
+    private static long _redirectBehindElapsing;
+
+    /// <summary>
+    /// Milliseconds from this redirect to the start of the edge it restages.
+    /// Small values are the exposure: the smaller it is, the more certain that
+    /// the client has already begun that edge when the correction arrives.
+    /// </summary>
+    public static void RedirectMargin(long marginMs)
+    {
+        if (marginMs < 250)
+            Interlocked.Increment(ref _redirectMarginUnder250);
+        if (marginMs < 100)
+            Interlocked.Increment(ref _redirectMarginUnder100);
+        if (marginMs < 50)
+            Interlocked.Increment(ref _redirectMarginUnder50);
+
+        long observed;
+        while (marginMs < (observed = Interlocked.Read(ref _minRedirectMarginMs)))
+        {
+            if (Interlocked.CompareExchange(ref _minRedirectMarginMs, marginMs, observed) == observed)
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A redirect whose walker could not be advanced to the elapsing index,
+    /// because nothing had been emitted that far. The origin it plans from is
+    /// then the terminal of an EARLIER edge than the one the client is
+    /// rendering, which is a second way the two can disagree. Expected to stay
+    /// at zero; it is here so that assumption is checked rather than trusted.
+    /// </summary>
+    public static void RedirectBehindElapsing() => Interlocked.Increment(ref _redirectBehindElapsing);
+
+    private static string MinRedirectMargin()
+    {
+        var value = Interlocked.Read(ref _minRedirectMarginMs);
+        return value == long.MaxValue ? "-" : value.ToString();
+    }
+
     public static void WalkStart() => Interlocked.Increment(ref _walkStarts);
     public static void Redirect() => Interlocked.Increment(ref _redirects);
     public static void Advance() => Interlocked.Increment(ref _advances);
@@ -166,7 +223,12 @@ public static class MovementCounters
         $"replans={Interlocked.Read(ref _replans)} " +
         $"replansDeferred={Interlocked.Read(ref _replansDeferred)} " +
         $"stopEnd={Interlocked.Read(ref _stopsRouteEnd)} " +
-        $"stopBlocked={Interlocked.Read(ref _stopsBlocked)}";
+        $"stopBlocked={Interlocked.Read(ref _stopsBlocked)} " +
+        $"redirectMarginUnder250={Interlocked.Read(ref _redirectMarginUnder250)} " +
+        $"under100={Interlocked.Read(ref _redirectMarginUnder100)} " +
+        $"under50={Interlocked.Read(ref _redirectMarginUnder50)} " +
+        $"minRedirectMarginMs={MinRedirectMargin()} " +
+        $"redirectBehindElapsing={Interlocked.Read(ref _redirectBehindElapsing)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
     public static void DrainDeferred() => Interlocked.Increment(ref _drainDeferred);

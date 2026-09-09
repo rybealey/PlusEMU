@@ -239,6 +239,17 @@ public static class MovementController
         if (result == PathResult.None || !w.Route.HasNext)
             return false; // keep walking the existing route
 
+        // MEASUREMENT ONLY, changing nothing. How near the boundary of the
+        // edge it is about to restage this replan lands. The client begins
+        // that edge from lookahead the instant its cycleStart passes, while
+        // this correction is still in flight, so a small margin means the
+        // geometry is being rewritten under an edge already being rendered.
+        // Counted here rather than earlier so only replans that actually
+        // stage are counted - a failed pathfind restages nothing.
+        MovementCounters.RedirectMargin(w.EdgeStartTick(e + 1) - nowMs);
+        if (w.EdgeIndex < e)
+            MovementCounters.RedirectBehindElapsing();
+
         // 5/6/7. Route identity advances; the movement clock does not.
         MovementCounters.Redirect();
         w.RouteRevision++;
