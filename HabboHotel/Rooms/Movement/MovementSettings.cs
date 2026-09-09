@@ -87,21 +87,4 @@ public static class MovementSettings
 
     /// <summary>Identical-target redirect debounce, so spam-clicking cannot spin A*.</summary>
     public const int RepathMinIntervalMs = 40;
-
-    /// <summary>
-    /// How far ahead of now a redirect must treat edges as ALREADY BEGUN.
-    ///
-    /// The client starts an edge the instant its cycleStart passes, and it
-    /// starts it from LOOKAHEAD - before the server has emitted a real record
-    /// for that index. A correction planned at T does not reach the client
-    /// until T + flight, so an edge whose cycleStart falls inside that window
-    /// is being rendered by the time the correction lands. Restaging it there
-    /// rewrites geometry under a live phase, which the client sees as a
-    /// sideways jump at unchanged speed - the crossing/following hitch.
-    ///
-    /// Deliberately below <see cref="IntervalMs"/>: it can only ever push the
-    /// first mutable index one edge further out, so a redirect costs at most
-    /// one extra tile of run-on and never two.
-    /// </summary>
-    public const int ReplanFlightAllowanceMs = 200;
 }

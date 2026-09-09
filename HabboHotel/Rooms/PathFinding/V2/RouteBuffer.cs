@@ -78,25 +78,5 @@ public sealed class RouteBuffer
         IsPartial = partial;
     }
 
-    /// <summary>
-    /// Put an already-promised edge back on the front of a freshly planned
-    /// route, moving <see cref="BaseIndex"/> back to match.
-    ///
-    /// Used by a redirect that must not restage an edge the client has begun.
-    /// The new path is planned FROM that edge's destination, so prepending its
-    /// tile leaves the walker still walking it and makes the first replanned
-    /// edge start exactly where it ends - the chain is contiguous by
-    /// construction rather than by inspection.
-    /// </summary>
-    public void PrependPreserved(Point tile)
-    {
-        EnsureCapacity(Length + 1);
-        for (var i = Length; i > 0; i--)
-            _tiles[i] = _tiles[i - 1];
-        _tiles[0] = tile;
-        Length++;
-        BaseIndex--;
-    }
-
     public Point Goal => Length > 0 ? _tiles[Length - 1] : Point.Empty;
 }
