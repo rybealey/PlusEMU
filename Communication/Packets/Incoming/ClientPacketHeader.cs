@@ -397,6 +397,8 @@ public static class ClientPacketHeader
     public const uint RpSaveUiSettingsEvent = 3903;
     public const uint RpSaveMacrosEvent = 3967;
     public const uint RpSavePhoneStateEvent = 3954;
+    public const uint RpSetRegionEvent = 3911;
+    public const uint RpGetUserRegionEvent = 3915;
     // internal 3971 is taken by SubmitBullyReportEvent; wire id (revisions json) stays 3971
     public const uint RpGetUserGangEvent = 43971; //3971
     public const uint RpBuyGangEvent = 3972;

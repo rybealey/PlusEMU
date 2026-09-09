@@ -143,6 +143,9 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: current airplane-mode state, so the phone's toggle and
             // its request/DM gating reflect what's saved.
             session.Send(new RpAirplaneModeComposer(session.GetHabbo().AirplaneMode));
+            // pixelrp: their own region, so Settings > General opens on the right
+            // one and their profile reads correctly to themselves.
+            session.Send(new RpUserRegionComposer(session.GetHabbo().Id, session.GetHabbo().RpRegion));
             //SendMessage(new TalentTrackLevelComposer());
 
 

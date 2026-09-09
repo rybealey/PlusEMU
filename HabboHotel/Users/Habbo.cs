@@ -144,6 +144,12 @@ public class Habbo
     // phone's Settings app.
     public bool AirplaneMode { get; set; }
 
+    // pixelrp: which part of the world this player plays from - 'na', 'eu',
+    // 'oc', or '' when they have not said (96_UserRegion.sql). Shown on their
+    // profile beside the motto, so unlike the phone's own settings it lives on
+    // the user row where anyone can read it.
+    public string RpRegion { get; set; } = "";
+
     public bool ChangingName { get; set; }
 
     public double FloodTime { get; set; }

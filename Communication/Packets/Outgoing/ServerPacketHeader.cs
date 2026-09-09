@@ -168,6 +168,7 @@ public static class ServerPacketHeader
     public const uint RpUiSettingsComposer = 3902;
     public const uint RpMacrosComposer = 3966;
     public const uint RpPhoneStateComposer = 3900;
+    public const uint RpUserRegionComposer = 3916;
     public const uint RpUserGangComposer = 3970;
     public const uint RpGangDetailComposer = 3973;
     public const uint RpGangInvitesComposer = 3974;
