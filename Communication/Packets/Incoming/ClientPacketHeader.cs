@@ -398,7 +398,10 @@ public static class ClientPacketHeader
     public const uint RpSaveMacrosEvent = 3967;
     public const uint RpSavePhoneStateEvent = 3954;
     public const uint RpSetRegionEvent = 3911;
-    public const uint RpGetUserRegionEvent = 3915;
+    // 3915 is GetPetTrainingPanelEvent - the C# headers carry ids the
+    // revisions map does not, and two incoming handlers on one id kills the
+    // emulator before it can listen. 3914 is free in both.
+    public const uint RpGetUserRegionEvent = 3914;
     // internal 3971 is taken by SubmitBullyReportEvent; wire id (revisions json) stays 3971
     public const uint RpGetUserGangEvent = 43971; //3971
     public const uint RpBuyGangEvent = 3972;

@@ -278,7 +278,7 @@
     "RpSaveMacrosEvent": 3967,
     "RpSavePhoneStateEvent": 3954,
     "RpSetRegionEvent": 3911,
-    "RpGetUserRegionEvent": 3915,
+    "RpGetUserRegionEvent": 3914,
     "RpGetUserGangEvent": 3971,
     "RpBuyGangEvent": 3972,
     "RpGetGangDetailEvent": 3976,
