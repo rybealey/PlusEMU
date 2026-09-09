@@ -225,19 +225,57 @@ public static class MovementController
         if (w.Mode != MovementMode.Moving)
             return false;
 
-        // 3. Origin = terminal of the CURRENT ELAPSING EDGE.
-        //    NOT the last promised terminal: that would force the avatar to
-        //    walk to the end of advertised lookahead (up to 1500ms) before
-        //    turning, which is precisely the responsiveness bug this rule fixes.
+        // 3. Origin = terminal of the last edge the CLIENT MAY ALREADY HAVE
+        //    BEGUN, which is normally the elapsing edge. Still NOT the last
+        //    promised terminal: planning from there would make the avatar walk
+        //    out the whole advertised lookahead before turning, the
+        //    responsiveness bug this rule exists to avoid.
+        //
+        //    THE EXCEPTION IS THE ONE THAT WAS BITING. The client begins an
+        //    edge the moment its cycleStart passes, and it begins it from
+        //    LOOKAHEAD - before this server has emitted a real record for that
+        //    index. A correction planned now does not land until now + flight,
+        //    so an edge whose cycleStart falls inside that window is already
+        //    being rendered when it arrives. Restaging it rewrites geometry
+        //    under a live phase: measured on beta as edge 103 turning from
+        //    8,16->8,17 into 8,16->7,15 at phase 0.128, a 0.33-tile sideways
+        //    jump with the phase itself perfectly correct. So when now +
+        //    flight has crossed the next boundary, that edge is preserved too
+        //    and the new path is planned from ITS destination.
+        var horizon = w.ElapsingEdgeIndex(nowMs + MovementSettings.ReplanFlightAllowanceMs);
+        var firstMutable = e + 1;
         var origin = w.EdgeTo;
+        var preserved = Point.Empty;
+        var hasPreserved = false;
+
+        if (horizon > e && w.Route.HasNext)
+        {
+            preserved = w.Route.PeekNext();
+            origin = preserved;
+            firstMutable = e + 2;
+            hasPreserved = true;
+        }
+
+        // Already walking to exactly there. Bail BEFORE the pathfinder, which
+        // clears the route buffer before its own start == goal early out and
+        // would leave the walker with no route at all.
+        if (origin == target)
+            return false;
 
         // 4. Plan from that origin.
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, origin, target, ctx,
-            baseIndex: e + 1, allowPartial: allowPartial);
+            baseIndex: firstMutable, allowPartial: allowPartial);
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false; // keep walking the existing route
+
+        // 4b. The preserved edge goes back on the front of the new route, so
+        //     the walker still walks it AND the first replanned edge starts
+        //     exactly where it ends. Contiguity is then a property of how the
+        //     route was built, not something anyone has to check afterwards.
+        if (hasPreserved)
+            w.Route.PrependPreserved(preserved);
 
         // 5/6/7. Route identity advances; the movement clock does not.
         MovementCounters.Redirect();
@@ -248,7 +286,9 @@ public static class MovementController
         // UNCHANGED, deliberately: WalkSessionId, TimelineOrigin, EdgeIndex,
         //                          DueTick / queue entry, timing alignment.
 
-        // 8. Future indexes (> e) may be restaged; indexes <= e never change.
+        // 8. Only indexes >= firstMutable are restaged. Everything at or
+        //    below the last edge the client may have begun keeps the
+        //    geometry it was given - that is the invariant.
         StageCorrection(room, w, e + 1);
         return true;
     }
