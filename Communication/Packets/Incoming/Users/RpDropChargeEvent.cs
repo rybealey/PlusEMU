@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 
@@ -14,13 +15,20 @@ namespace Plus.Communication.Packets.Incoming.Users;
 ///
 /// Gated on the same rule as every police power - employed by a force and
 /// clocked in - re-checked here rather than trusted from the client, which is
-/// free to send anything. There is no same-room requirement: this is paperwork
-/// done from a list, not a public act in front of a room, so it is also the
-/// one police action that announces nothing. The officer gets a whisper and
-/// everybody's wanted list updates; nobody gets a bubble.
+/// free to send anything.
+///
+/// There is no same-room requirement - a sheet is worked from a list, and the
+/// person it belongs to may be anywhere - but it is still announced, in the
+/// officer's own room, like every other police action. Dropping a charge is a
+/// thing an officer DID, and the room they are standing in is where the
+/// roleplay for it happens. The tally is not in the bubble: the tooltip's x2
+/// ticks down in front of the officer as they click, which is the feedback.
 /// </summary>
 internal class RpDropChargeEvent : IPacketEvent
 {
+    /// <summary>Blue bubble, the one every police action shares.</summary>
+    private const int PoliceBubble = 4;
+
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var habbo = session.GetHabbo();
@@ -46,9 +54,15 @@ internal class RpDropChargeEvent : IPacketEvent
             return Task.CompletedTask;
         }
 
-        session.SendWhisper(dropped.Remaining > 0
-            ? $"Dropped one count of {dropped.CrimeName} against {dropped.Username}. {dropped.Remaining} still stand."
-            : $"Dropped {dropped.CrimeName} against {dropped.Username}.");
+        // Narrated: the client moves the opening "*" ahead of the officer's
+        // name, so this reads "*Yavn drops one count of Assault against
+        // twist*". No room, no bubble - an officer working a sheet from the
+        // hotel view still drops the charge, they just do it unwitnessed.
+        var officerUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        if (officerUser != null)
+            habbo.CurrentRoom.SendPacket(new ChatComposer(officerUser.VirtualId, dropped.Remaining > 0
+                ? $"*drops one count of {dropped.CrimeName} against {dropped.Username}*"
+                : $"*drops {dropped.CrimeName} against {dropped.Username}*", 0, PoliceBubble));
 
         WantedUtility.Broadcast();
         return Task.CompletedTask;
