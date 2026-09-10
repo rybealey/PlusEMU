@@ -170,6 +170,10 @@ public static class ServerPacketHeader
     public const uint RpPhoneStateComposer = 3900;
     public const uint RpUserRegionComposer = 3916;
     public const uint RpWantedComposer = 3903;
+    // 3969 is free in every ledger that matters: our two header tables, the
+    // revisions JSON, and the stock client's IncomingHeader (it appears only
+    // in its OUTGOING table, a separate namespace).
+    public const uint RpPoliceComposer = 3969;
     public const uint RpUserGangComposer = 3970;
     public const uint RpGangDetailComposer = 3973;
     public const uint RpGangInvitesComposer = 3974;

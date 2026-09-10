@@ -345,7 +345,8 @@
     "RpSetFurniAlphaEvent": 3926,
     "RpPassiveCancelEvent": 3927,
     "GetDiamondsStoreEvent": 3929,
-    "PurchaseDiamondsStoreItemEvent": 3930
+    "PurchaseDiamondsStoreItemEvent": 3930,
+    "RpDropChargeEvent": 3988
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -656,6 +657,7 @@
     "RpOpenFloorplanComposer": 3963,
     "DiamondsStoreComposer": 3925,
     "DiamondsStorePurchaseResultComposer": 3931,
-    "RpMovementV2Composer": 4110
+    "RpMovementV2Composer": 4110,
+    "RpPoliceComposer": 3969
   }
 }

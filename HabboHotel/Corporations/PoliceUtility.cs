@@ -52,6 +52,21 @@ public static class PoliceUtility
     /// an off-duty officer are told apart - "you are not police" to someone
     /// who never was, and "clock in" to someone who only has to.
     /// </summary>
+    /// <summary>
+    /// Tell one client whether it may drop charges from the Wanted list, which
+    /// is exactly "are you an on-duty officer". Sent at login and on every
+    /// clock-in and clock-off - the only moments the answer changes - because
+    /// the wanted list itself is one broadcast and cannot carry a per-player
+    /// answer. Gates the affordance only; the drop packet re-checks.
+    /// </summary>
+    public static void PushPardonRights(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null)
+            return;
+        session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(IsOnDutyOfficer(habbo.Id)));
+    }
+
     public static bool RequireOnDuty(GameClient session, string verb)
     {
         var habbo = session.GetHabbo();

@@ -45,6 +45,7 @@ public class RpWantedComposer : IServerPacket
             packet.WriteInteger(player.Charges.Count);
             foreach (var charge in player.Charges)
             {
+                packet.WriteInteger(charge.CrimeId);
                 packet.WriteString(charge.Name);
                 packet.WriteInteger(charge.Count);
             }

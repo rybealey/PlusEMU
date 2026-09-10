@@ -18,8 +18,13 @@ namespace Plus.HabboHotel.Corporations;
 /// </summary>
 public static class WantedUtility
 {
-    /// <summary>One line of a rap sheet: the crime, and how many counts of it are open.</summary>
-    public record WantedCharge(string Name, int Count);
+    /// <summary>
+    /// One line of a rap sheet: the crime, and how many counts of it are open.
+    /// The id rides along so the Wanted list's x can name the crime it is
+    /// dropping a count of - the name is display text and two crimes may share
+    /// one after a housekeeping rename.
+    /// </summary>
+    public record WantedCharge(int CrimeId, string Name, int Count);
 
     /// <summary>
     /// The statute of limitations: how long a charge can sit on a sheet before
@@ -84,7 +89,7 @@ public static class WantedUtility
     {
         var sheets = new Dictionary<int, List<WantedCharge>>();
         dbClient.SetQuery(
-            "SELECT ch.`user_id`, c.`name`, COUNT(*) AS counts " +
+            "SELECT ch.`user_id`, c.`id` AS crime_id, c.`name`, COUNT(*) AS counts " +
             "FROM `rp_charges` ch " +
             "JOIN `rp_crimes` c ON c.`id` = ch.`crime_id` " +
             "WHERE ch.`dropped_at` = 0 " +
@@ -98,7 +103,10 @@ public static class WantedUtility
             var userId = Convert.ToInt32(row["user_id"]);
             if (!sheets.TryGetValue(userId, out var sheet))
                 sheets[userId] = sheet = new List<WantedCharge>();
-            sheet.Add(new WantedCharge(Convert.ToString(row["name"]) ?? "", Convert.ToInt32(row["counts"])));
+            sheet.Add(new WantedCharge(
+                Convert.ToInt32(row["crime_id"]),
+                Convert.ToString(row["name"]) ?? "",
+                Convert.ToInt32(row["counts"])));
         }
         return sheets;
     }
@@ -136,6 +144,57 @@ public static class WantedUtility
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         ExpireLapsed(dbClient);
+    }
+
+    /// <summary>What a dropped count leaves behind, for the officer's whisper.</summary>
+    public record DroppedCharge(string Username, string CrimeName, int Remaining);
+
+    /// <summary>
+    /// Drop ONE open count of a crime from a player's sheet, oldest first, and
+    /// report what is left of that crime. Null when there was nothing to drop
+    /// - a lapsed sheet, an already-dropped count, two officers clicking the
+    /// same x - which is a normal race, not an error.
+    ///
+    /// One row per call by design: the tooltip's x means "this count", and a
+    /// stacked crime is a tally an officer walks down one click at a time.
+    /// Clearing a whole sheet at once is :pardon.
+    /// </summary>
+    public static DroppedCharge DropOneCharge(int userId, int crimeId)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        // ORDER BY id: the oldest open count goes first, so a sheet reads as a
+        // queue rather than losing whichever row the engine happened to find.
+        dbClient.SetQuery(
+            "UPDATE `rp_charges` SET `dropped_at` = UNIX_TIMESTAMP() " +
+            "WHERE `user_id` = @user AND `crime_id` = @crime AND `dropped_at` = 0 " +
+            "ORDER BY `id` ASC LIMIT 1");
+        dbClient.AddParameter("user", userId);
+        dbClient.AddParameter("crime", crimeId);
+        dbClient.RunQuery();
+
+        // Exactly what the UPDATE touched, on the same connection, rather than
+        // a guess from timestamps: nothing to drop and a second officer having
+        // dropped it a moment ago look identical in the data, and both mean
+        // "not you". ROW_COUNT() is 0 or 1 - the UPDATE is LIMIT 1.
+        dbClient.SetQuery("SELECT ROW_COUNT()");
+        if (dbClient.GetInteger() == 0)
+            return null;
+
+        dbClient.SetQuery(
+            "SELECT u.`username`, c.`name`, " +
+            "(SELECT COUNT(*) FROM `rp_charges` ch WHERE ch.`user_id` = u.`id` " +
+            " AND ch.`crime_id` = c.`id` AND ch.`dropped_at` = 0) AS remaining " +
+            "FROM `users` u JOIN `rp_crimes` c ON c.`id` = @crime WHERE u.`id` = @user LIMIT 1");
+        dbClient.AddParameter("user", userId);
+        dbClient.AddParameter("crime", crimeId);
+        var row = dbClient.GetRow();
+        if (row == null)
+            return null;
+
+        return new DroppedCharge(
+            Convert.ToString(row["username"]) ?? "",
+            Convert.ToString(row["name"]) ?? "",
+            Convert.ToInt32(row["remaining"]));
     }
 
     /// <summary>

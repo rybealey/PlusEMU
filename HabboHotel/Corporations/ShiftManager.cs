@@ -159,6 +159,9 @@ public static class ShiftManager
         client.SendWhisper($"You are now on duty at {session.CorpName}. {PayMessage(RemainingSeconds(session, 0))}");
         ApplyMotto(client, session.WorkingMotto);
         AnnounceShift(client, $"*has started their shift at {session.CorpName}*");
+        // Police powers follow the clock: an officer clocking on gains the x
+        // that drops a charge in the Wanted list, and loses it below.
+        PoliceUtility.PushPardonRights(client);
     }
 
     // Acronym on line one, rank on line two; the client's motto elements
@@ -219,6 +222,7 @@ public static class ShiftManager
         client.SendWhisper($"Off duty. {FormatMinutes(banked)} banked toward your next pay.");
         RevertMotto(client);
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
+        PoliceUtility.PushPardonRights(client);
     }
 
     public static void InterruptForIdle(GameClient client)
@@ -228,6 +232,7 @@ public static class ShiftManager
         EndSession(session, client);
         RevertMotto(client);
         AnnounceShift(client, "*has fallen asleep on duty*");
+        PoliceUtility.PushPardonRights(client);
     }
 
     // pixelrp: clocked out because they're no longer in a room they may
@@ -238,6 +243,7 @@ public static class ShiftManager
     private static void InterruptForLeftWork(GameClient client, ShiftSession session)
     {
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
+        PoliceUtility.PushPardonRights(client);
     }
 
     // pixelrp: re-check the moment an on-duty worker enters a room, so an

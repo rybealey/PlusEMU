@@ -478,6 +478,9 @@ public static class ClientPacketHeader
     public const uint RpSetEmergencyEvent = 43960; //3960
     public const uint RpSetFurniAlphaEvent = 3926;
     public const uint RpPassiveCancelEvent = 3927;
+    // 3988 appears only in the stock client's INCOMING table, which is a
+    // separate namespace from this one.
+    public const uint RpDropChargeEvent = 3988;
     public const uint GetDiamondsStoreEvent = 3929;
     public const uint PurchaseDiamondsStoreItemEvent = 3930;
 }

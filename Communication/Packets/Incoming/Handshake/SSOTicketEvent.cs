@@ -149,6 +149,9 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: the wanted list, so the Wanted window has its rows and the
             // HUD can draw stars over whoever this player looks at.
             session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));
+            // pixelrp: whether the Wanted list shows this player the x that
+            // drops a charge - on-duty officers only.
+            HabboHotel.Corporations.PoliceUtility.PushPardonRights(session);
             //SendMessage(new TalentTrackLevelComposer());
 
 
