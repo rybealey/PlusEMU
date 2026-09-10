@@ -75,7 +75,7 @@ internal class PardonCommand : ITargetChatCommand
         }
 
         room.SendPacket(new ChatComposer(officerUser.VirtualId,
-            $"*pardons {target.Username}, dropping {dropped} {(dropped == 1 ? "charge" : "charges")}*", 0, PoliceBubble));
+            $"*{habbo.Username} pardons {target.Username}, dropping all charges*", 0, PoliceBubble));
 
         // They may have been on the wanted list; they are not now.
         WantedUtility.Broadcast();
