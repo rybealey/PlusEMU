@@ -18,7 +18,10 @@ namespace Plus.HabboHotel.Corporations;
 /// </summary>
 public static class WantedUtility
 {
-    public record WantedPlayer(int UserId, string Username, string Figure, int Level, int Since);
+    /// <summary>One line of a rap sheet: the crime, and how many counts of it are open.</summary>
+    public record WantedCharge(string Name, int Count);
+
+    public record WantedPlayer(int UserId, string Username, string Figure, int Level, int Since, List<WantedCharge> Charges);
 
     public static List<WantedPlayer> GetWanted()
     {
@@ -39,16 +42,48 @@ public static class WantedUtility
         var table = dbClient.GetTable();
         if (table == null)
             return wanted;
+        var charges = GetOpenCharges(dbClient);
         foreach (System.Data.DataRow row in table.Rows)
         {
+            var userId = Convert.ToInt32(row["user_id"]);
             wanted.Add(new WantedPlayer(
-                Convert.ToInt32(row["user_id"]),
+                userId,
                 Convert.ToString(row["username"]) ?? "",
                 Convert.ToString(row["look"]) ?? "",
                 Convert.ToInt32(row["level"]),
-                Convert.ToInt32(row["since"])));
+                Convert.ToInt32(row["since"]),
+                charges.TryGetValue(userId, out var sheet) ? sheet : new List<WantedCharge>()));
         }
         return wanted;
+    }
+
+    /// <summary>
+    /// Every open charge in the hotel, grouped per player and collapsed per
+    /// crime - two counts of assault are one line reading "Assault ×2". This
+    /// is what the Wanted window shows on hover, so the order is the order a
+    /// reader wants: worst crime first, then by name.
+    /// </summary>
+    private static Dictionary<int, List<WantedCharge>> GetOpenCharges(Plus.Database.Interfaces.IQueryAdapter dbClient)
+    {
+        var sheets = new Dictionary<int, List<WantedCharge>>();
+        dbClient.SetQuery(
+            "SELECT ch.`user_id`, c.`name`, COUNT(*) AS counts " +
+            "FROM `rp_charges` ch " +
+            "JOIN `rp_crimes` c ON c.`id` = ch.`crime_id` " +
+            "WHERE ch.`dropped_at` = 0 " +
+            "GROUP BY ch.`user_id`, c.`id`, c.`name`, c.`severity` " +
+            "ORDER BY ch.`user_id`, c.`severity` DESC, c.`name` ASC");
+        var table = dbClient.GetTable();
+        if (table == null)
+            return sheets;
+        foreach (System.Data.DataRow row in table.Rows)
+        {
+            var userId = Convert.ToInt32(row["user_id"]);
+            if (!sheets.TryGetValue(userId, out var sheet))
+                sheets[userId] = sheet = new List<WantedCharge>();
+            sheet.Add(new WantedCharge(Convert.ToString(row["name"]) ?? "", Convert.ToInt32(row["counts"])));
+        }
+        return sheets;
     }
 
     /// <summary>

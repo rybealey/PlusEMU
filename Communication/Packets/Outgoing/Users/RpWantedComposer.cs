@@ -13,6 +13,9 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// own level. Before this the HUD's stars came from a hash of the username -
 /// stable and meaningless.
 ///
+/// Each entry carries the player's open charges by crime name with a count
+/// per crime, which is what the Wanted window shows on hover.
+///
 /// A count of zero is a legitimate and common payload: nobody is wanted.
 /// </summary>
 public class RpWantedComposer : IServerPacket
@@ -36,6 +39,15 @@ public class RpWantedComposer : IServerPacket
             packet.WriteString(player.Figure);
             packet.WriteInteger(player.Level);
             packet.WriteInteger(player.Since);
+            // The rap sheet, for the Wanted window's hover tooltip. Appended
+            // after the original fields so the layout the HUD already reads
+            // is untouched.
+            packet.WriteInteger(player.Charges.Count);
+            foreach (var charge in player.Charges)
+            {
+                packet.WriteString(charge.Name);
+                packet.WriteInteger(charge.Count);
+            }
         }
     }
 }
