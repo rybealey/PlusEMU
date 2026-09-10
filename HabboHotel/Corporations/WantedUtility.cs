@@ -21,37 +21,50 @@ public static class WantedUtility
     /// <summary>One line of a rap sheet: the crime, and how many counts of it are open.</summary>
     public record WantedCharge(string Name, int Count);
 
-    public record WantedPlayer(int UserId, string Username, string Figure, int Level, int Since, List<WantedCharge> Charges);
+    /// <summary>
+    /// How long a player stays wanted after their LATEST charge. Every new
+    /// charge restarts the clock; the charges themselves stay on the sheet.
+    /// </summary>
+    public const int WantedSeconds = 15 * 60;
+
+    /// <remarks><c>Remaining</c> is seconds until they drop off the list, sent
+    /// relative rather than as a timestamp so a client's clock cannot skew it.</remarks>
+    public record WantedPlayer(int UserId, string Username, string Figure, int Level, int Remaining, List<WantedCharge> Charges);
 
     public static List<WantedPlayer> GetWanted()
     {
         var wanted = new List<WantedPlayer>();
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         // Severity is the star count, so MAX(severity) IS the wanted level.
-        // MIN(charged_at) is when they first became wanted, which is what the
-        // list sorts and counts from - a later charge does not reset it.
+        // MAX(charged_at) is the latest charge, which is what the wanted
+        // window counts down from: a player is listed for WantedSeconds after
+        // it, and only players still inside that window are returned.
         dbClient.SetQuery(
             "SELECT u.`id` AS user_id, u.`username`, u.`look`, " +
-            "MAX(c.`severity`) AS level, MIN(ch.`charged_at`) AS since " +
+            "MAX(c.`severity`) AS level, MAX(ch.`charged_at`) AS latest " +
             "FROM `rp_charges` ch " +
             "JOIN `rp_crimes` c ON c.`id` = ch.`crime_id` " +
             "JOIN `users` u ON u.`id` = ch.`user_id` " +
             "WHERE ch.`dropped_at` = 0 " +
             "GROUP BY u.`id`, u.`username`, u.`look` " +
-            "ORDER BY level DESC, since ASC");
+            "HAVING latest > UNIX_TIMESTAMP() - @window " +
+            "ORDER BY level DESC, latest DESC");
+        dbClient.AddParameter("window", WantedSeconds);
         var table = dbClient.GetTable();
         if (table == null)
             return wanted;
         var charges = GetOpenCharges(dbClient);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         foreach (System.Data.DataRow row in table.Rows)
         {
             var userId = Convert.ToInt32(row["user_id"]);
+            var remaining = (int)Math.Max(1, Convert.ToInt64(row["latest"]) + WantedSeconds - now);
             wanted.Add(new WantedPlayer(
                 userId,
                 Convert.ToString(row["username"]) ?? "",
                 Convert.ToString(row["look"]) ?? "",
                 Convert.ToInt32(row["level"]),
-                Convert.ToInt32(row["since"]),
+                remaining,
                 charges.TryGetValue(userId, out var sheet) ? sheet : new List<WantedCharge>()));
         }
         return wanted;
@@ -87,9 +100,10 @@ public static class WantedUtility
     }
 
     /// <summary>
-    /// Push the list to every online client. Called after a charge is filed;
-    /// a charge dropped straight in the database (housekeeping) is not seen
-    /// here, so that lands on the next charge or the next login.
+    /// Push the list to every online client. Called after a charge is filed.
+    /// Expiry needs no push: each client counts its own entries down and drops
+    /// them at zero. A charge dropped straight in the database (housekeeping)
+    /// is not seen here, so that lands on the next charge or the next login.
     /// </summary>
     public static void Broadcast()
     {

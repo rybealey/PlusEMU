@@ -38,7 +38,7 @@ public class RpWantedComposer : IServerPacket
             packet.WriteString(player.Username);
             packet.WriteString(player.Figure);
             packet.WriteInteger(player.Level);
-            packet.WriteInteger(player.Since);
+            packet.WriteInteger(player.Remaining);
             // The rap sheet, for the Wanted window's hover tooltip. Appended
             // after the original fields so the layout the HUD already reads
             // is untouched.
