@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Corporations;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
@@ -53,6 +54,9 @@ internal class CuffCommand : ITargetChatCommand
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         var habbo = session.GetHabbo();
+        // Police powers are a job: on the force AND clocked in.
+        if (!PoliceUtility.RequireOnDuty(session, "cuff someone"))
+            return Task.CompletedTask;
         if (target == habbo)
         {
             session.SendWhisper("You cannot cuff yourself.");

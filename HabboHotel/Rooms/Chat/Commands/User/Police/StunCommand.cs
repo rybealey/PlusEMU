@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Corporations;
 using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
@@ -8,9 +9,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// <summary>
 /// pixelrp police actions: :stun - freeze a nearby target for a few seconds.
 ///
-/// Ported from the old Arcturus plugin. The gates it had for being a clocked-in
-/// officer and for carrying a charged stungun are deliberately NOT here yet:
-/// this is the mechanic on its own, for testing, and any player can fire.
+/// Ported from the old Arcturus plugin. Its clocked-in-officer gate is back:
+/// only an on-duty employee of a corporation flagged `is_police` can fire
+/// (PoliceUtility). The stungun-charge gate it also had is still not here -
+/// there is no weapon inventory to draw from yet.
 ///
 /// Reach is DIRECTIONAL, which is what makes this different from every other
 /// combat command in the hotel. Along a straight grid line - same row or same
@@ -58,6 +60,9 @@ internal class StunCommand : ITargetChatCommand
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         var habbo = session.GetHabbo();
+        // Police powers are a job: on the force AND clocked in.
+        if (!PoliceUtility.RequireOnDuty(session, "fire a stun gun"))
+            return Task.CompletedTask;
         if (target == habbo)
         {
             session.SendWhisper("You cannot stun yourself.");
