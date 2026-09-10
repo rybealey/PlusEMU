@@ -22,8 +22,10 @@ public static class WantedUtility
     public record WantedCharge(string Name, int Count);
 
     /// <summary>
-    /// How long a player stays wanted after their LATEST charge. Every new
-    /// charge restarts the clock; the charges themselves stay on the sheet.
+    /// The statute of limitations: how long a charge can sit on a sheet before
+    /// it lapses. Every new charge restarts the clock for the WHOLE sheet -
+    /// a player under active investigation does not get to run out the timer
+    /// on their older counts - and when it runs out the sheet clears itself.
     /// </summary>
     public const int WantedSeconds = 15 * 60;
 
@@ -35,10 +37,12 @@ public static class WantedUtility
     {
         var wanted = new List<WantedPlayer>();
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        ExpireLapsed(dbClient);
         // Severity is the star count, so MAX(severity) IS the wanted level.
-        // MAX(charged_at) is the latest charge, which is what the wanted
-        // window counts down from: a player is listed for WantedSeconds after
-        // it, and only players still inside that window are returned.
+        // MAX(charged_at) is the latest charge, which is what the countdown
+        // runs from. The HAVING is redundant after the sweep above - a lapsed
+        // sheet has no open charges left to find - and stays as a guard, so a
+        // sweep that is ever skipped cannot put a lapsed player on the list.
         dbClient.SetQuery(
             "SELECT u.`id` AS user_id, u.`username`, u.`look`, " +
             "MAX(c.`severity`) AS level, MAX(ch.`charged_at`) AS latest " +
@@ -100,10 +104,47 @@ public static class WantedUtility
     }
 
     /// <summary>
-    /// Push the list to every online client. Called after a charge is filed.
-    /// Expiry needs no push: each client counts its own entries down and drops
-    /// them at zero. A charge dropped straight in the database (housekeeping)
-    /// is not seen here, so that lands on the next charge or the next login.
+    /// Drop every charge on a sheet whose newest charge has passed the statute
+    /// of limitations. Whole sheets, never single counts: the clock belongs to
+    /// the sheet, so either all of it has lapsed or none of it has.
+    ///
+    /// Swept lazily, from the reads themselves, rather than on a timer. There
+    /// is nothing to react to when a charge lapses - no packet goes out, no
+    /// bubble, the clients already counted the player off their own lists -
+    /// so the only thing that has to be true is that nothing ever READS a
+    /// lapsed charge, and running it here makes that so. The cost is that a
+    /// hotel where nobody logs in or charges anyone leaves lapsed rows sitting
+    /// open until it wakes up.
+    /// </summary>
+    private static void ExpireLapsed(Plus.Database.Interfaces.IQueryAdapter dbClient)
+    {
+        dbClient.SetQuery(
+            "UPDATE `rp_charges` ch " +
+            "JOIN (SELECT `user_id`, MAX(`charged_at`) AS latest FROM `rp_charges` " +
+            "      WHERE `dropped_at` = 0 GROUP BY `user_id`) sheet ON sheet.`user_id` = ch.`user_id` " +
+            "SET ch.`dropped_at` = UNIX_TIMESTAMP() " +
+            "WHERE ch.`dropped_at` = 0 AND sheet.`latest` <= UNIX_TIMESTAMP() - @window");
+        dbClient.AddParameter("window", WantedSeconds);
+        dbClient.RunQuery();
+    }
+
+    /// <summary>
+    /// Sweep lapsed sheets without reading the list back - for the commands
+    /// that ask a question about someone's record before anything is pushed.
+    /// </summary>
+    public static void ExpireLapsed()
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        ExpireLapsed(dbClient);
+    }
+
+    /// <summary>
+    /// Push the list to every online client. Called after a charge is filed
+    /// or a sheet is pardoned. A sheet LAPSING needs no push: every client
+    /// counts its own entries down and drops them at zero, arriving at the
+    /// same answer the sweep does. A charge dropped straight in the database
+    /// (housekeeping) is not seen here, so that lands on the next charge or
+    /// the next login.
     /// </summary>
     public static void Broadcast()
     {

@@ -9,10 +9,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// pixelrp police actions: :pardon &lt;player&gt; - clear someone's whole rap
 /// sheet.
 ///
-/// The other half of :charge, and the only way a sheet ever empties: charges
-/// are a record, so nothing lapses on its own. Being WANTED does lapse - the
-/// list only holds a player for fifteen minutes after their latest charge -
-/// but the charges themselves sit there until an officer drops them.
+/// The other half of :charge, and the way a sheet empties EARLY: left alone it
+/// clears itself after fifteen minutes, the statute of limitations that also
+/// takes the player off the wanted list (WantedUtility). A pardon is an
+/// officer deciding it should not have to wait.
 ///
 /// All of them, not one: an officer who wants to remove a single count is
 /// asking for a rap-sheet view that does not exist yet, and a per-charge
@@ -66,6 +66,10 @@ internal class PardonCommand : ITargetChatCommand
         var officerUser = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
         if (officerUser == null)
             return Task.CompletedTask;
+
+        // A sheet that has already lapsed is nothing to pardon, so sweep first
+        // and let the count below say so honestly.
+        WantedUtility.ExpireLapsed();
 
         var dropped = Drop(target.Id, habbo.Id);
         if (dropped == 0)

@@ -16,8 +16,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// indexed lookup on a table with a few dozen rows.
 ///
 /// A charge is a record, not a state: `rp_charges` gains a row per count and
-/// nothing is ever deleted by charging again. Dropping a charge sets
-/// `dropped_at`, which is a housekeeping job rather than a chat command.
+/// nothing is ever deleted by charging again. Charges leave a sheet two ways,
+/// both of them stamping `dropped_at` rather than deleting the row - an
+/// officer's :pardon, or the statute of limitations, fifteen minutes from the
+/// newest charge on the sheet (WantedUtility).
 ///
 /// Whether the same crime can sit on a sheet twice is the crime's own
 /// `stackable` flag. A non-stackable one already on the sheet is refused
@@ -57,6 +59,10 @@ internal class ChargeCommand : ITargetChatCommand
         // Police powers are a job: on the force AND clocked in.
         if (!PoliceUtility.RequireOnDuty(session, "charge someone"))
             return Task.CompletedTask;
+
+        // Before the stackable check below reads the sheet: a lapsed count
+        // must not be what stops a non-stackable crime being charged again.
+        WantedUtility.ExpireLapsed();
 
         if (target == habbo)
         {
