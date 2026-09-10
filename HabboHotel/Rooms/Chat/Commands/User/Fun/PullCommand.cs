@@ -14,6 +14,12 @@ internal class PullCommand : ITargetChatCommand
     public string Description => "Pull another user towards you.";
     public bool MustBeInSameRoom => true;
 
+    /// <summary>
+    /// Blue bubble, the style the client narrates. Kept in step with
+    /// PushCommand's FightBubble.
+    /// </summary>
+    private const int FightBubble = 4;
+
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         if (!room.PullEnabled && !session.GetHabbo().Permissions.HasRight("room_override_custom_config"))
@@ -47,7 +53,12 @@ internal class PullCommand : ITargetChatCommand
         }
         if (target.CurrentRoom!.Id == session.GetHabbo().CurrentRoom!.Id && Math.Abs(thisUser.X - targetUser.X) < 3 && Math.Abs(thisUser.Y - targetUser.Y) < 3)
         {
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pulls {target.Username} to them*", 0, thisUser.LastBubble));
+            // FightBubble, not the puller's own chat style: the client only
+            // narrates "*Actor pulls Target to them*" for a bubble style on
+            // its list, and a player's selected style is almost never on it -
+            // the same message in style 0 reads "Actor: *pulls Target...*".
+            // Matches :push, which this is the other half of.
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pulls {target.Username} to them*", 0, FightBubble));
             if (thisUser.RotBody % 2 != 0) 
                 PullTarget(targetUser, thisUser.X, thisUser.Y, thisUser.RotBody - 1);
             else

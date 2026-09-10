@@ -16,6 +16,12 @@ internal class SuperPullCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    /// <summary>
+    /// Blue bubble, the style the client narrates. Kept in step with
+    /// SuperPushCommand's FightBubble.
+    /// </summary>
+    private const int FightBubble = 4;
+
     public SuperPullCommand(IGameClientManager gameClientManager)
     {
         _gameClientManager = gameClientManager;
@@ -62,7 +68,8 @@ internal class SuperPullCommand : ITargetChatCommand
             targetUser.MoveTo(thisUser.X, thisUser.Y + 1);
         else if (thisUser.RotBody == 6)
             targetUser.MoveTo(thisUser.X - 1, thisUser.Y);
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*super pulls {target.Username} to them*", 0, thisUser.LastBubble));
+        // FightBubble, not the puller's own chat style - see PullCommand.
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*super pulls {target.Username} to them*", 0, FightBubble));
         return Task.CompletedTask;
     }
 }

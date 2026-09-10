@@ -74,8 +74,13 @@ internal class PardonCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
+        // Leading AND trailing "*" matter: the client only narrates a style-4
+        // bubble when the text is wrapped in them, and it then moves the
+        // opening marker ahead of the actor's name - so this renders as
+        // "*Yavn pardons twist, dropping all charges*". The name is never in
+        // the text itself or it would print twice.
         room.SendPacket(new ChatComposer(officerUser.VirtualId,
-            $"*{habbo.Username} pardons {target.Username}, dropping all charges*", 0, PoliceBubble));
+            $"*pardons {target.Username}, dropping all charges*", 0, PoliceBubble));
 
         // They may have been on the wanted list; they are not now.
         WantedUtility.Broadcast();

@@ -159,8 +159,14 @@ internal class SlapCommand : ITargetChatCommand
         // bubble as an action when the text is wrapped in them, and it then
         // moves the opening marker ahead of the actor's name, rendering
         // "*Actor slaps Target across the face*".
+        //
+        // Only a slap that lands says what it cost: in a safe zone it is pure
+        // flavour and nobody loses health, so claiming damage there would be a
+        // lie. Worded like :hit's hit line, which the same reader sees.
         _lastSlap[session.GetHabbo().Id] = DateTime.UtcNow;
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*slaps {target.Username} across the face*", 0, FightBubble));
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, hurts
+            ? $"*slaps {target.Username} across the face, causing {Damage} damage*"
+            : $"*slaps {target.Username} across the face*", 0, FightBubble));
 
         if (!hurts)
             return Task.CompletedTask;

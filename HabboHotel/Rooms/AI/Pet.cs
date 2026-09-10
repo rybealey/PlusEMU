@@ -7,6 +7,13 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public class Pet
 {
+    /// <summary>
+    /// The yellow bubble the client narrates as "*Name did a thing*". Ordinary
+    /// chat (style 0) is not narrated, so a level-up sent in it would read
+    /// "Rex: *leveled up to level 4*".
+    /// </summary>
+    private const int ConsumeBubble = 5;
+
     public int AnyoneCanRide;
     public string Color;
     public double CreationStamp;
@@ -135,7 +142,10 @@ public class Pet
         {
             Room.SendPacket(new AddExperiencePointsComposer(PetId, VirtualId, amount));
             if (Experience >= ExperienceGoal)
-                Room.SendPacket(new ChatComposer(VirtualId, $"*leveled up to level {Level} *", 0, 0));
+                // Style 5, the yellow narrated bubble, so it renders as
+                // "*Rex leveled up to level 4*" rather than "Rex: *leveled
+                // up...*" - style 0 is ordinary chat and is not narrated.
+                Room.SendPacket(new ChatComposer(VirtualId, $"*leveled up to level {Level}*", 0, ConsumeBubble));
         }
     }
 
