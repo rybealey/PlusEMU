@@ -104,6 +104,10 @@ internal class ChargeCommand : ITargetChatCommand
 
         room.SendPacket(new ChatComposer(officerUser.VirtualId,
             $"*charges {target.Username} with {crime.Name}*", 0, PoliceBubble));
+
+        // The wanted list is public and the HUD draws stars from it, so a new
+        // charge is everyone's news - not just this room's.
+        WantedUtility.Broadcast();
         return Task.CompletedTask;
     }
 

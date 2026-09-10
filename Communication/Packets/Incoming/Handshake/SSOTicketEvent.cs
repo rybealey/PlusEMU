@@ -146,6 +146,9 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: their own region, so Settings > General opens on the right
             // one and their profile reads correctly to themselves.
             session.Send(new RpUserRegionComposer(session.GetHabbo().Id, session.GetHabbo().RpRegion));
+            // pixelrp: the wanted list, so the Wanted window has its rows and the
+            // HUD can draw stars over whoever this player looks at.
+            session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));
             //SendMessage(new TalentTrackLevelComposer());
 
 
