@@ -481,6 +481,7 @@ public static class ClientPacketHeader
     // The 39xx block is full; these continue past the highest id in use.
     public const uint RpRequestFurniFunctionEvent = 4112;
     public const uint RpFurniFunctionEvent = 4111;
+    public const uint RpDeleteInventoryFurniEvent = 4113;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
