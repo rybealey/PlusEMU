@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.Privacy;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -12,7 +13,9 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// likely to be opened on someone offline (a friend in the phone's contacts,
 /// a name in the corporation directory), and the answer is one indexed lookup.
 /// An unknown id answers with '' rather than nothing, so the client can tell
-/// "no region" from "still waiting".
+/// "no region" from "still waiting". A region this viewer is not allowed
+/// answers the same way: hidden and unset have to look identical from outside,
+/// or the absence itself says something.
 /// </summary>
 internal class RpGetUserRegionEvent : IPacketEvent
 {
@@ -22,9 +25,19 @@ internal class RpGetUserRegionEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return Task.CompletedTask;
+
         var userId = packet.ReadInt();
         if (userId <= 0)
             return Task.CompletedTask;
+
+        if (!PrivacyUtility.CanSeeRegion(habbo.Id, userId))
+        {
+            session.Send(new RpUserRegionComposer(userId, ""));
+            return Task.CompletedTask;
+        }
 
         var region = "";
         using (var dbClient = _database.GetQueryReactor())

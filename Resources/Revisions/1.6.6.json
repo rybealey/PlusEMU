@@ -346,7 +346,8 @@
     "RpPassiveCancelEvent": 3927,
     "GetDiamondsStoreEvent": 3929,
     "PurchaseDiamondsStoreItemEvent": 3930,
-    "RpDropChargeEvent": 3988
+    "RpDropChargeEvent": 3988,
+    "RpSavePrivacyEvent": 4023
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -658,6 +659,7 @@
     "DiamondsStoreComposer": 3925,
     "DiamondsStorePurchaseResultComposer": 3931,
     "RpMovementV2Composer": 4110,
-    "RpPoliceComposer": 3969
+    "RpPoliceComposer": 3969,
+    "RpPrivacyComposer": 4025
   }
 }

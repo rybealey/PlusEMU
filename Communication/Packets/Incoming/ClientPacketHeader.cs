@@ -481,6 +481,7 @@ public static class ClientPacketHeader
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
+    public const uint RpSavePrivacyEvent = 4023;
     public const uint GetDiamondsStoreEvent = 3929;
     public const uint PurchaseDiamondsStoreItemEvent = 3930;
 }

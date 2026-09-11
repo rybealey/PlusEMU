@@ -66,17 +66,29 @@ public static class CalendarUtility
             "WHERE e.`ends_at` >= @since ORDER BY e.`starts_at`", new { since = (int)UnixTimestamp.GetNow() - PastWindowSeconds }).ToList();
     }
 
-    /// <summary>The viewer's own birthday plus every friend's (both friendship directions).</summary>
+    /// <summary>
+    /// The viewer's own birthday plus every friend's (both friendship
+    /// directions), minus the ones whose owner has hidden them. "Contacts" IS
+    /// the friends list, so a friend's birthday shows unless they chose no
+    /// one; "everyone" cannot add anybody here, since a calendar only ever
+    /// reaches friends in the first place.
+    /// </summary>
     public static List<BirthdayRow> GetBirthdays(int userId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<BirthdayRow>(
             "SELECT b.`user_id` AS UserId, u.`username` AS Username, b.`month` AS Month, b.`day` AS Day " +
             "FROM `rp_user_birthdays` b INNER JOIN `users` u ON u.`id` = b.`user_id` " +
-            "WHERE b.`user_id` = @userId " +
+            "LEFT JOIN `rp_user_privacy` p ON p.`user_id` = b.`user_id` " +
+            "WHERE (b.`user_id` = @userId " +
             "OR b.`user_id` IN (SELECT `user_two_id` FROM `messenger_friendships` WHERE `user_one_id` = @userId) " +
-            "OR b.`user_id` IN (SELECT `user_one_id` FROM `messenger_friendships` WHERE `user_two_id` = @userId) " +
-            "ORDER BY u.`username`", new { userId }).ToList();
+            "OR b.`user_id` IN (SELECT `user_one_id` FROM `messenger_friendships` WHERE `user_two_id` = @userId)) " +
+            // Filtered in SQL rather than per row afterwards: this runs for
+            // every online client on a staff calendar edit, and a lookup per
+            // friend would turn one query into a hundred. COALESCE carries
+            // PrivacyUtility.Default for anyone with no row yet.
+            "AND (b.`user_id` = @userId OR COALESCE(p.`birthday_visibility`, @contacts) <> @nobody) " +
+            "ORDER BY u.`username`", new { userId, contacts = Users.Privacy.PrivacyUtility.Contacts, nobody = Users.Privacy.PrivacyUtility.Nobody }).ToList();
     }
 
     public static RpCalendarComposer Compose(GameClient session, List<EventRow> events)

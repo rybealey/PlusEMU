@@ -174,6 +174,7 @@ public static class ServerPacketHeader
     // revisions JSON, and the stock client's IncomingHeader (it appears only
     // in its OUTGOING table, a separate namespace).
     public const uint RpPoliceComposer = 3969;
+    public const uint RpPrivacyComposer = 4025;
     public const uint RpUserGangComposer = 3970;
     public const uint RpGangDetailComposer = 3973;
     public const uint RpGangInvitesComposer = 3974;

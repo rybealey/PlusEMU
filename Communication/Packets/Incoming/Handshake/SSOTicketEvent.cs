@@ -152,6 +152,8 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: whether the Wanted list shows this player the x that
             // drops a charge - on-duty officers only.
             HabboHotel.Corporations.PoliceUtility.PushPardonRights(session);
+            // pixelrp: their own profile privacy, for Settings > Privacy.
+            session.Send(new RpPrivacyComposer(HabboHotel.Users.Privacy.PrivacyUtility.Get(session.GetHabbo().Id)));
             //SendMessage(new TalentTrackLevelComposer());
 
 
