@@ -90,7 +90,7 @@ public class CatalogPageComposer : IServerPacket
                     {
                         packet.WriteInteger(item.Definition.SpriteId);
                         if (item.Definition.InteractionType == InteractionType.Wallpaper || item.Definition.InteractionType == InteractionType.Floor || item.Definition.InteractionType == InteractionType.Landscape)
-                            packet.WriteString(item.CatalogName.Split('_')[2]);
+                            packet.WriteString(CatalogNameId(item.CatalogName));
                         else if (isBot) //Bots: figure from the preset -> client renders the avatar
                             packet.WriteString(catalogBot.Figure);
                         else if (item.ExtraData != null) packet.WriteString(item.ExtraData != null ? item.ExtraData : string.Empty);
@@ -123,5 +123,20 @@ public class CatalogPageComposer : IServerPacket
             packet.WriteString(promotion.PageLink);
             packet.WriteInteger(promotion.ParentId);
         }
+    }
+
+    /// The id a wallpaper/floor/landscape offer carries inside its catalog
+    /// name, e.g. "wallpaper_normal_12" -> "12".
+    ///
+    /// Indexing [2] straight off the split threw IndexOutOfRangeException on
+    /// any name with fewer than three parts and took the whole page down with
+    /// it - one bad row and the shop stops opening. A name that is not in that
+    /// shape has no id to give, so it gives nothing and only that one offer
+    /// renders wrong.
+    private static string CatalogNameId(string catalogName)
+    {
+        var parts = (catalogName ?? string.Empty).Split('_');
+
+        return (parts.Length > 2) ? parts[2] : string.Empty;
     }
 }

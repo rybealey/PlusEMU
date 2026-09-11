@@ -526,6 +526,9 @@ public class Room : RoomData
         if (edited is { Count: > 0 })
         {
             foreach (var definition in GetRoomItemHandler().GetWallAndFloor
+                         // the room's item collections can hold nulls - every
+                         // other loop over them guards, so this one does too
+                         .Where(item => item != null)
                          .Select(item => item.Definition)
                          .Where(definition => definition != null && edited.Contains(definition.Id))
                          .DistinctBy(definition => definition.Id))

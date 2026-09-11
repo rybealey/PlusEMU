@@ -152,10 +152,19 @@ internal class RpFurniFunctionEvent : IPacketEvent
             // The catalog serves its listing name from catalog_items, not from
             // the furniture row, so a rename that stopped at `furniture` would
             // leave the shop still selling the old name.
-            dbClient.SetQuery("UPDATE `catalog_items` SET `catalog_name` = @publicName WHERE `item_id` = @itemIdText");
-            dbClient.AddParameter("publicName", publicName);
-            dbClient.AddParameter("itemIdText", definitionId.ToString());
-            dbClient.RunQuery();
+            //
+            // Except for wallpaper, floor and landscape, where catalog_name is
+            // NOT a display name: the catalog composers read the id out of it
+            // with CatalogName.Split('_')[2], so a name without two underscores
+            // throws IndexOutOfRangeException and takes the whole page down.
+            // Those keep the key they were given.
+            if (!IsStructuredCatalogName(definition.InteractionType))
+            {
+                dbClient.SetQuery("UPDATE `catalog_items` SET `catalog_name` = @publicName WHERE `item_id` = @itemIdText");
+                dbClient.AddParameter("publicName", publicName);
+                dbClient.AddParameter("itemIdText", definitionId.ToString());
+                dbClient.RunQuery();
+            }
 
             foreach (var change in changes)
             {
@@ -190,14 +199,17 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         // The catalog is served from memory, so the pages hold their own copy
         // of the name and would go on showing the old one until a reload.
-        foreach (var page in _catalogManager.Pages)
+        if (!IsStructuredCatalogName(definition.InteractionType))
         {
-            if (page?.Items == null)
-                continue;
-            foreach (var catalogItem in page.Items.Values)
+            foreach (var page in _catalogManager.Pages)
             {
-                if (catalogItem?.Definition?.Id == definition.Id)
-                    catalogItem.CatalogName = publicName;
+                if (page?.Items == null)
+                    continue;
+                foreach (var catalogItem in page.Items.Values)
+                {
+                    if (catalogItem?.Definition?.Id == definition.Id)
+                        catalogItem.CatalogName = publicName;
+                }
             }
         }
 
@@ -238,6 +250,12 @@ internal class RpFurniFunctionEvent : IPacketEvent
             return string.Empty;
         return raw;
     }
+
+    /// These three carry an id inside catalog_name rather than a display name -
+    /// the catalog composers pull it out with Split('_')[2] - so renaming one
+    /// would corrupt the key and crash the page it sits on.
+    private static bool IsStructuredCatalogName(InteractionType type) =>
+        type is InteractionType.Wallpaper or InteractionType.Floor or InteractionType.Landscape;
 
     private static string Bit(bool value) => value ? "1" : "0";
 
