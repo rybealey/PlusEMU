@@ -244,7 +244,7 @@ public class RoomItemHandling
         // pixelrp jukebox: RemoveRoomItem() has already pulled the item out of
         // _floorItems/the game map above, so HasJukebox() inside
         // OnJukeboxRemoved() correctly reflects its absence.
-        if (item.Definition.ItemName == "jukebox*1")
+        if (Jukebox.RoomJukeboxManager.IsJukebox(item))
             _room.GetJukeboxManager().OnJukeboxRemoved();
     }
 
@@ -603,7 +603,7 @@ public class RoomItemHandling
             }
             // pixelrp jukebox: only a genuinely new placement, not a
             // move/rotate re-entry into this same `if (newItem)` branch.
-            if (item.Definition.ItemName == "jukebox*1")
+            if (Jukebox.RoomJukeboxManager.IsJukebox(item))
                 _room.GetJukeboxManager().OnJukeboxPlaced();
         }
         else

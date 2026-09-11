@@ -211,9 +211,14 @@ internal class RpFurniFunctionEvent : IPacketEvent
             var handler = loaded?.GetRoomItemHandler();
             if (handler == null)
                 continue;
-            if (handler.GetFloor.Any(x => x.Definition?.Id == definition.Id) ||
-                handler.GetWall.Any(x => x.Definition?.Id == definition.Id))
-                loaded.GetGameMap().GenerateMaps();
+            if (!handler.GetFloor.Any(x => x.Definition?.Id == definition.Id) &&
+                !handler.GetWall.Any(x => x.Definition?.Id == definition.Id))
+                continue;
+            loaded.GetGameMap().GenerateMaps();
+            // The music panel's "is there a jukebox here" flag is only rebroadcast
+            // when one is placed or removed, so a furni that BECAME a jukebox - or
+            // stopped being one - would not show up until the next room entry.
+            loaded.GetJukeboxManager()?.BroadcastState();
         }
 
         _clientManager.SendPacket(new RpFurniFunctionComposer(definition));
