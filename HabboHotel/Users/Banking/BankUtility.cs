@@ -580,12 +580,36 @@ public static class BankUtility
                 "`last_interest_at` = @now WHERE `user_id` IN @ids",
                 new { now, maxDelta = MaxDeltaPerTick, ids });
 
-            var due = connection.Query<BankRow>(
-                SelectColumns + "WHERE `user_id` IN @ids AND `savings_seconds` >= @period",
-                new { ids, period = InterestPeriodSeconds }).Select(r => r.ToAccount()).ToList();
+            // Every accruing account comes back, not just the ones that have
+            // crossed an hour - because the CACHE has to be refreshed either
+            // way. The Wallet asks for its accounts once a minute while it is
+            // open and is answered from the cache, so a cache that only moved
+            // when interest landed would leave the countdown frozen at whatever
+            // it read at login and then jump an hour.
+            //
+            // One statement for every online account, and the ones that have
+            // earned something are filtered out of the result in memory rather
+            // than by a second query.
+            var rows = connection.Query<BankRow>(
+                SelectColumns + "WHERE `user_id` IN @ids",
+                new { ids }).Select(r => r.ToAccount()).ToList();
 
-            foreach (var row in due)
+            // Read outside the per-account locks on purpose. A transfer that
+            // commits in the gap between this SELECT and this write would be
+            // rolled back IN THE CACHE for up to a minute - never in the
+            // database, and the client has already been sent the right figures
+            // by the transfer itself, so the worst case is one stale poll that
+            // the next one corrects. Closing a microsecond window properly
+            // would cost a query per online player per minute, forever.
+            foreach (var row in rows)
+                Accounts[row.UserId] = row;
+
+            foreach (var row in rows)
+            {
+                if (row.SavingsSeconds < InterestPeriodSeconds)
+                    continue;
                 PayInterest(connection, row, online.FirstOrDefault(c => c.GetHabbo().Id == row.UserId));
+            }
         }
         catch (Exception e)
         {
