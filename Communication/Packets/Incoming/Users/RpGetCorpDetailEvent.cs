@@ -2,6 +2,7 @@ using Dapper;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -9,6 +10,12 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// pixelrp: one corporation's full roster for the Corporations window - the
 /// rank ladder (with pay per 10-minute shift interval and tier ceilings) and
 /// the employees at each rank.
+///
+/// Staff who have hidden themselves on the website are hidden here too. Being
+/// absent from the team page but listed under City Government is the same
+/// information by another door, and a roster is exactly where somebody would
+/// look next. They are omitted outright rather than greyed - you cannot tell
+/// a hidden colleague from one who was never hired.
 /// </summary>
 internal class RpGetCorpDetailEvent : IPacketEvent
 {
@@ -33,12 +40,17 @@ internal class RpGetCorpDetailEvent : IPacketEvent
         var ranks = connection.Query<(int Id, int RankOrder, string Name, int Pay, int Tiers)>(
             "SELECT `id`, `rank_order` AS RankOrder, `name`, `pay`, `tiers` FROM `rp_corporation_ranks` " +
             "WHERE `corporation_id` = @corpId ORDER BY `rank_order`", new { corpId }).ToList();
+        // You always see yourself, whatever you are hiding from everybody else.
+        var viewerId = session.GetHabbo().Id;
+        var seeHidden = StaffVisibility.CanSeeHiddenStaff(session) ? 1 : 0;
         var employees = connection.Query<(int UserId, int RankId, int Tier, string Username, string Figure, int ShiftSeconds, int ShiftSecondsWeek, int LastOnline)>(
             "SELECT e.`user_id` AS UserId, e.`rank_id` AS RankId, e.`tier`, u.`username`, u.`look` AS Figure, " +
             "e.`shift_seconds` AS ShiftSeconds, e.`shift_seconds_week` AS ShiftSecondsWeek, " +
             "IFNULL(u.`last_online`, 0) AS LastOnline " +
             "FROM `rp_corporation_employees` e INNER JOIN `users` u ON u.`id` = e.`user_id` " +
-            "WHERE e.`corporation_id` = @corpId ORDER BY e.`tier` DESC, u.`username`", new { corpId }).ToList();
+            "WHERE e.`corporation_id` = @corpId " +
+            "AND (@seeHidden = 1 OR IFNULL(u.`hidden_staff`, 0) = 0 OR u.`id` = @viewerId) " +
+            "ORDER BY e.`tier` DESC, u.`username`", new { corpId, seeHidden, viewerId }).ToList();
         var rankPayload = ranks.Select(rank => new RpCorpDetailComposer.Rank(
             rank.Id, rank.RankOrder, rank.Name, rank.Pay, rank.Tiers,
             employees.Where(employee => employee.RankId == rank.Id)
