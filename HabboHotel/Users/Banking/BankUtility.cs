@@ -9,8 +9,8 @@ namespace Plus.HabboHotel.Users.Banking;
 /// <summary>
 /// pixelrp: the bank behind the Wallet's debit card and the ATM furni.
 ///
-/// A character has a current account and a savings account, opened together.
-/// Wages direct-deposit into the current account, savings earns interest for
+/// A character has a checking account and a savings account, opened together.
+/// Wages direct-deposit into checking, savings earns interest for
 /// every hour the player is actually online, and the ATM is the only way cash
 /// crosses between the bank and the money in hand.
 ///
@@ -31,7 +31,7 @@ public static class BankUtility
 {
     /// <summary>
     /// The savings ceiling. Savings is the account that COMPOUNDS, so an
-    /// uncapped balance accelerates away on its own; the current account only
+    /// uncapped balance accelerates away on its own; checking only
     /// grows as fast as somebody works, so it needs no ceiling.
     ///
     /// At the shipped rank pay (15-27c per ten minutes) this is on the order
@@ -269,7 +269,7 @@ public static class BankUtility
                 {
                     account = current;
                     message = from == BankAccountKind.Current
-                        ? "Your current account does not hold that much."
+                        ? "Your checking account does not hold that much."
                         : "Your savings account does not hold that much.";
                     return BankResult.InsufficientFunds;
                 }
@@ -328,7 +328,7 @@ public static class BankUtility
     }
 
     /// <summary>
-    /// ATM: cash in hand into the current account.
+    /// ATM: cash in hand into the checking account.
     ///
     /// The hand is debited FIRST. If anything fails between the two halves
     /// the money is lost rather than duplicated, which is the only acceptable
@@ -395,8 +395,8 @@ public static class BankUtility
     }
 
     /// <summary>
-    /// ATM: current account into cash in hand. Savings is not reachable from
-    /// here, by design - the ATM only ever names the current account.
+    /// ATM: checking into cash in hand. Savings is not reachable from here,
+    /// by design - the ATM only ever names checking.
     ///
     /// The bank is debited first, under a guarded UPDATE, so the balance can
     /// never go negative and a failure loses rather than mints.
@@ -436,7 +436,7 @@ public static class BankUtility
                 if (current.Current < amount)
                 {
                     account = current;
-                    message = "Your current account does not hold that much.";
+                    message = "Your checking account does not hold that much.";
                     return BankResult.InsufficientFunds;
                 }
                 var rows = connection.Execute(
@@ -446,7 +446,7 @@ public static class BankUtility
                 if (rows == 0)
                 {
                     account = current;
-                    message = "Your current account does not hold that much.";
+                    message = "Your checking account does not hold that much.";
                     return BankResult.InsufficientFunds;
                 }
                 account = Refresh(connection, habbo.Id);

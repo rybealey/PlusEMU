@@ -5,7 +5,7 @@ using Plus.HabboHotel.Users.Banking;
 namespace Plus.Communication.Packets.Incoming.Users.Banking;
 
 /// <summary>
-/// pixelrp: open a current account and a savings account.
+/// pixelrp: open a checking account and a savings account.
 ///
 /// No payload. The two accounts are opened together and there is no variant to
 /// name, and a field the server ignores is a field somebody later trusts.
@@ -29,7 +29,7 @@ internal class RpOpenBankAccountEvent : IPacketEvent
             // Said once, at the moment the player chooses it, rather than on
             // every payday: wages stop arriving in hand from here on, and the
             // ATM is how they come back out.
-            session.SendWhisper("Your accounts are open. Wages are paid into your current account from now on - use an ATM to take cash out.");
+            session.SendWhisper("Your accounts are open. Wages are paid into your checking account from now on - use an ATM to take cash out.");
             return Task.CompletedTask;
         }
 

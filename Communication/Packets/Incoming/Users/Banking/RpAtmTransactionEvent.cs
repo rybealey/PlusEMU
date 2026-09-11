@@ -15,7 +15,7 @@ namespace Plus.Communication.Packets.Incoming.Users.Banking;
 /// still in the room the machine is in. Without the gate these two packets are
 /// a bank the player carries around with them.
 ///
-/// Only ever the CURRENT account. The ATM is never told what is in savings and
+/// Only ever CHECKING. The ATM is never told what is in savings and
 /// has no way to name it.
 ///
 /// Both movements announce themselves to the room, amount included. Standing

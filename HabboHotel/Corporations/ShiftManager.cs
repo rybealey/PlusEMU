@@ -494,7 +494,7 @@ public static class ShiftManager
                 // packet saying it did is the one that makes somebody later
                 // "fix" this by adding the wage to Credits as well.
                 client.Send(new Communication.Packets.Outgoing.Users.Banking.RpBankAccountsComposer(BankUtility.Get(session.UserId)));
-                client.SendWhisper($"{session.RankPay}c has been paid into your current account.");
+                client.SendWhisper($"{session.RankPay}c has been paid into your checking account.");
                 continue;
             }
             habbo.Credits += session.RankPay;
