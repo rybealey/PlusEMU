@@ -479,6 +479,10 @@ public static class ClientPacketHeader
     public const uint RpSetFurniAlphaEvent = 3926;
     public const uint RpPassiveCancelEvent = 3927;
     // The 39xx block is full; these continue past the highest id in use.
+    // The builder Tools height slider. nitro-renderer sends this as
+    // ITEM_STACK_HELPER; the UpdateMagicTileEvent constant below names the id
+    // the stock client used, which this client never sends.
+    public const uint ItemStackHelperEvent = 3839;
     public const uint RpRequestFurniFunctionEvent = 4112;
     public const uint RpFurniFunctionEvent = 4111;
     public const uint RpDeleteInventoryFurniEvent = 4113;

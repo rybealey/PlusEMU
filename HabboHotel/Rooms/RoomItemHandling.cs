@@ -623,7 +623,15 @@ public class RoomItemHandling
             _room.AddTent(item.Id);
         }
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.RunQuery($"UPDATE `items` SET `room_id` = '{_room.RoomId}', `x` = '{item.GetX}', `y` = '{item.GetY}', `z` = '{item.GetZ}', `rot` = '{item.Rotation}' WHERE `id` = '{item.Id}' LIMIT 1");
+        // pixelrp: a height chosen in the Tools panel belongs to where the item
+        // was STANDING, so coming out of the inventory clears it. Without this
+        // the row keeps the old custom_height while the re-placed item stacks
+        // normally, and the next room load drags it back up to a height nobody
+        // asked for. Only a fresh placement resets it - a move or a height
+        // change comes through here with newItem false.
+        if (newItem)
+            item.CustomHeight = -1;
+        dbClient.RunQuery($"UPDATE `items` SET `room_id` = '{_room.RoomId}', `x` = '{item.GetX}', `y` = '{item.GetY}', `z` = '{item.GetZ}', `rot` = '{item.Rotation}'{(newItem ? ", `custom_height` = '-1'" : string.Empty)} WHERE `id` = '{item.Id}' LIMIT 1");
         return true;
     }
 

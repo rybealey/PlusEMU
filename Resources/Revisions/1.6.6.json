@@ -352,7 +352,8 @@
     "RpSwitchCharacterEvent": 4027,
     "RpRequestFurniFunctionEvent": 4112,
     "RpFurniFunctionEvent": 4111,
-    "RpDeleteInventoryFurniEvent": 4113
+    "RpDeleteInventoryFurniEvent": 4113,
+    "ItemStackHelperEvent": 3839
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,

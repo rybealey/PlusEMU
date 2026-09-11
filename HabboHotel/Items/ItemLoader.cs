@@ -39,6 +39,8 @@ public static class ItemLoader
                         // Defensive: a server whose 87_FurniAlpha has not run
                         // yet should load its rooms, not fail to.
                         Alpha = row.Table.Columns.Contains("alpha") ? Convert.ToInt32(row["alpha"]) : 100,
+                        // Same guard as alpha above, for 109_FurniCustomHeight.
+                        CustomHeight = row.Table.Columns.Contains("custom_height") ? Convert.ToDouble(row["custom_height"]) : -1,
                         RoomId = roomId
                     });
                 }
