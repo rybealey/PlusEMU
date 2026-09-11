@@ -134,6 +134,21 @@ public class RoomItemHandling
                     }
                     continue;
                 }
+                // Work out the footprint HERE, not just when something is
+                // placed or rotated. SetState is the only thing that fills
+                // GetAffectedTiles, and it was reached from the placement paths
+                // alone - so an item loaded from the database carried the empty
+                // dictionary it was constructed with, and GetCoords returned
+                // its origin square and nothing else.
+                //
+                // Every multi-tile furni in the hotel therefore blocked one tile
+                // out of its footprint from the moment a room loaded, and went
+                // on doing so until somebody happened to nudge or turn it. That
+                // is why walking through half a 2x2 table came back after every
+                // restart and went away again the moment it was rotated.
+                item.SetState(item.GetX, item.GetY, item.GetZ,
+                    Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width,
+                        item.GetX, item.GetY, item.Rotation));
                 if (!_floorItems.ContainsKey(item.Id))
                     _floorItems.TryAdd(item.Id, item);
             }
