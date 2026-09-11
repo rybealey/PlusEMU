@@ -535,18 +535,33 @@ public static class BankUtility
             if (clients == null)
                 return;
 
-            // "Online" means in a room, not merely socketed. A client parked
-            // on the hotel view overnight is not playing, and savings that
-            // grows for an idle tab is a thing players find in a day and
-            // never unlearn. ShiftManager already draws this line for wages.
-            var online = new List<GameClient>();
+            // Two groups, and both matter.
+            //
+            // ACTIVE is in a room and not asleep. Socketed is not enough - a
+            // client parked on the hotel view overnight is not playing - and
+            // neither is being in a room, because a character stood still for
+            // five minutes is a tab somebody left open. RoomUser.IsAsleep is
+            // exactly where the hotel already draws that line: it is what
+            // dims the avatar, and ShiftManager.InterruptForIdle ends a SHIFT
+            // on the same signal. Wages and interest stopping together is the
+            // point - one idea of being away, not two.
+            //
+            // IDLE is everybody else with an account who is still connected.
+            // They earn nothing, but their clock is still stamped below, so
+            // coming back does not hand them the time they were away.
+            var active = new List<GameClient>();
+            var idleIds = new List<int>();
             foreach (var client in clients)
             {
                 var habbo = client?.GetHabbo();
-                if (habbo == null || habbo.CurrentRoom == null)
+                if (habbo == null || !HasAccount(habbo.Id))
                     continue;
-                if (HasAccount(habbo.Id))
-                    online.Add(client);
+
+                var user = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+                if (user == null || user.IsAsleep)
+                    idleIds.Add(habbo.Id);
+                else
+                    active.Add(client);
             }
 
             // Whoever is cached and no longer connected is dropped. Doing it
@@ -566,19 +581,30 @@ public static class BankUtility
                     Accounts.TryRemove(id, out _);
             }
 
-            if (online.Count == 0)
+            if (active.Count == 0 && idleIds.Count == 0)
                 return;
 
             var now = Now;
-            var ids = online.Select(c => c.GetHabbo().Id).ToArray();
+            var activeIds = active.Select(c => c.GetHabbo().Id).ToArray();
 
             using var connection = PlusEnvironment.DatabaseManager.Connection();
 
-            connection.Execute(
-                "UPDATE `rp_bank_accounts` SET " +
-                "`savings_seconds` = `savings_seconds` + LEAST(GREATEST(@now - `last_interest_at`, 0), @maxDelta), " +
-                "`last_interest_at` = @now WHERE `user_id` IN @ids",
-                new { now, maxDelta = MaxDeltaPerTick, ids });
+            if (activeIds.Length > 0)
+                connection.Execute(
+                    "UPDATE `rp_bank_accounts` SET " +
+                    "`savings_seconds` = `savings_seconds` + LEAST(GREATEST(@now - `last_interest_at`, 0), @maxDelta), " +
+                    "`last_interest_at` = @now WHERE `user_id` IN @ids",
+                    new { now, maxDelta = MaxDeltaPerTick, ids = activeIds });
+
+            // Idle accounts have their clock moved forward WITHOUT earning
+            // anything. Skipping them entirely would let the gap since their
+            // last active tick grow, and the clamp would then hand them two
+            // minutes of credit for the first tick after they came back - a
+            // player could bank a slow trickle by going away and returning.
+            if (idleIds.Count > 0)
+                connection.Execute(
+                    "UPDATE `rp_bank_accounts` SET `last_interest_at` = @now WHERE `user_id` IN @ids",
+                    new { now, ids = idleIds.ToArray() });
 
             // Every accruing account comes back, not just the ones that have
             // crossed an hour - because the CACHE has to be refreshed either
@@ -587,12 +613,16 @@ public static class BankUtility
             // when interest landed would leave the countdown frozen at whatever
             // it read at login and then jump an hour.
             //
-            // One statement for every online account, and the ones that have
+            // Idle accounts are read back too, so the Wallet of somebody who
+            // has gone quiet shows a countdown that has genuinely stopped
+            // rather than one left over from whenever they last moved.
+            //
+            // One statement for every connected account, and the ones that have
             // earned something are filtered out of the result in memory rather
             // than by a second query.
             var rows = connection.Query<BankRow>(
                 SelectColumns + "WHERE `user_id` IN @ids",
-                new { ids }).Select(r => r.ToAccount()).ToList();
+                new { ids = activeIds.Concat(idleIds).ToArray() }).Select(r => r.ToAccount()).ToList();
 
             // Read outside the per-account locks on purpose. A transfer that
             // commits in the gap between this SELECT and this write would be
@@ -608,7 +638,7 @@ public static class BankUtility
             {
                 if (row.SavingsSeconds < InterestPeriodSeconds)
                     continue;
-                PayInterest(connection, row, online.FirstOrDefault(c => c.GetHabbo().Id == row.UserId));
+                PayInterest(connection, row, active.FirstOrDefault(c => c.GetHabbo().Id == row.UserId));
             }
         }
         catch (Exception e)
