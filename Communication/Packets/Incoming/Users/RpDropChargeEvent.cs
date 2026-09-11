@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.Accounts;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -42,6 +43,14 @@ internal class RpDropChargeEvent : IPacketEvent
 
         if (!PoliceUtility.RequireOnDuty(session, "drop a charge"))
             return Task.CompletedTask;
+
+        // Never your own character's sheet - see ChargeCommand. This is the
+        // quiet one: no room sees it, so it is the easiest to try.
+        if (AccountUtility.SameAccount(habbo.Id, userId))
+        {
+            session.SendWhisper("That is one of your own characters.");
+            return Task.CompletedTask;
+        }
 
         // A sheet that has already lapsed has nothing to drop, and its rows
         // must not be droppable one by one after the fact.

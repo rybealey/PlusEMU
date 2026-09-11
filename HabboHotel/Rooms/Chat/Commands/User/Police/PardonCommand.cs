@@ -2,6 +2,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Accounts;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
@@ -50,6 +51,17 @@ internal class PardonCommand : ITargetChatCommand
         if (target == habbo)
         {
             session.SendWhisper("You cannot pardon yourself.");
+            return Task.CompletedTask;
+        }
+
+        // pixelrp: never on one of your own characters. An officer who can
+        // police their own criminal is the whole reason the three-character
+        // limit needed rules - a rap sheet you can clear yourself is not a
+        // rap sheet. Same account, same person, regardless of which name is
+        // wearing the badge.
+        if (AccountUtility.SameAccount(habbo.Id, target.Id))
+        {
+            session.SendWhisper("That is one of your own characters.");
             return Task.CompletedTask;
         }
 

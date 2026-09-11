@@ -347,7 +347,9 @@
     "GetDiamondsStoreEvent": 3929,
     "PurchaseDiamondsStoreItemEvent": 3930,
     "RpDropChargeEvent": 3988,
-    "RpSavePrivacyEvent": 4023
+    "RpSavePrivacyEvent": 4023,
+    "RpCreateCharacterEvent": 4026,
+    "RpSwitchCharacterEvent": 4027
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -660,6 +662,8 @@
     "DiamondsStorePurchaseResultComposer": 3931,
     "RpMovementV2Composer": 4110,
     "RpPoliceComposer": 3969,
-    "RpPrivacyComposer": 4025
+    "RpPrivacyComposer": 4025,
+    "RpCharactersComposer": 4028,
+    "RpCharacterResultComposer": 4029
   }
 }

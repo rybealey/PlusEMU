@@ -1,6 +1,7 @@
 ﻿using Plus.Communication.Packets.Outgoing.Inventory.Trading;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.Accounts;
 using Plus.Utilities;
 using Dapper;
 
@@ -30,6 +31,15 @@ internal class InitTradeEvent : IPacketEvent
         var targetUser = room.GetRoomUserManager().GetRoomUserByVirtualId(userId);
         if (targetUser == null)
             return Task.CompletedTask;
+        // pixelrp: one account's characters cannot trade with each other.
+        // Two of your own people passing items back and forth is not a trade,
+        // it is a wardrobe - and it would make the three-character limit a
+        // way to triple an inventory rather than to play three people.
+        if (AccountUtility.SameAccount(session.GetHabbo().Id, targetUser.UserId))
+        {
+            session.SendWhisper("That is one of your own characters.");
+            return Task.CompletedTask;
+        }
         if (session.GetHabbo().TradingLockExpiry > 0)
         {
             if (session.GetHabbo().TradingLockExpiry > UnixTimestamp.GetNow())

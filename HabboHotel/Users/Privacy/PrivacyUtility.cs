@@ -82,7 +82,7 @@ public static class PrivacyUtility
 
     public static bool CanSeeBirthday(int viewerId, int ownerId)
     {
-        if (viewerId == ownerId)
+        if (viewerId == ownerId || Accounts.AccountUtility.SameAccount(viewerId, ownerId))
             return true;
         return Get(ownerId).Birthday switch
         {
@@ -92,9 +92,12 @@ public static class PrivacyUtility
         };
     }
 
+    // Your own characters see your own details. The Wallet shows all three
+    // cards, and a card that hid its own birthday from its owner would be a
+    // privacy setting pointed at the wrong person.
     public static bool CanSeeRegion(int viewerId, int ownerId)
     {
-        if (viewerId == ownerId)
+        if (viewerId == ownerId || Accounts.AccountUtility.SameAccount(viewerId, ownerId))
             return true;
         var privacy = Get(ownerId);
         return privacy.Region switch

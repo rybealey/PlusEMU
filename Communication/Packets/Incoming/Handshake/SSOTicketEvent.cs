@@ -154,6 +154,9 @@ public class SsoTicketEvent : IPacketEvent
             HabboHotel.Corporations.PoliceUtility.PushPardonRights(session);
             // pixelrp: their own profile privacy, for Settings > Privacy.
             session.Send(new RpPrivacyComposer(HabboHotel.Users.Privacy.PrivacyUtility.Get(session.GetHabbo().Id)));
+            // pixelrp: the characters on this account, for the Wallet.
+            session.Send(new RpCharactersComposer(
+                HabboHotel.Users.Accounts.AccountUtility.Characters(session.GetHabbo().Id), session.GetHabbo().Id));
             //SendMessage(new TalentTrackLevelComposer());
 
 

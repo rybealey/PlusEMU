@@ -175,6 +175,8 @@ public static class ServerPacketHeader
     // in its OUTGOING table, a separate namespace).
     public const uint RpPoliceComposer = 3969;
     public const uint RpPrivacyComposer = 4025;
+    public const uint RpCharactersComposer = 4028;
+    public const uint RpCharacterResultComposer = 4029;
     public const uint RpUserGangComposer = 3970;
     public const uint RpGangDetailComposer = 3973;
     public const uint RpGangInvitesComposer = 3974;

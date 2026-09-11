@@ -482,6 +482,8 @@ public static class ClientPacketHeader
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
     public const uint RpSavePrivacyEvent = 4023;
+    public const uint RpCreateCharacterEvent = 4026;
+    public const uint RpSwitchCharacterEvent = 4027;
     public const uint GetDiamondsStoreEvent = 3929;
     public const uint PurchaseDiamondsStoreItemEvent = 3930;
 }

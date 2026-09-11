@@ -2,6 +2,7 @@ using Plus.HabboHotel.Corporations;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Accounts;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
@@ -42,6 +43,13 @@ internal class EscortCommand : ITargetChatCommand
         // Police powers are a job: on the force AND clocked in.
         if (!PoliceUtility.RequireOnDuty(session, "escort someone"))
             return Task.CompletedTask;
+
+        // pixelrp: never on one of your own characters - see ChargeCommand.
+        if (AccountUtility.SameAccount(habbo.Id, target.Id))
+        {
+            session.SendWhisper("That is one of your own characters.");
+            return Task.CompletedTask;
+        }
         if (target == habbo)
         {
             session.SendWhisper("You cannot escort yourself.");
