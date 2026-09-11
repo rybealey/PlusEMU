@@ -80,8 +80,30 @@ public class RevisionsCache : IRevisionsCache, IStartable
             }
 
 
+            // Two names on one wire id make the ToDictionary below throw, and the
+            // mapping is then left NULL - at which point every incoming packet
+            // dies on a NullReferenceException in GameClient.OnReceived, the SSO
+            // ticket included, and nobody can log in. That is a silent, total
+            // outage caused by one duplicated number in a JSON file, so it is
+            // named here instead.
+            ReportDuplicates(revision.Name, "incoming", revision.IncomingHeaders);
+            ReportDuplicates(revision.Name, "outgoing", revision.OutgoingHeaders);
+
             revision.IncomingIdToInternalIdMapping = revision.IncomingHeaders.Where(kvp => kvp.Value > 0).ToDictionary(kvp => kvp.Value, kvp => InternalRevision.IncomingHeaders[kvp.Key]);
             revision.InternalIdToOutgoingIdMapping = revision.OutgoingHeaders.Where(kvp => kvp.Value > 0).ToDictionary(kvp => InternalRevision.OutgoingHeaders[kvp.Key], kvp => kvp.Value);
         }
+    }
+
+    private static void ReportDuplicates(string revisionName, string direction, IReadOnlyDictionary<string, uint> headers)
+    {
+        var duplicates = headers.Where(kvp => kvp.Value > 0)
+            .GroupBy(kvp => kvp.Value)
+            .Where(group => group.Count() > 1)
+            .ToList();
+        if (!duplicates.Any())
+            return;
+        Console.WriteLine($"{revisionName}: DUPLICATE {direction} header ids - the id mapping cannot be built and NO packet will be handled:");
+        foreach (var group in duplicates)
+            Console.WriteLine($"  {group.Key} <- {string.Join(", ", group.Select(kvp => kvp.Key))}");
     }
 }
