@@ -314,8 +314,14 @@ public static class BankUtility
                 var to = from == BankAccountKind.Current ? BankAccountKind.Savings : BankAccountKind.Current;
                 var fromBalance = from == BankAccountKind.Current ? account.Current : account.Savings;
                 var toBalance = to == BankAccountKind.Current ? account.Current : account.Savings;
-                LogMovement(connection, userId, username, BankTransactionKind.TransferOut, from, -amount, fromBalance, "transfer");
-                LogMovement(connection, userId, username, BankTransactionKind.TransferIn, to, amount, toBalance, "transfer");
+                // Directional, so a log row says where the money went rather than
+                // just that it moved. Mercury derives this itself from the
+                // account and the sign - rows written before this said only
+                // "transfer" - but the audit trail should read on its own.
+                var outLabel = from == BankAccountKind.Current ? "To savings" : "To checking";
+                var inLabel = to == BankAccountKind.Savings ? "From checking" : "From savings";
+                LogMovement(connection, userId, username, BankTransactionKind.TransferOut, from, -amount, fromBalance, outLabel);
+                LogMovement(connection, userId, username, BankTransactionKind.TransferIn, to, amount, toBalance, inLabel);
                 return BankResult.Ok;
             }
             catch (Exception e)
