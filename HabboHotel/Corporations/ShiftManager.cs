@@ -522,7 +522,9 @@ public static class ShiftManager
     {
         if (habbo == null || !BankUtility.HasAccount(session.UserId))
             return false;
-        var source = string.IsNullOrEmpty(session.CorpName) ? "shift pay" : $"{session.CorpName} shift pay";
+        // The employer alone. The kind already says these are wages, so
+        // repeating "shift pay" here would have every row say it twice.
+        var source = string.IsNullOrEmpty(session.CorpName) ? "Shift pay" : session.CorpName;
         return BankUtility.CreditWages(session.UserId, habbo.Username, session.RankPay, source, out _) == BankResult.Ok;
     }
 

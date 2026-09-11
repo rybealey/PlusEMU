@@ -190,7 +190,7 @@ public static class BankUtility
                 Accounts[userId] = account;
                 if (rows == 0)
                     return BankResult.AlreadyOpen;
-                LogMovement(connection, userId, username, BankTransactionKind.Open, BankAccountKind.Current, 0, 0, "accounts opened");
+                LogMovement(connection, userId, username, BankTransactionKind.Open, BankAccountKind.Current, 0, 0, "Opened from the Wallet");
                 return BankResult.Ok;
             }
             catch (Exception e)
@@ -737,7 +737,7 @@ public static class BankUtility
         {
             LogMovement(connection, row.UserId, client?.GetHabbo()?.Username ?? string.Empty,
                 BankTransactionKind.Interest, BankAccountKind.Savings, interest, account.Savings,
-                $"{SavingsRateBps / 100m:0.00}%/hr on {row.Savings:N0}c");
+                $"{SavingsRateBps / 100m:0.00}% per hour on {row.Savings:N0}c");
         }
         if (client != null && account != null)
             client.Send(new RpBankAccountsComposer(account));

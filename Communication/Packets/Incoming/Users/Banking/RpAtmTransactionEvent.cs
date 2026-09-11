@@ -55,7 +55,13 @@ internal class RpAtmTransactionEvent : IPacketEvent
             return Task.CompletedTask;
         }
 
-        var source = $"ATM in room {habbo.CurrentRoom?.Id ?? 0}";
+        // Named, not numbered. A room id means nothing to the person
+        // reading their own ledger a week later; the room they stood in
+        // does. Trimmed to fit `source`, which is varchar(96).
+        var roomName = habbo.CurrentRoom?.Name;
+        var source = string.IsNullOrEmpty(roomName)
+            ? "Cash machine"
+            : $"Cash machine in {(roomName.Length > 70 ? roomName.Substring(0, 70) : roomName)}";
         BankAccount? account;
         string message;
         BankResult result;
