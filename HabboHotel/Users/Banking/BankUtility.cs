@@ -53,6 +53,13 @@ public static class BankUtility
     /// <summary>Online seconds that buy one interest payment.</summary>
     public const int InterestPeriodSeconds = 3600;
 
+    /// <summary>
+    /// Savings -> checking moves allowed per week. Paying IN is unlimited and
+    /// never counted: the ration exists to stop savings being spending money,
+    /// not to make saving awkward.
+    /// </summary>
+    public const int WeeklyTransfers = 3;
+
     /// <summary>How often accrual is stamped. Also the eviction interval.</summary>
     private const int TickSeconds = 60;
 
@@ -77,7 +84,8 @@ public static class BankUtility
     // where a column's type and the parameter's did not line up exactly.
     private const string SelectColumns =
         "SELECT `user_id` AS UserId, `current_balance` AS CurrentBalance, `savings_balance` AS SavingsBalance, " +
-        "`savings_seconds` AS SavingsSeconds, `interest_total` AS InterestTotal, `wages_total` AS WagesTotal " +
+        "`savings_seconds` AS SavingsSeconds, `interest_total` AS InterestTotal, `wages_total` AS WagesTotal, " +
+        "`transfers_used` AS TransfersUsed, `transfers_reset_at` AS TransfersResetAt " +
         "FROM `rp_bank_accounts` ";
 
     private const string SelectSql = SelectColumns + "WHERE `user_id` = @userId LIMIT 1";
@@ -90,9 +98,12 @@ public static class BankUtility
         public int SavingsSeconds { get; set; }
         public long InterestTotal { get; set; }
         public long WagesTotal { get; set; }
+        public int TransfersUsed { get; set; }
+        public int TransfersResetAt { get; set; }
 
         public BankAccount ToAccount() =>
-            new(UserId, CurrentBalance, SavingsBalance, SavingsSeconds, InterestTotal, WagesTotal);
+            new(UserId, CurrentBalance, SavingsBalance, SavingsSeconds, InterestTotal, WagesTotal,
+                TransfersUsed, TransfersResetAt);
     }
 
     // Mirror of the DB, never the source of truth. Every mutation writes the
@@ -264,6 +275,16 @@ public static class BankUtility
                     return BankResult.NoAccount;
                 }
                 Accounts[userId] = current;
+                // Taking money OUT of savings is rationed; paying in is not.
+                // Checked before the funds test so somebody with no moves left
+                // is told that, rather than being told they are short.
+                if (from == BankAccountKind.Savings && TransfersLeft(current) <= 0)
+                {
+                    account = current;
+                    message = $"No transfers left this week. Your allowance of {WeeklyTransfers} refills on Monday.";
+                    return BankResult.TransfersSpent;
+                }
+
                 var available = from == BankAccountKind.Current ? current.Current : current.Savings;
                 if (available < amount)
                 {
@@ -294,14 +315,26 @@ public static class BankUtility
                     }
                 }
 
+                // The window rolls in the same statement that spends a move, so
+                // a stale week can never be read as spent: `used` is either
+                // reset to 1 or incremented, never left over from last week.
+                var rolled = (current.TransfersResetAt <= Now);
+                var resetAt = rolled ? NextWeekBoundary() : current.TransfersResetAt;
+
                 var sql = from == BankAccountKind.Current
                     ? "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` - @amount, " +
                       "`savings_balance` = `savings_balance` + @amount " +
                       "WHERE `user_id` = @userId AND `current_balance` >= @amount AND `savings_balance` + @amount <= @cap LIMIT 1"
                     : "UPDATE `rp_bank_accounts` SET `savings_balance` = `savings_balance` - @amount, " +
-                      "`current_balance` = `current_balance` + @amount " +
-                      "WHERE `user_id` = @userId AND `savings_balance` >= @amount LIMIT 1";
-                var rows = connection.Execute(sql, new { userId, amount, cap = SavingsCap });
+                      "`current_balance` = `current_balance` + @amount, " +
+                      "`transfers_used` = " + (rolled ? "1" : "`transfers_used` + 1") + ", " +
+                      "`transfers_reset_at` = @resetAt " +
+                      "WHERE `user_id` = @userId AND `savings_balance` >= @amount " +
+                      "AND (`transfers_reset_at` <= @now OR `transfers_used` < @limit) LIMIT 1";
+                var rows = connection.Execute(sql, new
+                {
+                    userId, amount, cap = SavingsCap, resetAt, now = Now, limit = WeeklyTransfers
+                });
                 if (rows == 0)
                 {
                     account = current;
@@ -524,6 +557,45 @@ public static class BankUtility
     }
 
     private static int Now => (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    /// <summary>
+    /// The unix moment the current allowance week ends: the next Monday at
+    /// 00:00 UTC.
+    ///
+    /// A fixed weekday rather than seven days from the last transfer, so every
+    /// player's week turns over together and "resets Monday" is something one
+    /// player can tell another. A rolling window would make the answer depend
+    /// on when you happened to spend your first move.
+    /// </summary>
+    private static int NextWeekBoundary()
+    {
+        var now = DateTime.UtcNow;
+        var days = ((int)DayOfWeek.Monday - (int)now.DayOfWeek + 7) % 7;
+        if (days == 0)
+            days = 7;
+        return (int)new DateTimeOffset(now.Date.AddDays(days), TimeSpan.Zero).ToUnixTimeSeconds();
+    }
+
+    /// <summary>
+    /// Moves still available out of savings this week.
+    ///
+    /// Rolls the window on the way past: a row whose week has ended reads as a
+    /// full allowance without anything having to write to it first, so an
+    /// account nobody touched for a month opens on three rather than owing a
+    /// catch-up.
+    /// </summary>
+    public static int TransfersLeft(BankAccount? account)
+    {
+        if (account == null)
+            return WeeklyTransfers;
+        if (account.TransfersResetAt <= Now)
+            return WeeklyTransfers;
+        return Math.Max(0, WeeklyTransfers - account.TransfersUsed);
+    }
+
+    /// <summary>When the allowance next refills. Always a real future moment.</summary>
+    public static int TransfersResetAt(BankAccount? account) =>
+        (account == null || account.TransfersResetAt <= Now) ? NextWeekBoundary() : account.TransfersResetAt;
 
     private static object LockFor(int userId) => Locks.GetOrAdd(userId, _ => new object());
 

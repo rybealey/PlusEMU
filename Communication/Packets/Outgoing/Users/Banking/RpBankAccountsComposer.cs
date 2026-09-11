@@ -37,5 +37,11 @@ public class RpBankAccountsComposer : IServerPacket
         packet.WriteInteger(Math.Max(0, BankUtility.InterestPeriodSeconds - (_account?.SavingsSeconds ?? 0)));
         packet.WriteInteger(BankUtility.ToWire(_account?.InterestTotal ?? 0));
         packet.WriteInteger(BankUtility.ToWire(_account?.WagesTotal ?? 0));
+        // Savings -> checking moves left this week, and when the allowance
+        // refills. Both are computed rather than read straight off the row, so
+        // a week that ended while nobody was looking reads as full.
+        packet.WriteInteger(BankUtility.TransfersLeft(_account));
+        packet.WriteInteger(BankUtility.WeeklyTransfers);
+        packet.WriteInteger(BankUtility.TransfersResetAt(_account));
     }
 }

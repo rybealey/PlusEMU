@@ -14,7 +14,11 @@ public sealed record BankAccount(
     // Online seconds banked toward the next interest hour.
     int SavingsSeconds,
     long InterestTotal,
-    long WagesTotal);
+    long WagesTotal,
+    // Savings -> checking moves spent in the current week, and the unix moment
+    // that week ends. Paying INTO savings is unlimited and never counted.
+    int TransfersUsed,
+    int TransfersResetAt);
 
 /// <summary>
 /// One movement out of rp_bank_transactions, as the Mercury app reads it.
@@ -54,7 +58,9 @@ public enum BankResult
     InvalidAmount = 3,
     InsufficientFunds = 4,
     SavingsFull = 5,
-    Failed = 6
+    Failed = 6,
+    /// <summary>No savings-to-checking moves left in the current week.</summary>
+    TransfersSpent = 7
 }
 
 /// <summary>
