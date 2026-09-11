@@ -51,7 +51,10 @@ internal class RpAtmTransactionEvent : IPacketEvent
 
         if (result != BankResult.Ok)
         {
-            session.Send(new RpAtmOpenComposer(account ?? BankUtility.Get(habbo.Id), habbo.Credits));
+            // Just the reason. An RpAtmOpenComposer is what takes the screen
+            // back to the balances, so sending one on a refusal would throw
+            // away the amount the player typed and hide the message behind a
+            // screen change.
             session.Send(new RpBankResultComposer(result, message));
             return Task.CompletedTask;
         }

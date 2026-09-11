@@ -43,10 +43,15 @@ internal class RpBankTransferEvent : IPacketEvent
             return Task.CompletedTask;
         }
 
-        // The balances go with the refusal: whatever the client believed was
-        // wrong enough to refuse it, so the screen is corrected at the same
-        // time it is told why.
-        session.Send(new RpBankAccountsComposer(account ?? BankUtility.Get(habbo.Id)));
+        // A refusal sends the REASON and nothing else. The accounts push is
+        // what tells the screen a transfer went through - it clears the amount
+        // and the last message - so sending one here would wipe the entry the
+        // player is about to correct.
+        //
+        // The exception is a character whose row has gone: their whole picture
+        // is wrong, not just this amount.
+        if (result == BankResult.NoAccount)
+            session.Send(new RpBankAccountsComposer(null));
         session.Send(new RpBankResultComposer(result, message));
         return Task.CompletedTask;
     }
