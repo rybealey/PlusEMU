@@ -87,7 +87,16 @@ public static class ShiftManager
     /// </summary>
     public static void PushRoomRights(GameClient client)
     {
-        client?.GetHabbo()?.CurrentRoom?.GetRoomUserManager()?.PushRoomRights(client);
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+
+        // The flag first, because it does not need a room. A staff member who
+        // clocks off in the hotel view has to lose the tools before they walk
+        // in anywhere, not on arrival.
+        client.Send(new Communication.Packets.Outgoing.Users.Banking.RpStaffDutyComposer(IsStaffOnDuty(habbo.Id)));
+
+        habbo.CurrentRoom?.GetRoomUserManager()?.PushRoomRights(client);
     }
 
     public static int ChatBubbleFor(Habbo habbo, int chosen) => (habbo != null && IsStaffOnDuty(habbo.Id)) ? StaffDutyBubble : chosen;

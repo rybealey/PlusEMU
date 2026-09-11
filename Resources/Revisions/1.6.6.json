@@ -678,6 +678,7 @@
     "RpBankAccountsComposer": 4112,
     "RpBankResultComposer": 4113,
     "RpAtmOpenComposer": 4114,
-    "RpBankLedgerComposer": 4115
+    "RpBankLedgerComposer": 4115,
+    "RpStaffDutyComposer": 4116
   }
 }

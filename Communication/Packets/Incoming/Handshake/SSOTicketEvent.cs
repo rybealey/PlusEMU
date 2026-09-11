@@ -149,6 +149,11 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: the wanted list, so the Wanted window has its rows and the
             // HUD can draw stars over whoever this player looks at.
             session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));
+            // pixelrp: whether this player's global room rights are live. Rank
+            // alone is what opens the client's furni tools, and those rights
+            // now follow the City Government clock - so the client has to be
+            // told, or it offers moves and pickups the server refuses.
+            HabboHotel.Corporations.ShiftManager.PushRoomRights(session);
             // pixelrp: whether the Wanted list shows this player the x that
             // drops a charge - on-duty officers only.
             HabboHotel.Corporations.PoliceUtility.PushPardonRights(session);
