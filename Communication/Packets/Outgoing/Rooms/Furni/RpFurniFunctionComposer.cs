@@ -1,4 +1,5 @@
 using System.Globalization;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Furni;
