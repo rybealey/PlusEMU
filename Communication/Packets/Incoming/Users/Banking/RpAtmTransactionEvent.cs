@@ -51,7 +51,7 @@ internal class RpAtmTransactionEvent : IPacketEvent
 
         if (!AtmSessions.IsAtMachine(habbo))
         {
-            session.Send(new RpBankResultComposer(BankResult.Failed, "You are not at a cash machine."));
+            session.Send(new RpBankResultComposer(BankResult.Failed, "You are not at an ATM."));
             return Task.CompletedTask;
         }
 
@@ -60,8 +60,8 @@ internal class RpAtmTransactionEvent : IPacketEvent
         // does. Trimmed to fit `source`, which is varchar(96).
         var roomName = habbo.CurrentRoom?.Name;
         var source = string.IsNullOrEmpty(roomName)
-            ? "Cash machine"
-            : $"Cash machine in {(roomName.Length > 70 ? roomName.Substring(0, 70) : roomName)}";
+            ? "ATM"
+            : $"ATM at {(roomName.Length > 70 ? roomName.Substring(0, 70) : roomName)}";
         BankAccount? account;
         string message;
         BankResult result;

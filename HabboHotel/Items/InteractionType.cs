@@ -119,7 +119,7 @@ public enum InteractionType
     Exchange,
     DressingBooth,
 
-    // pixelrp: the cash machine. A BEHAVIOUR rather than a classname check, so
+    // pixelrp: the ATM. A BEHAVIOUR rather than a classname check, so
     // a bank set can put it on a teller window or a wall panel without a code
     // change - the same route the jukebox took.
     Atm

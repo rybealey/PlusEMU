@@ -7,7 +7,7 @@ using Plus.HabboHotel.Users.Banking;
 namespace Plus.HabboHotel.Items.Interactor;
 
 /// <summary>
-/// pixelrp: the cash machine.
+/// pixelrp: the ATM.
 ///
 /// Using the furni opens the ATM screen for that player alone. It is the ONLY
 /// way that screen appears - RpAtmTransactionEvent refuses unless this has run
@@ -56,7 +56,7 @@ public class InteractorAtm : IFurniInteractor
             // Refused at the machine rather than opened onto an empty screen:
             // an account is opened in the Wallet, which is where the card and
             // the savings account live and where the choice belongs.
-            session.SendWhisper("You need a bank account before you can use a cash machine. Open one from your Wallet.");
+            session.SendWhisper("You need a bank account before you can use an ATM. Open one from your Wallet.");
             return;
         }
 
