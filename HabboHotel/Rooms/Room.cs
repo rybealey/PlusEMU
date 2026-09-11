@@ -516,6 +516,21 @@ public class Room : RoomData
         var fadedItems = GetRoomItemHandler().GetFloor.Where(item => item.Alpha < 100).ToList();
         if (fadedItems.Count > 0)
             session.Send(new RpFurniAlphaComposer(fadedItems));
+        // Definitions the Function Tool has edited, re-sent to whoever just
+        // walked in. The client reads a furni's NAME and its walkability out of
+        // gamedata on disk, which an edit never touches - so a live edit
+        // patches everyone connected and then the next login quietly reads the
+        // old values back. Only edited definitions actually in this room
+        // travel, which is normally none of them.
+        var edited = PlusEnvironment.Game?.ItemManager?.EditedDefinitions;
+        if (edited is { Count: > 0 })
+        {
+            foreach (var definition in GetRoomItemHandler().GetWallAndFloor
+                         .Select(item => item.Definition)
+                         .Where(definition => definition != null && edited.Contains(definition.Id))
+                         .DistinctBy(definition => definition.Id))
+                session.Send(new RpFurniFunctionComposer(definition));
+        }
         session.Send(new ItemsComposer(GetRoomItemHandler().GetWall.ToArray(), this));
         // pixelrp jukebox: sent unconditionally, even with no jukebox in the
         // room — the packet is tiny and the client hides the panel itself

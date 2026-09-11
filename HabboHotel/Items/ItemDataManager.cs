@@ -11,6 +11,7 @@ public class ItemDataManager : IItemDataManager
     private readonly IDatabase _database;
     public Dictionary<int, uint> Gifts { get; } = new(0); //<SpriteId, Item>
     public Dictionary<uint, ItemDefinition> Items { get; } = new(0);
+    public HashSet<uint> EditedDefinitions { get; } = new();
 
     public ItemDataManager(ILogger<ItemDataManager> logger, IDatabase database)
     {
@@ -79,6 +80,26 @@ public class ItemDataManager : IItemDataManager
                         //Logging.WriteLine("Could not load item #" + Convert.ToInt32(Row[0]) + ", please verify the data is okay.");
                     }
                 }
+            }
+        }
+        // Seeded from the audit trail rather than a column: every edit already
+        // writes a row there, so the set survives a restart for free.
+        using (var dbClient = _database.GetQueryReactor())
+        {
+            try
+            {
+                EditedDefinitions.Clear();
+                dbClient.SetQuery("SELECT DISTINCT `definition_id` FROM `rp_furni_function_log`");
+                var editedData = dbClient.GetTable();
+                if (editedData != null)
+                    foreach (DataRow row in editedData.Rows)
+                        EditedDefinitions.Add(Convert.ToUInt32(row["definition_id"]));
+            }
+            catch (Exception e)
+            {
+                // A database that predates 103_FurniFunction has no log table;
+                // nothing has been edited there either, so an empty set is right.
+                _logger.LogWarning("Could not read the furni function log: {message}", e.Message);
             }
         }
         _logger.LogInformation("Item Manager -> LOADED");
