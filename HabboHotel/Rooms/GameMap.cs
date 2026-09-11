@@ -972,6 +972,22 @@ public class Gamemap
     {
         var x = 0;
         var pointList = new Dictionary<int, ThreeDCoord>();
+
+        // Only 0/2/4/6 are handled below, and anything else used to fall
+        // through BOTH branches and return an empty list - which is not "no
+        // extra tiles", it is a multi-tile furni that blocks only the square it
+        // was dropped on while avatars walk through the rest of it.
+        //
+        // Two ways to reach that. RoomItemHandling explicitly permits rotation
+        // 8 (out of range; 0-7 is the domain), and it permits ANY rotation on a
+        // furni with extra_rot, so a 2x2 at rotation 1 covered one tile.
+        //
+        // A half-turned footprint has no representation on a square grid, so an
+        // odd rotation takes the even one below it - the same footprint the
+        // item had before it was nudged round.
+        rotation = ((rotation % 8) + 8) % 8;
+        if (rotation % 2 != 0)
+            rotation -= 1;
         if (length > 1)
         {
             if (rotation == 0 || rotation == 4)
