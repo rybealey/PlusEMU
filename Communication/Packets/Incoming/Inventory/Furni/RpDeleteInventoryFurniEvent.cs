@@ -67,7 +67,7 @@ internal class RpDeleteInventoryFurniEvent : IPacketEvent
 
             if (roomUser != null && roomUser.TradeId != 0)
             {
-                session.SendNotification("You cannot throw away furni while you are trading.");
+                session.SendNotification("You cannot delete furni while you are trading.");
                 return Task.CompletedTask;
             }
         }
@@ -96,13 +96,16 @@ internal class RpDeleteInventoryFurniEvent : IPacketEvent
         using (var connection = _database.Connection())
         {
             // The log is written BEFORE anything is destroyed, and the order is
-            // load-bearing. These migrations are applied by hand on the VPS, so
-            // there is a window where the code is deployed and the table is not;
-            // logging last would erase the items and then throw, leaving furni
-            // gone from the database but still drawn in the player's inventory
-            // until they relog, with no record of what happened. This way the
-            // failure is that nothing happens at all. It also means the log
-            // cannot miss a deletion - only ever name one that did not finish.
+            // load-bearing: it means the log can never MISS a deletion, only
+            // ever name one that did not finish. Logging last would invert
+            // that - any failure between the two writes would erase the items
+            // and then throw, leaving furni gone from the database but still
+            // drawn in the player's inventory until they relog, with no record
+            // of what happened. This way such a failure destroys nothing.
+            //
+            // (The deploy does apply `106_FurniTrashBin.sql` itself, tracked in
+            // `_applied_sql_updates`, so a missing table is not the expected
+            // case - but it is the cheap one to be safe about.)
             //
             // Denormalised on purpose: it has to still read after the item is
             // gone and after a furni is renamed.
