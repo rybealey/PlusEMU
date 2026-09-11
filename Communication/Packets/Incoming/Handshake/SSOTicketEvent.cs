@@ -157,6 +157,11 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: the characters on this account, for the Wallet.
             session.Send(new RpCharactersComposer(
                 HabboHotel.Users.Accounts.AccountUtility.Characters(session.GetHabbo().Id), session.GetHabbo().Id));
+            // pixelrp: this character's bank accounts, for the Wallet's debit
+            // card. Also the one place per session the row is read, so the
+            // payout and interest paths afterwards are memory only.
+            session.Send(new Outgoing.Users.Banking.RpBankAccountsComposer(
+                HabboHotel.Users.Banking.BankUtility.EnsureLoaded(session.GetHabbo().Id)));
             //SendMessage(new TalentTrackLevelComposer());
 
 

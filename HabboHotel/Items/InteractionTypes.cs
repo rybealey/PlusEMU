@@ -219,6 +219,8 @@ public static class InteractionTypes
                 return InteractionType.Pet;
             case "dressing_booth":
                 return InteractionType.DressingBooth;
+            case "atm":
+                return InteractionType.Atm;
             default:
             {
                 //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);

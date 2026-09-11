@@ -143,6 +143,10 @@ public class PlusEnvironment : IPlusEnvironment
             // pixelrp: phone notifications - starts the sweep that spots an
             // event about to begin. Everything else is pushed as it happens.
             HabboHotel.Notifications.NotificationUtility.Init();
+            // pixelrp: player banking - starts the interest accrual tick. It
+            // reads nothing at boot, so it is safe anywhere after the
+            // database; it sits here with the other pixelrp subsystems.
+            HabboHotel.Users.Banking.BankUtility.Init();
             // Allow services to self initialize
             foreach (var task in _startableTasks)
                 await task.Start();

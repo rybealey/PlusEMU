@@ -352,7 +352,12 @@
     "RpSwitchCharacterEvent": 4027,
     "RpRequestFurniFunctionEvent": 4112,
     "RpFurniFunctionEvent": 4111,
-    "RpDeleteInventoryFurniEvent": 4113
+    "RpDeleteInventoryFurniEvent": 4113,
+    "RpGetBankAccountsEvent": 4114,
+    "RpOpenBankAccountEvent": 4115,
+    "RpBankTransferEvent": 4116,
+    "RpAtmTransactionEvent": 4117,
+    "RpCloseAtmEvent": 4118
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -668,6 +673,9 @@
     "RpPrivacyComposer": 4025,
     "RpCharactersComposer": 4028,
     "RpCharacterResultComposer": 4029,
-    "RpFurniFunctionComposer": 4111
+    "RpFurniFunctionComposer": 4111,
+    "RpBankAccountsComposer": 4112,
+    "RpBankResultComposer": 4113,
+    "RpAtmOpenComposer": 4114
   }
 }

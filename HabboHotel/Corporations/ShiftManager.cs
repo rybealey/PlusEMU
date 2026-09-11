@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Banking;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Corporations;
@@ -278,6 +279,11 @@ public static class ShiftManager
             while (PayProgress(session, elapsed) >= PayIntervalSeconds)
             {
                 session.PaidIntervals++;
+                // Silent either way, the connection is gone. The bank branch
+                // is the safer of the two: it is its own committed write and
+                // does not depend on the disconnect save that runs after this.
+                if (TryDepositWage(session, habbo))
+                    continue;
                 habbo.Credits += session.RankPay;
                 PersistCredits(session.UserId, session.RankPay);
             }
@@ -481,11 +487,43 @@ public static class ShiftManager
         while (PayProgress(session, elapsed) >= PayIntervalSeconds)
         {
             session.PaidIntervals++;
-            client.GetHabbo().Credits += session.RankPay;
+            var habbo = client.GetHabbo();
+            if (TryDepositWage(session, habbo))
+            {
+                // NOT CreditBalanceComposer: the purse did not move, and a
+                // packet saying it did is the one that makes somebody later
+                // "fix" this by adding the wage to Credits as well.
+                client.Send(new Communication.Packets.Outgoing.Users.Banking.RpBankAccountsComposer(BankUtility.Get(session.UserId)));
+                client.SendWhisper($"{session.RankPay}c has been paid into your current account.");
+                continue;
+            }
+            habbo.Credits += session.RankPay;
             PersistCredits(session.UserId, session.RankPay);
-            client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
+            client.Send(new CreditBalanceComposer(habbo.Credits));
             client.SendWhisper($"You have earned {session.RankPay}c for this shift.");
         }
+    }
+
+    /// <summary>
+    /// pixelrp banking: wages for a character who has opened a bank account
+    /// are DIRECT DEPOSITED and never touch Habbo.Credits. A character with no
+    /// account - the default, and everybody who predates banking - is paid in
+    /// hand exactly as before.
+    ///
+    /// Shared by both payout sites so the two cannot drift. HasAccount is a
+    /// dictionary read, so this costs nothing on the path that runs for every
+    /// working player every ten minutes.
+    ///
+    /// Returns true when the bank took it. The bank write is relative and has
+    /// already committed by then, so PersistCredits - the crash hedge the hand
+    /// path needs - must NOT also run.
+    /// </summary>
+    private static bool TryDepositWage(ShiftSession session, Habbo habbo)
+    {
+        if (habbo == null || !BankUtility.HasAccount(session.UserId))
+            return false;
+        var source = string.IsNullOrEmpty(session.CorpName) ? "shift pay" : $"{session.CorpName} shift pay";
+        return BankUtility.CreditWages(session.UserId, habbo.Username, session.RankPay, source, out _) == BankResult.Ok;
     }
 
     // Crash hedge: writes the payout straight to the DB row alongside the

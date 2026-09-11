@@ -215,6 +215,12 @@ public static class ServerPacketHeader
     public const uint RpFurniAlphaComposer = 3926;
     // The 39xx block is full; this continues past the highest id in use.
     public const uint RpFurniFunctionComposer = 4111;
+    // pixelrp banking. Accounts and the refusal message go to the Wallet; the
+    // ATM screen is its own message because it deliberately carries less -
+    // the current account and the cash in hand, and never savings.
+    public const uint RpBankAccountsComposer = 4112;
+    public const uint RpBankResultComposer = 4113;
+    public const uint RpAtmOpenComposer = 4114;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpRoomCorpComposer = 43957; //3957
     public const uint RpOpenFloorplanComposer = 43963; //3963
