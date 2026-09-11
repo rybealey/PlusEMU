@@ -1409,11 +1409,22 @@ public class RoomUserManager
             return;
 
         var cur = habbo.Effects.CurrentEffect;
-        // pixelrp: on duty for City Government the staff enable owns the slot
-        // (same dance/lay exceptions as the passive enable below).
+        // pixelrp: on duty for City Government the staff enable owns the slot,
+        // and it owns it against ANY other enable - not just an empty slot or
+        // the passive one.
+        //
+        // It used to reclaim the slot only from 0, -1 or the passive enable,
+        // which meant a smoothie taken before clocking in, an inventory effect,
+        // a mount or a costume all held it for the whole shift. The staff
+        // enable is how a room knows somebody is on duty, so anything that can
+        // quietly outrank it makes that unreliable.
+        //
+        // Dancing and lying keep their exceptions: ApplyEffect stops a dance,
+        // and LayCommand clears the effect to hold the lay pose, so the enable
+        // resumes when the player stands.
         if (ShiftManager.IsStaffOnDuty(habbo.Id))
         {
-            if (cur != Habbo.StaffDutyEffectId && (cur == 0 || cur == -1 || cur == Habbo.PassiveEnableEffectId) && !user.IsDancing && !user.IsLying)
+            if (cur != Habbo.StaffDutyEffectId && !user.IsDancing && !user.IsLying)
                 habbo.Effects.ApplyEffect(Habbo.StaffDutyEffectId);
         }
         else if (habbo.RpPassiveSeconds > 0)
