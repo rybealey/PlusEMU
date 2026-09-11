@@ -60,6 +60,10 @@ public class RpFurniFunctionComposer : IServerPacket
         packet.WriteInteger((int)Math.Round(_definition.Height * 100));
         packet.WriteString(string.Join(",", _definition.AdjustableHeights.Select(
             height => height.ToString("0.####", CultureInfo.InvariantCulture))));
+        // Display only: whether the tile cursor may show its raised ring over
+        // this furni. The client is the only reader - see
+        // 111_FurniHeightMarker.sql for what the ring actually is.
+        packet.WriteBoolean(_definition.HeightMarker);
 
         packet.WriteString(_definition.InteractionTypeName ?? "default");
         packet.WriteInteger(_definition.Modes);

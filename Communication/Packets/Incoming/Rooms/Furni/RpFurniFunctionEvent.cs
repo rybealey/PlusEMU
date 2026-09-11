@@ -66,6 +66,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         var stackable = packet.ReadBool();
         var heightHundredths = Math.Clamp(packet.ReadInt(), 0, MaximumHeight);
         var adjustableHeights = ParseDoubleList(packet.ReadString());
+        var heightMarker = packet.ReadBool();
         var interactionName = (packet.ReadString() ?? string.Empty).Trim().ToLowerInvariant();
         var modes = Math.Clamp(packet.ReadInt(), 1, MaximumModes);
         var effectId = Math.Max(0, packet.ReadInt());
@@ -118,6 +119,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         Track("can_stack", Bit(definition.Stackable), Bit(stackable));
         Track("stack_height", Num(definition.Height), Num(height));
         Track("height_adjustable", Join(definition.AdjustableHeights), Join(adjustableHeights));
+        Track("height_marker", Bit(definition.HeightMarker), Bit(heightMarker));
         Track("interaction_type", definition.InteractionTypeName ?? "default", interactionName);
         Track("interaction_modes_count", definition.Modes.ToString(), modes.ToString());
         Track("effect_id", definition.EffectId.ToString(), effectId.ToString());
@@ -130,7 +132,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
-                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, " +
+                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
@@ -141,6 +143,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
             dbClient.AddParameter("stackable", Bit(stackable));
             dbClient.AddParameter("height", height);
             dbClient.AddParameter("adjustable", adjustableHeights.Count > 0 ? Join(adjustableHeights) : "0");
+            dbClient.AddParameter("heightMarker", Bit(heightMarker));
             dbClient.AddParameter("interaction", interactionName);
             dbClient.AddParameter("modes", modes);
             dbClient.AddParameter("effect", effectId);
@@ -190,6 +193,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         definition.Stackable = stackable;
         definition.Height = height;
         definition.AdjustableHeights = adjustableHeights;
+        definition.HeightMarker = heightMarker;
         definition.InteractionType = interactionType;
         definition.InteractionTypeName = interactionName;
         definition.Modes = modes;
