@@ -1,6 +1,8 @@
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Banking;
 
 namespace Plus.Communication.Packets.Incoming.Users.Banking;
@@ -15,11 +17,25 @@ namespace Plus.Communication.Packets.Incoming.Users.Banking;
 ///
 /// Only ever the CURRENT account. The ATM is never told what is in savings and
 /// has no way to name it.
+///
+/// Both movements announce themselves to the room, amount included. Standing
+/// at a machine counting out cash is a PUBLIC act - it is what makes a payday
+/// worth following someone home for - and a bank that moved money silently
+/// would quietly delete that whole piece of play. It is also the only record
+/// anyone in the room has, since neither balance is visible to them.
 /// </summary>
 internal class RpAtmTransactionEvent : IPacketEvent
 {
     private const int Deposit = 0;
     private const int Withdraw = 1;
+
+    /// <summary>
+    /// The blue action bubble the rest of the RP commands use - fighting,
+    /// police, consuming. An ATM withdrawal is an action somebody performs in
+    /// the room, so it reads in the same voice as the others rather than
+    /// inventing a style of its own.
+    /// </summary>
+    private const int ActionBubble = 4;
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
@@ -59,6 +75,8 @@ internal class RpAtmTransactionEvent : IPacketEvent
             return Task.CompletedTask;
         }
 
+        Announce(habbo, mode, amount);
+
         // The purse moved, so the HUD has to be told: the ATM is the only
         // place bank money and hand money meet, and a stale purse here is the
         // one that looks like the machine ate it.
@@ -66,5 +84,30 @@ internal class RpAtmTransactionEvent : IPacketEvent
         session.Send(new RpAtmOpenComposer(account, habbo.Credits));
         session.Send(new RpBankAccountsComposer(account));
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Says out loud what just happened, to everybody in the room.
+    ///
+    /// Third person and starred, the same shape every other RP action uses, so
+    /// it reads as something the character did rather than as a notification
+    /// that happens to be sitting over their head.
+    ///
+    /// Silent if the player has somehow left the room between the transaction
+    /// and this - the money has already moved and is not worth unwinding over
+    /// a bubble nobody would have seen anyway.
+    /// </summary>
+    private static void Announce(Habbo habbo, int mode, int amount)
+    {
+        var room = habbo.CurrentRoom;
+        var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        if (user == null)
+            return;
+
+        var message = (mode == Deposit)
+            ? $"*deposits {amount:N0}c into the bank*"
+            : $"*withdraws {amount:N0}c from the bank*";
+
+        room.SendPacket(new ChatComposer(user.VirtualId, message, 0, ActionBubble));
     }
 }
