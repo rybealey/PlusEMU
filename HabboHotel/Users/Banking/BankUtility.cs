@@ -57,6 +57,13 @@ public static class BankUtility
     private const int TickSeconds = 60;
 
     /// <summary>
+    /// The most ledger rows one read returns. The app pages nothing, so this
+    /// is simply what the screen can hold; a busy character works through it
+    /// in a couple of days and the rest stays in the table for support.
+    /// </summary>
+    public const int MaxLedgerRows = 150;
+
+    /// <summary>
     /// The most online time one tick may claim. Twice the period, so a long
     /// GC pause or a skipped tick is recovered, while a restart or a week
     /// offline can claim at most two minutes. The bias is deliberately toward
@@ -465,6 +472,50 @@ public static class BankUtility
     /// an exploitable one.
     /// </summary>
     public static int ToWire(long balance) => balance <= 0 ? 0 : balance >= int.MaxValue ? int.MaxValue : (int)balance;
+
+    /// <summary>
+    /// The same clamp for a SIGNED figure - a ledger amount, which is negative
+    /// on the way out of an account. ToWire floors at zero, which would turn
+    /// every withdrawal into a 0 on the wire.
+    /// </summary>
+    public static int ToWireSigned(long amount) =>
+        amount >= int.MaxValue ? int.MaxValue : amount <= int.MinValue ? int.MinValue : (int)amount;
+
+    /// <summary>
+    /// A character's own ledger, newest first, for the Mercury app.
+    ///
+    /// Read straight from the table rather than cached: it is asked for when
+    /// somebody opens the app and never on a timer, it grows without bound,
+    /// and it is the one part of banking where being a few seconds stale would
+    /// actually be wrong - a player checks the ledger precisely to see the
+    /// movement they just made.
+    ///
+    /// Capped, because the app pages nothing: what comes back is what the
+    /// screen holds. Both accounts travel together so switching between them
+    /// costs no round trip.
+    /// </summary>
+    public static List<BankTransaction> Ledger(int userId, int limit)
+    {
+        if (userId <= 0)
+            return new List<BankTransaction>();
+        if (limit <= 0 || limit > MaxLedgerRows)
+            limit = MaxLedgerRows;
+        try
+        {
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+
+            return connection.Query<BankTransaction>(
+                "SELECT `id` AS Id, `kind` AS Kind, `account` AS Account, `amount` AS Amount, " +
+                "`balance_after` AS BalanceAfter, `source` AS Source, `created_at` AS CreatedAt " +
+                "FROM `rp_bank_transactions` WHERE `user_id` = @userId ORDER BY `id` DESC LIMIT @limit",
+                new { userId, limit }).ToList();
+        }
+        catch (Exception e)
+        {
+            Log.Error("Reading {0}'s ledger failed: {1}", userId, e.Message);
+            return new List<BankTransaction>();
+        }
+    }
 
     private static int Now => (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 

@@ -221,6 +221,7 @@ public static class ServerPacketHeader
     public const uint RpBankAccountsComposer = 4112;
     public const uint RpBankResultComposer = 4113;
     public const uint RpAtmOpenComposer = 4114;
+    public const uint RpBankLedgerComposer = 4115;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpRoomCorpComposer = 43957; //3957
     public const uint RpOpenFloorplanComposer = 43963; //3963

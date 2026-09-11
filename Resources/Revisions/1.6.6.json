@@ -357,7 +357,8 @@
     "RpOpenBankAccountEvent": 4115,
     "RpBankTransferEvent": 4116,
     "RpAtmTransactionEvent": 4117,
-    "RpCloseAtmEvent": 4118
+    "RpCloseAtmEvent": 4118,
+    "RpGetBankLedgerEvent": 4119
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -676,6 +677,7 @@
     "RpFurniFunctionComposer": 4111,
     "RpBankAccountsComposer": 4112,
     "RpBankResultComposer": 4113,
-    "RpAtmOpenComposer": 4114
+    "RpAtmOpenComposer": 4114,
+    "RpBankLedgerComposer": 4115
   }
 }

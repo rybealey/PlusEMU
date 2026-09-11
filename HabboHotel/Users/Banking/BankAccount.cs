@@ -16,6 +16,24 @@ public sealed record BankAccount(
     long InterestTotal,
     long WagesTotal);
 
+/// <summary>
+/// One movement out of rp_bank_transactions, as the Mercury app reads it.
+///
+/// A mutable property class rather than a positional record: Dapper maps onto
+/// it by name, and this codebase has been bitten before by a positional record
+/// whose parameter types did not line up with the columns exactly.
+/// </summary>
+public sealed class BankTransaction
+{
+    public long Id { get; set; }
+    public string Kind { get; set; } = string.Empty;
+    public string Account { get; set; } = string.Empty;
+    public long Amount { get; set; }
+    public long BalanceAfter { get; set; }
+    public string Source { get; set; } = string.Empty;
+    public int CreatedAt { get; set; }
+}
+
 /// <summary>Which of a character's two accounts an operation names.</summary>
 public enum BankAccountKind
 {
