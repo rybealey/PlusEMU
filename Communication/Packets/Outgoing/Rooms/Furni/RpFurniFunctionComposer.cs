@@ -52,6 +52,7 @@ public class RpFurniFunctionComposer : IServerPacket
         packet.WriteInteger(_definition.Length);
 
         packet.WriteBoolean(_definition.Walkable);
+        packet.WriteString(_definition.WalkMask ?? string.Empty);
         packet.WriteBoolean(_definition.IsSeat);
         packet.WriteBoolean(_definition.Stackable);
         // Height rides as hundredths, the same wire format the stack-height

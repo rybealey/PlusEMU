@@ -25,6 +25,19 @@ public class ItemDefinition
     public double Height { get; set; }
     public bool Stackable { get; set; }
     public bool Walkable { get; set; }
+
+    /// <summary>
+    /// Per-tile walkability override, in the furni's OWN frame so it turns with
+    /// the item: `width` * `length` characters, '1' where that tile is walkable
+    /// and '0' where it follows the furni's normal blocking, indexed
+    /// `b * Width + a` with `a` across the width and `b` along the length.
+    ///
+    /// Empty - every row until someone sets one - means no override. It exists
+    /// because `Walkable` is all-or-nothing across the footprint, which cannot
+    /// describe an L-shaped sofa: a 2x2 that covers three tiles and leaves the
+    /// inside corner as floor.
+    /// </summary>
+    public string WalkMask { get; set; } = string.Empty;
     public bool IsSeat { get; set; }
     public bool AllowEcotronRecycle { get; set; }
     public bool AllowTrade { get; set; }

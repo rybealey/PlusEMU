@@ -53,6 +53,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
     {
         var definitionId = packet.ReadInt();
         var walkable = packet.ReadBool();
+        var walkMask = SanitiseMask(packet.ReadString());
         var seat = packet.ReadBool();
         var stackable = packet.ReadBool();
         var heightHundredths = Math.Clamp(packet.ReadInt(), 0, MaximumHeight);
@@ -96,6 +97,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         }
 
         Track("is_walkable", Bit(definition.Walkable), Bit(walkable));
+        Track("walk_mask", definition.WalkMask ?? string.Empty, walkMask);
         Track("can_sit", Bit(definition.IsSeat), Bit(seat));
         Track("can_stack", Bit(definition.Stackable), Bit(stackable));
         Track("stack_height", Num(definition.Height), Num(height));
@@ -111,12 +113,13 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         using (var dbClient = _database.GetQueryReactor())
         {
-            dbClient.SetQuery("UPDATE `furniture` SET `is_walkable` = @walkable, `can_sit` = @seat, " +
+            dbClient.SetQuery("UPDATE `furniture` SET `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
                               "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
             dbClient.AddParameter("walkable", Bit(walkable));
+            dbClient.AddParameter("walkMask", walkMask);
             dbClient.AddParameter("seat", Bit(seat));
             dbClient.AddParameter("stackable", Bit(stackable));
             dbClient.AddParameter("height", height);
@@ -147,6 +150,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         // In place, not a reload - see the class note.
         definition.Walkable = walkable;
+        definition.WalkMask = walkMask;
         definition.IsSeat = seat;
         definition.Stackable = stackable;
         definition.Height = height;
@@ -170,6 +174,20 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         _clientManager.SendPacket(new RpFurniFunctionComposer(definition));
         return Task.CompletedTask;
+    }
+
+    /// A mask the map cannot read is worse than none - it would punch holes in
+    /// a wall on a shape nobody intended - so anything that is not exactly the
+    /// footprint's worth of 0s and 1s, or is all zeroes (which says nothing the
+    /// furni's own flag does not), comes back as no mask at all.
+    private static string SanitiseMask(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return string.Empty;
+        raw = raw.Trim();
+        if (raw.Length > 64 || raw.Any(c => c != '0' && c != '1') || raw.All(c => c == '0'))
+            return string.Empty;
+        return raw;
     }
 
     private static string Bit(bool value) => value ? "1" : "0";

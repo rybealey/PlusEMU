@@ -45,6 +45,7 @@ public class ItemDataManager : IItemDataManager
                             Height = Convert.ToDouble(row["stack_height"]),
                             Stackable = row["can_stack"].ToString() == "1",
                             Walkable = row["is_walkable"].ToString() == "1",
+                            WalkMask = Convert.ToString(row["walk_mask"]) ?? string.Empty,
                             IsSeat = row["can_sit"].ToString() == "1",
                             AllowEcotronRecycle = row["allow_recycle"].ToString() == "1",
                             AllowTrade = row["allow_trade"].ToString() == "1",

@@ -249,6 +249,50 @@ public class Gamemap
         catch { }
     }
 
+    /// <summary>
+    /// Does this item's per-tile mask make THIS square walkable?
+    ///
+    /// The mask is stored in the furni's own frame - `a` across its width, `b`
+    /// along its length - so it turns with the item. Mapping a world square
+    /// back into that frame is the inverse of what GetAffectedTiles does when
+    /// it lays the footprint out: at rotation 0/4 the item runs along X by its
+    /// width and Y by its length, and at 2/6 those axes swap.
+    ///
+    /// Anything that does not line up - no mask, a mask of the wrong size, a
+    /// square outside the footprint - answers false and leaves the furni's
+    /// normal blocking to decide, because a half-understood mask punching holes
+    /// in a wall is worse than no mask at all.
+    /// </summary>
+    private static bool IsMaskedWalkable(Item item, Point coord)
+    {
+        var mask = item.Definition?.WalkMask;
+        var width = item.Definition?.Width ?? 0;
+        var length = item.Definition?.Length ?? 0;
+        if (string.IsNullOrEmpty(mask) || width < 1 || length < 1 || mask.Length != width * length)
+            return false;
+
+        var rotation = ((item.Rotation % 8) + 8) % 8;
+        if (rotation % 2 != 0)
+            rotation -= 1;
+
+        int a, b;
+        if (rotation == 0 || rotation == 4)
+        {
+            a = coord.X - item.GetX;
+            b = coord.Y - item.GetY;
+        }
+        else
+        {
+            a = coord.Y - item.GetY;
+            b = coord.X - item.GetX;
+        }
+
+        if (a < 0 || a >= width || b < 0 || b >= length)
+            return false;
+
+        return mask[(b * width) + a] == '1';
+    }
+
     private bool ConstructMapForItem(Item item, Point coord)
     {
         try
@@ -290,7 +334,9 @@ public class Gamemap
                 }
 
                 //SwimHalloween
-                if (item.Definition.Walkable) // If this item is walkable and on the floor, allow users to walk here.
+                // The per-tile mask is checked alongside the whole-furni flag: an
+                // L-shaped sofa is not walkable, but the inside of the L is.
+                if (item.Definition.Walkable || IsMaskedWalkable(item, coord))
                 {
                     if (GameMap[coord.X, coord.Y] != 3)
                         GameMap[coord.X, coord.Y] = 1;
