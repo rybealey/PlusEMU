@@ -43,5 +43,8 @@ public class RpBankAccountsComposer : IServerPacket
         packet.WriteInteger(BankUtility.TransfersLeft(_account));
         packet.WriteInteger(BankUtility.WeeklyTransfers);
         packet.WriteInteger(BankUtility.TransfersResetAt(_account));
+        // What savings has to hold before it earns anything. Sent rather than
+        // hardcoded, so the screen and the rule can never disagree.
+        packet.WriteInteger(BankUtility.ToWire(BankUtility.InterestMinimum));
     }
 }

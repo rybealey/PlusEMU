@@ -54,6 +54,17 @@ public static class BankUtility
     public const int InterestPeriodSeconds = 3600;
 
     /// <summary>
+    /// Savings has to hold this much before it earns anything.
+    ///
+    /// Interest is rounded down to whole credits, so below about 400c the rate
+    /// pays literally nothing and the countdown is a promise the account
+    /// cannot keep. A visible floor says that out loud and gives saving a
+    /// first goal, rather than letting somebody watch a timer for an hour and
+    /// receive zero.
+    /// </summary>
+    public const long InterestMinimum = 1500;
+
+    /// <summary>
     /// Savings -> checking moves allowed per week. Paying IN is unlimited and
     /// never counted: the ration exists to stop savings being spending money,
     /// not to make saving awkward.
@@ -789,7 +800,11 @@ public static class BankUtility
     /// </summary>
     private static void PayInterest(IDbConnection connection, BankAccount row, GameClient? client)
     {
-        var interest = row.Savings * SavingsRateBps / 10000;
+        // Below the floor the hour is still SPENT, just unpaid - the same rule
+        // as a balance sitting at the ceiling. Banking hours while under the
+        // minimum would let somebody park at zero, collect a week of them, and
+        // cash the lot in the moment they crossed it.
+        var interest = (row.Savings < InterestMinimum) ? 0 : row.Savings * SavingsRateBps / 10000;
         var room = SavingsCap - row.Savings;
         if (interest > room)
             interest = room;
