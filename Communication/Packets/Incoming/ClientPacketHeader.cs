@@ -478,6 +478,9 @@ public static class ClientPacketHeader
     public const uint RpSetEmergencyEvent = 43960; //3960
     public const uint RpSetFurniAlphaEvent = 3926;
     public const uint RpPassiveCancelEvent = 3927;
+    // The 39xx block is full; these continue past the highest id in use.
+    public const uint RpRequestFurniFunctionEvent = 4112;
+    public const uint RpFurniFunctionEvent = 4111;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

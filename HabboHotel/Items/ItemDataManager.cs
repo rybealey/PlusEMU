@@ -52,6 +52,9 @@ public class ItemDataManager : IItemDataManager
                             AllowGift = row["allow_gift"].ToString() == "1",
                             AllowInventoryStack = row["allow_inventory_stack"].ToString() == "1",
                             InteractionType = InteractionTypes.GetTypeFromString(row["interaction_type"].ToString()),
+                            InteractionTypeName = string.IsNullOrEmpty(Convert.ToString(row["interaction_type"]))
+                                ? "default"
+                                : Convert.ToString(row["interaction_type"]),
                             BehaviourData = Convert.ToInt32(row["behaviour_data"]),
                             Modes = Convert.ToInt32(row["interaction_modes_count"]),
                             VendingIds = (!string.IsNullOrEmpty(Convert.ToString(row["vending_ids"])) && Convert.ToString(row["vending_ids"]) != "0")

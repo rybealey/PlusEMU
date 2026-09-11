@@ -213,6 +213,8 @@ public static class ServerPacketHeader
     public const uint RpJukeboxStateComposer = 3917;
     public const uint RpRoomZoneComposer = 3924;
     public const uint RpFurniAlphaComposer = 3926;
+    // The 39xx block is full; this continues past the highest id in use.
+    public const uint RpFurniFunctionComposer = 4111;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpRoomCorpComposer = 43957; //3957
     public const uint RpOpenFloorplanComposer = 43963; //3963

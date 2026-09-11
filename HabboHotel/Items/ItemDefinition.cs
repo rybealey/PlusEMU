@@ -34,6 +34,17 @@ public class ItemDefinition
 
     /// TODO @80O: Convert to string so plugins can add new interactions.
     public InteractionType InteractionType { get; set; }
+
+    /// <summary>
+    /// The raw `furniture`.`interaction_type` this was parsed from.
+    ///
+    /// InteractionTypes only maps one way - string to enum, across a 107-case
+    /// switch - so without keeping the original there is no way back to the
+    /// value the database holds, and the Function window needs exactly that to
+    /// show what a furni is set to and to write an edit back. Carrying the
+    /// string beats a second switch that would silently drift from the first.
+    /// </summary>
+    public string InteractionTypeName { get; set; } = "default";
     public int BehaviourData { get; set; }
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; }

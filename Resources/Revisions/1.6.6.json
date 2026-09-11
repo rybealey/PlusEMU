@@ -349,7 +349,9 @@
     "RpDropChargeEvent": 3988,
     "RpSavePrivacyEvent": 4023,
     "RpCreateCharacterEvent": 4026,
-    "RpSwitchCharacterEvent": 4027
+    "RpSwitchCharacterEvent": 4027,
+    "RpRequestFurniFunctionEvent": 4112,
+    "RpFurniFunctionEvent": 4111
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -664,6 +666,7 @@
     "RpPoliceComposer": 3969,
     "RpPrivacyComposer": 4025,
     "RpCharactersComposer": 4028,
-    "RpCharacterResultComposer": 4029
+    "RpCharacterResultComposer": 4029,
+    "RpFurniFunctionComposer": 4111
   }
 }
