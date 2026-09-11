@@ -581,6 +581,13 @@ public class RoomUserManager
         return null;
     }
 
+    /// <summary>
+    /// pixelrp: this user's :bh build height in the form SetFloorItem expects -
+    /// a height in tiles, or -1 meaning "stack normally". A user who is not in
+    /// the room, or who has not set one, gets -1.
+    /// </summary>
+    public double BuildHeightFor(int habboId) => GetRoomUserByHabbo(habboId)?.BuildHeight ?? -1;
+
     public List<RoomUser> GetRoomUsers()
     {
         var list = new List<RoomUser>();

@@ -237,6 +237,19 @@ public class RoomUser
         }
     }
 
+    /// <summary>
+    /// pixelrp: the sticky build height from :bh, in tiles, or null for normal
+    /// auto-stacking.
+    ///
+    /// It lives on RoomUser rather than Room deliberately. Two people building
+    /// together would otherwise fight over one value, and because a RoomUser
+    /// only exists between entering and leaving, the setting is forgotten on
+    /// the way out - inheriting a stray height from whoever built here an hour
+    /// ago is the kind of thing that goes unnoticed until a wall is in the
+    /// wrong place.
+    /// </summary>
+    public double? BuildHeight { get; set; }
+
     public bool IsTrading { get; set; }
 
     public int TradePartner { get; set; }

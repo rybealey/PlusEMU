@@ -563,12 +563,17 @@ public class RoomItemHandling
                 }
             }
 
-            // Verify the rotation is correct
-            if (newRot != 0 && newRot != 2 && newRot != 4 && newRot != 6 && newRot != 8 && !item.Definition.ExtraRot)
-                newRot = 0;
         }
         else
             newZ = height;
+
+        // Verify the rotation is correct. This sits OUTSIDE the branch above on
+        // purpose: a :bh placement skips the whole auto-stacking block, and an
+        // unnormalised rotation would otherwise survive and draw wrong. Nothing
+        // about snapping a rotation depends on how the height was decided.
+        if (newRot != 0 && newRot != 2 && newRot != 4 && newRot != 6 && newRot != 8 && !item.Definition.ExtraRot)
+            newRot = 0;
+
         item.Rotation = newRot;
         var oldX = item.GetX;
         var oldY = item.GetY;

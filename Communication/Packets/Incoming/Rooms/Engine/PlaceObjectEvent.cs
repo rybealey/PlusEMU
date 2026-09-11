@@ -96,7 +96,10 @@ internal class PlaceObjectEvent : RoomPacketEvent
             if (!int.TryParse(data[1], out var x)) return Task.CompletedTask;
             if (!int.TryParse(data[2], out var y)) return Task.CompletedTask;
             if (!int.TryParse(data[3], out var rotation)) return Task.CompletedTask;
-            if (room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, true, false, true))
+            // pixelrp: -1 unless :bh is on, in which case the piece goes straight
+            // to that height instead of stacking on what is underneath.
+            if (room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, true, false, true,
+                    height: room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id)))
             {
                 session.GetHabbo().Inventory.Furniture.RemoveItem(itemId);
                 session.Send(new FurniListRemoveComposer(itemId));

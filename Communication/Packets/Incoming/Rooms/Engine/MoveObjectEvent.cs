@@ -48,7 +48,10 @@ internal class MoveObjectEvent : RoomPacketEvent
             _questManager.ProgressUserQuest(session, QuestType.FurniMove);
         if (rotation != item.Rotation)
             _questManager.ProgressUserQuest(session, QuestType.FurniRotate);
-        if (!room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, false, false, true))
+        // pixelrp: same build height as a fresh placement - dragging a piece while
+        // :bh is on re-levels it rather than dropping it back onto the stack.
+        if (!room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, false, false, true,
+                height: room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id)))
         {
             room.SendPacket(new ObjectUpdateComposer(item));
             return Task.CompletedTask;
