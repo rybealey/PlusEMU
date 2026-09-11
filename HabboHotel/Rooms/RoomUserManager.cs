@@ -280,27 +280,7 @@ public class RoomUserManager
             _room.SendPacket(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(session.GetHabbo().Id, enteringEmployment));
         // Knocked-out players (0 health persists) re-enter laying and frozen.
         user.UpdateRpKnockoutState();
-        if (_room.CheckRights(session, true))
-        {
-            user.SetStatus("flatctrl", "useradmin");
-            session.Send(new YouAreOwnerComposer());
-            // Nitro only shows the branding (ads_background) editor at controller
-            // level 5 ("moderator"); level 4 caps out at plain owner tools.
-            session.Send(new YouAreControllerComposer(
-                session.GetHabbo().Permissions.HasRight("room_item_save_branding_items") ? 5 : 4));
-        }
-        else if (_room.CheckRights(session, false) && _room.Group == null)
-        {
-            user.SetStatus("flatctrl", "1");
-            session.Send(new YouAreControllerComposer(1));
-        }
-        else if (_room.Group != null && _room.CheckRights(session, false, true))
-        {
-            user.SetStatus("flatctrl", "3");
-            session.Send(new YouAreControllerComposer(3));
-        }
-        else
-            session.Send(new YouAreNotControllerComposer());
+        ApplyRoomRights(session, user);
         user.UpdateNeeded = true;
         // Staff are no longer given a forced effect (102) on room entry.
         if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
@@ -571,6 +551,63 @@ public class RoomUserManager
         if (!_users.TryGetValue(virtualId, out user))
             return null;
         return user;
+    }
+
+    /// <summary>
+    /// Tells one client which rights they hold in THIS room, and shows the
+    /// room the matching badge.
+    ///
+    /// Extracted from room entry so a SHIFT change can re-run it. Rights now
+    /// follow the clock, and entry is no longer the only moment the answer
+    /// changes - a staff member who clocks off would otherwise keep the owner
+    /// tools on screen until they walked out and back in.
+    /// </summary>
+    private void ApplyRoomRights(GameClient session, RoomUser user)
+    {
+        if (_room.CheckRights(session, true))
+        {
+            user.SetStatus("flatctrl", "useradmin");
+            session.Send(new YouAreOwnerComposer());
+            // Nitro only shows the branding (ads_background) editor at controller
+            // level 5 ("moderator"); level 4 caps out at plain owner tools.
+            session.Send(new YouAreControllerComposer(
+                session.GetHabbo().Permissions.HasRight("room_item_save_branding_items") ? 5 : 4));
+        }
+        else if (_room.CheckRights(session, false) && _room.Group == null)
+        {
+            user.SetStatus("flatctrl", "1");
+            session.Send(new YouAreControllerComposer(1));
+        }
+        else if (_room.Group != null && _room.CheckRights(session, false, true))
+        {
+            user.SetStatus("flatctrl", "3");
+            session.Send(new YouAreControllerComposer(3));
+        }
+        else
+        {
+            // Losing rights has to clear the badge as well as the level. Entry
+            // never needed this - nobody arrives holding a stale one - but a
+            // clock-out does, and a staff member still wearing the rights star
+            // off duty is the tell that this did not work.
+            user.RemoveStatus("flatctrl");
+            session.Send(new YouAreNotControllerComposer());
+        }
+    }
+
+    /// <summary>
+    /// Re-send a player's rights for this room, after something OUTSIDE the
+    /// room changed the answer - today, clocking on or off at City Government.
+    /// </summary>
+    public void PushRoomRights(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null)
+            return;
+        var user = GetRoomUserByHabbo(habbo.Id);
+        if (user == null)
+            return;
+        ApplyRoomRights(session, user);
+        user.UpdateNeeded = true;
     }
 
     public RoomUser GetRoomUserByHabbo(int id)

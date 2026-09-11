@@ -72,6 +72,24 @@ public static class ShiftManager
     public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
 
     /// <summary>The bubble a chat line goes out in: 23 for City Government on duty, else the one chosen.</summary>
+    /// <summary>
+    /// pixelrp: re-send this player's room rights, because clocking on or off
+    /// just changed the answer.
+    ///
+    /// Room.CheckRights only honours `room_any_owner` / `room_any_rights` while
+    /// their holder is on duty here, and room ENTRY is otherwise the only
+    /// moment a controller level is sent - so without this a staff member who
+    /// clocked off would keep the owner tools on screen until they walked out
+    /// and back in.
+    ///
+    /// Same shape as PoliceUtility.PushPardonRights, called from the same five
+    /// moments: it gates the affordance, and every packet re-checks anyway.
+    /// </summary>
+    public static void PushRoomRights(GameClient client)
+    {
+        client?.GetHabbo()?.CurrentRoom?.GetRoomUserManager()?.PushRoomRights(client);
+    }
+
     public static int ChatBubbleFor(Habbo habbo, int chosen) => (habbo != null && IsStaffOnDuty(habbo.Id)) ? StaffDutyBubble : chosen;
 
     // Re-send the room this player's RP stats so the HUD's PASSIVE tag follows
@@ -163,6 +181,7 @@ public static class ShiftManager
         // Police powers follow the clock: an officer clocking on gains the x
         // that drops a charge in the Wanted list, and loses it below.
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     // Acronym on line one, rank on line two; the client's motto elements
@@ -224,6 +243,7 @@ public static class ShiftManager
         RevertMotto(client);
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     public static void InterruptForIdle(GameClient client)
@@ -234,6 +254,7 @@ public static class ShiftManager
         RevertMotto(client);
         AnnounceShift(client, "*has fallen asleep on duty*");
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     // pixelrp: clocked out because they're no longer in a room they may
@@ -245,6 +266,7 @@ public static class ShiftManager
     {
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     // pixelrp: re-check the moment an on-duty worker enters a room, so an
