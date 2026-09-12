@@ -86,6 +86,9 @@ internal class PlaceBotEvent : RoomPacketEvent
                 ref botSpeechList, "", 0, bot.OwnerId, ConvertExtensions.EnumToBool(getData["automatic_chat"].ToString()), Convert.ToInt32(getData["speaking_interval"]),
                 ConvertExtensions.EnumToBool(getData["mix_sentences"].ToString()), Convert.ToInt32(getData["chat_bubble"])), null);
         botUser.Chat("Hello!");
+        // A teller only exists for the client once it knows which bots are
+        // tellers, so the set is re-sent the moment one lands.
+        room.GetRoomUserManager().BroadcastTellerBots();
         room.GetGameMap().UpdateUserMovement(new(x, y), new(x, y), botUser);
         if (!session.GetHabbo().Inventory.Bots.RemoveBot(botId))
         {

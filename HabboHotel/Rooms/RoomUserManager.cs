@@ -281,6 +281,7 @@ public class RoomUserManager
         // Knocked-out players (0 health persists) re-enter laying and frozen.
         user.UpdateRpKnockoutState();
         ApplyRoomRights(session, user);
+        PushTellerBots(session);
         user.UpdateNeeded = true;
         // Staff are no longer given a forced effect (102) on room entry.
         if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
@@ -609,6 +610,32 @@ public class RoomUserManager
         ApplyRoomRights(session, user);
         user.UpdateNeeded = true;
     }
+
+    /// <summary>
+    /// pixelrp: the virtual ids of the bank tellers standing in this room.
+    ///
+    /// The client cannot work this out for itself - nothing in UsersComposer
+    /// distinguishes a teller from any other bot - and it needs to know in
+    /// order to decide whether clicking a bot offers banking. Cheap enough to
+    /// rebuild on demand: a room holds a handful of bots, not thousands.
+    /// </summary>
+    private List<int> TellerVirtualIds() =>
+        _bots.Values
+            .Where(bot => bot != null && bot.BotAi is AI.Types.BankerBot)
+            .Select(bot => bot.VirtualId)
+            .ToList();
+
+    /// <summary>Tell one player which bots here are tellers - on room entry.</summary>
+    public void PushTellerBots(GameClient session) =>
+        session?.Send(new Communication.Packets.Outgoing.Rooms.AI.Bots.RpTellerBotsComposer(TellerVirtualIds()));
+
+    /// <summary>
+    /// Tell everybody, after the set changed - a teller placed or picked up.
+    /// Sent to the whole room rather than to the person who moved it, because
+    /// the bot appearing is a fact about the room, not about them.
+    /// </summary>
+    public void BroadcastTellerBots() =>
+        _room.SendPacket(new Communication.Packets.Outgoing.Rooms.AI.Bots.RpTellerBotsComposer(TellerVirtualIds()));
 
     public RoomUser GetRoomUserByHabbo(int id)
     {

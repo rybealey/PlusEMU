@@ -119,6 +119,8 @@ public class RoomBot
                 return new GenericBot(virtualId);
             case BotAiType.Bartender:
                 return new BartenderBot(virtualId);
+            case BotAiType.Banker:
+                return new BankerBot(virtualId);
             default:
                 return new GenericBot(virtualId);
         }

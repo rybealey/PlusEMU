@@ -358,7 +358,8 @@
     "RpBankTransferEvent": 4116,
     "RpAtmTransactionEvent": 4117,
     "RpCloseAtmEvent": 4118,
-    "RpGetBankLedgerEvent": 4119
+    "RpGetBankLedgerEvent": 4119,
+    "RpTellerActionEvent": 4120
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -679,6 +680,7 @@
     "RpBankResultComposer": 4113,
     "RpAtmOpenComposer": 4114,
     "RpBankLedgerComposer": 4115,
-    "RpStaffDutyComposer": 4116
+    "RpStaffDutyComposer": 4116,
+    "RpTellerBotsComposer": 4117
   }
 }

@@ -41,6 +41,9 @@ internal class PickUpBotEvent : IPacketEvent
             botUser.BotData.Look, botUser.BotData.Gender));
         session.Send(new BotInventoryComposer(session.GetHabbo().Inventory.Bots.Bots.Values.ToList()));
         room.GetRoomUserManager().RemoveBot(botUser.VirtualId, false);
+        // After the removal, so the set the client gets no longer holds a
+        // virtual id nothing answers to.
+        room.GetRoomUserManager().BroadcastTellerBots();
         return Task.CompletedTask;
     }
 }
