@@ -1,6 +1,7 @@
 using System.Globalization;
 using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Database;
+using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
@@ -37,27 +38,35 @@ internal class RpFurniFunctionEvent : IPacketEvent
 {
     private const int MaximumHeight = 4000; // hundredths; the stack-height widget's ceiling is 40
     private const int MaximumModes = 128;
+    private const int MaximumNameLength = 56; // `furniture`.`public_name` is varchar(56)
 
     private readonly IDatabase _database;
     private readonly IRoomManager _roomManager;
     private readonly IGameClientManager _clientManager;
+    private readonly ICatalogManager _catalogManager;
+    private readonly IItemDataManager _itemDataManager;
 
-    public RpFurniFunctionEvent(IDatabase database, IRoomManager roomManager, IGameClientManager clientManager)
+    public RpFurniFunctionEvent(IDatabase database, IRoomManager roomManager, IGameClientManager clientManager,
+        ICatalogManager catalogManager, IItemDataManager itemDataManager)
     {
         _database = database;
         _roomManager = roomManager;
         _clientManager = clientManager;
+        _catalogManager = catalogManager;
+        _itemDataManager = itemDataManager;
     }
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var definitionId = packet.ReadInt();
+        var publicName = (packet.ReadString() ?? string.Empty).Trim();
         var walkable = packet.ReadBool();
         var walkMask = SanitiseMask(packet.ReadString());
         var seat = packet.ReadBool();
         var stackable = packet.ReadBool();
         var heightHundredths = Math.Clamp(packet.ReadInt(), 0, MaximumHeight);
         var adjustableHeights = ParseDoubleList(packet.ReadString());
+        var heightMarker = packet.ReadBool();
         var interactionName = (packet.ReadString() ?? string.Empty).Trim().ToLowerInvariant();
         var modes = Math.Clamp(packet.ReadInt(), 1, MaximumModes);
         var effectId = Math.Max(0, packet.ReadInt());
@@ -88,6 +97,13 @@ internal class RpFurniFunctionEvent : IPacketEvent
         if (interactionType == InteractionType.None && interactionName != "default")
             return Task.CompletedTask;
 
+        // A blank name would leave the furni nameless everywhere it is listed,
+        // so it keeps the one it has rather than being cleared.
+        if (string.IsNullOrEmpty(publicName))
+            publicName = definition.PublicName ?? string.Empty;
+        if (publicName.Length > MaximumNameLength)
+            publicName = publicName.Substring(0, MaximumNameLength);
+
         var height = heightHundredths / 100d;
         var changes = new List<(string Field, string Old, string New)>();
         void Track(string field, string oldValue, string newValue)
@@ -96,12 +112,14 @@ internal class RpFurniFunctionEvent : IPacketEvent
                 changes.Add((field, oldValue, newValue));
         }
 
+        Track("public_name", definition.PublicName ?? string.Empty, publicName);
         Track("is_walkable", Bit(definition.Walkable), Bit(walkable));
         Track("walk_mask", definition.WalkMask ?? string.Empty, walkMask);
         Track("can_sit", Bit(definition.IsSeat), Bit(seat));
         Track("can_stack", Bit(definition.Stackable), Bit(stackable));
         Track("stack_height", Num(definition.Height), Num(height));
         Track("height_adjustable", Join(definition.AdjustableHeights), Join(adjustableHeights));
+        Track("height_marker", Bit(definition.HeightMarker), Bit(heightMarker));
         Track("interaction_type", definition.InteractionTypeName ?? "default", interactionName);
         Track("interaction_modes_count", definition.Modes.ToString(), modes.ToString());
         Track("effect_id", definition.EffectId.ToString(), effectId.ToString());
@@ -113,17 +131,19 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         using (var dbClient = _database.GetQueryReactor())
         {
-            dbClient.SetQuery("UPDATE `furniture` SET `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
-                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, " +
+            dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
+                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
+            dbClient.AddParameter("publicName", publicName);
             dbClient.AddParameter("walkable", Bit(walkable));
             dbClient.AddParameter("walkMask", walkMask);
             dbClient.AddParameter("seat", Bit(seat));
             dbClient.AddParameter("stackable", Bit(stackable));
             dbClient.AddParameter("height", height);
             dbClient.AddParameter("adjustable", adjustableHeights.Count > 0 ? Join(adjustableHeights) : "0");
+            dbClient.AddParameter("heightMarker", Bit(heightMarker));
             dbClient.AddParameter("interaction", interactionName);
             dbClient.AddParameter("modes", modes);
             dbClient.AddParameter("effect", effectId);
@@ -131,6 +151,23 @@ internal class RpFurniFunctionEvent : IPacketEvent
             dbClient.AddParameter("vending", vendingIds.Count > 0 ? Join(vendingIds) : "0");
             dbClient.AddParameter("definitionId", definitionId);
             dbClient.RunQuery();
+
+            // The catalog serves its listing name from catalog_items, not from
+            // the furniture row, so a rename that stopped at `furniture` would
+            // leave the shop still selling the old name.
+            //
+            // Except for wallpaper, floor and landscape, where catalog_name is
+            // NOT a display name: the catalog composers read the id out of it
+            // with CatalogName.Split('_')[2], so a name without two underscores
+            // throws IndexOutOfRangeException and takes the whole page down.
+            // Those keep the key they were given.
+            if (!IsStructuredCatalogName(definition.InteractionType))
+            {
+                dbClient.SetQuery("UPDATE `catalog_items` SET `catalog_name` = @publicName WHERE `item_id` = @itemIdText");
+                dbClient.AddParameter("publicName", publicName);
+                dbClient.AddParameter("itemIdText", definitionId.ToString());
+                dbClient.RunQuery();
+            }
 
             foreach (var change in changes)
             {
@@ -149,12 +186,14 @@ internal class RpFurniFunctionEvent : IPacketEvent
         }
 
         // In place, not a reload - see the class note.
+        definition.PublicName = publicName;
         definition.Walkable = walkable;
         definition.WalkMask = walkMask;
         definition.IsSeat = seat;
         definition.Stackable = stackable;
         definition.Height = height;
         definition.AdjustableHeights = adjustableHeights;
+        definition.HeightMarker = heightMarker;
         definition.InteractionType = interactionType;
         definition.InteractionTypeName = interactionName;
         definition.Modes = modes;
@@ -162,14 +201,40 @@ internal class RpFurniFunctionEvent : IPacketEvent
         definition.BehaviourData = behaviourData;
         definition.VendingIds = vendingIds;
 
+        // The catalog is served from memory, so the pages hold their own copy
+        // of the name and would go on showing the old one until a reload.
+        if (!IsStructuredCatalogName(definition.InteractionType))
+        {
+            foreach (var page in _catalogManager.Pages)
+            {
+                if (page?.Items == null)
+                    continue;
+                foreach (var catalogItem in page.Items.Values)
+                {
+                    if (catalogItem?.Definition?.Id == definition.Id)
+                        catalogItem.CatalogName = publicName;
+                }
+            }
+        }
+
+        // Remembered so a room can re-send this record to anyone entering it:
+        // the client reads names and walkability out of gamedata on disk, which
+        // this edit does not touch.
+        _itemDataManager.EditedDefinitions.Add(definition.Id);
+
         foreach (var loaded in _roomManager.GetRooms())
         {
             var handler = loaded?.GetRoomItemHandler();
             if (handler == null)
                 continue;
-            if (handler.GetFloor.Any(x => x.Definition?.Id == definition.Id) ||
-                handler.GetWall.Any(x => x.Definition?.Id == definition.Id))
-                loaded.GetGameMap().GenerateMaps();
+            if (!handler.GetFloor.Any(x => x.Definition?.Id == definition.Id) &&
+                !handler.GetWall.Any(x => x.Definition?.Id == definition.Id))
+                continue;
+            loaded.GetGameMap().GenerateMaps();
+            // The music panel's "is there a jukebox here" flag is only rebroadcast
+            // when one is placed or removed, so a furni that BECAME a jukebox - or
+            // stopped being one - would not show up until the next room entry.
+            loaded.GetJukeboxManager()?.BroadcastState();
         }
 
         _clientManager.SendPacket(new RpFurniFunctionComposer(definition));
@@ -189,6 +254,12 @@ internal class RpFurniFunctionEvent : IPacketEvent
             return string.Empty;
         return raw;
     }
+
+    /// These three carry an id inside catalog_name rather than a display name -
+    /// the catalog composers pull it out with Split('_')[2] - so renaming one
+    /// would corrupt the key and crash the page it sits on.
+    private static bool IsStructuredCatalogName(InteractionType type) =>
+        type is InteractionType.Wallpaper or InteractionType.Floor or InteractionType.Landscape;
 
     private static string Bit(bool value) => value ? "1" : "0";
 

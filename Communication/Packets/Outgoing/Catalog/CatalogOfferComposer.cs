@@ -45,17 +45,16 @@ public class CatalogOfferComposer : IServerPacket
         {
             packet.WriteInteger(_item.Definition.SpriteId);
             if (_item.Definition.InteractionType == InteractionType.Wallpaper || _item.Definition.InteractionType == InteractionType.Floor || _item.Definition.InteractionType == InteractionType.Landscape)
-                packet.WriteString(_item.CatalogName.Split('_')[2]);
+                packet.WriteString(CatalogNameId(_item.CatalogName));
 
-            // TODO @80O: Dont make this static hardcoded page 9
-            else if (_item.PageId == 9) //Bots
-            {
-                CatalogBot cataBot = null;
-                if (!PlusEnvironment.Game.Catalog.TryGetBot(_item.ItemId, out cataBot))
-                    packet.WriteString("hd-180-7.ea-1406-62.ch-210-1321.hr-831-49.ca-1813-62.sh-295-1321.lg-285-92");
-                else
-                    packet.WriteString(cataBot.Figure);
-            }
+            // A bot is detected by HAVING a preset, not by the page it happens
+            // to sit on. CatalogPageComposer already asks this way; this side
+            // still asked "is it page 9", so a bot listed anywhere else opened
+            // into a detail view with no figure in it - and the whole point of
+            // a teller bot is that it belongs on the bank's page, not with the
+            // stock ones.
+            else if (PlusEnvironment.Game.Catalog.TryGetBot(_item.ItemId, out var cataBot))
+                packet.WriteString(cataBot.Figure);
             else if (_item.ExtraData != null)
                 packet.WriteString(_item.ExtraData != null ? _item.ExtraData : string.Empty);
             packet.WriteInteger(_item.Amount);
@@ -70,5 +69,20 @@ public class CatalogOfferComposer : IServerPacket
         packet.WriteBoolean(ItemUtility.CanSelectAmount(_item));
         packet.WriteBoolean(false); // TODO: Figure out
         packet.WriteString(""); //previewImage -> e.g; catalogue/pet_lion.png
+    }
+
+    /// The id a wallpaper/floor/landscape offer carries inside its catalog
+    /// name, e.g. "wallpaper_normal_12" -> "12".
+    ///
+    /// Indexing [2] straight off the split threw IndexOutOfRangeException on
+    /// any name with fewer than three parts and took the whole page down with
+    /// it - one bad row and the shop stops opening. A name that is not in that
+    /// shape has no id to give, so it gives nothing and only that one offer
+    /// renders wrong.
+    private static string CatalogNameId(string catalogName)
+    {
+        var parts = (catalogName ?? string.Empty).Split('_');
+
+        return (parts.Length > 2) ? parts[2] : string.Empty;
     }
 }

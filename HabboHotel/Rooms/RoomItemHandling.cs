@@ -244,7 +244,7 @@ public class RoomItemHandling
         // pixelrp jukebox: RemoveRoomItem() has already pulled the item out of
         // _floorItems/the game map above, so HasJukebox() inside
         // OnJukeboxRemoved() correctly reflects its absence.
-        if (item.Definition.ItemName == "jukebox*1")
+        if (Jukebox.RoomJukeboxManager.IsJukebox(item))
             _room.GetJukeboxManager().OnJukeboxRemoved();
     }
 
@@ -603,7 +603,7 @@ public class RoomItemHandling
             }
             // pixelrp jukebox: only a genuinely new placement, not a
             // move/rotate re-entry into this same `if (newItem)` branch.
-            if (item.Definition.ItemName == "jukebox*1")
+            if (Jukebox.RoomJukeboxManager.IsJukebox(item))
                 _room.GetJukeboxManager().OnJukeboxPlaced();
         }
         else
@@ -623,7 +623,15 @@ public class RoomItemHandling
             _room.AddTent(item.Id);
         }
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.RunQuery($"UPDATE `items` SET `room_id` = '{_room.RoomId}', `x` = '{item.GetX}', `y` = '{item.GetY}', `z` = '{item.GetZ}', `rot` = '{item.Rotation}' WHERE `id` = '{item.Id}' LIMIT 1");
+        // pixelrp: a height chosen in the Tools panel belongs to where the item
+        // was STANDING, so coming out of the inventory clears it. Without this
+        // the row keeps the old custom_height while the re-placed item stacks
+        // normally, and the next room load drags it back up to a height nobody
+        // asked for. Only a fresh placement resets it - a move or a height
+        // change comes through here with newItem false.
+        if (newItem)
+            item.CustomHeight = -1;
+        dbClient.RunQuery($"UPDATE `items` SET `room_id` = '{_room.RoomId}', `x` = '{item.GetX}', `y` = '{item.GetY}', `z` = '{item.GetZ}', `rot` = '{item.Rotation}'{(newItem ? ", `custom_height` = '-1'" : string.Empty)} WHERE `id` = '{item.Id}' LIMIT 1");
         return true;
     }
 

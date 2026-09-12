@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Banking;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Corporations;
@@ -71,6 +72,33 @@ public static class ShiftManager
     public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
 
     /// <summary>The bubble a chat line goes out in: 23 for City Government on duty, else the one chosen.</summary>
+    /// <summary>
+    /// pixelrp: re-send this player's room rights, because clocking on or off
+    /// just changed the answer.
+    ///
+    /// Room.CheckRights only honours `room_any_owner` / `room_any_rights` while
+    /// their holder is on duty here, and room ENTRY is otherwise the only
+    /// moment a controller level is sent - so without this a staff member who
+    /// clocked off would keep the owner tools on screen until they walked out
+    /// and back in.
+    ///
+    /// Same shape as PoliceUtility.PushPardonRights, called from the same five
+    /// moments: it gates the affordance, and every packet re-checks anyway.
+    /// </summary>
+    public static void PushRoomRights(GameClient client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+
+        // The flag first, because it does not need a room. A staff member who
+        // clocks off in the hotel view has to lose the tools before they walk
+        // in anywhere, not on arrival.
+        client.Send(new Communication.Packets.Outgoing.Users.Banking.RpStaffDutyComposer(IsStaffOnDuty(habbo.Id)));
+
+        habbo.CurrentRoom?.GetRoomUserManager()?.PushRoomRights(client);
+    }
+
     public static int ChatBubbleFor(Habbo habbo, int chosen) => (habbo != null && IsStaffOnDuty(habbo.Id)) ? StaffDutyBubble : chosen;
 
     // Re-send the room this player's RP stats so the HUD's PASSIVE tag follows
@@ -162,6 +190,7 @@ public static class ShiftManager
         // Police powers follow the clock: an officer clocking on gains the x
         // that drops a charge in the Wanted list, and loses it below.
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     // Acronym on line one, rank on line two; the client's motto elements
@@ -223,6 +252,7 @@ public static class ShiftManager
         RevertMotto(client);
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     public static void InterruptForIdle(GameClient client)
@@ -233,6 +263,7 @@ public static class ShiftManager
         RevertMotto(client);
         AnnounceShift(client, "*has fallen asleep on duty*");
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     // pixelrp: clocked out because they're no longer in a room they may
@@ -244,6 +275,7 @@ public static class ShiftManager
     {
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
         PoliceUtility.PushPardonRights(client);
+        PushRoomRights(client);
     }
 
     // pixelrp: re-check the moment an on-duty worker enters a room, so an
@@ -278,6 +310,11 @@ public static class ShiftManager
             while (PayProgress(session, elapsed) >= PayIntervalSeconds)
             {
                 session.PaidIntervals++;
+                // Silent either way, the connection is gone. The bank branch
+                // is the safer of the two: it is its own committed write and
+                // does not depend on the disconnect save that runs after this.
+                if (TryDepositWage(session, habbo))
+                    continue;
                 habbo.Credits += session.RankPay;
                 PersistCredits(session.UserId, session.RankPay);
             }
@@ -481,11 +518,45 @@ public static class ShiftManager
         while (PayProgress(session, elapsed) >= PayIntervalSeconds)
         {
             session.PaidIntervals++;
-            client.GetHabbo().Credits += session.RankPay;
+            var habbo = client.GetHabbo();
+            if (TryDepositWage(session, habbo))
+            {
+                // NOT CreditBalanceComposer: the purse did not move, and a
+                // packet saying it did is the one that makes somebody later
+                // "fix" this by adding the wage to Credits as well.
+                client.Send(new Communication.Packets.Outgoing.Users.Banking.RpBankAccountsComposer(BankUtility.Get(session.UserId)));
+                client.SendWhisper($"{session.RankPay}c has been paid into your checking account.");
+                continue;
+            }
+            habbo.Credits += session.RankPay;
             PersistCredits(session.UserId, session.RankPay);
-            client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
+            client.Send(new CreditBalanceComposer(habbo.Credits));
             client.SendWhisper($"You have earned {session.RankPay}c for this shift.");
         }
+    }
+
+    /// <summary>
+    /// pixelrp banking: wages for a character who has opened a bank account
+    /// are DIRECT DEPOSITED and never touch Habbo.Credits. A character with no
+    /// account - the default, and everybody who predates banking - is paid in
+    /// hand exactly as before.
+    ///
+    /// Shared by both payout sites so the two cannot drift. HasAccount is a
+    /// dictionary read, so this costs nothing on the path that runs for every
+    /// working player every ten minutes.
+    ///
+    /// Returns true when the bank took it. The bank write is relative and has
+    /// already committed by then, so PersistCredits - the crash hedge the hand
+    /// path needs - must NOT also run.
+    /// </summary>
+    private static bool TryDepositWage(ShiftSession session, Habbo habbo)
+    {
+        if (habbo == null || !BankUtility.HasAccount(session.UserId))
+            return false;
+        // The employer alone. The kind already says these are wages, so
+        // repeating "shift pay" here would have every row say it twice.
+        var source = string.IsNullOrEmpty(session.CorpName) ? "Shift pay" : session.CorpName;
+        return BankUtility.CreditWages(session.UserId, habbo.Username, session.RankPay, source, out _) == BankResult.Ok;
     }
 
     // Crash hedge: writes the payout straight to the DB row alongside the

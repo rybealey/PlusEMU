@@ -274,6 +274,27 @@ public class Room : RoomData
 
     public bool CheckRights(GameClient session) => CheckRights(session, false);
 
+    /// <summary>
+    /// pixelrp: a global-rights permission is a LICENCE, not a grant.
+    ///
+    /// `room_any_owner` and `room_any_rights` used to answer every hour of the
+    /// day, so a staff member's ordinary mis-click could toggle a furni's
+    /// state, drag a piece off its tile, or eject somebody else's furni to
+    /// their inventory. None of that was a moderation action anybody chose; it
+    /// was the cost of having the tools armed permanently.
+    ///
+    /// They answer now only while their holder is clocked in at City
+    /// Government. The tools are armed for the shift and disarmed for the rest
+    /// of the day.
+    ///
+    /// IsStaffOnDuty is a dictionary lookup over in-memory shift sessions, not
+    /// a query - which matters, because this runs on every click and every
+    /// room entry. It must not become a database read.
+    /// </summary>
+    private static bool HoldsGlobalRight(GameClient session, string right) =>
+        session.GetHabbo().Permissions.HasRight(right) &&
+        Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id);
+
     public bool CheckRights(GameClient session, bool requireOwnership, bool checkForGroups = false)
     {
         try
@@ -282,11 +303,14 @@ public class Room : RoomData
                 return false;
             if (session.GetHabbo().Username == OwnerName && Type == "private")
                 return true;
-            if (session.GetHabbo().Permissions.HasRight("room_any_owner"))
+            // Ownership above and granted rights below are untouched: a staff
+            // member who owns this room, or was given rights in it, keeps them
+            // off duty like anybody else.
+            if (HoldsGlobalRight(session, "room_any_owner"))
                 return true;
             if (!requireOwnership && Type == "private")
             {
-                if (session.GetHabbo().Permissions.HasRight("room_any_rights"))
+                if (HoldsGlobalRight(session, "room_any_rights"))
                     return true;
                 if (UsersWithRights.Contains(session.GetHabbo().Id))
                     return true;
@@ -516,6 +540,24 @@ public class Room : RoomData
         var fadedItems = GetRoomItemHandler().GetFloor.Where(item => item.Alpha < 100).ToList();
         if (fadedItems.Count > 0)
             session.Send(new RpFurniAlphaComposer(fadedItems));
+        // Definitions the Function Tool has edited, re-sent to whoever just
+        // walked in. The client reads a furni's NAME and its walkability out of
+        // gamedata on disk, which an edit never touches - so a live edit
+        // patches everyone connected and then the next login quietly reads the
+        // old values back. Only edited definitions actually in this room
+        // travel, which is normally none of them.
+        var edited = PlusEnvironment.Game?.ItemManager?.EditedDefinitions;
+        if (edited is { Count: > 0 })
+        {
+            foreach (var definition in GetRoomItemHandler().GetWallAndFloor
+                         // the room's item collections can hold nulls - every
+                         // other loop over them guards, so this one does too
+                         .Where(item => item != null)
+                         .Select(item => item.Definition)
+                         .Where(definition => definition != null && edited.Contains(definition.Id))
+                         .DistinctBy(definition => definition.Id))
+                session.Send(new RpFurniFunctionComposer(definition));
+        }
         session.Send(new ItemsComposer(GetRoomItemHandler().GetWall.ToArray(), this));
         // pixelrp jukebox: sent unconditionally, even with no jukebox in the
         // room — the packet is tiny and the client hides the panel itself

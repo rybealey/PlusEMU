@@ -149,6 +149,11 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: the wanted list, so the Wanted window has its rows and the
             // HUD can draw stars over whoever this player looks at.
             session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));
+            // pixelrp: whether this player's global room rights are live. Rank
+            // alone is what opens the client's furni tools, and those rights
+            // now follow the City Government clock - so the client has to be
+            // told, or it offers moves and pickups the server refuses.
+            HabboHotel.Corporations.ShiftManager.PushRoomRights(session);
             // pixelrp: whether the Wanted list shows this player the x that
             // drops a charge - on-duty officers only.
             HabboHotel.Corporations.PoliceUtility.PushPardonRights(session);
@@ -157,6 +162,11 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: the characters on this account, for the Wallet.
             session.Send(new RpCharactersComposer(
                 HabboHotel.Users.Accounts.AccountUtility.Characters(session.GetHabbo().Id), session.GetHabbo().Id));
+            // pixelrp: this character's bank accounts, for the Wallet's debit
+            // card. Also the one place per session the row is read, so the
+            // payout and interest paths afterwards are memory only.
+            session.Send(new Outgoing.Users.Banking.RpBankAccountsComposer(
+                HabboHotel.Users.Banking.BankUtility.EnsureLoaded(session.GetHabbo().Id)));
             //SendMessage(new TalentTrackLevelComposer());
 
 

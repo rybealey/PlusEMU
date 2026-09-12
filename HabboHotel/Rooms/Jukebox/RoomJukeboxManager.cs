@@ -1,5 +1,6 @@
 using Plus.Communication.Packets;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 
 namespace Plus.HabboHotel.Rooms.Jukebox;
 
@@ -9,8 +10,6 @@ namespace Plus.HabboHotel.Rooms.Jukebox;
 // clock, rights and broadcasts live in the station.
 public class RoomJukeboxManager
 {
-    private const string JukeboxItemName = "jukebox*1";
-
     private readonly Room _room;
 
     public RoomJukeboxManager(Room room)
@@ -18,8 +17,14 @@ public class RoomJukeboxManager
         _room = room;
     }
 
-    public bool HasJukebox() =>
-        _room.GetRoomItemHandler().GetFloor.Any(item => item.Definition.ItemName == JukeboxItemName);
+    // Keyed on the BEHAVIOUR, not on the classname it used to hardcode
+    // ("jukebox*1"). The music player is the hotel's own, so tying it to one
+    // official furni meant a builder could not put it in a booth, a radio or a
+    // custom cabinet - and the Function Tool already hands out behaviours.
+    public static bool IsJukebox(Item item) =>
+        item?.Definition?.InteractionType == InteractionType.Jukebox;
+
+    public bool HasJukebox() => _room.GetRoomItemHandler().GetFloor.Any(IsJukebox);
 
     public static string ParseVideoId(string input) => JukeboxStation.ParseVideoId(input);
 
@@ -48,7 +53,7 @@ public class RoomJukeboxManager
     public void SyncJukeboxItemState()
     {
         var extraData = JukeboxStation.IsPlaying ? "1" : "0";
-        foreach (var item in _room.GetRoomItemHandler().GetFloor.Where(item => item.Definition.ItemName == JukeboxItemName).ToList())
+        foreach (var item in _room.GetRoomItemHandler().GetFloor.Where(IsJukebox).ToList())
         {
             if (item.ExtraData == null || item.ExtraData.Serialize() == extraData)
                 continue;

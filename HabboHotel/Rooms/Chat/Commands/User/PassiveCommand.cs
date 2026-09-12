@@ -116,8 +116,12 @@ internal class PassiveCommand : IChatCommand
         roomUser.OnChat(ConsumeBubble, "*consumes the Kylie Jeener smoothie, activating passive status*", true);
         room.SendPacket(new RpStatsComposer(roomUser.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), 1, habbo.Rank >= 5 ? 1 : 0));
 
-        // Wear the passive enable immediately on activation.
-        if (habbo.Effects != null)
+        // Wear the passive enable immediately on activation - unless the staff
+        // enable is on, which outranks it. Passive still runs and still counts
+        // down; only the enable waits for the end of the shift, and the room
+        // tick puts it on then. Applying it here would show for one tick and
+        // then be pulled back, which reads as a bug.
+        if (habbo.Effects != null && !Corporations.ShiftManager.IsStaffOnDuty(habbo.Id))
             habbo.Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
 
         // The smoothie is gone from a slot, so the open Backpack must be told.

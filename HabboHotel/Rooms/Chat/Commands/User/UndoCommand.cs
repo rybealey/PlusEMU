@@ -78,6 +78,12 @@ internal class UndoCommand : IChatCommand
         }
         else
         {
+            // Put the chosen height back BEFORE the move, because SetFloorItem is
+            // not the only thing that reads it - the next drag re-applies
+            // CustomHeight, so leaving it at the value being undone would bring
+            // that height straight back.
+            RestoreCustomHeight(item, state.CustomHeight);
+
             // The saved height is passed explicitly. Going through the normal
             // placement path would pick up the builder's CURRENT :bh instead, and
             // undo would put the piece back on the right tile at the wrong height.
@@ -97,6 +103,28 @@ internal class UndoCommand : IChatCommand
 
         user.LastFurniUndo = null;
         session.SendWhisper("Undone. There is only one step, so that is as far back as it goes.");
+    }
+
+    /// <summary>
+    /// The height the builder chose, persisted the same way UpdateMagicTileEvent
+    /// writes it. Only `custom_height` is written here - `z` follows from the
+    /// SetFloorItem call that comes next, and SaveFurniture persists that on its
+    /// own cycle.
+    /// </summary>
+    private void RestoreCustomHeight(Items.Item item, double customHeight)
+    {
+        if (Math.Abs(item.CustomHeight - customHeight) < 0.0001)
+            return;
+
+        item.CustomHeight = customHeight;
+
+        using (var dbClient = _database.GetQueryReactor())
+        {
+            dbClient.SetQuery("UPDATE `items` SET `custom_height` = @height WHERE `id` = @itemId LIMIT 1");
+            dbClient.AddParameter("height", customHeight);
+            dbClient.AddParameter("itemId", item.Id);
+            dbClient.RunQuery();
+        }
     }
 
     /// <summary>

@@ -62,6 +62,18 @@ public class ItemDefinition
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; }
     public List<double> AdjustableHeights { get; set; }
+
+    /// <summary>
+    /// pixelrp: whether the tile cursor may show its raised height ring over
+    /// this furni. OFF for everything unless somebody opted this furni in -
+    /// see 112_FurniHeightMarkerOffByDefault.sql.
+    ///
+    /// Purely how it is DRAWN. The stacking height is unchanged either way and
+    /// the emulator never reads this; it exists so the Function window can
+    /// govern a marker that otherwise comes from the .nitro bundle's own logic
+    /// and could only be removed by rebuilding the asset.
+    /// </summary>
+    public bool HeightMarker { get; set; }
     public int EffectId { get; set; }
 
     /// TODO @80O: Should be removed, use unique interaction name instead.

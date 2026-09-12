@@ -34,12 +34,20 @@ internal class PickupObjectEvent : IPacketEvent
             return;
         if (item.Definition.InteractionType == InteractionType.Postit)
             return;
+        // pixelrp: `room_item_take` is the one destructive override that does
+        // not go through CheckRights, so the on-duty gate has to be repeated
+        // here. This is the EJECTION path - it moves somebody else's furni out
+        // of the room, and the second test below hands it to whoever pressed
+        // the button rather than to its owner. Off duty, neither answers.
+        var canTakeAnyones = session.GetHabbo().Permissions.HasRight("room_item_take") &&
+                             HabboHotel.Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id);
+
         var itemRights = false;
         if (item.UserId == session.GetHabbo().Id || room.CheckRights(session, false))
             itemRights = true;
         else if (room.Group != null && room.CheckRights(session, false, true)) //Room has a group, this user has group rights.
             itemRights = true;
-        else if (session.GetHabbo().Permissions.HasRight("room_item_take"))
+        else if (canTakeAnyones)
             itemRights = true;
         if (itemRights)
         {
@@ -54,7 +62,7 @@ internal class PickupObjectEvent : IPacketEvent
             {
                 await connection.ExecuteAsync("DELETE FROM `room_items_toner` WHERE `id` = @id LIMIT 1", new { id = item.Id });
             }
-            if (item.UserId == session.GetHabbo().Id || session.GetHabbo().Permissions.HasRight("room_item_take"))
+            if (item.UserId == session.GetHabbo().Id || canTakeAnyones)
             {
                 room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
                 session.GetHabbo().Inventory.Furniture.AddItem(item.ToInventoryItem());

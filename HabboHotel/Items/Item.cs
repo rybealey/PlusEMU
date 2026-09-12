@@ -28,6 +28,17 @@ public class Item
     /// </summary>
     public int Alpha { get; set; } = 100;
 
+    /// <summary>
+    /// A height the builder chose in the Tools panel, or -1 for "stack me
+    /// normally".
+    ///
+    /// Separate from GetZ on purpose: an auto-stacked item's Z is just where
+    /// the stack put it, so re-applying Z on a move would freeze every item at
+    /// whatever height it happened to have instead of letting it re-stack on
+    /// its new tile. This records the INTENT; Z records the result.
+    /// </summary>
+    public double CustomHeight { get; set; } = -1;
+
     public uint UniqueNumber { get; set; }
     public uint UniqueSeries { get; set; }
     public string WallCoordinates = string.Empty;
@@ -258,6 +269,8 @@ public class Item
                     return new InteractorCounter();
                 case InteractionType.DressingBooth:
                     return new InteractorDressingBooth();
+                case InteractionType.Atm:
+                    return new InteractorAtm();
                 case InteractionType.None:
                 default:
                     return new InteractorGenericSwitch();

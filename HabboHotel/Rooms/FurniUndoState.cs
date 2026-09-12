@@ -13,6 +13,12 @@ namespace Plus.HabboHotel.Rooms;
 /// it: restoring all of it cannot resurrect anything older than the change
 /// being undone.
 ///
+/// CustomHeight is carried alongside Z because the two say different things.
+/// Z is where the piece ended up; CustomHeight is the height the builder CHOSE,
+/// and it outlives any single move - MoveObjectEvent re-applies it on every
+/// drag. Putting Z back without it would leave the stored intent pointing at
+/// the height being undone, and the next drag would quietly restore it.
+///
 /// Deliberately NOT captured: anything that is not placement. Deleting furni is
 /// permanent and there is nothing here that could bring it back.
 /// </summary>
@@ -23,6 +29,7 @@ public sealed record FurniUndoState(
     int Y,
     double Z,
     int Rotation,
+    double CustomHeight,
     string WallCoordinates,
     int Alpha)
 {
@@ -33,6 +40,7 @@ public sealed record FurniUndoState(
         item.GetY,
         item.GetZ,
         item.Rotation,
+        item.CustomHeight,
         item.WallCoordinates,
         item.Alpha);
 }
