@@ -15,6 +15,25 @@ namespace Plus.HabboHotel.Rooms;
 
 public class RoomUser
 {
+    /// <summary>
+    /// The "sit" status a player sitting on the FLOOR gets, as opposed to one
+    /// sitting on furniture - which reports the seat's own height instead.
+    ///
+    /// Not 1.0, which is what it was and what leaves the avatar floating a few
+    /// pixels clear of the tile. The client adds this to the avatar's z
+    /// (RoomMessageHandler: `status.z + height`) and then pulls the sprite back
+    /// down by a flat `scale / 2` in AvatarVisualization. Those two numbers come
+    /// from different places - one projected through the room geometry, one a
+    /// hardcoded constant - so they were never going to cancel exactly, and the
+    /// residue is the gap. On furniture it is invisible, because the seat fills
+    /// the space the avatar is hovering over.
+    ///
+    /// Tuned by eye rather than derived: the pixels a z unit is worth depend on
+    /// the projection, so the honest way to change this is to nudge it and look.
+    /// Lower sits the avatar closer to the floor.
+    /// </summary>
+    public const string FloorSitHeight = "0.92";
+
     private GameClient _mClient;
     private Room _mRoom;
 

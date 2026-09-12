@@ -1,4 +1,5 @@
 ﻿using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Avatar;
 
@@ -18,7 +19,7 @@ internal class SitEvent : IPacketEvent
             {
                 try
                 {
-                    user.Statusses.Add("sit", "1.0");
+                    user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                     user.Z -= 0.35;
                     user.IsSitting = true;
                     user.UpdateNeeded = true;
@@ -31,7 +32,7 @@ internal class SitEvent : IPacketEvent
             else
             {
                 user.RotBody--;
-                user.Statusses.Add("sit", "1.0");
+                user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                 user.Z -= 0.35;
                 user.IsSitting = true;
                 user.UpdateNeeded = true;

@@ -1299,7 +1299,7 @@ public class RoomUserManager
             if (model.SqState[user.X, user.Y] == SquareState.Seat)
             {
                 if (!user.Statusses.ContainsKey("sit"))
-                    user.Statusses.Add("sit", "1.0");
+                    user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                 user.Z = model.SqFloorHeight[user.X, user.Y];
                 user.RotHead = model.SqSeatRot[user.X, user.Y];
                 user.RotBody = model.SqSeatRot[user.X, user.Y];

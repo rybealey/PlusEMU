@@ -26,7 +26,7 @@ internal class SitCommand : IChatCommand
                     return;
                 try
                 {
-                    user.Statusses.Add("sit", "1.0");
+                    user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                     user.Z -= 0.35;
                     user.IsSitting = true;
                     user.UpdateNeeded = true;
@@ -36,7 +36,7 @@ internal class SitCommand : IChatCommand
             else
             {
                 user.RotBody--;
-                user.Statusses.Add("sit", "1.0");
+                user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                 user.Z -= 0.35;
                 user.IsSitting = true;
                 user.UpdateNeeded = true;

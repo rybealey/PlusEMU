@@ -29,7 +29,7 @@ internal class ForceSitCommand : ITargetChatCommand
                     return Task.CompletedTask;
                 try
                 {
-                    user.Statusses.Add("sit", "1.0");
+                    user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                     user.Z -= 0.35;
                     user.IsSitting = true;
                     user.UpdateNeeded = true;
@@ -39,7 +39,7 @@ internal class ForceSitCommand : ITargetChatCommand
             else
             {
                 user.RotBody--;
-                user.Statusses.Add("sit", "1.0");
+                user.Statusses.Add("sit", RoomUser.FloorSitHeight);
                 user.Z -= 0.35;
                 user.IsSitting = true;
                 user.UpdateNeeded = true;
