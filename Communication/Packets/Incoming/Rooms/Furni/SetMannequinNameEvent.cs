@@ -1,5 +1,6 @@
 ﻿using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
 
@@ -22,18 +23,15 @@ internal class SetMannequinNameEvent : IPacketEvent
         var item = session.GetHabbo().CurrentRoom.GetRoomItemHandler().GetItem(itemId);
         if (item == null)
             return Task.CompletedTask;
-        if (item.LegacyDataString.Contains(Convert.ToChar(5)))
-        {
-            var flags = item.LegacyDataString.Split(Convert.ToChar(5));
-            item.LegacyDataString = flags[0] + Convert.ToChar(5) + flags[1] + Convert.ToChar(5) + name;
-        }
-        else
-            item.LegacyDataString = $"m{Convert.ToChar(5)}.ch-210-1321.lg-285-92{Convert.ToChar(5)}Default Mannequin";
+        var data = ItemBehaviourUtility.MannequinData(item);
+        data.Set("OUTFIT_NAME", name);
         using (var dbClient = _database.GetQueryReactor())
         {
+            // The serialized MAP, not LegacyDataString - that reads empty for
+            // anything but a LegacyDataFormat and would have stored nothing.
             dbClient.SetQuery("UPDATE `items` SET `extra_data` = @Ed WHERE `id` = @itemId LIMIT 1");
             dbClient.AddParameter("itemId", item.Id);
-            dbClient.AddParameter("Ed", item.LegacyDataString);
+            dbClient.AddParameter("Ed", item.ExtraData.Serialize());
             dbClient.RunQuery();
         }
         item.UpdateState(true, true);

@@ -11,13 +11,20 @@ internal class InteractorMannequin : IFurniInteractor
 
     public void OnTrigger(GameClient session, Item item, int request, bool hasRights)
     {
-        if (item.LegacyDataString.Contains(Convert.ToChar(5).ToString()))
+        // The mannequin's outfit is a MAP now, not a char-5 string, so reaching
+        // for LegacyDataString here would read empty and this whole body would
+        // be skipped - clicking a mannequin to wear its outfit would quietly
+        // stop working. ItemBehaviourUtility.MannequinData is the one place
+        // that knows the keys.
+        var data = ItemBehaviourUtility.MannequinData(item);
+        if (data.Data.TryGetValue("FIGURE", out var mannequinFigure) && !string.IsNullOrEmpty(mannequinFigure))
         {
-            var stuff = item.LegacyDataString.Split(Convert.ToChar(5));
-            session.GetHabbo().Gender = stuff[0].ToUpper();
+            session.GetHabbo().Gender = (data.Data.TryGetValue("GENDER", out var mannequinGender)
+                ? mannequinGender
+                : "m").ToUpper();
             var newFig = new Dictionary<string, string>();
             newFig.Clear();
-            foreach (var man in stuff[1].Split('.'))
+            foreach (var man in mannequinFigure.Split('.'))
             {
                 foreach (var fig in session.GetHabbo().Look.Split('.'))
                 {

@@ -24,6 +24,8 @@ internal static class ItemBehaviourUtility
     public static IFurniObjectData HydrateExtraData(ItemDefinition definition, string raw)
     {
         raw ??= string.Empty;
+        if (definition.InteractionType == InteractionType.Mannequin)
+            return HydrateMannequin(raw);
         if (definition.InteractionType == InteractionType.Background)
         {
             var map = new MapDataFormat();
@@ -54,6 +56,83 @@ internal static class ItemBehaviourUtility
             return map;
         }
         return new LegacyDataFormat { Data = raw };
+    }
+
+    /// <summary>
+    /// A mannequin's outfit, in the shape its client-side logic reads.
+    ///
+    /// FurnitureMannequinLogic builds a MapDataType off the room object model
+    /// and looks for GENDER, FIGURE and OUTFIT_NAME. As a LegacyDataFormat the
+    /// whole thing arrives as one opaque string, that map parses empty, and the
+    /// visualization never learns there is a figure at all - so it falls back
+    /// to the bundle's static art, which for boutique_mannequin1 is one white
+    /// torso aliased across all eight directions. The mannequin then looks
+    /// undressed AND appears not to rotate, both from this single cause.
+    ///
+    /// Stored as GENDER, FIGURE, OUTFIT_NAME separated by char 5 - what Habbo
+    /// wrote, and what the live rows hold:
+    ///
+    ///     6D 05 2E 63 68 2D ...     05 44 65 66 61 75 6C 74 ...
+    ///     m     .ch-210-1321.lg-285-92  Default Mannequin
+    ///
+    /// The newline form is accepted too, because MapDataFormat.Serialize writes
+    /// that back to `items`.`extra_data` the first time one of these is saved,
+    /// and a piece has to survive its own round trip.
+    /// </summary>
+    private static IFurniObjectData HydrateMannequin(string raw)
+    {
+        var map = new MapDataFormat();
+        if (string.IsNullOrEmpty(raw))
+            return map;
+        try
+        {
+            if (raw.Contains('\n'))
+            {
+                map.Store(raw); // MapDataFormat.Serialize round-trip
+                return map;
+            }
+
+            // Positional, not keyed: the order IS the format.
+            var parts = raw.Split((char)5);
+            if (parts.Length > 0)
+                map.Data["GENDER"] = parts[0];
+            if (parts.Length > 1)
+                // Leading and trailing dots come from a figure assembled by
+                // concatenation, and every live row carries one. The client
+                // splits FIGURE on '.', so an empty piece would become a part
+                // with no type; trimming costs nothing and means it never has
+                // to deal with one.
+                map.Data["FIGURE"] = parts[1].Trim('.');
+            if (parts.Length > 2)
+                map.Data["OUTFIT_NAME"] = parts[2];
+        }
+        catch
+        {
+            // Same reasoning as Background: a row written by another emulator
+            // should leave the mannequin blank, not fail the room load.
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// A live mannequin's data as the map it is now stored in.
+    ///
+    /// The save handlers used to reach for Item.LegacyDataString, whose setter
+    /// is a silent no-op on anything but a LegacyDataFormat - so once these
+    /// became maps, dressing and renaming a mannequin would have written
+    /// nowhere while still reporting success. This is the one place that knows
+    /// the three keys, so no caller has to spell them again.
+    ///
+    /// Converts in place if an item somehow arrives in the old shape, which
+    /// keeps a mannequin bought before this change from needing a migration.
+    /// </summary>
+    internal static MapDataFormat MannequinData(Item item)
+    {
+        if (item.ExtraData is MapDataFormat map)
+            return map;
+        var converted = (MapDataFormat)HydrateMannequin(item.LegacyDataString);
+        item.ExtraData = converted;
+        return converted;
     }
 
     public static Item ToRoomObject(this InventoryItem item) => new()
