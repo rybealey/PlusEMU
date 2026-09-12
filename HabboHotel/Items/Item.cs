@@ -140,6 +140,15 @@ public class Item
         }
     }
 
+    /// <summary>
+    /// The piece's own height, with the position it sits at taken back out.
+    ///
+    /// Derived from TotalHeight rather than restating the adjustable-height
+    /// rules, so the two can never give different answers about how tall a
+    /// piece is.
+    /// </summary>
+    public double OwnHeight => TotalHeight - GetZ;
+
     public bool IsWallItem => Definition.Type == ItemType.Wall;
 
     public bool IsFloorItem => Definition.Type == ItemType.Floor;

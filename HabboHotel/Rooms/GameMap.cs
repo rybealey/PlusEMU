@@ -1038,6 +1038,27 @@ public class Gamemap
         }*/
     }
 
+    /// <summary>
+    /// How high this piece leaves the square for somebody STANDING on it.
+    ///
+    /// Normally the top of the piece. But a height set with the Tools slider
+    /// or :bh is scenery - pixelrp hangs floor furni up a wall to stand in for
+    /// wall decoration it does not have - and a walker has no business being
+    /// carried up there with it. So a builder-set height contributes the
+    /// piece's OWN height above the floor instead, which is the Stack height
+    /// the Function tool shows and edits.
+    ///
+    /// The walk surface ONLY. The piece still draws where it was put, furni
+    /// still stacks on its visible top (SetFloorItem reads TotalHeight), and
+    /// sitting or laying still follows the piece up (RoomUserManager takes
+    /// item.GetZ for those). Raising something is a visual act; this is the
+    /// one place that stops being true.
+    /// </summary>
+    private double WalkSurfaceOf(Item item, int x, int y) =>
+        item.CustomHeight >= 0
+            ? Model.SqFloorHeight[x, y] + item.OwnHeight
+            : item.TotalHeight;
+
     public double SqAbsoluteHeight(int x, int y, List<Item> itemsOnSquare)
     {
         try
@@ -1051,7 +1072,8 @@ public class Gamemap
                 {
                     if (item == null)
                         continue;
-                    if (item.TotalHeight > highestStack)
+                    var surface = WalkSurfaceOf(item, x, y);
+                    if (surface > highestStack)
                     {
                         if (item.Definition.IsSeat || item.Definition.InteractionType == InteractionType.Bed || item.Definition.InteractionType == InteractionType.TentSmall)
                         {
@@ -1060,7 +1082,7 @@ public class Gamemap
                         }
                         else
                             deduct = false;
-                        highestStack = item.TotalHeight;
+                        highestStack = surface;
                     }
                 }
             }
