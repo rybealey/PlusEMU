@@ -224,6 +224,7 @@ public static class ServerPacketHeader
     public const uint RpBankLedgerComposer = 4115;
     public const uint RpStaffDutyComposer = 4116;
     public const uint RpTellerBotsComposer = 4117;
+    public const uint RpCatalogSearchComposer = 4118;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpRoomCorpComposer = 43957; //3957
     public const uint RpOpenFloorplanComposer = 43963; //3963

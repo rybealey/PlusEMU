@@ -492,6 +492,7 @@ public static class ClientPacketHeader
     public const uint RpCloseAtmEvent = 4118;
     public const uint RpGetBankLedgerEvent = 4119;
     public const uint RpTellerActionEvent = 4120;
+    public const uint RpCatalogSearchEvent = 4121;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
