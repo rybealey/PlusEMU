@@ -60,6 +60,10 @@ internal class MoveObjectEvent : RoomPacketEvent
         // is re-applied instead, so dragging a piece across the room does not
         // quietly drop it back onto the stack. :bh wins when both are set: it is
         // the deliberate "everything I touch sits here" mode.
+        //
+        // A TURN IN PLACE ignores all of it. SetFloorItem keeps a rotating piece
+        // at exactly the height it already has - a turn is not a placement, so
+        // neither the stack nor a build height gets to re-level it.
         var buildHeight = room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id);
         if (!room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, false, false, true,
                 height: (buildHeight >= 0) ? buildHeight : item.CustomHeight))

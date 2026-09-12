@@ -452,10 +452,37 @@ public class RoomItemHandling
         var itemsOnTile = GetFurniObjects(newX, newY);
         if (item.Definition.InteractionType == InteractionType.Roller && itemsOnTile.Count(x => x.Definition.InteractionType == InteractionType.Roller && x.Id != item.Id) > 0)
             return false;
+        // pixelrp: TURNING IS NOT PLACING.
+        //
+        // Every check below asks whether the item may be PUT somewhere - is the
+        // tile open, is somebody standing on it, is the thing underneath
+        // stackable, how high does the stack make it. All of that is the right
+        // question for a placement and the wrong one for a rotation, because a
+        // rotation changes nothing except which way the sprite faces and, for
+        // a piece longer than one tile, which tiles it covers.
+        //
+        // The consequences were everyday: you could not turn the piece you were
+        // standing on, or one raised onto a stack tile, or one resting on
+        // something that does not allow stacking - the same piece you had just
+        // placed by hand a second earlier. Line 546 below even says "if this is
+        // a rotating action, maintain item at current height", and could not be
+        // reached from any of those.
+        //
+        // So a turn in place is validated against what a turn actually changes:
+        // the tiles it did not already cover. Its own footprint is conceded -
+        // it is standing there already - and its height is kept exactly, which
+        // is what "regardless of how it was raised" means.
+        var rotateOnly = !newItem && !onRoller && newX == item.GetX && newY == item.GetY && newRot != item.Rotation;
+        var alreadyCovered = rotateOnly
+            ? Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width, item.GetX, item.GetY, item.Rotation).Values
+                .Select(tile => (tile.X, tile.Y)).ToHashSet()
+            : new HashSet<(int, int)>();
+
         if (!newItem)
             needsReAdd = _room.GetGameMap().RemoveFromMap(item);
         var affectedTiles = Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width, newX, newY, newRot);
-        if (!_room.GetGameMap().ValidTile(newX, newY) || _room.GetGameMap().SquareHasUsers(newX, newY) && !item.Definition.IsSeat)
+        if (!_room.GetGameMap().ValidTile(newX, newY) ||
+            (!rotateOnly && _room.GetGameMap().SquareHasUsers(newX, newY) && !item.Definition.IsSeat))
         {
             if (needsReAdd)
                 _room.GetGameMap().AddToMap(item);
@@ -463,6 +490,12 @@ public class RoomItemHandling
         }
         foreach (var tile in affectedTiles.Values)
         {
+            // A tile the piece already stood on is not a tile it is moving
+            // onto. Only the ones the turn sweeps over are new ground, and
+            // those are still refused if they are off the map or occupied -
+            // a long sofa must not be able to turn through somebody.
+            if (rotateOnly && alreadyCovered.Contains((tile.X, tile.Y)))
+                continue;
             if (!_room.GetGameMap().ValidTile(tile.X, tile.Y) ||
                 _room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !item.Definition.IsSeat)
             {
@@ -473,7 +506,15 @@ public class RoomItemHandling
 
         // Start calculating new Z coordinate
         double newZ = _room.GetGameMap().Model.SqFloorHeight[newX, newY];
-        if (height == -1)
+        if (rotateOnly)
+        {
+            // Exactly where it already sits - not where the stack says it
+            // should sit, and not where a build height would put it. A turn is
+            // not a re-placement, so nothing about its level is up for
+            // recalculation; this is what keeps a raised piece raised.
+            newZ = item.GetZ;
+        }
+        else if (height == -1)
         {
             if (!onRoller)
             {
@@ -543,7 +584,12 @@ public class RoomItemHandling
 
             //if (!Item.IsRoller)
             {
-                // If this is a rotating action, maintain item at current height
+                // If this is a rotating action, maintain item at current height.
+                // Only a ROLLER reaches this now - an ordinary turn in place is
+                // handled by the rotateOnly branch above, which gets here
+                // neither refused nor re-levelled. Left in place because a
+                // roller turning its cargo is still a rotation and still wants
+                // its height kept.
                 if (item.Rotation != newRot && item.GetX == newX && item.GetY == newY)
                     newZ = item.GetZ;
 

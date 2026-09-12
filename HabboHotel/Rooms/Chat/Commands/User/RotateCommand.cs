@@ -124,27 +124,17 @@ internal class RotateCommand : IChatCommand
         // snapshot the builder can still use.
         var before = FurniUndoState.Capture(item);
 
-        // A single tile turns in place. Its footprint cannot change, so none of
-        // SetFloorItem's placement checks apply - including the one that refuses
-        // a tile with somebody on it, which would otherwise make it impossible
-        // to turn the piece you are standing on.
-        if (item.Definition.Length <= 1 && item.Definition.Width <= 1)
+        // One path, because SetFloorItem now understands a turn in place: it
+        // concedes the tiles the piece already covers, keeps its height exactly
+        // as it is, and only refuses when a longer piece would sweep over new
+        // ground it cannot have. This used to need a 1x1 special case here that
+        // skipped SetFloorItem entirely - and skipped the map update and the
+        // interactor's OnPlace with it.
+        if (!room.GetRoomItemHandler().SetFloorItem(session, item, item.GetX, item.GetY, rotation, false, false, true,
+                height: item.CustomHeight))
         {
-            item.Rotation = rotation;
-            item.UpdateState();
-        }
-        else
-        {
-            // Anything larger sweeps new tiles as it turns, so it goes through
-            // the placement path and is allowed to be refused.
-            var buildHeight = room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id);
-
-            if (!room.GetRoomItemHandler().SetFloorItem(session, item, item.GetX, item.GetY, rotation, false, false, true,
-                    height: (buildHeight >= 0) ? buildHeight : item.CustomHeight))
-            {
-                session.SendWhisper($"{name} has no room to turn there. Move it, or step out of the way.");
-                return;
-            }
+            session.SendWhisper($"{name} has no room to turn there. Move it, or step out of the way.");
+            return;
         }
 
         actor.LastFurniUndo = before;
