@@ -1,4 +1,4 @@
-using Plus.HabboHotel.GameClients;
+﻿using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Outgoing.Users.Banking;
 
@@ -15,17 +15,30 @@ namespace Plus.Communication.Packets.Outgoing.Users.Banking;
 /// Sent at login and at every moment the answer changes - the same four
 /// clock events the pardon-rights push already rides. It gates the
 /// AFFORDANCE only; every packet re-checks server-side regardless.
+///
+/// It also carries whether this player holds `rp_furni_function`, the command
+/// permission the Function tool's own two packets check. The client had been
+/// approximating that with rank, which is not the same question: a rank can be
+/// high and hold no such row, and the button then opened a panel the server
+/// refused. The permission does not change while somebody is online, so riding
+/// the duty push is enough - it already fires at login.
 /// </summary>
 public class RpStaffDutyComposer : IServerPacket
 {
     private readonly bool _onDuty;
+    private readonly bool _canFurniFunction;
 
     public uint MessageId => ServerPacketHeader.RpStaffDutyComposer;
 
-    public RpStaffDutyComposer(bool onDuty)
+    public RpStaffDutyComposer(bool onDuty, bool canFurniFunction)
     {
         _onDuty = onDuty;
+        _canFurniFunction = canFurniFunction;
     }
 
-    public void Compose(IOutgoingPacket packet) => packet.WriteBoolean(_onDuty);
+    public void Compose(IOutgoingPacket packet)
+    {
+        packet.WriteBoolean(_onDuty);
+        packet.WriteBoolean(_canFurniFunction);
+    }
 }

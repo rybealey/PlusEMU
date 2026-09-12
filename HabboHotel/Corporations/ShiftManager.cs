@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
@@ -94,7 +94,9 @@ public static class ShiftManager
         // The flag first, because it does not need a room. A staff member who
         // clocks off in the hotel view has to lose the tools before they walk
         // in anywhere, not on arrival.
-        client.Send(new Communication.Packets.Outgoing.Users.Banking.RpStaffDutyComposer(IsStaffOnDuty(habbo.Id)));
+        client.Send(new Communication.Packets.Outgoing.Users.Banking.RpStaffDutyComposer(
+            IsStaffOnDuty(habbo.Id),
+            habbo.Permissions.HasCommand("rp_furni_function")));
 
         habbo.CurrentRoom?.GetRoomUserManager()?.PushRoomRights(client);
     }
