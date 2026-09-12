@@ -217,7 +217,12 @@ public static class CanTraverse
         }
 
         // 3. Height. Drops are unrestricted, matching V1.
-        if (!ctx.IsRoller && !ctx.IsMounted && (toHeight - fromHeight) > MaxStepUp)
+        //
+        //    A square the map already calls walkable is exempt however far up
+        //    it is - see Gamemap.TileClimbable. The limit stops people scaling
+        //    a stack of boxes; it was never meant to refuse a rug.
+        if (!ctx.IsRoller && !ctx.IsMounted && (toHeight - fromHeight) > MaxStepUp &&
+            !map.TileClimbable(to.X, to.Y, items))
             return TraverseResult.Blocked;
 
         // 4. Occupancy is NEVER consulted (I-10). Stacking stays legal.

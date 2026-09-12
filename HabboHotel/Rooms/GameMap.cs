@@ -344,6 +344,28 @@ public class Gamemap
          definition.InteractionType == InteractionType.Bed ||
          definition.InteractionType == InteractionType.TentSmall);
 
+    /// <summary>
+    /// May a walker step up onto this square however far up it is?
+    ///
+    /// The climb limit exists so nobody scales a stack of boxes. It has no
+    /// business refusing a piece the map has already called walkable: pixelrp
+    /// builds with floor furni standing in for wall decoration, routinely
+    /// raised well past a step, and a rug you cannot walk onto is not a rug.
+    ///
+    /// State 1 with furniture on the square IS that question, already answered.
+    /// ConstructMapForItem writes the byte from the HIGHEST item on the tile,
+    /// and only a walkable one leaves it 1 - so re-deriving walkability here
+    /// would be a second opinion that can drift from the first.
+    ///
+    /// An empty square keeps the limit. Its height is the room model's own
+    /// shape rather than something a builder stacked, and a cliff stays a
+    /// cliff. Drops were never limited and still are not.
+    /// </summary>
+    internal bool TileClimbable(int x, int y, List<Item> itemsOnSquare) =>
+        ValidTile(x, y) && GameMap[x, y] == 1 && itemsOnSquare != null && itemsOnSquare.Count > 0;
+
+    internal bool TileClimbable(int x, int y) => TileClimbable(x, y, GetAllRoomItemForSquare(x, y));
+
     private bool ConstructMapForItem(Item item, Point coord)
     {
         try
@@ -924,7 +946,7 @@ public class Gamemap
             user.PathRecalcNeeded = true;
         }
         var heightDiff = SqAbsoluteHeight(to.X, to.Y) - SqAbsoluteHeight(from.X, from.Y);
-        if (heightDiff > 1.5 && !user.RidingHorse)
+        if (heightDiff > 1.5 && !user.RidingHorse && !TileClimbable(to.X, to.Y, items))
             return false;
 
         //Check this last, because ya.
@@ -967,7 +989,7 @@ public class Gamemap
         if (!roller)
         {
             var heightDiff = SqAbsoluteHeight(to.X, to.Y) - SqAbsoluteHeight(from.X, from.Y);
-            if (heightDiff > 1.5)
+            if (heightDiff > 1.5 && !TileClimbable(to.X, to.Y, items))
                 return false;
         }
         return true;
