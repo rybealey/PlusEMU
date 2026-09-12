@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
 
@@ -39,6 +40,14 @@ internal class RpSetFurniAlphaEvent : IPacketEvent
             return Task.CompletedTask;
         if (item.Alpha == alpha)
             return Task.CompletedTask;
+
+        // pixelrp: the previous opacity, for :undo. Past the equality check above,
+        // so dragging the slider back to where it already was records nothing.
+        var builder = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+
+        if (builder != null)
+            builder.LastFurniUndo = FurniUndoState.Capture(item);
+
         item.Alpha = alpha;
         using (var dbClient = _database.GetQueryReactor())
         {

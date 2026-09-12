@@ -25,6 +25,14 @@ internal class MoveWallItemEvent : RoomPacketEvent
         try
         {
             var wallPos = room.GetRoomItemHandler().WallPositionCheck($":{wallPositionData.Split(':')[1]}");
+
+            // pixelrp: where it hung before, for :undo. Inside the try and after
+            // WallPositionCheck, so a position the room rejects records nothing.
+            var builder = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+
+            if (builder != null)
+                builder.LastFurniUndo = FurniUndoState.Capture(item);
+
             item.WallCoordinates = wallPos;
         }
         catch

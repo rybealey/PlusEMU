@@ -250,6 +250,20 @@ public class RoomUser
     /// </summary>
     public double? BuildHeight { get; set; }
 
+    /// <summary>
+    /// pixelrp: the one furni placement :undo can put back - the state of the
+    /// last piece this builder moved, rotated, re-levelled or faded, captured
+    /// just before they changed it. Null when there is nothing to undo.
+    ///
+    /// One step, not a stack: :undo restores this and clears it, so a second
+    /// :undo reports there is nothing left rather than toggling the same piece
+    /// back and forth.
+    ///
+    /// Lives here for the same reason BuildHeight does - it is one builder's
+    /// history, and it should not outlive their time in the room.
+    /// </summary>
+    public FurniUndoState? LastFurniUndo { get; set; }
+
     public bool IsTrading { get; set; }
 
     public int TradePartner { get; set; }

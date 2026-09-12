@@ -48,6 +48,11 @@ internal class MoveObjectEvent : RoomPacketEvent
             _questManager.ProgressUserQuest(session, QuestType.FurniMove);
         if (rotation != item.Rotation)
             _questManager.ProgressUserQuest(session, QuestType.FurniRotate);
+        // pixelrp: where the piece was, for :undo. Taken before the move and only
+        // kept if the move actually happens - a refused move changes nothing, and
+        // recording it would throw away a snapshot the builder can still use.
+        var undoState = FurniUndoState.Capture(item);
+
         // pixelrp: same build height as a fresh placement - dragging a piece while
         // :bh is on re-levels it rather than dropping it back onto the stack.
         if (!room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, false, false, true,
@@ -58,6 +63,13 @@ internal class MoveObjectEvent : RoomPacketEvent
         }
         if (item.GetZ >= 0.1)
             _questManager.ProgressUserQuest(session, QuestType.FurniStack);
+
+        // The move stuck, so this is now the thing :undo puts back.
+        var mover = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+
+        if (mover != null)
+            mover.LastFurniUndo = undoState;
+
         return Task.CompletedTask;
     }
 }
