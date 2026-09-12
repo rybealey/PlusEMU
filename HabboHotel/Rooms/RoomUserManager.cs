@@ -693,6 +693,15 @@ public class RoomUserManager
                 continue;
             if (user.IsBot)
             {
+                // pixelrp: the bot's LIVE facing, not BotData.Rot.
+                //
+                // BotData.Rot was only ever written once, by the constructor,
+                // from the row this query then wrote it straight back to - so a
+                // bot's rotation could never change in the database no matter
+                // what the bot did. A bot left to roam and then set to stand
+                // still kept the facing it had the day it was made, and snapped
+                // back to it at the next restart, usually into a wall.
+                user.BotData.Rot = user.RotBody;
                 dbClient.SetQuery("UPDATE bots SET x=@x, y=@y, z=@z, name=@name, look=@look, rotation=@rotation WHERE id=@id LIMIT 1;");
                 dbClient.AddParameter("name", user.BotData.Name);
                 dbClient.AddParameter("look", user.BotData.Look);

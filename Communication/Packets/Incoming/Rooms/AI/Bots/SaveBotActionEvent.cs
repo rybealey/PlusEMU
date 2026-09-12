@@ -111,8 +111,16 @@ internal class SaveBotActionEvent : IPacketEvent
                     bot.BotData.WalkingMode = "freeroam";
                 else
                     bot.BotData.WalkingMode = "stand";
+                // pixelrp: freezing a bot saves the way it is facing.
+                //
+                // This is the moment a wandering bot becomes a posed one, and
+                // until now the facing it stopped in was only written when the
+                // room unloaded - so a bot in a room that never empties went
+                // back to its original rotation at the next restart, which is
+                // how the bank teller ended up staring at the wall.
+                bot.BotData.Rot = bot.RotBody;
                 using var dbClient = _database.GetQueryReactor();
-                dbClient.RunQuery($"UPDATE `bots` SET `walk_mode` = '{bot.BotData.WalkingMode}' WHERE `id` = '{bot.BotData.Id}' LIMIT 1");
+                dbClient.RunQuery($"UPDATE `bots` SET `walk_mode` = '{bot.BotData.WalkingMode}', `rotation` = '{bot.BotData.Rot}' WHERE `id` = '{bot.BotData.Id}' LIMIT 1");
                 break;
             }
             case 4:
