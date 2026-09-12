@@ -468,15 +468,12 @@ public class RoomItemHandling
         // a rotating action, maintain item at current height", and could not be
         // reached from any of those.
         //
-        // So a turn in place is validated against what a turn actually changes:
-        // the tiles it did not already cover. Its own footprint is conceded -
-        // it is standing there already - and its height is kept exactly, which
-        // is what "regardless of how it was raised" means.
+        // So a turn in place is validated against one thing only: that every
+        // tile it ends up covering is on the map. Not whether anybody is
+        // standing there, not what is underneath, not what the stack thinks its
+        // height should be - a turn keeps the height it already has, which is
+        // what "regardless of how it was raised" means.
         var rotateOnly = !newItem && !onRoller && newX == item.GetX && newY == item.GetY && newRot != item.Rotation;
-        var alreadyCovered = rotateOnly
-            ? Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width, item.GetX, item.GetY, item.Rotation).Values
-                .Select(tile => (tile.X, tile.Y)).ToHashSet()
-            : new HashSet<(int, int)>();
 
         if (!newItem)
             needsReAdd = _room.GetGameMap().RemoveFromMap(item);
@@ -490,14 +487,25 @@ public class RoomItemHandling
         }
         foreach (var tile in affectedTiles.Values)
         {
-            // A tile the piece already stood on is not a tile it is moving
-            // onto. Only the ones the turn sweeps over are new ground, and
-            // those are still refused if they are off the map or occupied -
-            // a long sofa must not be able to turn through somebody.
-            if (rotateOnly && alreadyCovered.Contains((tile.X, tile.Y)))
+            // Off the map is not a policy, it is the edge of the array:
+            // ValidTile is a bounds check on Model.MapSizeX/Y, and a piece
+            // covering a tile outside them indexes GameMap out of range on the
+            // next tick. This one refuses a turn, and has to.
+            if (!_room.GetGameMap().ValidTile(tile.X, tile.Y))
+            {
+                if (needsReAdd) _room.GetGameMap().AddToMap(item);
+                return false;
+            }
+
+            // Somebody standing there does not. A turn is allowed to sweep a
+            // long piece over a player - they end up standing in the sofa until
+            // they move, which is untidy and entirely recoverable, where a turn
+            // that silently refuses is neither obvious nor fixable from inside
+            // the room. Placement still refuses; only turning concedes this.
+            if (rotateOnly)
                 continue;
-            if (!_room.GetGameMap().ValidTile(tile.X, tile.Y) ||
-                _room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !item.Definition.IsSeat)
+
+            if (_room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !item.Definition.IsSeat)
             {
                 if (needsReAdd) _room.GetGameMap().AddToMap(item);
                 return false;
