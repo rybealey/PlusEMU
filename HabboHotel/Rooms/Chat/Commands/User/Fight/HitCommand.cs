@@ -173,6 +173,23 @@ internal class HitCommand : ITargetChatCommand
         {
             var damage = Random.Shared.Next(MinDamage, MaxDamage + 1);
             target.RpHealth = Math.Max(0, target.RpHealth - damage);
+
+            // pixelrp consumables: a punch that lands ruins a medkit. The
+            // remaining health is not owed back - the kit is spent, and
+            // standing still somewhere safe is the price of using one.
+            //
+            // A LANDED punch only. A swing that misses is not being hit, and
+            // neither is a slap, which is why this lives in the inReach branch
+            // of :hit and nowhere in :slap.
+            //
+            // The snack keeps going. Getting hit interrupts bandaging, not
+            // eating, which is the line the design drew.
+            if (target.RpHealthRegen.Running)
+            {
+                target.RpHealthRegen.Stop();
+                target.Client?.SendWhisper("Your medkit was ruined when you were hit.");
+            }
+
             target.SaveRpStats();
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
             // the only thing that moved on the target is their health

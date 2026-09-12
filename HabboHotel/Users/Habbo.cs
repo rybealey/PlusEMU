@@ -216,6 +216,15 @@ public class Habbo
     // Stored as double so the per-tick decay can be fractional.
     public double RpAggression { get; set; }
 
+    // pixelrp consumables: a snack refills energy, a medkit refills health,
+    // each at the whole bar over a minute (RpRegen). Transient like aggression
+    // - they run while the player is in a room and end at logout.
+    //
+    // Separate clocks on purpose: eating and bandaging at the same time is
+    // fine, and a punch stops only the medkit.
+    public RpRegen RpEnergyRegen { get; } = new();
+    public RpRegen RpHealthRegen { get; } = new();
+
     // pixelrp: the "passive enable" avatar effect worn while RpPassiveSeconds > 0.
     // Maps to nitro/assets/bundled/effect/Squad.nitro via EffectMap.json id 597
     // (the canonical "Squad" effect id; matches the served EffectMap + clients).

@@ -98,6 +98,62 @@ public class RpUseItemEvent : IPacketEvent
                 if (roomUser != null && habbo.Effects != null)
                     habbo.Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
                 break;
+            // pixelrp consumables: a snack refills energy, a medkit refills
+            // health, each at the whole bar over a minute. Both refuse a full
+            // bar rather than burning the item for nothing, and refuse to
+            // stack with themselves - a second one would not fill any faster.
+            case "snack":
+            {
+                habbo.EnsureRpStatsLoaded();
+                if (habbo.RpEnergy >= habbo.RpEnergyMax)
+                {
+                    session.SendWhisper("Your energy is already full.");
+                    return;
+                }
+                if (habbo.RpEnergyRegen.Running)
+                {
+                    session.SendWhisper("You are already eating something.");
+                    return;
+                }
+                habbo.ConsumeRpItem(slot);
+                habbo.RpEnergyRegen.Start(habbo.RpEnergyMax);
+                var snackUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+                if (snackUser != null)
+                    snackUser.OnChat(4, "*eats a snack, slowly getting their energy back*", true);
+                else
+                    session.SendWhisper("You eat the snack. Your energy comes back over the next minute.");
+                break;
+            }
+            case "medkit":
+            {
+                habbo.EnsureRpStatsLoaded();
+                // Out cold is out of the fight: :hit refuses a target on zero
+                // health for the same reason, and a knockout is undone by being
+                // revived rather than by rummaging in your own backpack.
+                if (habbo.RpHealth <= 0)
+                {
+                    session.SendWhisper("You are out cold - somebody else will have to help you.");
+                    return;
+                }
+                if (habbo.RpHealth >= habbo.RpHealthMax)
+                {
+                    session.SendWhisper("You are not injured.");
+                    return;
+                }
+                if (habbo.RpHealthRegen.Running)
+                {
+                    session.SendWhisper("You are already patching yourself up.");
+                    return;
+                }
+                habbo.ConsumeRpItem(slot);
+                habbo.RpHealthRegen.Start(habbo.RpHealthMax);
+                var medkitUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+                if (medkitUser != null)
+                    medkitUser.OnChat(4, "*opens a medkit and starts patching themselves up*", true);
+                else
+                    session.SendWhisper("You open the medkit. Stay out of trouble and you will be patched up within the minute.");
+                break;
+            }
             case "vip_token_31":
             case "vip_token_14":
             {

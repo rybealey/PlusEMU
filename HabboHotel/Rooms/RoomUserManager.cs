@@ -1055,6 +1055,48 @@ public class RoomUserManager
                         }
                     }
                 }
+                // pixelrp consumables: a snack or a medkit still filling a bar.
+                //
+                // Energy and health advance independently - eating and
+                // bandaging at once is fine - and each stops itself the moment
+                // its bar is full rather than waiting out the minute.
+                if (!user.IsBot && user.GetClient()?.GetHabbo() is { } habboFed &&
+                    (habboFed.RpEnergyRegen.Running || habboFed.RpHealthRegen.Running))
+                {
+                    var regenNow = Environment.TickCount64;
+                    var beforeEnergy = habboFed.RpEnergy;
+                    var beforeHealth = habboFed.RpHealth;
+
+                    var energyGained = habboFed.RpEnergyRegen.Advance(regenNow);
+                    if (energyGained > 0)
+                        habboFed.RpEnergy = Math.Min(habboFed.RpEnergyMax, habboFed.RpEnergy + energyGained);
+                    var energyDone = habboFed.RpEnergyRegen.Running && habboFed.RpEnergy >= habboFed.RpEnergyMax;
+                    if (energyDone)
+                        habboFed.RpEnergyRegen.Stop();
+
+                    var healthGained = habboFed.RpHealthRegen.Advance(regenNow);
+                    if (healthGained > 0)
+                        habboFed.RpHealth = Math.Min(habboFed.RpHealthMax, habboFed.RpHealth + healthGained);
+                    var healthDone = habboFed.RpHealthRegen.Running && habboFed.RpHealth >= habboFed.RpHealthMax;
+                    if (healthDone)
+                        habboFed.RpHealthRegen.Stop();
+
+                    if (habboFed.RpEnergy != beforeEnergy || habboFed.RpHealth != beforeHealth)
+                    {
+                        // Written in steps, not per point: a full bar is sixty
+                        // seconds at 1.67 points a second, and a row per point
+                        // would be a hundred writes for one snack. Every tenth
+                        // point, and whenever a regen finishes, keeps a logout
+                        // mid-heal from costing more than a few points.
+                        if (energyDone || healthDone ||
+                            habboFed.RpEnergy / 10 != beforeEnergy / 10 ||
+                            habboFed.RpHealth / 10 != beforeHealth / 10)
+                            habboFed.SaveRpStats();
+                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboFed.RpHealth, habboFed.RpHealthMax,
+                            habboFed.RpEnergy, habboFed.RpEnergyMax, (int)Math.Round(habboFed.RpAggression),
+                            habboFed.IsRpPassive ? 1 : 0, habboFed.Rank >= 5 ? 1 : 0));
+                    }
+                }
                     // pixelrp police: lift a stun whose few seconds are up.
                     Chat.Commands.User.Police.PoliceState.TickStun(user);
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)

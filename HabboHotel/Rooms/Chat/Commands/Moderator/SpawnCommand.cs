@@ -14,6 +14,8 @@ internal class SpawnCommand : ITargetChatCommand
     private static readonly Dictionary<string, (string ItemKey, string Name)> Items = new()
     {
         { "smoothie", ("smoothie", "Passive Smoothie") },
+        { "snack", ("snack", "Snack") },
+        { "medkit", ("medkit", "Medkit") },
         { "vip31", ("vip_token_31", "VIP Token (31 days)") },
         { "vip14", ("vip_token_14", "VIP Token (14 days)") }
     };
