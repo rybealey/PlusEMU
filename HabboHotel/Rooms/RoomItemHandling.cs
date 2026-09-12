@@ -452,7 +452,7 @@ public class RoomItemHandling
         var itemsOnTile = GetFurniObjects(newX, newY);
         if (item.Definition.InteractionType == InteractionType.Roller && itemsOnTile.Count(x => x.Definition.InteractionType == InteractionType.Roller && x.Id != item.Id) > 0)
             return false;
-        // pixelrp: TURNING IS NOT PLACING.
+        // pixelrp: STAYING PUT IS NOT PLACING.
         //
         // Every check below asks whether the item may be PUT somewhere - is the
         // tile open, is somebody standing on it, is the thing underneath
@@ -473,7 +473,20 @@ public class RoomItemHandling
         // standing there, not what is underneath, not what the stack thinks its
         // height should be - a turn keeps the height it already has, which is
         // what "regardless of how it was raised" means.
-        var rotateOnly = !newItem && !onRoller && newX == item.GetX && newY == item.GetY && newRot != item.Rotation;
+        // Staying put, whether or not the rotation actually changed.
+        //
+        // This used to require newRot != item.Rotation, which missed the case
+        // that looks worst: the client picks the next rotation from the furni's
+        // own FURNITURE_ALLOWED_DIRECTIONS, and a bundle declaring ONE direction
+        // makes "next" the same one. The move then arrived with an unchanged
+        // rotation, fell through to the ordinary placement path, and had its
+        // height recomputed from the stack - so a mannequin asked to turn would
+        // visibly jump and not turn. Nothing was going to turn it; the jump was
+        // gratuitous on top.
+        //
+        // An operation that does not move a piece has no business re-levelling
+        // it either, so the test is the tile, not the angle.
+        var inPlace = !newItem && !onRoller && newX == item.GetX && newY == item.GetY;
 
         // pixelrp: a rug does not care that you are standing there.
         //
@@ -503,7 +516,7 @@ public class RoomItemHandling
             needsReAdd = _room.GetGameMap().RemoveFromMap(item);
         var affectedTiles = Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width, newX, newY, newRot);
         if (!_room.GetGameMap().ValidTile(newX, newY) ||
-            (!rotateOnly && _room.GetGameMap().SquareHasUsers(newX, newY) && !Occupiable(newX, newY)))
+            (!inPlace && _room.GetGameMap().SquareHasUsers(newX, newY) && !Occupiable(newX, newY)))
         {
             if (needsReAdd)
                 _room.GetGameMap().AddToMap(item);
@@ -525,8 +538,8 @@ public class RoomItemHandling
             // long piece over a player - they end up standing in the sofa until
             // they move, which is untidy and entirely recoverable, where a turn
             // that silently refuses is neither obvious nor fixable from inside
-            // the room. Placement still refuses; only turning concedes this.
-            if (rotateOnly)
+            // the room. A piece that never left its tile concedes the same way.
+            if (inPlace)
                 continue;
 
             if (_room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !Occupiable(tile.X, tile.Y))
@@ -538,12 +551,13 @@ public class RoomItemHandling
 
         // Start calculating new Z coordinate
         double newZ = _room.GetGameMap().Model.SqFloorHeight[newX, newY];
-        if (rotateOnly)
+        if (inPlace)
         {
             // Exactly where it already sits - not where the stack says it
-            // should sit, and not where a build height would put it. A turn is
-            // not a re-placement, so nothing about its level is up for
-            // recalculation; this is what keeps a raised piece raised.
+            // should sit, and not where a build height would put it. A piece
+            // that did not move is not being re-placed, so nothing about its
+            // level is up for recalculation; this is what keeps a raised piece
+            // raised, and what stops a refused turn from bouncing it.
             newZ = item.GetZ;
         }
         else if (height == -1)
@@ -623,7 +637,7 @@ public class RoomItemHandling
             {
                 // If this is a rotating action, maintain item at current height.
                 // Only a ROLLER reaches this now - an ordinary turn in place is
-                // handled by the rotateOnly branch above, which gets here
+                // handled by the inPlace branch above, which gets here
                 // neither refused nor re-levelled. Left in place because a
                 // roller turning its cargo is still a rotation and still wants
                 // its height kept.
