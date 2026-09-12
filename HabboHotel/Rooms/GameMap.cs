@@ -263,28 +263,35 @@ public class Gamemap
     /// normal blocking to decide, because a half-understood mask punching holes
     /// in a wall is worse than no mask at all.
     /// </summary>
-    private static bool IsMaskedWalkable(Item item, Point coord)
+    /// <summary>
+    /// Takes the anchor and rotation explicitly rather than reading the item's
+    /// own, because the placement checks ask this about a square a piece has
+    /// not reached yet: mid-validation its GetX/GetY/Rotation still describe
+    /// where it is coming from, and for a piece leaving the inventory they are
+    /// not a position at all.
+    /// </summary>
+    private static bool IsMaskedWalkable(ItemDefinition definition, int anchorX, int anchorY, int itemRotation, Point coord)
     {
-        var mask = item.Definition?.WalkMask;
-        var width = item.Definition?.Width ?? 0;
-        var length = item.Definition?.Length ?? 0;
+        var mask = definition?.WalkMask;
+        var width = definition?.Width ?? 0;
+        var length = definition?.Length ?? 0;
         if (string.IsNullOrEmpty(mask) || width < 1 || length < 1 || mask.Length != width * length)
             return false;
 
-        var rotation = ((item.Rotation % 8) + 8) % 8;
+        var rotation = ((itemRotation % 8) + 8) % 8;
         if (rotation % 2 != 0)
             rotation -= 1;
 
         int a, b;
         if (rotation == 0 || rotation == 4)
         {
-            a = coord.X - item.GetX;
-            b = coord.Y - item.GetY;
+            a = coord.X - anchorX;
+            b = coord.Y - anchorY;
         }
         else
         {
-            a = coord.Y - item.GetY;
-            b = coord.X - item.GetX;
+            a = coord.Y - anchorY;
+            b = coord.X - anchorX;
         }
 
         if (a < 0 || a >= width || b < 0 || b >= length)
@@ -292,6 +299,50 @@ public class Gamemap
 
         return mask[(b * width) + a] == '1';
     }
+
+    /// <summary>
+    /// pixelrp: may somebody be standing on this square once this item is on it?
+    ///
+    /// This is the decision ConstructMapForItem makes a moment later when the
+    /// map is rebuilt - walkable, or occupiable like a seat or a bed, versus
+    /// blocked - lifted out so the placement checks can ask it BEFORE the item
+    /// moves, about the square it is moving ONTO.
+    ///
+    /// Lifted rather than rewritten on purpose. "Walkable or a seat" looks like
+    /// the whole answer and is not: it misses beds and small tents, which people
+    /// lie on, and open gates, which people walk through. A second opinion here
+    /// would start out wrong and then drift.
+    ///
+    /// Takes the target explicitly because the item has not moved yet.
+    /// </summary>
+    internal bool LeavesSquareOccupiable(Item item, int anchorX, int anchorY, int itemRotation, double itemZ, Point coord) =>
+        LeavesSquareWalkable(item, anchorX, anchorY, itemRotation, itemZ, coord) ||
+        LeavesSquareSittable(item?.Definition);
+
+    /// <summary>Walkable: you may stand here and keep walking. The per-tile
+    /// mask counts, so an L-shaped sofa concedes the inside of the L.</summary>
+    private bool LeavesSquareWalkable(Item item, int anchorX, int anchorY, int itemRotation, double itemZ, Point coord)
+    {
+        var definition = item?.Definition;
+
+        if (definition == null)
+            return false;
+
+        if (definition.Walkable || IsMaskedWalkable(definition, anchorX, anchorY, itemRotation, coord))
+            return true;
+
+        // An open gate resting on the floor is a doorway, not a wall.
+        return definition.InteractionType == InteractionType.Gate && item.LegacyDataString == "1" &&
+               ValidTile(anchorX, anchorY) && itemZ <= Model.SqFloorHeight[anchorX, anchorY] + 0.1;
+    }
+
+    /// <summary>Occupiable but not walkable: you end up ON it, seated or
+    /// lying, and the map marks the square 3 rather than 1.</summary>
+    private static bool LeavesSquareSittable(ItemDefinition definition) =>
+        definition != null &&
+        (definition.IsSeat ||
+         definition.InteractionType == InteractionType.Bed ||
+         definition.InteractionType == InteractionType.TentSmall);
 
     private bool ConstructMapForItem(Item item, Point coord)
     {
@@ -334,20 +385,18 @@ public class Gamemap
                 }
 
                 //SwimHalloween
-                // The per-tile mask is checked alongside the whole-furni flag: an
-                // L-shaped sofa is not walkable, but the inside of the L is.
-                if (item.Definition.Walkable || IsMaskedWalkable(item, coord))
+                // The same two questions the placement checks ask before a piece
+                // lands - walkable (the per-tile mask included, so an L-shaped
+                // sofa concedes the inside of the L), then merely occupiable.
+                // Shared rather than restated: if these ever disagreed, a piece
+                // would be allowed onto a tile it then blocks, or refused one it
+                // then leaves free.
+                if (LeavesSquareWalkable(item, item.GetX, item.GetY, item.Rotation, item.GetZ, coord))
                 {
                     if (GameMap[coord.X, coord.Y] != 3)
                         GameMap[coord.X, coord.Y] = 1;
                 }
-                else if (item.GetZ <= Model.SqFloorHeight[item.GetX, item.GetY] + 0.1 && item.Definition.InteractionType == InteractionType.Gate &&
-                         item.LegacyDataString == "1") // If this item is a gate, open, and on the floor, allow users to walk here.
-                {
-                    if (GameMap[coord.X, coord.Y] != 3)
-                        GameMap[coord.X, coord.Y] = 1;
-                }
-                else if (item.Definition.IsSeat || item.Definition.InteractionType == InteractionType.Bed || item.Definition.InteractionType == InteractionType.TentSmall)
+                else if (LeavesSquareSittable(item.Definition))
                     GameMap[coord.X, coord.Y] = 3;
                 else // Finally, if it's none of those, block the square.
                 {

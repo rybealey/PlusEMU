@@ -98,7 +98,14 @@ internal class PlaceObjectEvent : RoomPacketEvent
             if (!int.TryParse(data[3], out var rotation)) return Task.CompletedTask;
             // pixelrp: -1 unless :bh is on, in which case the piece goes straight
             // to that height instead of stacking on what is underneath.
+            // updateRoomUserStatuses: a piece can now land UNDER somebody if it
+            // is walkable or occupiable, and their height is otherwise only
+            // recomputed when they next step - so without this they stand at the
+            // old floor level, sunk into the rug that just appeared beneath
+            // them, until they move. Seats were always exempt from this flag,
+            // which is why a chair under somebody has always looked right.
             if (room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, true, false, true,
+                    updateRoomUserStatuses: true,
                     height: room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id)))
             {
                 session.GetHabbo().Inventory.Furniture.RemoveItem(itemId);

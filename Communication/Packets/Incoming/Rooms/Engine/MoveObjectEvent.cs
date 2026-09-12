@@ -65,7 +65,11 @@ internal class MoveObjectEvent : RoomPacketEvent
         // at exactly the height it already has - a turn is not a placement, so
         // neither the stack nor a build height gets to re-level it.
         var buildHeight = room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id);
+        // updateRoomUserStatuses: same reason as a fresh placement - a walkable
+        // piece dragged under somebody leaves their height stale until they
+        // step, so they appear sunk into it.
         if (!room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, false, false, true,
+                updateRoomUserStatuses: true,
                 height: (buildHeight >= 0) ? buildHeight : item.CustomHeight))
         {
             room.SendPacket(new ObjectUpdateComposer(item));

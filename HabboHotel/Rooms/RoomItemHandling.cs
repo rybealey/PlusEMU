@@ -475,11 +475,35 @@ public class RoomItemHandling
         // what "regardless of how it was raised" means.
         var rotateOnly = !newItem && !onRoller && newX == item.GetX && newY == item.GetY && newRot != item.Rotation;
 
+        // pixelrp: a rug does not care that you are standing there.
+        //
+        // The three user checks below used to make one exception - a seat -
+        // which is why a chair could be placed under somebody and a rug could
+        // not, though people stand on rugs for a living. The exception was
+        // never about seats; it was about pieces a person may legitimately be
+        // on top of, and a seat is only one of those.
+        //
+        // Gamemap answers that already, because it is the same decision it
+        // makes a moment later when the map is rebuilt: walkable, or occupiable
+        // like a seat, a bed or a small tent, versus blocked. Asking it here
+        // means the tile a piece is allowed to land on and the tile it leaves
+        // people able to stand on can never disagree - and it picks up the
+        // per-tile mask, so an L-shaped sofa concedes only its walkable corner.
+        //
+        // The TARGET is passed explicitly: the item has not moved yet, so its
+        // own GetX/GetY/Rotation still describe where it is coming from.
+        var targetZ = _room.GetGameMap().ValidTile(newX, newY)
+            ? ((height >= 0) ? height : _room.GetGameMap().Model.SqFloorHeight[newX, newY])
+            : 0;
+
+        bool Occupiable(int x, int y) =>
+            _room.GetGameMap().LeavesSquareOccupiable(item, newX, newY, newRot, targetZ, new Point(x, y));
+
         if (!newItem)
             needsReAdd = _room.GetGameMap().RemoveFromMap(item);
         var affectedTiles = Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width, newX, newY, newRot);
         if (!_room.GetGameMap().ValidTile(newX, newY) ||
-            (!rotateOnly && _room.GetGameMap().SquareHasUsers(newX, newY) && !item.Definition.IsSeat))
+            (!rotateOnly && _room.GetGameMap().SquareHasUsers(newX, newY) && !Occupiable(newX, newY)))
         {
             if (needsReAdd)
                 _room.GetGameMap().AddToMap(item);
@@ -505,7 +529,7 @@ public class RoomItemHandling
             if (rotateOnly)
                 continue;
 
-            if (_room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !item.Definition.IsSeat)
+            if (_room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !Occupiable(tile.X, tile.Y))
             {
                 if (needsReAdd) _room.GetGameMap().AddToMap(item);
                 return false;
@@ -542,11 +566,16 @@ public class RoomItemHandling
                     }
                 }
 
-                // And that we have no users
-                if (!item.Definition.IsSeat && !item.IsRoller)
+                // And that we have no users. Per tile now rather than per
+                // piece: the same question as above, asked again by the
+                // auto-stacking path, so it has to concede the same squares.
+                if (!item.IsRoller)
                 {
                     foreach (var tile in affectedTiles.Values)
                     {
+                        if (Occupiable(tile.X, tile.Y))
+                            continue;
+
                         if (_room.GetGameMap().GetRoomUsers(new(tile.X, tile.Y)).Count > 0)
                         {
                             if (needsReAdd)
