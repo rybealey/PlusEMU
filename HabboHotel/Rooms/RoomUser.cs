@@ -32,7 +32,7 @@ public class RoomUser
     /// the projection, so the honest way to change this is to nudge it and look.
     /// Lower sits the avatar closer to the floor.
     /// </summary>
-    public const string FloorSitHeight = "0.92";
+    public const string FloorSitHeight = "0.88";
 
     private GameClient _mClient;
     private Room _mRoom;
