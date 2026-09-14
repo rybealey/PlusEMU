@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Users.Sitch;
 using Plus.HabboHotel.GameClients;
@@ -212,11 +213,106 @@ public static class SitchUtility
         session.Send(new RpSitchProfileComposer(profile, GetUserPosts(habbo.Id, userId)));
     }
 
+    public static void SendSearch(GameClient session, string query)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null) return;
+        var trimmed = (query ?? "").Trim();
+        // A tag search is about posts, not people - nobody is called "#muse".
+        var people = trimmed.StartsWith("#") ? new List<ProfileRow>() : SearchPeople(habbo.Id, trimmed);
+        session.Send(new RpSitchSearchComposer(trimmed, people, SearchPosts(habbo.Id, trimmed)));
+    }
+
     public static void SendActivity(GameClient session)
     {
         var habbo = session?.GetHabbo();
         if (habbo == null) return;
         session.Send(new RpSitchActivityComposer(GetActivity(habbo.Id)));
+    }
+
+    // ---- hashtags and mentions ----------------------------------------------
+
+    /// <summary>
+    /// A hashtag: # then letters, digits or underscore. Deliberately does NOT
+    /// allow a leading digit-only tag (#2024 reads as a year, not a topic) and
+    /// stops at punctuation so "#muse." tags "muse".
+    /// </summary>
+    private static readonly Regex TagPattern = new(@"#([A-Za-z][A-Za-z0-9_]{0,63})", RegexOptions.Compiled);
+
+    /// <summary>
+    /// A mention: @ then a username. The character set matches what this hotel
+    /// allows in a name; the lookup decides whether it is a real person, so a
+    /// generous match here costs nothing.
+    /// </summary>
+    private static readonly Regex MentionPattern = new(@"@([A-Za-z0-9_\-\.]{1,32})", RegexOptions.Compiled);
+
+    /// <summary>Distinct tags in a body, lowercased so #Muse and #muse are one.</summary>
+    public static List<string> ExtractTags(string body) =>
+        TagPattern.Matches(body ?? "")
+            .Select(match => match.Groups[1].Value.ToLowerInvariant())
+            .Distinct()
+            .Take(10)
+            .ToList();
+
+    /// <summary>Distinct names mentioned in a body, as typed.</summary>
+    public static List<string> ExtractMentions(string body) =>
+        MentionPattern.Matches(body ?? "")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+
+    /// <summary>A username to a user id, or 0. Exact, case-insensitive.</summary>
+    public static int ResolveUsername(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return 0;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>(
+            "SELECT COALESCE((SELECT `id` FROM `users` WHERE `username` = @username LIMIT 1), 0)",
+            new { username });
+    }
+
+    /// <summary>People whose name starts with, or contains, the query.</summary>
+    public static List<ProfileRow> SearchPeople(int viewerId, string query)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.Query<ProfileRow>(
+            "SELECT u.`id` AS UserId, u.`username` AS Username, COALESCE(u.`look`, '') AS Figure, " +
+            "COALESCE(u.`motto`, '') AS Motto, COALESCE(s.`bio`, '') AS Bio, " +
+            "COALESCE(s.`favorite_video_id`, '') AS FavoriteVideoId, COALESCE(s.`favorite_title`, '') AS FavoriteTitle, " +
+            "COALESCE(s.`favorite_author`, '') AS FavoriteAuthor, " +
+            "(SELECT COUNT(*) FROM `rp_sitch_follows` a WHERE a.`followee_id` = u.`id`) AS Followers, " +
+            "(SELECT COUNT(*) FROM `rp_sitch_follows` b WHERE b.`follower_id` = u.`id`) AS Following, " +
+            "EXISTS(SELECT 1 FROM `rp_sitch_follows` m WHERE m.`follower_id` = @viewerId AND m.`followee_id` = u.`id`) AS Follows " +
+            "FROM `users` u LEFT JOIN `rp_sitch_profiles` s ON s.`user_id` = u.`id` " +
+            "WHERE u.`username` LIKE @like " +
+            // A name that STARTS with the query is what somebody typing a name
+            // means; a name that merely contains it comes after.
+            "ORDER BY (u.`username` LIKE @prefix) DESC, u.`username` ASC LIMIT @limit",
+            new { viewerId, like = "%" + query + "%", prefix = query + "%", limit = 20 }).ToList();
+    }
+
+    /// <summary>
+    /// Posts matching a search. A query beginning with # goes to the tag index
+    /// instead of the body, which is the whole reason that index exists.
+    /// </summary>
+    public static List<PostRow> SearchPosts(int viewerId, string query)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+
+        if (query.StartsWith("#") && query.Length > 1)
+        {
+            var tag = query.Substring(1).ToLowerInvariant();
+            return connection.Query<PostRow>(
+                PostSelect + "INNER JOIN `rp_sitch_tags` t ON t.`post_id` = p.`id` AND t.`tag` = @tag " +
+                "WHERE p.`deleted_at` = 0 ORDER BY p.`created_at` DESC, p.`id` DESC LIMIT @limit",
+                new { viewerId, tag, limit = FeedPageSize }).ToList();
+        }
+
+        return connection.Query<PostRow>(
+            PostSelect + "WHERE p.`deleted_at` = 0 AND p.`body` LIKE @like " +
+            "ORDER BY p.`created_at` DESC, p.`id` DESC LIMIT @limit",
+            new { viewerId, like = "%" + query + "%", limit = FeedPageSize }).ToList();
     }
 
     // ---- writes -------------------------------------------------------------
@@ -282,6 +378,23 @@ public static class SitchUtility
             "INSERT INTO `rp_sitch_posts` (`user_id`,`parent_id`,`body`,`photo_id`,`created_at`) " +
             "VALUES (@userId,@parentId,@body,@photoId,@now); SELECT LAST_INSERT_ID();",
             new { userId, parentId, body, photoId, now });
+
+        // Index the hashtags now rather than searching for them later - see
+        // 128_SitchTags for why a LIKE would be both slow and wrong.
+        foreach (var tag in ExtractTags(body))
+        {
+            connection.Execute(
+                "INSERT IGNORE INTO `rp_sitch_tags` (`post_id`,`tag`,`created_at`) VALUES (@id,@tag,@now)",
+                new { id, tag, now });
+        }
+
+        // A mention is only worth anything if the person hears about it. An
+        // unknown name resolves to 0 and is simply text.
+        foreach (var name in ExtractMentions(body))
+        {
+            var mentioned = ResolveUsername(name);
+            if (mentioned > 0) AddActivity(mentioned, userId, "mention", id);
+        }
 
         if (parentId > 0)
         {

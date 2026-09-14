@@ -509,6 +509,7 @@ public static class ClientPacketHeader
     public const uint RpSitchDeleteEvent = 4134;
     public const uint RpSitchSetBioEvent = 4135;
     public const uint RpSitchSetSongEvent = 4136;
+    public const uint RpSitchSearchEvent = 4137;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

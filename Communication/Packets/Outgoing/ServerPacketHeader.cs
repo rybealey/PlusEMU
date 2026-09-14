@@ -231,6 +231,7 @@ public static class ServerPacketHeader
     public const uint RpSitchThreadComposer = 4127;
     public const uint RpSitchProfileComposer = 4128;
     public const uint RpSitchActivityComposer = 4129;
+    public const uint RpSitchSearchComposer = 4138;
     // Internal 439xx / wire 39xx - see the album note in ClientPacketHeader.
     public const uint RpRoomCorpComposer = 43957; //3957
     public const uint RpOpenFloorplanComposer = 43963; //3963
