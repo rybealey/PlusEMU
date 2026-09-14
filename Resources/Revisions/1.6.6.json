@@ -360,7 +360,11 @@
     "RpCloseAtmEvent": 4118,
     "RpGetBankLedgerEvent": 4119,
     "RpTellerActionEvent": 4120,
-    "RpCatalogSearchEvent": 4121
+    "RpCatalogSearchEvent": 4121,
+    "RpGetSitchFeedEvent": 4122,
+    "RpGetSitchThreadEvent": 4123,
+    "RpGetSitchProfileEvent": 4124,
+    "RpGetSitchActivityEvent": 4125
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -683,6 +687,10 @@
     "RpBankLedgerComposer": 4115,
     "RpStaffDutyComposer": 4116,
     "RpTellerBotsComposer": 4117,
-    "RpCatalogSearchComposer": 4118
+    "RpCatalogSearchComposer": 4118,
+    "RpSitchFeedComposer": 4126,
+    "RpSitchThreadComposer": 4127,
+    "RpSitchProfileComposer": 4128,
+    "RpSitchActivityComposer": 4129
   }
 }

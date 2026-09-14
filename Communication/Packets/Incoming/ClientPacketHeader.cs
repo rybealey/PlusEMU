@@ -493,6 +493,14 @@ public static class ClientPacketHeader
     public const uint RpGetBankLedgerEvent = 4119;
     public const uint RpTellerActionEvent = 4120;
     public const uint RpCatalogSearchEvent = 4121;
+
+    // pixelrp Sitch. The const NAME must equal the handler class name -
+    // PacketManager resolves it by reflection - and the value here is the
+    // INTERNAL id, matched to the wire id in Revisions/1.6.6.json by name.
+    public const uint RpGetSitchFeedEvent = 4122;
+    public const uint RpGetSitchThreadEvent = 4123;
+    public const uint RpGetSitchProfileEvent = 4124;
+    public const uint RpGetSitchActivityEvent = 4125;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
