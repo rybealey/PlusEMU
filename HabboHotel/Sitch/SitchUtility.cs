@@ -99,7 +99,11 @@ public static class SitchUtility
     /// </summary>
     private const string PostSelect =
         "SELECT p.`id` AS Id, p.`parent_id` AS ParentId, p.`user_id` AS UserId, " +
-        "u.`username` AS Username, COALESCE(u.`look`, '') AS Figure, COALESCE(u.`rank`, 1) AS Rank, " +
+        // `Rank` is backticked as an ALIAS, not only as a column: RANK is a
+        // reserved word in MySQL 8 (the window function), and an unquoted
+        // alias is a syntax error even though the quoted column beside it is
+        // fine. That cost a deploy.
+        "u.`username` AS Username, COALESCE(u.`look`, '') AS Figure, COALESCE(u.`rank`, 1) AS `Rank`, " +
         "p.`body` AS Body, p.`photo_id` AS PhotoId, " +
         "COALESCE(c.`url`, '') AS PhotoUrl, COALESCE(c.`room_name`, '') AS PhotoRoom, " +
         "p.`created_at` AS CreatedAt, " +
