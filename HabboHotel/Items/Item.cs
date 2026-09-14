@@ -958,12 +958,12 @@ public class Item
                         }
                         break;
                     }
-                    case InteractionType.PressurePad:
-                    {
-                        LegacyDataString = "1";
-                        UpdateState();
-                        break;
-                    }
+                    // PressurePad is not handled here any more. This case set
+                    // the pad to "1" and nothing ever cleared it, so a pad that
+                    // reached this path latched on for good - and nothing
+                    // triggered it in the first place. The state now belongs to
+                    // UserWalksOnFurni / UserWalksOffFurni, which know whether
+                    // anybody is actually standing there.
                     case InteractionType.WiredEffect:
                     case InteractionType.WiredTrigger:
                     case InteractionType.WiredCondition:
@@ -1156,6 +1156,8 @@ public class Item
             UpdateState(false, true);
             user.GetClient().Send(new InClientLinkComposer("avatar-editor/show"));
         }
+        if (Definition.InteractionType == InteractionType.PressurePad)
+            SetPressurePad(true, null);
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
         user.LastItem = this;
     }
@@ -1176,7 +1178,79 @@ public class Item
             UpdateState(false, true);
             user.GetClient().Send(new InClientLinkComposer("avatar-editor/hide"));
         }
+        // The leaver is passed in because this fires BEFORE their X/Y move
+        // (RoomUserManager's frame loop walks them off the old tile first), so
+        // an occupancy check would otherwise still count them and the pad would
+        // never go dark.
+        if (Definition.InteractionType == InteractionType.PressurePad)
+            SetPressurePad(false, user);
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
+    }
+
+    /// <summary>
+    /// A pressure pad is lit while somebody is standing on it, dark when
+    /// nobody is - state "1" and "0", which is what a multistate tile's own
+    /// artwork already draws.
+    ///
+    /// It asks whether the pad is OCCUPIED rather than trusting the event that
+    /// just fired, for two reasons. PixelRP has global tile overlap, so two
+    /// people can share a tile and the first to leave must not switch the light
+    /// off under the second. And a pad can be more than one tile - the coffin
+    /// is 1x2 - so somebody stepping off one end while standing on the other is
+    /// still standing on it.
+    ///
+    /// <paramref name="leaving"/> is the user walking off, who is still
+    /// recorded on the tile at that moment and must not count as an occupant.
+    /// </summary>
+    private void SetPressurePad(bool steppingOn, RoomUser leaving)
+    {
+        var room = GetRoom();
+        if (room == null)
+            return;
+
+        var lit = steppingOn || IsPadOccupied(room, leaving);
+        var want = lit ? "1" : "0";
+
+        // Every change is a packet to everyone in the room, and a crowd
+        // shuffling across a dance floor would otherwise send one per step.
+        if (LegacyDataString == want)
+            return;
+
+        LegacyDataString = want;
+        UpdateState(false, true);
+    }
+
+    private bool IsPadOccupied(Room room, RoomUser leaving)
+    {
+        var map = room.GetGameMap();
+        if (map == null)
+            return false;
+
+        // The anchor square is NOT in GetAffectedTiles - that dictionary holds
+        // the EXTRA squares of a multi-tile piece and its loops start at 1 - so
+        // the square the item was dropped on has to be checked on its own.
+        if (HasOccupant(map, new Point(GetX, GetY), leaving))
+            return true;
+
+        foreach (var tile in GetAffectedTiles.Values)
+        {
+            if (HasOccupant(map, new Point(tile.X, tile.Y), leaving))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasOccupant(Gamemap map, Point tile, RoomUser leaving)
+    {
+        foreach (var occupant in map.GetRoomUsers(tile))
+        {
+            if (occupant == null || occupant == leaving)
+                continue;
+            return true;
+        }
+
+        return false;
     }
 
     public void Destroy()
