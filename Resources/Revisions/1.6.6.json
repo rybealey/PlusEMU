@@ -364,7 +364,14 @@
     "RpGetSitchFeedEvent": 4122,
     "RpGetSitchThreadEvent": 4123,
     "RpGetSitchProfileEvent": 4124,
-    "RpGetSitchActivityEvent": 4125
+    "RpGetSitchActivityEvent": 4125,
+    "RpSitchPostEvent": 4130,
+    "RpSitchLikeEvent": 4131,
+    "RpSitchRepostEvent": 4132,
+    "RpSitchFollowEvent": 4133,
+    "RpSitchDeleteEvent": 4134,
+    "RpSitchSetBioEvent": 4135,
+    "RpSitchSetSongEvent": 4136
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,

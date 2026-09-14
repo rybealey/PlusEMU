@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Users.Sitch;
 using Plus.HabboHotel.GameClients;
@@ -14,10 +15,10 @@ namespace Plus.HabboHotel.Sitch;
 /// post keeps its row so staff removals stay auditable - which is why every
 /// read here carries `deleted_at` = 0.
 ///
-/// READ PATH ONLY for now: nothing in this file writes. The counts each post
-/// carries (replies, likes, reposts) and the two "did I" flags are computed in
-/// the query rather than cached on the row, because a cached counter that
-/// drifts is worse than a join, and at hotel scale this is a handful of rows.
+/// The counts each post carries (replies, likes, reposts) and the two "did I"
+/// flags are computed in the query rather than cached on the row, because a
+/// cached counter that drifts is worse than a join, and at hotel scale this is
+/// a handful of rows.
 ///
 /// Row types are property classes for Dapper, and double as the composers'
 /// payload types - the same arrangement NotesUtility uses.
@@ -189,7 +190,10 @@ public static class SitchUtility
     {
         var habbo = session?.GetHabbo();
         if (habbo == null) return;
-        session.Send(new RpSitchFeedComposer(following, GetFeed(habbo.Id, following)));
+        // An affordance flag only - RpSitchDeleteEvent checks the permission
+        // again before removing anything.
+        var canModerate = habbo.Permissions?.HasCommand("rp_sitch_moderate") ?? false;
+        session.Send(new RpSitchFeedComposer(following, canModerate, GetFeed(habbo.Id, following)));
     }
 
     public static void SendThread(GameClient session, int postId)
@@ -213,6 +217,185 @@ public static class SitchUtility
         var habbo = session?.GetHabbo();
         if (habbo == null) return;
         session.Send(new RpSitchActivityComposer(GetActivity(habbo.Id)));
+    }
+
+    // ---- writes -------------------------------------------------------------
+
+    /// <summary>
+    /// How long a player must wait between posts.
+    ///
+    /// The same shape :hit uses - a dictionary of last-action times rather
+    /// than a table, because a cooldown that resets when the server restarts
+    /// is fine and a row per post attempt is not.
+    /// </summary>
+    public const int PostCooldownSeconds = 20;
+
+    private static readonly ConcurrentDictionary<int, int> LastPost = new();
+
+    /// <summary>Seconds still to wait, or 0 when the player may post.</summary>
+    public static int CooldownLeft(int userId)
+    {
+        if (!LastPost.TryGetValue(userId, out var last)) return 0;
+        var left = PostCooldownSeconds - (Now() - last);
+        return (left > 0) ? left : 0;
+    }
+
+    /// <summary>
+    /// Does this photo belong to this player? Checked before a post may carry
+    /// it, so nobody can attach somebody else's picture by guessing an id.
+    /// </summary>
+    public static bool OwnsPhoto(int userId, int photoId)
+    {
+        if (photoId <= 0) return false;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM `camera_web` WHERE `id` = @photoId AND `user_id` = @userId",
+            new { photoId, userId }) > 0;
+    }
+
+    /// <summary>The author of a live post, or 0 if it is gone.</summary>
+    public static int AuthorOf(int postId)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>(
+            "SELECT COALESCE((SELECT `user_id` FROM `rp_sitch_posts` WHERE `id` = @postId AND `deleted_at` = 0), 0)",
+            new { postId });
+    }
+
+    /// <summary>Returns the new post's id, or 0 if the parent has gone.</summary>
+    public static int CreatePost(int userId, string body, int parentId, int photoId)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+
+        // A reply to a post that has been removed would be unreachable - the
+        // thread it belongs to no longer lists it - so it is refused rather
+        // than written somewhere nobody can read.
+        if (parentId > 0 && connection.ExecuteScalar<int>(
+                "SELECT COUNT(*) FROM `rp_sitch_posts` WHERE `id` = @parentId AND `deleted_at` = 0",
+                new { parentId }) == 0)
+            return 0;
+
+        var now = Now();
+        LastPost[userId] = now;
+
+        var id = connection.ExecuteScalar<int>(
+            "INSERT INTO `rp_sitch_posts` (`user_id`,`parent_id`,`body`,`photo_id`,`created_at`) " +
+            "VALUES (@userId,@parentId,@body,@photoId,@now); SELECT LAST_INSERT_ID();",
+            new { userId, parentId, body, photoId, now });
+
+        if (parentId > 0)
+        {
+            var parentAuthor = connection.ExecuteScalar<int>(
+                "SELECT COALESCE((SELECT `user_id` FROM `rp_sitch_posts` WHERE `id` = @parentId), 0)", new { parentId });
+            AddActivity(parentAuthor, userId, "reply", id);
+        }
+
+        return id;
+    }
+
+    /// <summary>
+    /// Like or unlike. INSERT IGNORE / DELETE rather than a read-then-write:
+    /// the composite primary key already says a player likes a post at most
+    /// once, so the database settles a double tap instead of a race.
+    /// </summary>
+    public static void SetLike(int postId, int userId, bool on)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        if (on)
+        {
+            var added = connection.Execute(
+                "INSERT IGNORE INTO `rp_sitch_likes` (`post_id`,`user_id`,`created_at`) VALUES (@postId,@userId,@now)",
+                new { postId, userId, now = Now() });
+            // Only a NEW like is worth telling somebody about, so a player
+            // cannot spam a notification by tapping twice.
+            if (added > 0) AddActivity(AuthorOf(postId), userId, "like", postId);
+        }
+        else
+            connection.Execute("DELETE FROM `rp_sitch_likes` WHERE `post_id` = @postId AND `user_id` = @userId",
+                new { postId, userId });
+    }
+
+    public static void SetRepost(int postId, int userId, bool on)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        if (on)
+        {
+            var added = connection.Execute(
+                "INSERT IGNORE INTO `rp_sitch_reposts` (`post_id`,`user_id`,`created_at`) VALUES (@postId,@userId,@now)",
+                new { postId, userId, now = Now() });
+            if (added > 0) AddActivity(AuthorOf(postId), userId, "repost", postId);
+        }
+        else
+            connection.Execute("DELETE FROM `rp_sitch_reposts` WHERE `post_id` = @postId AND `user_id` = @userId",
+                new { postId, userId });
+    }
+
+    public static void SetFollow(int followerId, int followeeId, bool on)
+    {
+        if (followerId == followeeId) return;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        if (on)
+        {
+            var added = connection.Execute(
+                "INSERT IGNORE INTO `rp_sitch_follows` (`follower_id`,`followee_id`,`created_at`) VALUES (@followerId,@followeeId,@now)",
+                new { followerId, followeeId, now = Now() });
+            if (added > 0) AddActivity(followeeId, followerId, "follow", 0);
+        }
+        else
+            connection.Execute("DELETE FROM `rp_sitch_follows` WHERE `follower_id` = @followerId AND `followee_id` = @followeeId",
+                new { followerId, followeeId });
+    }
+
+    /// <summary>
+    /// Soft-delete a post. The author may remove their own; staff may remove
+    /// anyone's. The row stays, carrying who removed it and when, so a staff
+    /// removal is auditable afterwards.
+    /// </summary>
+    public static bool DeletePost(int postId, int actorId, bool staff)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var sql = "UPDATE `rp_sitch_posts` SET `deleted_at` = @now, `deleted_by` = @actorId " +
+                  "WHERE `id` = @postId AND `deleted_at` = 0" + (staff ? "" : " AND `user_id` = @actorId");
+        return connection.Execute(sql, new { postId, actorId, now = Now() }) > 0;
+    }
+
+    /// <summary>
+    /// The favorite song, or all-empty to clear it. Title and author are what
+    /// oEmbed returned at save time, kept so a profile renders without a
+    /// network call every time somebody opens it.
+    /// </summary>
+    public static void SetFavoriteSong(int userId, string videoId, string title, string author)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Execute(
+            "INSERT INTO `rp_sitch_profiles` (`user_id`,`favorite_video_id`,`favorite_title`,`favorite_author`,`updated_at`) " +
+            "VALUES (@userId,@videoId,@title,@author,@now) " +
+            "ON DUPLICATE KEY UPDATE `favorite_video_id` = @videoId, `favorite_title` = @title, " +
+            "`favorite_author` = @author, `updated_at` = @now",
+            new { userId, videoId, title, author, now = Now() });
+    }
+
+    public static void SetBio(int userId, string bio)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Execute(
+            "INSERT INTO `rp_sitch_profiles` (`user_id`,`bio`,`updated_at`) VALUES (@userId,@bio,@now) " +
+            "ON DUPLICATE KEY UPDATE `bio` = @bio, `updated_at` = @now",
+            new { userId, bio, now = Now() });
+    }
+
+    /// <summary>
+    /// Record something that happened TO somebody. Never records an action
+    /// against yourself - "you liked your own post" is noise, not activity.
+    /// </summary>
+    public static void AddActivity(int userId, int actorId, string kind, int postId)
+    {
+        if (userId <= 0 || actorId <= 0 || userId == actorId) return;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Execute(
+            "INSERT INTO `rp_sitch_activity` (`user_id`,`actor_id`,`kind`,`post_id`,`created_at`) " +
+            "VALUES (@userId,@actorId,@kind,@postId,@now)",
+            new { userId, actorId, kind, postId, now = Now() });
     }
 
     /// <summary>

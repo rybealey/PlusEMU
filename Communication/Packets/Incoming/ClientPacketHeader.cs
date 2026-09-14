@@ -501,6 +501,14 @@ public static class ClientPacketHeader
     public const uint RpGetSitchThreadEvent = 4123;
     public const uint RpGetSitchProfileEvent = 4124;
     public const uint RpGetSitchActivityEvent = 4125;
+
+    public const uint RpSitchPostEvent = 4130;
+    public const uint RpSitchLikeEvent = 4131;
+    public const uint RpSitchRepostEvent = 4132;
+    public const uint RpSitchFollowEvent = 4133;
+    public const uint RpSitchDeleteEvent = 4134;
+    public const uint RpSitchSetBioEvent = 4135;
+    public const uint RpSitchSetSongEvent = 4136;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
