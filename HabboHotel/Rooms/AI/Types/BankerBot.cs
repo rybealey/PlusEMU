@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Banking;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.AI.Types;
 
@@ -300,8 +301,8 @@ internal class BankerBot : BotAi
         var where = conversation.Account == BankAccountKind.Savings ? "savings" : "checking";
 
         Say(conversation.Withdrawing
-            ? $"{amount:N0}c from {where}. Thank you, {Name(user)}."
-            : $"{amount:N0}c into {where}. Thank you, {Name(user)}.");
+            ? $"{TextHandling.GetCoins(amount)} from {where}. Thank you, {Name(user)}."
+            : $"{TextHandling.GetCoins(amount)} into {where}. Thank you, {Name(user)}.");
     }
 
     /// <summary>

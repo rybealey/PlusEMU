@@ -527,13 +527,13 @@ public static class ShiftManager
                 // packet saying it did is the one that makes somebody later
                 // "fix" this by adding the wage to Credits as well.
                 client.Send(new Communication.Packets.Outgoing.Users.Banking.RpBankAccountsComposer(BankUtility.Get(session.UserId)));
-                client.SendWhisper($"{session.RankPay}c has been paid into your checking account.");
+                client.SendWhisper($"{TextHandling.GetCoins(session.RankPay)} has been paid into your checking account.");
                 continue;
             }
             habbo.Credits += session.RankPay;
             PersistCredits(session.UserId, session.RankPay);
             client.Send(new CreditBalanceComposer(habbo.Credits));
-            client.SendWhisper($"You have earned {session.RankPay}c for this shift.");
+            client.SendWhisper($"You have earned {TextHandling.GetCoins(session.RankPay)} for this shift.");
         }
     }
 

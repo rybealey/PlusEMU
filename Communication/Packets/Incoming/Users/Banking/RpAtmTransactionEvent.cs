@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Banking;
+using Plus.Utilities;
 
 namespace Plus.Communication.Packets.Incoming.Users.Banking;
 
@@ -111,8 +112,8 @@ internal class RpAtmTransactionEvent : IPacketEvent
             return;
 
         var message = (mode == Deposit)
-            ? $"*deposits {amount:N0}c into the bank*"
-            : $"*withdraws {amount:N0}c from the bank*";
+            ? $"*deposits {TextHandling.GetCoins(amount)} into the bank*"
+            : $"*withdraws {TextHandling.GetCoins(amount)} from the bank*";
 
         room.SendPacket(new ChatComposer(user.VirtualId, message, 0, ActionBubble));
     }

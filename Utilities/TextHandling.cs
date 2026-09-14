@@ -15,4 +15,13 @@ public static class TextHandling
     /// figure to whoever read it. No decimals: these are counts of things.
     /// </summary>
     public static string GetNumber(long k) => k.ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A sum of money the way a player reads one: "7,500 coins", "1 coin".
+    ///
+    /// The hotel's money has exactly one name in front of a player. It used to
+    /// be written as a "c" suffix in the bank and as "credits" in the purse,
+    /// which read as two currencies to anybody who had not seen the code.
+    /// </summary>
+    public static string GetCoins(long k) => $"{GetNumber(k)} {((k == 1) ? "coin" : "coins")}";
 }

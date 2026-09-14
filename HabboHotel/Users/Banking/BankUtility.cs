@@ -3,6 +3,7 @@ using System.Data;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.GameClients;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Users.Banking;
 
@@ -315,13 +316,13 @@ public static class BankUtility
                     if (room <= 0)
                     {
                         account = current;
-                        message = $"Your savings account is full at {SavingsCap:N0}c.";
+                        message = $"Your savings account is full at {TextHandling.GetCoins(SavingsCap)}.";
                         return BankResult.SavingsFull;
                     }
                     if (amount > room)
                     {
                         account = current;
-                        message = $"Only {room:N0}c fits before your savings account reaches {SavingsCap:N0}c.";
+                        message = $"Only {TextHandling.GetCoins(room)} fits before your savings account reaches {TextHandling.GetCoins(SavingsCap)}.";
                         return BankResult.SavingsFull;
                     }
                 }
@@ -824,7 +825,7 @@ public static class BankUtility
         {
             LogMovement(connection, row.UserId, client?.GetHabbo()?.Username ?? string.Empty,
                 BankTransactionKind.Interest, BankAccountKind.Savings, interest, account.Savings,
-                $"{SavingsRateBps / 100m:0.00}% per hour on {row.Savings:N0}c");
+                $"{SavingsRateBps / 100m:0.00}% per hour on {TextHandling.GetCoins(row.Savings)}");
         }
         if (client != null && account != null)
             client.Send(new RpBankAccountsComposer(account));
