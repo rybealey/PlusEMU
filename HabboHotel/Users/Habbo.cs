@@ -134,8 +134,6 @@ public class Habbo
 
     public bool AllowMimic { get; set; }
 
-    public bool ReceiveWhispers { get; set; }
-
     public bool IgnorePublicWhispers { get; set; }
 
     public FriendBarState FriendbarState { get; set; }

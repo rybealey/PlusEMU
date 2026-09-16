@@ -93,11 +93,6 @@ public class WhisperEvent : IPacketEvent
                 return Task.CompletedTask;
             }
         }
-        if (!user2.GetClient().GetHabbo().ReceiveWhispers && !session.GetHabbo().Permissions.HasRight("room_whisper_override"))
-        {
-            session.SendWhisper("Oops, this user has their whispers disabled!");
-            return Task.CompletedTask;
-        }
         _chatlogManager.StoreChatlog(new(session.GetHabbo().Id, room.Id, $"<Whisper to {toUser}>: {message}", UnixTimestamp.GetNow(), session.GetHabbo(), room));
         if (_wordFilterManager.CheckBannedWords(message))
         {
