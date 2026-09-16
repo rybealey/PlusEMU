@@ -127,6 +127,11 @@ public class Habbo
 
     public bool AllowGifts { get; set; }
 
+    /// <summary>pixelrp: the phone is open on this client's screen. Lives on the
+    /// session rather than the RoomUser so that walking into another room puts
+    /// the handitem back - see RoomUserManager.AddUserToRoom.</summary>
+    public bool PhoneOpen { get; set; }
+
     public bool AllowMimic { get; set; }
 
     public bool ReceiveWhispers { get; set; }

@@ -300,6 +300,19 @@ public class RoomUserManager
         // this client's full room-stats view for the next few cycles, by which
         // point the HUD is listening. See RpStatsResyncTicks in the room cycle.
         user.RpStatsResyncTicks = 6;
+        // pixelrp: the phone in hand. Two halves, because a handitem is a
+        // broadcast and not part of the user object everyone is sent on entry:
+        // this player gets their own phone back after a room change, and they
+        // are told about anybody already holding one - which they would
+        // otherwise not see until that person closed and reopened it.
+        if (session.GetHabbo().PhoneOpen)
+            user.SetPhoneInHand(true);
+        foreach (var other in _users.Values.ToList())
+        {
+            if (other == null || other == user || !other.PhoneInHand)
+                continue;
+            session.Send(new CarryObjectComposer(other.VirtualId, RoomUser.PhoneHandItemId));
+        }
         // pixelrp Movement V2: enrol this user with the movement scheduler.
         // Bots and pets stay on V1, so this only enrols human users.
         Movement.MovementV2Bridge.OnUserEnter(_room, user);
@@ -1112,7 +1125,9 @@ public class RoomUserManager
                         if (!user.IsBot && user.GetClient() != null)
                             Corporations.ShiftManager.InterruptForIdle(user.GetClient());
                     }
-                    if (user.CarryItemId > 0)
+                    // pixelrp: the phone is held for as long as it is open, so
+                    // it is the one carry with no countdown.
+                    if (user.CarryItemId > 0 && !user.PhoneInHand)
                     {
                         user.CarryTimer--;
                         if (user.CarryTimer <= 0)

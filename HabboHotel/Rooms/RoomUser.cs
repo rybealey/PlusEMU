@@ -45,6 +45,10 @@ public class RoomUser
     public bool CanWalk;
     public int CarryItemId; //byte
     public int CarryTimer; //byte
+    // pixelrp: true while this player has the phone open on screen, which puts
+    // handitem 244 in their hand. Deliberately NOT a timed carry - see
+    // SetPhoneInHand.
+    public bool PhoneInHand;
     // pixelrp: >0 while an enable is paused for the "67" gesture; the room
     // cycle counts it down and reapplies the effect at zero.
     public int EffectReapplyTimer;
@@ -798,6 +802,38 @@ public class RoomUser
         else
             CarryTimer = 0;
         GetRoom().SendPacket(new CarryObjectComposer(VirtualId, item));
+    }
+
+    /// <summary>The mobile phone handitem. The only one in hh_human_item drawn
+    /// for carrying and NOT for drinking - it has eight crr frames and no drk
+    /// frame at all, which is why the client is patched not to raise it.</summary>
+    public const int PhoneHandItemId = 244;
+
+    /// <summary>
+    /// pixelrp: the phone is open on screen, so it is in the player's hand.
+    ///
+    /// Not a normal carry. CarryTimer stays at 0, which does three things at
+    /// once: the room cycle's countdown has nothing to expire, and both
+    /// DropHandItemEvent and GiveHandItemEvent already refuse an item whose
+    /// timer is 0 - so nobody can drop their phone on the floor or hand it to
+    /// a stranger. A phone is held until its owner closes it.
+    ///
+    /// Anything else being carried is replaced and does not come back: you put
+    /// the coffee down to look at your phone.
+    /// </summary>
+    public void SetPhoneInHand(bool inHand)
+    {
+        if (PhoneInHand == inHand)
+            return;
+        PhoneInHand = inHand;
+        if (inHand)
+        {
+            CarryItemId = PhoneHandItemId;
+            CarryTimer = 0;
+            GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, PhoneHandItemId));
+        }
+        else
+            CarryItem(0);
     }
 
 

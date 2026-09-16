@@ -371,7 +371,8 @@
     "RpSitchDeleteEvent": 4134,
     "RpSitchSetBioEvent": 4135,
     "RpSitchSetSongEvent": 4136,
-    "RpSitchSearchEvent": 4137
+    "RpSitchSearchEvent": 4137,
+    "RpPhoneVisibleEvent": 4139
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,

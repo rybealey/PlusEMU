@@ -513,6 +513,8 @@ public static class ClientPacketHeader
     public const uint RpSitchSetBioEvent = 4135;
     public const uint RpSitchSetSongEvent = 4136;
     public const uint RpSitchSearchEvent = 4137;
+    // pixelrp: the phone open on screen puts handitem 244 in the player's hand.
+    public const uint RpPhoneVisibleEvent = 4139;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
