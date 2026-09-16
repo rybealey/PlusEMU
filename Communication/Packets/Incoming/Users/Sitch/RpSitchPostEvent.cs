@@ -11,6 +11,12 @@ namespace Plus.Communication.Packets.Incoming.Users.Sitch;
 /// where a player types something other people read. The 280 limit is enforced
 /// HERE as well as in the composer - the client's counter is a courtesy, not a
 /// control, and nothing stops a crafted packet.
+///
+/// Links are refused outright rather than stripped. Stripping leaves a sentence
+/// that reads like it lost a word and gives no reason, and somebody who meant to
+/// advertise simply posts again; a refusal says what happened once. Checked on
+/// the body AFTER filtering and trimming, because that is what would actually
+/// have been stored.
 /// </summary>
 internal class RpSitchPostEvent : IPacketEvent
 {
@@ -48,6 +54,12 @@ internal class RpSitchPostEvent : IPacketEvent
         if (photoId > 0 && !SitchUtility.OwnsPhoto(habbo.Id, photoId))
         {
             session.SendWhisper("That photo is not in your library.");
+            return Task.CompletedTask;
+        }
+
+        if (SitchUtility.ContainsLink(body))
+        {
+            session.SendWhisper("Links can't be posted on Sitch.");
             return Task.CompletedTask;
         }
 

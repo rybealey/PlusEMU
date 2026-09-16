@@ -254,6 +254,51 @@ public static class SitchUtility
     /// </summary>
     private static readonly Regex MentionPattern = new(@"@([A-Za-z0-9_\-\.]{1,32})", RegexOptions.Compiled);
 
+    /// <summary>
+    /// The top-level domains a link is recognised by. Deliberately a list and
+    /// not "any two-or-more letters": a bare-dot rule that accepts anything
+    /// would read "vs.Then" and "e.g." as websites. These are the endings that
+    /// actually turn up in advertising; the cost of one missing from the list
+    /// is one link getting through, which the staff delete already covers.
+    /// </summary>
+    private const string LinkTlds =
+        "com|net|org|io|co|me|gg|tv|xyz|info|biz|online|site|shop|store|club|live|link|app|dev|" +
+        "cc|ly|to|be|us|uk|de|fr|nl|ru|br|es|it|pl|ca|au|top|win|fun|life|world|space|website|" +
+        "press|host|icu|pw|tk|ml|ga|cf";
+
+    /// <summary>
+    /// Anything that reads as a link. Three shapes, and the seams between them
+    /// are where the thought went:
+    ///
+    ///   * a scheme - http://, https://, and anything else with ://
+    ///   * www.something
+    ///   * a bare domain, in one of three spellings:
+    ///       example.com          the dot with NO space around it
+    ///       example[.]com        a bracketed separator, spaces allowed
+    ///       example dot com      the word, spaces required
+    ///
+    /// The bare dot is the fussy one. Allowing spaces around it would make
+    /// "I'll be back. It was fun" a link to back.it - a real TLD - so a plain
+    /// dot has to be tight against both labels, and the spelt-out evasions get
+    /// the spacing instead.
+    ///
+    /// This is a filter, not a proof. Somebody determined will get a link past
+    /// it; the point is that casual advertising stops being effortless.
+    /// </summary>
+    private static readonly Regex LinkPattern = new(
+        @"[a-z][a-z0-9+.\-]*://" +
+        @"|\bwww\d{0,3}\.[a-z0-9\-]+" +
+        @"|\b[a-z0-9][a-z0-9\-]{0,62}(?:" +
+            @"\.(?:" + LinkTlds + @")" +
+            @"|\s*[\[\(\{]\s*\.?\s*(?:dot)?\s*\.?\s*[\]\)\}]\s*(?:" + LinkTlds + @")" +
+            @"|\s+dot\s+(?:" + LinkTlds + @")" +
+        @")\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Whether a body carries something that reads as a link.</summary>
+    public static bool ContainsLink(string body) =>
+        !string.IsNullOrWhiteSpace(body) && LinkPattern.IsMatch(body);
+
     /// <summary>Distinct tags in a body, lowercased so #Muse and #muse are one.</summary>
     public static List<string> ExtractTags(string body) =>
         TagPattern.Matches(body ?? "")
