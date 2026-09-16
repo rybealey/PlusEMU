@@ -354,7 +354,6 @@
     "RpFurniFunctionEvent": 4111,
     "RpDeleteInventoryFurniEvent": 4113,
     "RpGetBankAccountsEvent": 4114,
-    "RpOpenBankAccountEvent": 4115,
     "RpBankTransferEvent": 4116,
     "RpAtmTransactionEvent": 4117,
     "RpCloseAtmEvent": 4118,

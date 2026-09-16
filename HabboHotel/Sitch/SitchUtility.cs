@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Users.Sitch;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Notifications;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Sitch;
@@ -34,6 +35,9 @@ public static class SitchUtility
 
     /// <summary>How far back the Activity tab reaches.</summary>
     public const int ActivityPageSize = 50;
+
+    /// <summary>How much of a post body a notification carries.</summary>
+    private const int NotifyExcerptLength = 80;
 
     public class PostRow
     {
@@ -513,6 +517,36 @@ public static class SitchUtility
             "INSERT INTO `rp_sitch_activity` (`user_id`,`actor_id`,`kind`,`post_id`,`created_at`) " +
             "VALUES (@userId,@actorId,@kind,@postId,@now)",
             new { userId, actorId, kind, postId, now = Now() });
+
+        // The phone hears about it here and nowhere else. Every one of the five
+        // things worth telling somebody about - like, reply, repost, follow,
+        // mention - already funnels through this method, so the badge and the
+        // Activity tab are written in the same breath and cannot disagree.
+        //
+        // The client owns the wording; this sends facts. The kinds are prefixed
+        // so they cannot collide with another app's (`story`, `message`).
+        var actor = connection.QueryFirstOrDefault<string>(
+            "SELECT `username` FROM `users` WHERE `id` = @actorId", new { actorId }) ?? string.Empty;
+        var subject = postId > 0
+            ? connection.QueryFirstOrDefault<string>(
+                "SELECT `body` FROM `rp_sitch_posts` WHERE `id` = @postId", new { postId }) ?? string.Empty
+            : string.Empty;
+
+        NotificationUtility.Push(userId, NotificationUtility.Sitch, "sitch_" + kind, Excerpt(subject), actor, postId);
+    }
+
+    /// <summary>
+    /// A post body cut to fit one line of a notification. A post is capped at
+    /// 280 characters and a banner shows nothing like that many, so the cut
+    /// happens here rather than sending the whole thing down the wire to be
+    /// thrown away by CSS.
+    /// </summary>
+    private static string Excerpt(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+        body = body.Trim();
+
+        return body.Length <= NotifyExcerptLength ? body : body[..NotifyExcerptLength].TrimEnd() + "\u2026";
     }
 
     /// <summary>

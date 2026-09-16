@@ -29,6 +29,7 @@ public static class NotificationUtility
     public const string Calendar = "calendar";
     public const string Notes = "notes";
     public const string News = "news";
+    public const string Sitch = "sitch";
 
     /// <summary>How long before an event starts the reminder goes out.</summary>
     private const int ReminderLeadSeconds = 600;

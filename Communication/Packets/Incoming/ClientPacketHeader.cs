@@ -482,11 +482,14 @@ public static class ClientPacketHeader
     public const uint RpRequestFurniFunctionEvent = 4112;
     public const uint RpFurniFunctionEvent = 4111;
     public const uint RpDeleteInventoryFurniEvent = 4113;
-    // pixelrp banking. The Wallet asks for and opens accounts and moves money
-    // between the two; the last two are the ATM, which the SERVER opens when
-    // the player uses the furni.
+    // pixelrp banking. The Wallet asks for accounts and moves money between
+    // the two; the last two are the ATM, which the SERVER opens when the player
+    // uses the furni. OPENING an account is not here: a banker bot does it in
+    // person (BankerBot.cs), so 4115 was a second way in that no client used
+    // and nothing checked you had spoken to anybody. The id stays retired
+    // rather than reused - a returning client holding the old number would
+    // otherwise reach whatever took its place.
     public const uint RpGetBankAccountsEvent = 4114;
-    public const uint RpOpenBankAccountEvent = 4115;
     public const uint RpBankTransferEvent = 4116;
     public const uint RpAtmTransactionEvent = 4117;
     public const uint RpCloseAtmEvent = 4118;
