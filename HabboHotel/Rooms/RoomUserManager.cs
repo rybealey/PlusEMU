@@ -1294,14 +1294,6 @@ public class RoomUserManager
             var isBot = user.IsBot;
             if (isBot)
                 cyclegameitems = false;
-            if (UnixTimestamp.GetNow() > UnixTimestamp.GetNow() + user.SignTime)
-            {
-                if (user.Statusses.ContainsKey("sign"))
-                {
-                    user.Statusses.Remove("sign");
-                    user.UpdateNeeded = true;
-                }
-            }
             if (user.Statusses.ContainsKey("lay") && !user.IsLying || user.Statusses.ContainsKey("sit") && !user.IsSitting)
             {
                 if (user.Statusses.ContainsKey("lay"))

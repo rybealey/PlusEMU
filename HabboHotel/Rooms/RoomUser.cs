@@ -197,7 +197,6 @@ public class RoomUser
     public double SetZ;
     public bool ShieldActive;
     public int ShieldCounter;
-    public double SignTime;
     public byte SqState;
     public bool SuperFastWalking = false;
     public Team Team;
@@ -863,11 +862,10 @@ public class RoomUser
     /// <summary>
     /// pixelrp: the phone is open on screen, so it is in the player's hand.
     ///
-    /// Not a normal carry. CarryTimer stays at 0, which does three things at
-    /// once: the room cycle's countdown has nothing to expire, and both
-    /// DropHandItemEvent and GiveHandItemEvent already refuse an item whose
-    /// timer is 0 - so nobody can drop their phone on the floor or hand it to
-    /// a stranger. A phone is held until its owner closes it.
+    /// Not a normal carry. CarryTimer stays at 0, so the room cycle's countdown
+    /// has nothing to expire and GiveHandItemEvent refuses it - nobody hands
+    /// their phone to a stranger. A phone is held until its owner closes it.
+    /// (Dropping is gone hotel-wide, so there is nothing left to guard there.)
     ///
     /// Anything else being carried is replaced and does not come back: you put
     /// the coffee down to look at your phone.

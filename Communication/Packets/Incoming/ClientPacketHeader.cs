@@ -39,13 +39,18 @@ public static class ClientPacketHeader
     public const uint CancelQuestEvent = 104; //3879
 
     // Room Avatar
+    //
+    // pixelrp: no ApplySignEvent (3555) and no DropHandItemEvent (3296). Signs
+    // and dropping what you are carrying were removed outright rather than
+    // hidden - a menu entry taken off the UI is still a packet anybody can
+    // send, and the point was that neither can happen at all. The ids stay
+    // retired rather than reused: a stale client holding an old number would
+    // otherwise reach whatever took its place.
     public const uint ActionEvent = 3268; //3639
-    public const uint ApplySignEvent = 3555; //2966
     public const uint DanceEvent = 1225; //645
     public const uint SitEvent = 3735; //1565
     public const uint ChangeMottoEvent = 674; //3515
     public const uint LookToEvent = 1142; //3744
-    public const uint DropHandItemEvent = 3296; //1751
 
     // Room Connection
     public const uint OpenFlatConnectionEvent = 189; //407
