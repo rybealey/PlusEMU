@@ -25,12 +25,15 @@ public class RpJamStateComposer : IServerPacket
     private readonly JukeboxTrack _current;
     private readonly int _elapsedSec;
     private readonly List<JukeboxTrack> _queue;
+    private readonly bool _hasPrevious;
 
     public uint MessageId => ServerPacketHeader.RpJamStateComposer;
 
     public RpJamStateComposer(int jamId, int hostId, string hostName, bool isHost, bool paused,
-        List<JamMemberView> members, JukeboxTrack current, int elapsedSec, List<JukeboxTrack> queue)
+        List<JamMemberView> members, JukeboxTrack current, int elapsedSec, List<JukeboxTrack> queue,
+        bool hasPrevious = false)
     {
+        _hasPrevious = hasPrevious;
         _inJam = true;
         _jamId = jamId;
         _hostId = hostId;
@@ -93,5 +96,11 @@ public class RpJamStateComposer : IServerPacket
             packet.WriteString(track.Author);
             packet.WriteString(track.QueuedBy);
         }
+        // LAST, on purpose. A new field in the middle would be read as part of
+        // whatever followed it by any browser still holding the previous
+        // bundle - and the client and the emulator do not restart at the same
+        // instant. At the end, an older parser simply stops before it and
+        // nothing it has already read is disturbed.
+        packet.WriteBoolean(_hasPrevious);
     }
 }

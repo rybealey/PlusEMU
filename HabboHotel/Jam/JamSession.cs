@@ -45,6 +45,13 @@ public class JamSession
     // is a disconnect: without this, every reload would drop you out of the jam
     // you are listening to, and drop the HOST's jam onto somebody else.
     private const int AwayGraceSec = 90;
+    // Capped at the queue's size for no deeper reason than that a session with a
+    // longer memory than future is a strange shape.
+    private const int MaxHistory = 20;
+    // Press the back button later than this into a song and you meant "play this
+    // again", not "play the last one" - which is how every music player has
+    // behaved for forty years, and the reason one button can do both jobs.
+    private const int RestartWindowSec = 5;
 
     public int Id { get; }
 
@@ -54,6 +61,14 @@ public class JamSession
     // see from the outside - the longest-serving guest takes it.
     private readonly List<JamMember> _members = new();
     private readonly List<JukeboxTrack> _queue = new();
+    // WHAT HAS ALREADY PLAYED, oldest first. Nothing kept this before: a track
+    // ending overwrote the current one and the old one was dropped on the floor,
+    // which is why no player in this hotel has ever had a back button.
+    //
+    // It belongs to the JAM, not to whoever is hosting, so it survives a
+    // handover - the songs played are a fact about the session, not about the
+    // person in charge of it.
+    private readonly List<JukeboxTrack> _history = new();
     private readonly Dictionary<int, DateTime> _lastAddByUser = new();
     private JukeboxTrack _current;
     private DateTime _currentStartedAt;
@@ -195,6 +210,15 @@ public class JamSession
     {
         lock (_lock)
         {
+            // Onto the history before it is overwritten. This is the whole of
+            // what a back button needed: somewhere for a finished song to go
+            // other than nowhere.
+            if (_current != null)
+            {
+                _history.Add(_current);
+                if (_history.Count > MaxHistory)
+                    _history.RemoveAt(0);
+            }
             if (_queue.Count == 0)
             {
                 _current = null;
@@ -257,6 +281,54 @@ public class JamSession
         }
         StartNext();
         NotifyRequester(skipped, habbo, "skipped");
+        return true;
+    }
+
+    /// <summary>
+    /// The back button, which is two buttons wearing one face.
+    ///
+    /// Past the first few seconds it RESTARTS the song, because somebody
+    /// pressing back in the middle of a track almost always means "play that
+    /// again". In those first few seconds - or when nothing has played yet - it
+    /// steps back a track instead.
+    ///
+    /// Stepping back does not throw the current song away. It goes to the FRONT
+    /// of the queue, so whoever asked for it still gets their turn, and it plays
+    /// next rather than being quietly deleted by somebody else's button. That
+    /// can push the queue one past its cap, which is allowed: the cap is there
+    /// to stop people piling songs on, and this is a song coming back.
+    ///
+    /// Any member may, like skip. A guest with both can hold a jam on one song
+    /// forever, which skip alone never allowed - worth knowing, and still the
+    /// right call next to a pause only the host has, because neither of these
+    /// stops the music.
+    /// </summary>
+    public bool TryBack(GameClient session)
+    {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return false;
+        lock (_lock)
+        {
+            if (_current == null || !_members.Any(member => member.Id == habbo.Id))
+                return false;
+            if (ElapsedSec > RestartWindowSec || _history.Count == 0)
+            {
+                _currentStartedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                var previous = _history[^1];
+                _history.RemoveAt(_history.Count - 1);
+                _queue.Insert(0, _current);
+                _current = previous;
+                _currentStartedAt = DateTime.UtcNow;
+            }
+            // Either way it plays. Coming back to a song and finding it paused
+            // would be the button half-working.
+            _pausedAt = null;
+        }
+        BroadcastState();
         return true;
     }
 
@@ -426,7 +498,8 @@ public class JamSession
                 _members.Select(member => new JamMemberView(member.Id, member.Username, member.AwaySince != null)).ToList(),
                 currentSnapshot,
                 ElapsedSec,
-                new List<JukeboxTrack>(_queue));
+                new List<JukeboxTrack>(_queue),
+                _history.Count > 0);
         }
     }
 
