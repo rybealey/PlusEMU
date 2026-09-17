@@ -387,7 +387,8 @@
     "RpSitchSearchEvent": 4137,
     "RpPhoneVisibleEvent": 4139,
     "RpGetSitchTrendingEvent": 4140,
-    "RpSitchSuppressTagEvent": 4141
+    "RpSitchSuppressTagEvent": 4141,
+    "RpCatalogRenameFurniEvent": 4142
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,

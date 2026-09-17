@@ -542,6 +542,8 @@ public static class ClientPacketHeader
     // pixelrp: Sitch trending, and the staff button that quiets a tag.
     public const uint RpGetSitchTrendingEvent = 4140;
     public const uint RpSitchSuppressTagEvent = 4141;
+    // pixelrp: rename a furni from the shop, without owning one.
+    public const uint RpCatalogRenameFurniEvent = 4142;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
