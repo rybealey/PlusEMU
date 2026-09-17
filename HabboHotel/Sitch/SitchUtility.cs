@@ -91,6 +91,22 @@ public static class SitchUtility
         public int Follows { get; set; }
     }
 
+    /// <summary>A tag the city is talking about, with how many posts carry it.</summary>
+    public class TrendRow
+    {
+        public string Tag { get; set; } = "";
+        public int Posts { get; set; }
+    }
+
+    /// <summary>Somebody being talked about, with how often they were mentioned.</summary>
+    public class TalkedAboutRow
+    {
+        public int UserId { get; set; }
+        public string Username { get; set; } = "";
+        public string Figure { get; set; } = "";
+        public int Mentions { get; set; }
+    }
+
     public class ActivityRow
     {
         public int Id { get; set; }
@@ -237,6 +253,86 @@ public static class SitchUtility
             new { viewerId, userId, limit = FeedPageSize }).ToList();
     }
 
+    /// <summary>How far back trending looks.</summary>
+    public const int TrendingWindowSeconds = 48 * 60 * 60;
+
+    /// <summary>How many rows each trending list returns.</summary>
+    public const int TrendingSize = 8;
+
+    /// <summary>
+    /// What the city is talking about: tags on live posts from the last couple
+    /// of days, most-carried first.
+    ///
+    /// Counted over posts rather than tag rows so one person cannot trend a
+    /// word by repeating it - a post uses a tag at most once (the composite key
+    /// in 128 says so), and a deleted post stops counting.
+    ///
+    /// Suppressed tags are excluded here as well as in search. A tag that
+    /// returns nothing but still sits at the top of trending would be the
+    /// worst of both: visibly important and visibly broken.
+    /// </summary>
+    public static List<TrendRow> GetTrendingTags()
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.Query<TrendRow>(
+            "SELECT t.`tag` AS Tag, COUNT(DISTINCT t.`post_id`) AS Posts " +
+            "FROM `rp_sitch_tags` t " +
+            "INNER JOIN `rp_sitch_posts` p ON p.`id` = t.`post_id` AND p.`deleted_at` = 0 " +
+            "WHERE t.`created_at` >= @since " +
+            "AND NOT EXISTS (SELECT 1 FROM `rp_sitch_suppressed_tags` x WHERE x.`tag` = t.`tag`) " +
+            "GROUP BY t.`tag` ORDER BY Posts DESC, t.`tag` ASC LIMIT @limit",
+            new { since = Now() - TrendingWindowSeconds, limit = TrendingSize }).ToList();
+    }
+
+    /// <summary>
+    /// Who the city is talking about, from the mention rows the activity feed
+    /// already writes - 128 deliberately gave mentions no table of their own,
+    /// and this is the question that would have wanted one.
+    ///
+    /// Counted by DISTINCT actor, so one person mentioning somebody twenty
+    /// times is one voice, not twenty.
+    /// </summary>
+    public static List<TalkedAboutRow> GetTalkedAbout()
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.Query<TalkedAboutRow>(
+            "SELECT a.`user_id` AS UserId, u.`username` AS Username, COALESCE(u.`look`, '') AS Figure, " +
+            "COUNT(DISTINCT a.`actor_id`) AS Mentions " +
+            "FROM `rp_sitch_activity` a " +
+            "INNER JOIN `users` u ON u.`id` = a.`user_id` " +
+            "WHERE a.`kind` = 'mention' AND a.`created_at` >= @since " +
+            "GROUP BY a.`user_id`, u.`username`, u.`look` " +
+            "ORDER BY Mentions DESC, u.`username` ASC LIMIT @limit",
+            new { since = Now() - TrendingWindowSeconds, limit = TrendingSize }).ToList();
+    }
+
+    /// <summary>Whether a tag has been taken out of circulation.</summary>
+    public static bool IsTagSuppressed(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return false;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM `rp_sitch_suppressed_tags` WHERE `tag` = @tag",
+            new { tag = tag.ToLowerInvariant() }) > 0;
+    }
+
+    /// <summary>Take a tag out of circulation, or put it back.</summary>
+    public static void SetTagSuppressed(string tag, int staffId, bool on)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return;
+        var normalised = tag.ToLowerInvariant();
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        if (on)
+            connection.Execute(
+                "INSERT INTO `rp_sitch_suppressed_tags` (`tag`,`suppressed_by`,`created_at`) " +
+                "VALUES (@normalised,@staffId,@now) " +
+                "ON DUPLICATE KEY UPDATE `suppressed_by` = @staffId, `created_at` = @now",
+                new { normalised, staffId, now = Now() });
+        else
+            connection.Execute("DELETE FROM `rp_sitch_suppressed_tags` WHERE `tag` = @normalised",
+                new { normalised });
+    }
+
     /// <summary>What happened to the viewer while they were away.</summary>
     public static List<ActivityRow> GetActivity(int userId)
     {
@@ -288,6 +384,17 @@ public static class SitchUtility
         // A tag search is about posts, not people - nobody is called "#muse".
         var people = trimmed.StartsWith("#") ? new List<ProfileRow>() : SearchPeople(habbo.Id, trimmed);
         session.Send(new RpSitchSearchComposer(trimmed, people, SearchPosts(habbo.Id, trimmed)));
+    }
+
+    /// <summary>The Search tab's resting state: what the city is talking about.</summary>
+    public static void SendTrending(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null) return;
+        // An affordance flag only - RpSitchSuppressTagEvent checks the
+        // permission again before suppressing anything.
+        var canModerate = habbo.Permissions?.HasCommand("rp_sitch_moderate") ?? false;
+        session.Send(new RpSitchTrendingComposer(GetTrendingTags(), GetTalkedAbout(), canModerate));
     }
 
     public static void SendActivity(GameClient session)
@@ -410,6 +517,13 @@ public static class SitchUtility
     /// </summary>
     public static List<PostRow> SearchPosts(int viewerId, string query)
     {
+        // A suppressed tag answers nothing, however it is spelled. Checked with
+        // the # stripped as well as with it, because "muse" and "#muse" are the
+        // same search to the person typing them - suppressing only the hashtag
+        // form would leave the posts one keystroke away.
+        if (IsTagSuppressed(query.TrimStart('#').Trim()))
+            return new List<PostRow>();
+
         using var connection = PlusEnvironment.DatabaseManager.Connection();
 
         if (query.StartsWith("#") && query.Length > 1)

@@ -372,7 +372,9 @@
     "RpSitchSetBioEvent": 4135,
     "RpSitchSetSongEvent": 4136,
     "RpSitchSearchEvent": 4137,
-    "RpPhoneVisibleEvent": 4139
+    "RpPhoneVisibleEvent": 4139,
+    "RpGetSitchTrendingEvent": 4140,
+    "RpSitchSuppressTagEvent": 4141
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -700,6 +702,7 @@
     "RpSitchThreadComposer": 4127,
     "RpSitchProfileComposer": 4128,
     "RpSitchActivityComposer": 4129,
-    "RpSitchSearchComposer": 4138
+    "RpSitchSearchComposer": 4138,
+    "RpSitchTrendingComposer": 4139
   }
 }
