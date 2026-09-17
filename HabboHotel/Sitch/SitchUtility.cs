@@ -59,6 +59,14 @@ public static class SitchUtility
         /// <summary>1 when the VIEWER has liked / reposted this, not the author.</summary>
         public int Liked { get; set; }
         public int Reposted { get; set; }
+        /// <summary>
+        /// On a PROFILE, who put this post there by reposting it - empty when
+        /// they wrote it themselves. Everywhere else this is always empty: a
+        /// repost belongs to the profile that made it, not to the post.
+        /// </summary>
+        public string RepostedBy { get; set; } = "";
+        /// <summary>When the repost happened, so a profile can order by it.</summary>
+        public int RepostedAt { get; set; }
     }
 
     public class ProfileRow
@@ -101,8 +109,12 @@ public static class SitchUtility
     /// @viewerId appears in the two EXISTS clauses only - the counts belong to
     /// the post, the flags belong to whoever is looking.
     /// </summary>
-    private const string PostSelect =
-        "SELECT p.`id` AS Id, p.`parent_id` AS ParentId, p.`user_id` AS UserId, " +
+    /// <summary>
+    /// The columns of a post, without SELECT or FROM, so a query that needs a
+    /// column of its own can splice one in - GetUserPosts does, for reposts.
+    /// </summary>
+    private const string PostColumns =
+        "p.`id` AS Id, p.`parent_id` AS ParentId, p.`user_id` AS UserId, " +
         // `Rank` is backticked as an ALIAS, not only as a column: RANK is a
         // reserved word in MySQL 8 (the window function), and an unquoted
         // alias is a syntax error even though the quoted column beside it is
@@ -115,10 +127,20 @@ public static class SitchUtility
         "(SELECT COUNT(*) FROM `rp_sitch_likes` l WHERE l.`post_id` = p.`id`) AS Likes, " +
         "(SELECT COUNT(*) FROM `rp_sitch_reposts` s WHERE s.`post_id` = p.`id`) AS Reposts, " +
         "EXISTS(SELECT 1 FROM `rp_sitch_likes` ml WHERE ml.`post_id` = p.`id` AND ml.`user_id` = @viewerId) AS Liked, " +
-        "EXISTS(SELECT 1 FROM `rp_sitch_reposts` ms WHERE ms.`post_id` = p.`id` AND ms.`user_id` = @viewerId) AS Reposted " +
+        "EXISTS(SELECT 1 FROM `rp_sitch_reposts` ms WHERE ms.`post_id` = p.`id` AND ms.`user_id` = @viewerId) AS Reposted ";
+
+    private const string PostFrom =
         "FROM `rp_sitch_posts` p " +
         "INNER JOIN `users` u ON u.`id` = p.`user_id` " +
         "LEFT JOIN `camera_web` c ON c.`id` = p.`photo_id` ";
+
+    /// <summary>
+    /// A post as every timeline but the profile reads it. RepostedBy is empty
+    /// and RepostedAt is 0 here: those only mean something on a profile, where
+    /// a post can be somebody else's.
+    /// </summary>
+    private const string PostSelect =
+        "SELECT " + PostColumns + ", '' AS RepostedBy, 0 AS RepostedAt " + PostFrom;
 
     /// <summary>
     /// A timeline. `following` narrows it to people the viewer follows, plus
@@ -168,13 +190,42 @@ public static class SitchUtility
             new { viewerId, userId });
     }
 
-    /// <summary>A profile's own posts, newest first.</summary>
+    /// <summary>
+    /// A profile's timeline: what they wrote, and what they reposted, newest
+    /// first by when it landed on the profile.
+    ///
+    /// Two arms rather than one join, because they sort by different clocks. A
+    /// post is placed by when it was WRITTEN and a repost by when it was
+    /// REPOSTED - a two-year-old post reposted this morning belongs at the top,
+    /// which is the whole point of the feature. SortAt carries whichever clock
+    /// applies so the union can order across both.
+    ///
+    /// UNION ALL, not UNION: the arms cannot overlap, because reposting your
+    /// own post is excluded below, so asking the database to check for
+    /// duplicates would be work with a known answer.
+    ///
+    /// Reposting yourself does not double you up. The row is still written -
+    /// it is a real repost and it counts - it simply is not shown twice on the
+    /// one profile that already has it.
+    ///
+    /// A deleted original disappears from the reposter's profile too. Nobody
+    /// gets to keep a copy of a post staff removed.
+    /// </summary>
     public static List<PostRow> GetUserPosts(int viewerId, int userId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<PostRow>(
-            PostSelect + "WHERE p.`user_id` = @userId AND p.`parent_id` = 0 AND p.`deleted_at` = 0 " +
-            "ORDER BY p.`created_at` DESC, p.`id` DESC LIMIT @limit",
+            "(SELECT " + PostColumns + ", '' AS RepostedBy, 0 AS RepostedAt, p.`created_at` AS SortAt " +
+            PostFrom +
+            "WHERE p.`user_id` = @userId AND p.`parent_id` = 0 AND p.`deleted_at` = 0) " +
+            "UNION ALL " +
+            "(SELECT " + PostColumns + ", ru.`username` AS RepostedBy, sr.`created_at` AS RepostedAt, " +
+            "sr.`created_at` AS SortAt " +
+            PostFrom +
+            "INNER JOIN `rp_sitch_reposts` sr ON sr.`post_id` = p.`id` AND sr.`user_id` = @userId " +
+            "INNER JOIN `users` ru ON ru.`id` = sr.`user_id` " +
+            "WHERE p.`parent_id` = 0 AND p.`deleted_at` = 0 AND p.`user_id` <> @userId) " +
+            "ORDER BY SortAt DESC, Id DESC LIMIT @limit",
             new { viewerId, userId, limit = FeedPageSize }).ToList();
     }
 

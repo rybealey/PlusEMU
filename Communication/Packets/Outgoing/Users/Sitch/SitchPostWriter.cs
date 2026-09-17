@@ -29,5 +29,10 @@ internal static class SitchPostWriter
         packet.WriteInteger(p.Reposts);
         packet.WriteInteger(p.Liked);
         packet.WriteInteger(p.Reposted);
+        // Appended rather than slotted in beside the author, because the client
+        // reads this positionally: anything inserted mid-record shifts every
+        // field after it. Empty and 0 on every timeline but a profile.
+        packet.WriteString(p.RepostedBy ?? "");
+        packet.WriteInteger(p.RepostedAt);
     }
 }
