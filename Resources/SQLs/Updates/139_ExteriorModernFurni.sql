@@ -35,9 +35,6 @@ INSERT INTO `catalog_pages`
 VALUES
     (947000, @customs, 'Exterior Modern', 193, 2, 0, 1, '', 'default_3x3', '', '', b'1', b'1');
 
-INSERT INTO `catalog_pages` (`id`,`parent_id`,`caption`,`icon_image`,`min_rank`,`min_vip`,`order_num`,`page_link`,`page_layout`,`page_strings_1`,`page_strings_2`,`visible`,`enabled`) VALUES
-;
-
 -- Furniture. id == sprite_id, the convention every custom line here follows;
 -- interaction_modes_count is the bundle's own animation count.
 INSERT INTO `furniture` (`id`,`item_name`,`public_name`,`type`,`width`,`length`,`stack_height`,`can_stack`,`can_sit`,`is_walkable`,`sprite_id`,`allow_recycle`,`allow_trade`,`allow_marketplace_sell`,`allow_gift`,`allow_inventory_stack`,`interaction_type`,`behaviour_data`,`interaction_modes_count`,`is_rare`) VALUES
