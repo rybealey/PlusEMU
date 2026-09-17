@@ -219,6 +219,8 @@ public static class InteractionTypes
                 return InteractionType.Pet;
             case "dressing_booth":
                 return InteractionType.DressingBooth;
+            case "zara_shop":
+                return InteractionType.ZaraShop;
             case "atm":
                 return InteractionType.Atm;
             default:

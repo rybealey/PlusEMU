@@ -1158,6 +1158,10 @@ public class Item
         }
         if (Definition.InteractionType == InteractionType.PressurePad)
             SetPressurePad(true, null);
+        // The window asks for its own shelf once it shows, so stepping on the
+        // furni only has to open it - exactly what :zara does.
+        if (Definition.InteractionType == InteractionType.ZaraShop)
+            user.GetClient().Send(new Communication.Packets.Outgoing.Users.RpOpenClothingStoreComposer());
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
         user.LastItem = this;
     }
