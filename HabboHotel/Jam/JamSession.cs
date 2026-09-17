@@ -162,6 +162,35 @@ public class JamSession
             BroadcastState();
     }
 
+    /// <summary>
+    /// Starts the jam ALREADY PLAYING, on the song its host was listening to.
+    ///
+    /// Without this, starting a jam while a song of your own is on created an
+    /// empty one: your song is a purely local thing until this moment, so the
+    /// server had nothing to tell anybody. The host carried on hearing it, saw a
+    /// jam, invited people - and every guest arrived to silence, because as far
+    /// as the jam was concerned nothing was playing. The next song they queued
+    /// went through properly and everybody heard that, which made it look like
+    /// joining worked and only the first song was cursed.
+    ///
+    /// The clock is wound BACK by however far in the song already is, so the jam
+    /// joins the song rather than the song restarting for the host.
+    /// </summary>
+    public void SeedCurrent(JukeboxTrack track, int elapsedSec)
+    {
+        lock (_lock)
+        {
+            // Only ever into an empty jam. A race with a real queue must not
+            // knock out whatever actually started.
+            if (_current != null || track == null)
+                return;
+            _current = track;
+            _currentStartedAt = DateTime.UtcNow.AddSeconds(-Math.Clamp(elapsedSec, 0, 7200));
+            _pausedAt = null;
+        }
+        BroadcastState();
+    }
+
     private void StartNext()
     {
         lock (_lock)

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Jam;
 using Plus.HabboHotel.Rooms.Jukebox;
@@ -18,8 +17,6 @@ namespace Plus.Communication.Packets.Incoming.Jam;
 // session they are no longer part of.
 internal class RpJamAddEvent : IPacketEvent
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(5) };
-
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
         var url = packet.ReadString();
@@ -38,29 +35,16 @@ internal class RpJamAddEvent : IPacketEvent
             session.SendNotification(error);
             return;
         }
-        var videoId = JukeboxStation.ParseVideoId(url);
-        try
-        {
-            var json = await Http.GetStringAsync(
-                $"https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D{videoId}&format=json");
-            using var doc = JsonDocument.Parse(json);
-            var stillHere = JamManager.GetFor(habbo.Id);
-            if (stillHere == null || stillHere != jam)
-                return;
-            stillHere.Enqueue(new JukeboxTrack
-            {
-                VideoId = videoId,
-                Title = doc.RootElement.GetProperty("title").GetString() ?? videoId,
-                Author = doc.RootElement.TryGetProperty("author_name", out var author) ? (author.GetString() ?? "") : "",
-                DurationSec = 0,
-                QueuedBy = habbo.Username,
-                QueuedById = habbo.Id
-            });
-        }
-        catch
+        var track = await JamTrackResolver.Resolve(JukeboxStation.ParseVideoId(url), habbo);
+        if (track == null)
         {
             // 404/401 from oEmbed = video missing, private or embed-restricted.
             session.SendNotification("That video can't be played (missing, private, or embedding disabled).");
+            return;
         }
+        var stillHere = JamManager.GetFor(habbo.Id);
+        if (stillHere == null || stillHere != jam)
+            return;
+        stillHere.Enqueue(track);
     }
 }
