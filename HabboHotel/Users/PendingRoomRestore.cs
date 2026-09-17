@@ -1,10 +1,18 @@
 namespace Plus.HabboHotel.Users;
 
 /// <summary>
-/// pixelrp last-position restore: set once at login when the user is
-/// forwarded to their last room; consumed (and cleared) by the first room
-/// entry. Expires 30s after login so it can never leak into a later manual
-/// entry if the forward is denied (locked/full/banned room).
+/// pixelrp: where to put somebody when they next enter a room, instead of the
+/// door. Consumed (and cleared) by the first room entry, so it can only ever
+/// act once.
+///
+/// Two callers, one meaning:
+///   * login, forwarding the user to the room they logged out of, on the tile
+///     they left;
+///   * :summon, naming the summoner's tile in the summoner's room.
+///
+/// Expires after 30s so it can never leak into a later manual entry if the
+/// forward is refused - a locked, full or banned room, or a summons the target
+/// simply does not act on.
 /// </summary>
 public sealed class PendingRoomRestore
 {

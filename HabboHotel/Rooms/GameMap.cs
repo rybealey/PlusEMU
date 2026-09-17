@@ -54,23 +54,41 @@ public class Gamemap
     {
         if (item == null || user == null)
             return;
+        TeleportToTile(user, item.GetX, item.GetY, item.GetZ, item.Rotation);
+    }
+
+    /// <summary>
+    /// pixelrp: put a user on a tile immediately, with none of the walking.
+    ///
+    /// The body of what TeleportToItem always did, with the destination passed
+    /// in rather than read off a furni - :summon lands somebody on the
+    /// summoner's exact tile, and there is no item there to ask.
+    ///
+    /// Clearing GoalX/GoalY and SetStep/IsWalking matters as much as the move
+    /// itself: a user warped mid-walk would otherwise keep the old goal and
+    /// stroll straight back.
+    /// </summary>
+    public void TeleportToTile(RoomUser user, int x, int y, double z, int rotation)
+    {
+        if (user == null)
+            return;
         // Same rule as movement/leave: with global tile-overlap (RoomBlockingEnabled
         // always true) users never write occupancy into the pathfinding map, so skip
         // the restore-at-origin (stale SqState would stamp 0/"blocked") and the
         // stamp-1-at-destination (would clobber seat/door state).
         if (!_room.RoomBlockingEnabled)
             GameMap[user.X, user.Y] = user.SqState;
-        UpdateUserMovement(new(user.Coordinate.X, user.Coordinate.Y), new(item.Coordinate.X, item.Coordinate.Y), user);
-        user.X = item.GetX;
-        user.Y = item.GetY;
-        user.Z = item.GetZ;
+        UpdateUserMovement(new(user.Coordinate.X, user.Coordinate.Y), new(x, y), user);
+        user.X = x;
+        user.Y = y;
+        user.Z = z;
         if (!_room.RoomBlockingEnabled)
         {
-            user.SqState = GameMap[item.GetX, item.GetY];
+            user.SqState = GameMap[x, y];
             GameMap[user.X, user.Y] = 1;
         }
-        user.RotBody = item.Rotation;
-        user.RotHead = item.Rotation;
+        user.RotBody = rotation;
+        user.RotHead = rotation;
         user.GoalX = user.X;
         user.GoalY = user.Y;
         user.SetStep = false;

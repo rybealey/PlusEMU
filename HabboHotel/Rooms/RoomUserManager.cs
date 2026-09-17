@@ -201,8 +201,10 @@ public class RoomUserManager
                 model.DoorY = square.Y;
                 model.DoorZ = (int)_room.GetGameMap().GetHeightForSquareFromData(square);
             }
-            // pixelrp last-position restore: if this entry is the login forward to the
-            // user's last room, spawn on the saved tile/rotation instead of the door.
+            // pixelrp arrival position: spawn on a named tile/rotation instead of
+            // the door. Two things set it - the login forward to the user's last
+            // room, and :summon naming the summoner's tile - and it means the
+            // same thing for both: enter HERE, not at the door.
             // Furni-blocked/occupied Open squares are allowed (exact continuity); a tile
             // outside the current model, or a Blocked map square (room remodeled into a
             // wall), falls back to the door. The marker is single-use: cleared below on
