@@ -15,6 +15,17 @@ namespace Plus.HabboHotel.Rooms;
 
 public class RoomUser
 {
+    /// <summary>pixelrp: how many DISTINCT people one message may ping. A
+    /// sentence naming more than a handful of people is not roleplay, it is a
+    /// room-wide alert - everybody past this is still named in the text, they
+    /// just do not get the bubble and the sound. See OnChat.</summary>
+    public const int MentionsPerMessage = 5;
+
+    /// <summary>pixelrp: seconds a speaker waits after pinging somebody before
+    /// any later message of theirs can ping again. The per-message cap limits how
+    /// wide one line reaches; this limits how often. See OnChat.</summary>
+    public const int MentionCooldownSeconds = 10;
+
     /// <summary>
     /// The "sit" status a player sitting on the FLOOR gets, as opposed to one
     /// sitting on furniture - which reports the seat's own height instead.
@@ -515,14 +526,19 @@ public class RoomUser
         else
             packet = new ChatComposer(VirtualId, message, emotion, colour, usernameColor, usernameIcon, usernameIconColor);
 
-        // pixelrp mention: any message containing "@Name" of another player in
-        // the room (case-insensitive — GetRoomUserByHabbo matches OrdinalIgnoreCase)
-        // is delivered to that player with bubble style 25 (mention alert; the
+        // pixelrp mention: every "@Name" of another player in the room
+        // (case-insensitive - GetRoomUserByHabbo matches OrdinalIgnoreCase) is
+        // delivered to that player with bubble style 25 (mention alert; the
         // client also plays a mention sound on it) while everyone else sees the
-        // sender's normal bubble. Applies to talk and shout alike; the client's
-        // "@x" shorthand expands to the selected HUD target, but any typed
-        // @Name behaves the same.
-        RoomUser mentionedUser = null;
+        // sender's normal bubble. One sentence can name several people and each
+        // of them is pinged, up to MentionsPerMessage. Applies to talk and shout
+        // alike; the client's "@x" shorthand expands to the selected HUD target,
+        // but any typed @Name behaves the same.
+        //
+        // Names are found by splitting on spaces, so "@bob @alice" works and
+        // "@bob,@alice" does not - widening that starts eating the apostrophes
+        // and hyphens that are legal in a username.
+        var mentionedUsers = new HashSet<RoomUser>();
         if (message.IndexOf('@') >= 0)
         {
             foreach (var token in message.Split(' '))
@@ -533,13 +549,37 @@ public class RoomUser
                     .GetRoomUserByHabbo(token.Substring(1).TrimEnd('.', ',', '!', '?', ':', ';'));
                 if (candidate != null && !candidate.IsBot && candidate != this)
                 {
-                    mentionedUser = candidate;
-                    break;
+                    // a set, so "@bob @bob" pings Bob once rather than twice
+                    mentionedUsers.Add(candidate);
+                    if (mentionedUsers.Count >= MentionsPerMessage)
+                        break;
                 }
             }
         }
+        // pixelrp mention cooldown: naming somebody puts the SPEAKER on a short
+        // timer before any later message of theirs can ping again. Without it one
+        // player could alert the whole room, then do it again on the next line -
+        // the per-message cap limits the blast, this limits the rate.
+        //
+        // The message itself is never held back. It goes out in full to everyone
+        // who would normally hear it, names and all; only the alert bubble is
+        // withheld, so a suppressed mention reads as ordinary chat rather than
+        // vanishing. The speaker is told, because a ping that silently did
+        // nothing is worse than one that was refused out loud.
+        if (mentionedUsers.Count > 0)
+        {
+            var now = UnixTimestamp.GetNow();
+            var habbo = GetClient().GetHabbo();
+            if (now < habbo.MentionCooldownUntil)
+            {
+                GetClient().SendWhisper($"You can mention somebody again in {Math.Max(1, (int)Math.Ceiling(habbo.MentionCooldownUntil - now))} seconds.");
+                mentionedUsers.Clear();
+            }
+            else
+                habbo.MentionCooldownUntil = now + MentionCooldownSeconds;
+        }
         IServerPacket mentionPacket = null;
-        if (mentionedUser != null)
+        if (mentionedUsers.Count > 0)
             mentionPacket = shout
                 ? new ShoutComposer(VirtualId, message, emotion, 25, usernameColor, usernameIcon, usernameIconColor)
                 : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25, usernameColor, usernameIcon, usernameIconColor);
@@ -567,9 +607,10 @@ public class RoomUser
                     continue;
                 if (_mRoom.ChatDistance > 0 && Gamemap.TileDistance(X, Y, user.X, user.Y) > _mRoom.ChatDistance)
                     continue;
-                // pixelrp mention: the mentioned player alone sees this message
-                // in bubble style 25 so being addressed is unmissable.
-                if (mentionPacket != null && user == mentionedUser)
+                // pixelrp mention: everybody named sees this message in bubble
+                // style 25 so being addressed is unmissable. One packet, handed to
+                // each of them - it is the same bubble whoever is reading it.
+                if (mentionPacket != null && mentionedUsers.Contains(user))
                 {
                     user.GetClient().Send(mentionPacket);
                     continue;
