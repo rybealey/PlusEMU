@@ -211,6 +211,11 @@ public static class ServerPacketHeader
     public const uint RpAlbumPhotosComposer = 43944; //3944
     public const uint RpPhotoListComposer = 3909;
     public const uint RpJukeboxStateComposer = 3917;
+
+    // pixelrp jam. One composer covers the whole feature: every change a member
+    // needs to know about - who joined, who is hosting, what is playing, what is
+    // queued - is a change to the same state, so there is one state packet.
+    public const uint RpJamStateComposer = 4030;
     public const uint RpRoomZoneComposer = 3924;
     public const uint RpFurniAlphaComposer = 3926;
     // The 39xx block is full; this continues past the highest id in use.

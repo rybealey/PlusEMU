@@ -171,6 +171,12 @@ public class Game : IGame
             _roomManager.OnCycle();
             var tRooms = sw.ElapsedMilliseconds;
             _clientManager.OnCycle();
+            // pixelrp: jams have no room to tick them. A room jukebox advances
+            // off its own room's beat (Room.cs), and a jam is deliberately not
+            // in a room - so it gets its beat here. Each session self-gates to
+            // once a second, and an empty hotel returns on a dictionary check,
+            // so this costs nothing at the 5ms poll rate.
+            Jam.JamManager.Cycle();
             var tTotal = sw.ElapsedMilliseconds;
             if (tTotal > 250)
                 Log.Warn($"[stall] Game cycle iteration took {tTotal}ms (roomManager={tRooms}ms, clientManager={tTotal - tRooms}ms)");

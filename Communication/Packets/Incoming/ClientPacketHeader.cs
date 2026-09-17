@@ -467,6 +467,20 @@ public static class ClientPacketHeader
     public const uint RpJukeboxRemoveEvent = 3919;
     public const uint RpJukeboxSkipEvent = 3921;
     public const uint RpJukeboxReportEvent = 3922;
+
+    // pixelrp jam - the room jukebox's twin with an invited audience instead of
+    // a room. A clean block of its own rather than numbers picked out of the
+    // gaps around 39xx, so the whole feature reads as one thing.
+    public const uint RpJamStateEvent = 4031;
+    public const uint RpJamStartEvent = 4032;
+    public const uint RpJamInviteEvent = 4033;
+    public const uint RpJamJoinEvent = 4034;
+    public const uint RpJamLeaveEvent = 4035;
+    public const uint RpJamAddEvent = 4036;
+    public const uint RpJamRemoveEvent = 4037;
+    public const uint RpJamSkipEvent = 4038;
+    public const uint RpJamPauseEvent = 4039;
+    public const uint RpJamReportEvent = 4040;
     public const uint RpRoomZoneSaveEvent = 3923;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958

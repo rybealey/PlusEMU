@@ -584,6 +584,11 @@ public class Habbo
             return;
 
         Corporations.ShiftManager.InterruptForDisconnect(this);
+        // pixelrp: a jam holds your place rather than dropping you. Reloading
+        // the client is a disconnect, and a jam you lose by refreshing the page
+        // is not a jam anybody can use - so this only marks you away, and the
+        // jam's own cycle gives up on you a minute and a half later.
+        Jam.JamManager.OnDisconnect(Id);
         // pixelrp: drop this player from any shared note they had open
         Notes.NotesUtility.ClearPresence(Id);
         // pixelrp police: a cuff, a stun and an escort are all session state, and
