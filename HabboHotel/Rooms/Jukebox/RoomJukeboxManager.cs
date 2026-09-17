@@ -38,6 +38,7 @@ public class RoomJukeboxManager
     public void Enqueue(JukeboxTrack track) => _station.Enqueue(track);
     public bool TryRemove(GameClient session, int index) => _station.TryRemove(session, index);
     public bool TrySkip(GameClient session) => _station.TrySkip(session);
+    public bool TryMove(GameClient session, int from, int to) => _station.TryMove(session, from, to);
     public void Report(GameClient session, int durationSec, bool ended) => _station.Report(session, durationSec, ended);
 
     // Room cycle: advance this room's station if due (guarded inside) and keep

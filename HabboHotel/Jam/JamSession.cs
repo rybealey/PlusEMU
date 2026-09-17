@@ -271,6 +271,34 @@ public class JamSession
     }
 
     /// <summary>
+    /// Reorder the queue. The HOST's, matching who may pull anyone's song out -
+    /// moving somebody's request down the list is the same kind of act as
+    /// removing it, done more gently.
+    ///
+    /// Both ends are checked against the list as it is NOW. A drag is decided on
+    /// the client against the list it was showing, and a song can be removed or
+    /// start playing while a finger is down.
+    /// </summary>
+    public bool TryMove(GameClient session, int from, int to)
+    {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return false;
+        lock (_lock)
+        {
+            if (_members.Count == 0 || _members[0].Id != habbo.Id)
+                return false;
+            if (from < 0 || from >= _queue.Count || to < 0 || to >= _queue.Count || from == to)
+                return false;
+            var track = _queue[from];
+            _queue.RemoveAt(from);
+            _queue.Insert(to, track);
+        }
+        BroadcastState();
+        return true;
+    }
+
+    /// <summary>
     /// ANY member may skip. That is a deliberate asymmetry with pause, which is
     /// the host's alone: pausing everyone is a state nobody else can undo, while
     /// a skip moves the jam on to the thing it was going to play anyway.

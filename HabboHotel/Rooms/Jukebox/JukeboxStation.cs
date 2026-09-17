@@ -159,6 +159,31 @@ public class JukeboxStation
         return true;
     }
 
+    /// <summary>
+    /// Reorder the queue. The same rights that let you remove anyone's song:
+    /// moving one down the list is the same kind of act done more gently, so it
+    /// would be strange for the gentler one to need less.
+    ///
+    /// Both ends are checked against the list as it is NOW - a drag is decided
+    /// on the client against the list it was showing, and in a public room a
+    /// song can be removed or start playing while a finger is down.
+    /// </summary>
+    public bool TryMove(GameClient session, int from, int to)
+    {
+        lock (_lock)
+        {
+            if (!CanManage(session))
+                return false;
+            if (from < 0 || from >= _queue.Count || to < 0 || to >= _queue.Count || from == to)
+                return false;
+            var track = _queue[from];
+            _queue.RemoveAt(from);
+            _queue.Insert(to, track);
+        }
+        BroadcastState();
+        return true;
+    }
+
     public bool TrySkip(GameClient session)
     {
         JukeboxTrack skipped;

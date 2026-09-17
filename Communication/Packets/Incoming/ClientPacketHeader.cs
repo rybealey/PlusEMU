@@ -484,6 +484,8 @@ public static class ClientPacketHeader
     public const uint RpJamEndEvent = 4041;
     public const uint RpJamBackEvent = 4042;
     public const uint RpJamKickEvent = 4043;
+    public const uint RpJamMoveEvent = 4044;
+    public const uint RpJukeboxMoveEvent = 4045;
     public const uint RpRoomZoneSaveEvent = 3923;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958
