@@ -348,6 +348,7 @@
     "RpJamSkipEvent": 4038,
     "RpJamPauseEvent": 4039,
     "RpJamReportEvent": 4040,
+    "RpJamEndEvent": 4041,
     "RpRoomZoneSaveEvent": 3923,
     "RpSetRoomCorpEvent": 3958,
     "RpSetHqRankEvent": 3962,

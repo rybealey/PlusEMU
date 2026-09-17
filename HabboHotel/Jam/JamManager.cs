@@ -109,6 +109,41 @@ public static class JamManager
     }
 
     /// <summary>
+    /// The host stops the jam for everybody.
+    ///
+    /// Deliberately not the same thing as the host leaving, which hands the jam
+    /// on and lets it carry on without them. Both are reasonable things to want
+    /// at the end of a session - one is "I am done", the other is "we are done" -
+    /// so neither is made to stand in for the other.
+    /// </summary>
+    public static void End(Habbo habbo)
+    {
+        if (habbo == null)
+            return;
+        var jam = GetFor(habbo.Id);
+        if (jam == null || !jam.IsHost(habbo.Id))
+            return;
+        var members = jam.MemberIds;
+        // Out of the index FIRST. Anything arriving from a member while the
+        // goodbyes are going out must find no jam rather than half of one.
+        _byId.TryRemove(jam.Id, out _);
+        foreach (var userId in members)
+            _byUser.TryRemove(userId, out _);
+        foreach (var userId in members)
+        {
+            try
+            {
+                var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+                if (client?.GetHabbo() == null) continue;
+                client.Send(RpJamStateComposer.None());
+                if (userId != habbo.Id)
+                    client.SendWhisper($"{habbo.Username} ended the jam.");
+            }
+            catch (Exception) { }
+        }
+    }
+
+    /// <summary>
     /// The connection went, which is not the same as leaving. Their place is
     /// held: refreshing the client disconnects, and a jam you lose by reloading
     /// the page is not a jam anybody can use. Cycle() reaps them if they really
