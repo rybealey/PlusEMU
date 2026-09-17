@@ -45,9 +45,11 @@ public class JamSession
     // is a disconnect: without this, every reload would drop you out of the jam
     // you are listening to, and drop the HOST's jam onto somebody else.
     private const int AwayGraceSec = 90;
-    // Capped at the queue's size for no deeper reason than that a session with a
-    // longer memory than future is a strange shape.
-    private const int MaxHistory = 20;
+    // The queue's size, DERIVED rather than typed again. Both were 20, which
+    // looked the same and was not: two constants that happen to agree today
+    // quietly stop agreeing the first time one of them is changed, and a session
+    // remembering more than it promises is a strange shape.
+    private const int MaxHistory = MaxQueue;
     // Press the back button later than this into a song and you meant "play this
     // again", not "play the last one" - which is how every music player has
     // behaved for forty years, and the reason one button can do both jobs.
