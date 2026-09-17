@@ -26,7 +26,7 @@ public class RoomUser
     /// two people in consecutive lines pings both - it is a pile-on guard, not a
     /// speaking limit. The per-message cap limits how wide one line reaches; this
     /// limits how often one person can be rung. See OnChat.</summary>
-    public const int MentionCooldownSeconds = 10;
+    public const int MentionCooldownSeconds = 30;
 
     /// <summary>
     /// The "sit" status a player sitting on the FLOOR gets, as opposed to one
