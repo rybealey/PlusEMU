@@ -82,8 +82,17 @@ public static class JamManager
     }
 
     /// <summary>
-    /// A deliberate leave. The last one out closes the jam; anyone else leaving
-    /// may hand the hosting on, which JamSession works out from its own order.
+    /// A deliberate leave - the button, not a dropped connection.
+    ///
+    /// THE HOST HAS ONLY ONE ENDING. A host who chooses to go ends the jam for
+    /// everybody; there is no version of it that carries on without them. It
+    /// used to hand over instead, which gave the host two different exits to
+    /// tell apart at the moment they had already decided to stop.
+    ///
+    /// Losing your CONNECTION is still not this. That holds your place for a
+    /// minute and a half and then passes the jam on - a host whose browser
+    /// crashed did not decide anything, and cutting four people off for it would
+    /// be punishing them for somebody else's accident.
     /// </summary>
     public static void Leave(Habbo habbo)
     {
@@ -92,7 +101,11 @@ public static class JamManager
         var jam = GetFor(habbo.Id);
         if (jam == null)
             return;
-        var wasHost = jam.IsHost(habbo.Id);
+        if (jam.IsHost(habbo.Id))
+        {
+            End(habbo);
+            return;
+        }
         jam.Leave(habbo.Id);
         _byUser.TryRemove(habbo.Id, out _);
         // Told first and unconditionally: they are out whether or not the jam
@@ -103,8 +116,6 @@ public static class JamManager
             _byId.TryRemove(jam.Id, out _);
             return;
         }
-        if (wasHost)
-            AnnounceHost(jam);
         jam.BroadcastState();
     }
 
@@ -185,24 +196,6 @@ public static class JamManager
             client?.Send(RpJamStateComposer.None());
         }
         catch (Exception) { }
-    }
-
-    private static void AnnounceHost(JamSession jam)
-    {
-        var hostId = jam.HostId;
-        var hostName = jam.HostName;
-        foreach (var userId in jam.MemberIds)
-        {
-            try
-            {
-                var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
-                if (client?.GetHabbo() == null) continue;
-                client.SendWhisper((userId == hostId)
-                    ? "The jam is yours now."
-                    : $"{hostName} is hosting the jam now.");
-            }
-            catch (Exception) { }
-        }
     }
 
     /// <summary>
