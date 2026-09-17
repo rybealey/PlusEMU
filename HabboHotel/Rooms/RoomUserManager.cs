@@ -269,6 +269,24 @@ public class RoomUserManager
             // still be consumed here so it can't leak into a later manual entry.
             session.GetHabbo().PendingRestore = null;
         }
+        // pixelrp: a player who spawns on a seat SITS, rather than standing on
+        // it. UpdateUserStatus is what applies a seat's pose, height and facing,
+        // but it only ever ran from the movement path - on ARRIVAL at the end of
+        // a step - and a spawn is not a walk, so nothing fired. Anybody landing
+        // on a chair stood in it until somebody moved a furni, which re-runs the
+        // check for the whole room and made this look intermittent.
+        //
+        // Before the UsersComposer broadcast, so the seat height and pose are
+        // already right in the first frame the room is sent rather than the
+        // player appearing upright and dropping into the chair a moment later.
+        // Safe this side of it: a knocked-out player is laid down by
+        // UpdateRpKnockoutState just below, which already strips a sit and gives
+        // back the height it took.
+        //
+        // Covers the model's own seat squares as well as seat furni, and means a
+        // last-position restore puts a player who logged out in a chair back in
+        // it instead of standing on it.
+        UpdateUserStatus(user, false);
         _room.SendPacket(new UsersComposer(user));
         // pixelrp RP stats: announce the entering player's health/energy to the
         // room (the enterer receives everyone else's in Room.SendObjects).
