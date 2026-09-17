@@ -71,6 +71,10 @@ public class JamSession
     // handover - the songs played are a fact about the session, not about the
     // person in charge of it.
     private readonly List<JukeboxTrack> _history = new();
+    // WHO HAS BEEN PUT OUT. A kick that lets you walk back in through the
+    // invite still sitting in your messages is not a kick - the card carries the
+    // jam's id and Join would take it. Per jam, and it dies with the jam.
+    private readonly HashSet<int> _kicked = new();
     private readonly Dictionary<int, DateTime> _lastAddByUser = new();
     private JukeboxTrack _current;
     private DateTime _currentStartedAt;
@@ -107,6 +111,8 @@ public class JamSession
     {
         lock (_lock)
         {
+            if (_kicked.Contains(habbo.Id))
+                return;
             var existing = _members.FirstOrDefault(member => member.Id == habbo.Id);
             if (existing != null)
             {
@@ -331,6 +337,36 @@ public class JamSession
             _pausedAt = null;
         }
         BroadcastState();
+        return true;
+    }
+
+    /// <summary>
+    /// The host puts somebody out.
+    ///
+    /// SILENTLY. Nobody is told - not the room, not the jam, not the person. The
+    /// music simply stops for them, which they will work out, and there is no
+    /// announcement for the others to react to. A kick said out loud is a scene;
+    /// this is meant to be the quiet end of somebody's evening in here.
+    ///
+    /// They cannot come back with the invite still sitting in their messages,
+    /// which is the only thing that makes it a kick rather than a nudge.
+    /// </summary>
+    public bool TryKick(GameClient session, int targetId)
+    {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return false;
+        lock (_lock)
+        {
+            if (_members.Count == 0 || _members[0].Id != habbo.Id)
+                return false;
+            // Not yourself. Ending a jam you are hosting is the other button.
+            if (targetId == habbo.Id)
+                return false;
+            if (_members.RemoveAll(member => member.Id == targetId) == 0)
+                return false;
+            _kicked.Add(targetId);
+        }
         return true;
     }
 

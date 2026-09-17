@@ -155,6 +155,25 @@ public static class JamManager
     }
 
     /// <summary>
+    /// The host puts somebody out, and nobody is told.
+    ///
+    /// The kicked player's client is sent an empty state, which is what actually
+    /// stops their music - no whisper, no notification, nothing for the rest of
+    /// the jam to see. The silence is the point: see JamSession.TryKick.
+    /// </summary>
+    public static void Kick(Habbo host, int targetId)
+    {
+        if (host == null)
+            return;
+        var jam = GetFor(host.Id);
+        if (jam == null || !jam.TryKick(PlusEnvironment.Game.ClientManager.GetClientByUserId(host.Id), targetId))
+            return;
+        _byUser.TryRemove(targetId, out _);
+        SendEmpty(targetId);
+        jam.BroadcastState();
+    }
+
+    /// <summary>
     /// The connection went, which is not the same as leaving. Their place is
     /// held: refreshing the client disconnects, and a jam you lose by reloading
     /// the page is not a jam anybody can use. Cycle() reaps them if they really
