@@ -119,9 +119,10 @@ public enum InteractionType
     Exchange,
     DressingBooth,
 
-    // pixelrp: step on it and the Clothing Store opens, the same window :zara
-    // gives you. A BEHAVIOUR rather than a classname check, so any piece can be
-    // a shop doorway - a mat, a till, a rail - without a code change.
+    // pixelrp: step on it and the Clothing Store opens. A BEHAVIOUR rather than
+    // a classname check, so any piece can be a shop doorway - a mat, a till, a
+    // rail - without a code change. This replaced the :zara command outright:
+    // a shop you walk into beats a word you type from anywhere in the hotel.
     ZaraShop,
 
     // pixelrp: the ATM. A BEHAVIOUR rather than a classname check, so

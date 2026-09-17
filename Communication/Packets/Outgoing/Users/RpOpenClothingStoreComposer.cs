@@ -2,7 +2,8 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Outgoing.Users;
 
-/// <summary>pixelrp: tells the client to open the Clothing Store window (:zara).</summary>
+/// <summary>pixelrp: tells the client to open the Clothing Store window. Sent by
+/// the zara_shop furni behaviour when somebody steps on it.</summary>
 public class RpOpenClothingStoreComposer : IServerPacket
 {
     public uint MessageId => ServerPacketHeader.RpOpenClothingStoreComposer;
