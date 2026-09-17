@@ -427,6 +427,18 @@ public class RoomItemHandling
         // reload — walking on/off such an item NRE'd the tick (and the crash repeated
         // every cycle because SetStep never got cleared). Stamp the room up front.
         item.RoomId = _room.RoomId;
+        // pixelrp: same gap for a behaviour scoped to this one furni. The room
+        // load applies those, but an item placed from inventory never goes
+        // through it, so it would arrive holding the SHARED definition and
+        // behave like every other copy until the next reload. Only on a new
+        // placement - a move already has its own definition and re-fetching
+        // would cost a query per drag.
+        if (newItem)
+        {
+            var overrides = ItemFunctionOverrides.ForItems(new[] { item.Id });
+            if (overrides.TryGetValue(item.Id, out var fields))
+                ItemFunctionOverrides.Apply(item, fields);
+        }
         // Same gap for owner identity: ToRoomObject() fills OwnerId but not the legacy
         // UserId/Username pair the composers serialize, leaving the infostand's Owner
         // blank until a reload. Only on new placements — movers must not become owners.

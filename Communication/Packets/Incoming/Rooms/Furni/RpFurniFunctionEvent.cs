@@ -72,6 +72,10 @@ internal class RpFurniFunctionEvent : IPacketEvent
         var effectId = Math.Max(0, packet.ReadInt());
         var behaviourData = Math.Max(0, packet.ReadInt());
         var vendingIds = ParseIntList(packet.ReadString());
+        // pixelrp: 0 edits the DEFINITION, hotel-wide, as this tool always has.
+        // Anything else is the id of the one placed item to scope the change to.
+        // Read unconditionally - the whole record has to come off the wire.
+        var scopeItemId = (uint)Math.Max(0, packet.ReadInt());
 
         var habbo = session.GetHabbo();
         if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
@@ -88,6 +92,17 @@ internal class RpFurniFunctionEvent : IPacketEvent
         var definition = item?.Definition;
         if (definition == null)
             return Task.CompletedTask;
+
+        // pixelrp: scoped to one item. Handled here, before any of the
+        // definition-wide work below, because almost none of it applies: no
+        // shared object is mutated, no other room is touched, and nothing is
+        // broadcast - the client mirrors none of these five fields.
+        if (scopeItemId > 0)
+        {
+            ApplyToSingleItem(session, room, scopeItemId, definition, interactionName, modes, effectId,
+                behaviourData, vendingIds);
+            return Task.CompletedTask;
+        }
 
         // An unrecognised name would silently become InteractionType.None and
         // quietly strip whatever the furni did, so it is rejected instead.
@@ -239,6 +254,75 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         _clientManager.SendPacket(new RpFurniFunctionComposer(definition));
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// pixelrp: the same edit, scoped to one placed furni.
+    ///
+    /// Only the five fields the client does not mirror - see
+    /// 136_ItemFunctionOverrides. Name, walkability and the rest are silently
+    /// NOT applied here rather than refused, because the window disables them
+    /// for a scoped edit and a crafted packet carrying them should change
+    /// nothing rather than half-apply.
+    /// </summary>
+    private void ApplyToSingleItem(GameClient session, Room room, uint itemId, ItemDefinition definition,
+        string interactionName, int modes, int effectId, int behaviourData, List<int> vendingIds)
+    {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return;
+
+        var item = room.GetRoomItemHandler().GetFloor.FirstOrDefault(x => x.Id == itemId)
+                   ?? room.GetRoomItemHandler().GetWall.FirstOrDefault(x => x.Id == itemId);
+        // Resolved through the room the caller is standing in, same as the
+        // definition is, and it has to BE the furni they opened the window on.
+        if (item == null || item.Definition?.Id != definition.Id)
+            return;
+
+        // Laying is derived client-side from the interaction type, so scoping
+        // one to or from a laying type cannot be expressed per item - the client
+        // would apply it to every copy or to none.
+        var wasLaying = ItemFunctionOverrides.IsLayingType(item.Definition.InteractionTypeName);
+        var willLay = ItemFunctionOverrides.IsLayingType(interactionName);
+        if (wasLaying || willLay)
+        {
+            session.SendWhisper("Bed and tent behaviours cannot be set on a single furni - the client reads laying per furni type.");
+            return;
+        }
+
+        ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldInteractionType, interactionName, habbo.Id);
+        ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldModes, modes.ToString(), habbo.Id);
+        ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldEffectId, effectId.ToString(), habbo.Id);
+        ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldBehaviourData, behaviourData.ToString(), habbo.Id);
+        ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldVendingIds,
+            vendingIds.Count > 0 ? Join(vendingIds) : "0", habbo.Id);
+
+        using (var dbClient = _database.GetQueryReactor())
+        {
+            dbClient.SetQuery("INSERT INTO `rp_furni_function_log` (`definition_id`, `item_name`, `user_id`, " +
+                              "`username`, `field`, `old_value`, `new_value`) VALUES (@definitionId, @itemName, " +
+                              "@userId, @username, 'scopedBehaviour', @oldValue, @newValue)");
+            dbClient.AddParameter("definitionId", (int)definition.Id);
+            dbClient.AddParameter("itemName", definition.ItemName ?? string.Empty);
+            dbClient.AddParameter("userId", habbo.Id);
+            dbClient.AddParameter("username", habbo.Username ?? string.Empty);
+            dbClient.AddParameter("oldValue", $"item {itemId}: {item.Definition.InteractionTypeName}");
+            dbClient.AddParameter("newValue", $"item {itemId}: {interactionName}");
+            dbClient.RunQuery();
+        }
+
+        // Re-clone from the SHARED definition rather than from the item's own,
+        // so clearing a field really clears it instead of leaving the previous
+        // override in place.
+        if (PlusEnvironment.Game.ItemManager.Items.TryGetValue(definition.Id, out var shared))
+            item.Definition = shared;
+        item.HasOwnDefinition = false;
+        ItemFunctionOverrides.Apply(item, ItemFunctionOverrides.ForItems(new[] { itemId }).GetValueOrDefault(itemId));
+
+        // Walkability is baked into the map at generation time. Nothing here
+        // changes it today, but a behaviour can imply a seat, and regenerating
+        // one room is cheap next to a tile nobody can path to.
+        room.GetGameMap().GenerateMaps();
     }
 
     /// A mask the map cannot read is worse than none - it would punch holes in

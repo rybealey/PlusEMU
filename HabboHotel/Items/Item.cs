@@ -20,6 +20,15 @@ public class Item
     public uint OwnerId { get; set; }
     public uint RoomId { get; set; }
     public ItemDefinition Definition { get; set; }
+
+    /// <summary>
+    /// pixelrp: true when this item holds a PRIVATE clone of its definition,
+    /// carrying overrides that apply to this copy alone. Mutating Definition on
+    /// one of these cannot reach any other copy - which is the opposite of the
+    /// hotel-wide Function tool, and why that tool refuses to edit one.
+    /// See ItemFunctionOverrides.
+    /// </summary>
+    public bool HasOwnDefinition { get; set; }
     public IFurniObjectData ExtraData { get; set; } = FurniObjectData.Empty;
     /// <summary>
     /// How see-through this item is, 10-100, set from the infostand's build

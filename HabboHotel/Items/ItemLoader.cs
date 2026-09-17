@@ -46,6 +46,24 @@ public static class ItemLoader
                 }
             }
         }
+
+        // pixelrp: behaviour scoped to one placed furni. Fetched in a single
+        // query for the whole room rather than per item, and applied by handing
+        // the item its own definition - see ItemFunctionOverrides for why that
+        // makes the ~128 readers of Definition.InteractionType correct without
+        // any of them changing.
+        if (items.Count > 0)
+        {
+            var overrides = ItemFunctionOverrides.ForItems(items.Select(item => item.Id));
+            if (overrides.Count > 0)
+            {
+                foreach (var item in items)
+                {
+                    if (overrides.TryGetValue(item.Id, out var fields))
+                        ItemFunctionOverrides.Apply(item, fields);
+                }
+            }
+        }
         return items;
     }
 
