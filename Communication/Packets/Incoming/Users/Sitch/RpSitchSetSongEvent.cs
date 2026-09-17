@@ -1,6 +1,4 @@
-using System.Text.Json;
 using Plus.HabboHotel.GameClients;
-using Plus.HabboHotel.Rooms.Jukebox;
 using Plus.HabboHotel.Sitch;
 
 namespace Plus.Communication.Packets.Incoming.Users.Sitch;
@@ -24,8 +22,6 @@ namespace Plus.Communication.Packets.Incoming.Users.Sitch;
 /// </summary>
 internal class RpSitchSetSongEvent : IPacketEvent
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(5) };
-
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
         var url = packet.ReadString() ?? "";
@@ -33,34 +29,16 @@ internal class RpSitchSetSongEvent : IPacketEvent
         if (habbo == null) return;
 
         // An empty link clears the song rather than being an error - that is
-        // how somebody takes it off their profile.
-        if (string.IsNullOrWhiteSpace(url))
+        // how somebody takes it off their profile. The resolver returns Ok with
+        // an empty id for exactly that case.
+        var song = await SitchSongResolver.Resolve(url);
+        if (!song.Ok)
         {
-            SitchUtility.SetFavoriteSong(habbo.Id, "", "", "");
-            SitchUtility.SendProfile(session, habbo.Id);
+            session.SendNotification(song.Error);
             return;
         }
 
-        var videoId = JukeboxStation.ParseVideoId(url);
-        if (string.IsNullOrEmpty(videoId))
-        {
-            session.SendNotification("That does not look like a YouTube link.");
-            return;
-        }
-
-        try
-        {
-            var json = await Http.GetStringAsync(
-                $"https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D{videoId}&format=json");
-            using var doc = JsonDocument.Parse(json);
-            var title = doc.RootElement.GetProperty("title").GetString() ?? videoId;
-            var author = doc.RootElement.TryGetProperty("author_name", out var name) ? (name.GetString() ?? "") : "";
-            SitchUtility.SetFavoriteSong(habbo.Id, videoId, title, author);
-            SitchUtility.SendProfile(session, habbo.Id);
-        }
-        catch
-        {
-            session.SendNotification("That video can't be used (missing, private, or embedding disabled).");
-        }
+        SitchUtility.SetFavoriteSong(habbo.Id, song.VideoId, song.Title, song.Author);
+        SitchUtility.SendProfile(session, habbo.Id);
     }
 }

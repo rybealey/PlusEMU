@@ -34,5 +34,8 @@ internal static class SitchPostWriter
         // field after it. Empty and 0 on every timeline but a profile.
         packet.WriteString(p.RepostedBy ?? "");
         packet.WriteInteger(p.RepostedAt);
+        packet.WriteString(p.SongVideoId ?? "");
+        packet.WriteString(p.SongTitle ?? "");
+        packet.WriteString(p.SongAuthor ?? "");
     }
 }

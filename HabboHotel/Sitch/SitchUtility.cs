@@ -65,6 +65,12 @@ public static class SitchUtility
         /// repost belongs to the profile that made it, not to the post.
         /// </summary>
         public string RepostedBy { get; set; } = "";
+        /// <summary>The song attached to the post, or empty. Same shape as a
+        /// profile's favorite song: the id is the identity, title and author
+        /// are what oEmbed said when it was written.</summary>
+        public string SongVideoId { get; set; } = "";
+        public string SongTitle { get; set; } = "";
+        public string SongAuthor { get; set; } = "";
         /// <summary>When the repost happened, so a profile can order by it.</summary>
         public int RepostedAt { get; set; }
     }
@@ -121,6 +127,8 @@ public static class SitchUtility
         // fine. That cost a deploy.
         "u.`username` AS Username, COALESCE(u.`look`, '') AS Figure, COALESCE(u.`rank`, 1) AS `Rank`, " +
         "p.`body` AS Body, p.`photo_id` AS PhotoId, " +
+        "p.`song_video_id` AS SongVideoId, p.`song_title` AS SongTitle, " +
+        "p.`song_author` AS SongAuthor, " +
         "COALESCE(c.`url`, '') AS PhotoUrl, COALESCE(c.`room_name`, '') AS PhotoRoom, " +
         "p.`created_at` AS CreatedAt, " +
         "(SELECT COUNT(*) FROM `rp_sitch_posts` r WHERE r.`parent_id` = p.`id` AND r.`deleted_at` = 0) AS Replies, " +
@@ -463,7 +471,8 @@ public static class SitchUtility
     }
 
     /// <summary>Returns the new post's id, or 0 if the parent has gone.</summary>
-    public static int CreatePost(int userId, string body, int parentId, int photoId)
+    public static int CreatePost(int userId, string body, int parentId, int photoId,
+        string songVideoId = "", string songTitle = "", string songAuthor = "")
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
 
@@ -479,9 +488,11 @@ public static class SitchUtility
         LastPost[userId] = now;
 
         var id = connection.ExecuteScalar<int>(
-            "INSERT INTO `rp_sitch_posts` (`user_id`,`parent_id`,`body`,`photo_id`,`created_at`) " +
-            "VALUES (@userId,@parentId,@body,@photoId,@now); SELECT LAST_INSERT_ID();",
-            new { userId, parentId, body, photoId, now });
+            "INSERT INTO `rp_sitch_posts` " +
+            "(`user_id`,`parent_id`,`body`,`photo_id`,`song_video_id`,`song_title`,`song_author`,`created_at`) " +
+            "VALUES (@userId,@parentId,@body,@photoId,@songVideoId,@songTitle,@songAuthor,@now); " +
+            "SELECT LAST_INSERT_ID();",
+            new { userId, parentId, body, photoId, songVideoId, songTitle, songAuthor, now });
 
         // Index the hashtags now rather than searching for them later - see
         // 128_SitchTags for why a LIKE would be both slow and wrong.
