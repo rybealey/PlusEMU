@@ -541,7 +541,7 @@ public class RoomUser
         // "@bob,@alice" does not - widening that starts eating the apostrophes
         // and hyphens that are legal in a username.
         var mentionedUsers = new HashSet<RoomUser>();
-        HashSet<RoomUser> mentionsOnCooldown = null;
+        var anyOnCooldown = false;
         if (message.IndexOf('@') >= 0)
         {
             foreach (var token in message.Split(' '))
@@ -553,11 +553,12 @@ public class RoomUser
                 if (candidate != null && !candidate.IsBot && candidate != this)
                 {
                     // Still inside their own quiet period: named in the text like
-                    // everybody else, just not rung again. Sets throughout, so
-                    // "@bob @bob" counts Bob once whichever list he lands in.
+                    // everybody else, just not rung again. A flag rather than a
+                    // list of them, because the speaker is told the same one line
+                    // however many were quietened.
                     if (candidate.GetClient()?.GetHabbo() is { } theirs && UnixTimestamp.GetNow() < theirs.MentionCooldownUntil)
                     {
-                        (mentionsOnCooldown ??= new HashSet<RoomUser>()).Add(candidate);
+                        anyOnCooldown = true;
                         continue;
                     }
                     mentionedUsers.Add(candidate);
@@ -575,17 +576,16 @@ public class RoomUser
         // The message itself is never held back. It goes out in full to everyone
         // who would normally hear it, names and all; only the alert is withheld,
         // so a quietened mention reads as ordinary chat rather than vanishing. The
-        // speaker is told who was skipped, because a ping that silently did
-        // nothing is worse than one refused out loud.
+        // speaker is told, because a ping that silently did nothing is worse than
+        // one refused out loud. Deliberately says nothing about WHO was skipped or
+        // for how long: it is one line whoever and however many were quietened,
+        // and it does not report one player's state to another.
         //
         // The timer is started where the ping is actually SENT, further down, not
         // here: somebody out of chat range or ignoring the speaker never receives
         // the alert, and must not be left on a cooldown for it.
-        if (mentionsOnCooldown != null && mentionsOnCooldown.Count > 0)
-        {
-            var names = mentionsOnCooldown.Select(quiet => quiet.GetUsername()).ToList();
-            GetClient().SendWhisper($"{string.Join(", ", names)} {(names.Count == 1 ? "was" : "were")} mentioned moments ago, so they were not alerted again.");
-        }
+        if (anyOnCooldown)
+            GetClient().SendWhisper("Wait a moment before you ping again.");
         IServerPacket mentionPacket = null;
         if (mentionedUsers.Count > 0)
             mentionPacket = shout
