@@ -21,9 +21,11 @@ public class RoomUser
     /// just do not get the bubble and the sound. See OnChat.</summary>
     public const int MentionsPerMessage = 5;
 
-    /// <summary>pixelrp: seconds a speaker waits after pinging somebody before
-    /// any later message of theirs can ping again. The per-message cap limits how
-    /// wide one line reaches; this limits how often. See OnChat.</summary>
+    /// <summary>pixelrp: seconds a player is left alone after being @mentioned
+    /// before another mention can alert them again. Per RECIPIENT, so addressing
+    /// two people in consecutive lines pings both - it is a pile-on guard, not a
+    /// speaking limit. The per-message cap limits how wide one line reaches; this
+    /// limits how often one person can be rung. See OnChat.</summary>
     public const int MentionCooldownSeconds = 10;
 
     /// <summary>
@@ -539,6 +541,7 @@ public class RoomUser
         // "@bob,@alice" does not - widening that starts eating the apostrophes
         // and hyphens that are legal in a username.
         var mentionedUsers = new HashSet<RoomUser>();
+        HashSet<RoomUser> mentionsOnCooldown = null;
         if (message.IndexOf('@') >= 0)
         {
             foreach (var token in message.Split(' '))
@@ -549,34 +552,39 @@ public class RoomUser
                     .GetRoomUserByHabbo(token.Substring(1).TrimEnd('.', ',', '!', '?', ':', ';'));
                 if (candidate != null && !candidate.IsBot && candidate != this)
                 {
-                    // a set, so "@bob @bob" pings Bob once rather than twice
+                    // Still inside their own quiet period: named in the text like
+                    // everybody else, just not rung again. Sets throughout, so
+                    // "@bob @bob" counts Bob once whichever list he lands in.
+                    if (candidate.GetClient()?.GetHabbo() is { } theirs && UnixTimestamp.GetNow() < theirs.MentionCooldownUntil)
+                    {
+                        (mentionsOnCooldown ??= new HashSet<RoomUser>()).Add(candidate);
+                        continue;
+                    }
                     mentionedUsers.Add(candidate);
+                    // only a real ping counts towards the cap
                     if (mentionedUsers.Count >= MentionsPerMessage)
                         break;
                 }
             }
         }
-        // pixelrp mention cooldown: naming somebody puts the SPEAKER on a short
-        // timer before any later message of theirs can ping again. Without it one
-        // player could alert the whole room, then do it again on the next line -
-        // the per-message cap limits the blast, this limits the rate.
+        // pixelrp mention cooldown: the timer belongs to the person being
+        // mentioned. Addressing two people in consecutive lines pings both, which
+        // a timer on the speaker would not; what it stops is the same player being
+        // rung over and over, by one person or by several piling on.
         //
         // The message itself is never held back. It goes out in full to everyone
-        // who would normally hear it, names and all; only the alert bubble is
-        // withheld, so a suppressed mention reads as ordinary chat rather than
-        // vanishing. The speaker is told, because a ping that silently did
-        // nothing is worse than one that was refused out loud.
-        if (mentionedUsers.Count > 0)
+        // who would normally hear it, names and all; only the alert is withheld,
+        // so a quietened mention reads as ordinary chat rather than vanishing. The
+        // speaker is told who was skipped, because a ping that silently did
+        // nothing is worse than one refused out loud.
+        //
+        // The timer is started where the ping is actually SENT, further down, not
+        // here: somebody out of chat range or ignoring the speaker never receives
+        // the alert, and must not be left on a cooldown for it.
+        if (mentionsOnCooldown != null && mentionsOnCooldown.Count > 0)
         {
-            var now = UnixTimestamp.GetNow();
-            var habbo = GetClient().GetHabbo();
-            if (now < habbo.MentionCooldownUntil)
-            {
-                GetClient().SendWhisper($"You can mention somebody again in {Math.Max(1, (int)Math.Ceiling(habbo.MentionCooldownUntil - now))} seconds.");
-                mentionedUsers.Clear();
-            }
-            else
-                habbo.MentionCooldownUntil = now + MentionCooldownSeconds;
+            var names = mentionsOnCooldown.Select(quiet => quiet.GetUsername()).ToList();
+            GetClient().SendWhisper($"{string.Join(", ", names)} {(names.Count == 1 ? "was" : "were")} mentioned moments ago, so they were not alerted again.");
         }
         IServerPacket mentionPacket = null;
         if (mentionedUsers.Count > 0)
@@ -613,6 +621,8 @@ public class RoomUser
                 if (mentionPacket != null && mentionedUsers.Contains(user))
                 {
                     user.GetClient().Send(mentionPacket);
+                    // their quiet period starts here, where the alert really landed
+                    user.GetClient().GetHabbo().MentionCooldownUntil = UnixTimestamp.GetNow() + MentionCooldownSeconds;
                     continue;
                 }
                 user.GetClient().Send((IServerPacket)packet);

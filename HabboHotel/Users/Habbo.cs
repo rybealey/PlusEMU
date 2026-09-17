@@ -157,10 +157,13 @@ public class Habbo
 
     public double FloodTime { get; set; }
 
-    /// <summary>pixelrp: unix seconds until this player's next @mention may ping
-    /// anybody. Session-only and never persisted - a cooldown measured in seconds
-    /// is not worth a database round trip, and a relog resets something that was
-    /// about to expire anyway. See RoomUser.OnChat.</summary>
+    /// <summary>pixelrp: unix seconds until THIS player can be alerted by another
+    /// @mention. The timer belongs to the person being mentioned, not the speaker,
+    /// so two people addressed in the same breath both get their ping - it only
+    /// stops the same player being alerted over and over. Session-only and never
+    /// persisted: a cooldown measured in seconds is not worth a database round
+    /// trip, and a relog resets something about to expire anyway. See
+    /// RoomUser.OnChat.</summary>
     public double MentionCooldownUntil { get; set; }
 
     public int BannedPhraseCount { get; set; }
