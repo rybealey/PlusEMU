@@ -34,7 +34,11 @@ internal class RpJamInviteEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        var targetId = packet.ReadInt();
+        // BY NAME, not by id. The app's picker offers the player's friends as
+        // taps and a box for anybody else, and a name typed into that box is
+        // all the client has - it has never been told a stranger's id, and
+        // handing it a way to ask would be handing it a way to enumerate.
+        var targetName = packet.ReadString();
         var habbo = session.GetHabbo();
         if (habbo == null)
             return Task.CompletedTask;
@@ -49,8 +53,17 @@ internal class RpJamInviteEvent : IPacketEvent
             session.SendNotification("Start a jam before inviting anyone to it.");
             return Task.CompletedTask;
         }
-        if (targetId == habbo.Id)
+        // Resolved among ONLINE players only. A jam is happening now, so an
+        // invite to somebody who is not here has nothing to offer them - and
+        // this is also what stops the box being used to check whether a name
+        // exists at all: every unreachable name gets one answer.
+        var target = PlusEnvironment.Game.ClientManager.GetClientByUsername(targetName);
+        if (target?.GetHabbo() == null || !target.GetHabbo().AllowConsoleMessages || target.GetHabbo().Id == habbo.Id)
+        {
+            session.SendNotification("They can't be invited right now.");
             return Task.CompletedTask;
+        }
+        var targetId = target.GetHabbo().Id;
         if (jam.Has(targetId))
         {
             session.SendNotification("They're already in your jam.");
@@ -65,16 +78,6 @@ internal class RpJamInviteEvent : IPacketEvent
         if (_lastInvite.TryGetValue(key, out var last) && (DateTime.UtcNow - last).TotalSeconds < InviteCooldownSec)
         {
             session.SendNotification("You've already invited them - give them a moment.");
-            return Task.CompletedTask;
-        }
-        var target = PlusEnvironment.Game.ClientManager.GetClientByUserId(targetId);
-        // Offline is not an error worth naming precisely. A jam is happening
-        // now, so an invite to somebody who is not here has nothing to offer
-        // them - and saying "they are offline" would report on who is online to
-        // anyone willing to try user ids.
-        if (target?.GetHabbo() == null || !target.GetHabbo().AllowConsoleMessages)
-        {
-            session.SendNotification("They can't be invited right now.");
             return Task.CompletedTask;
         }
         _lastInvite[key] = DateTime.UtcNow;
