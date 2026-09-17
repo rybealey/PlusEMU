@@ -9,7 +9,7 @@ internal class RpJukeboxSkipEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        if (session.GetHabbo() != null) JukeboxStation.TrySkip(session);
+        session.GetHabbo()?.CurrentRoom?.GetJukeboxManager()?.TrySkip(session);
         return Task.CompletedTask;
     }
 }

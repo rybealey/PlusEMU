@@ -118,10 +118,11 @@ public class SsoTicketEvent : IPacketEvent
             session.GetHabbo().EnsureRpUiSettingsLoaded();
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor, session.GetHabbo().RpUiUsernameColor, session.GetHabbo().RpUiUsernameIcon, session.GetHabbo().RpUiUsernameIconColor));
             session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
-            // pixelrp: the hotel station's state, so the phone's Music app can tune
-            // in before (or without) entering a room; room entry re-sends it with
-            // that room's has-jukebox flag.
-            session.Send(JukeboxStation.BuildState(false));
+            // pixelrp: quiet, because at login there is no room and a station
+            // belongs to one. Room entry sends that room's real state. This is
+            // still worth sending: without it the app would open on whatever the
+            // last session left in its store.
+            session.Send(JukeboxStation.EmptyState());
             session.Send(new Plus.Communication.Packets.Outgoing.Users.RpTunesAccessComposer(JukeboxStation.IsStationStaff(session)));
             // pixelrp: first login of the day starts the weather fetch loop so the phone opens warm
             Plus.HabboHotel.Weather.WeatherStation.Touch();

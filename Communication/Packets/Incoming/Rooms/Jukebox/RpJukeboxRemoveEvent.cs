@@ -10,7 +10,7 @@ internal class RpJukeboxRemoveEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var index = packet.ReadInt();
-        if (session.GetHabbo() != null) JukeboxStation.TryRemove(session, index);
+        session.GetHabbo()?.CurrentRoom?.GetJukeboxManager()?.TryRemove(session, index);
         return Task.CompletedTask;
     }
 }

@@ -80,6 +80,11 @@ public class Room : RoomData
         _gamemap = new(this, data.Model);
         _roomItemHandling = new(this);
         _roomUserManager = new(this);
+        // Eager, not lazy: ??= is not thread safe, and the room cycle and a
+        // packet handler can both reach this. Harmless while the manager was a
+        // pass-through to a static station - it now holds this room's queue, so
+        // losing that race would mean two managers and one queue vanishing.
+        _jukeboxManager = new(this);
         _filterComponent = new(this);
         _wiredComponent = new(this);
         _bansComponent = new(this);
@@ -117,6 +122,7 @@ public class Room : RoomData
     public RoomUserManager GetRoomUserManager() => _roomUserManager;
 
     public RoomJukeboxManager GetJukeboxManager() => _jukeboxManager ??= new RoomJukeboxManager(this);
+
 
     public Soccer GetSoccer()
     {

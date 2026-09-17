@@ -12,7 +12,7 @@ internal class RpJukeboxReportEvent : IPacketEvent
     {
         var durationSec = packet.ReadInt();
         var ended = packet.ReadInt() == 1;
-        if (session.GetHabbo() != null) JukeboxStation.Report(session, durationSec, ended);
+        session.GetHabbo()?.CurrentRoom?.GetJukeboxManager()?.Report(session, durationSec, ended);
         return Task.CompletedTask;
     }
 }
