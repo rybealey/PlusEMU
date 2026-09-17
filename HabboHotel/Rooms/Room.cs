@@ -546,24 +546,37 @@ public class Room : RoomData
         var fadedItems = GetRoomItemHandler().GetFloor.Where(item => item.Alpha < 100).ToList();
         if (fadedItems.Count > 0)
             session.Send(new RpFurniAlphaComposer(fadedItems));
-        // Definitions the Function Tool has edited, re-sent to whoever just
-        // walked in. The client reads a furni's NAME and its walkability out of
-        // gamedata on disk, which an edit never touches - so a live edit
-        // patches everyone connected and then the next login quietly reads the
-        // old values back. Only edited definitions actually in this room
-        // travel, which is normally none of them.
+        // Definitions whose database record differs from the gamedata on disk,
+        // re-sent to whoever just walked in. The client reads a furni's NAME,
+        // its walkability and its height marker out of that file, which an edit
+        // never touches - so a live edit patches everyone connected and then the
+        // next login quietly reads the old values back.
+        //
+        // Two reasons a definition qualifies, and the second was missing:
+        //
+        //   * the Function Tool has edited it (rp_furni_function_log)
+        //   * it carries the height marker at all
+        //
+        // The marker was relying entirely on the log, so one set by a migration
+        // or by hand in SQL had no row, never travelled, and the ring silently
+        // stopped appearing after any restart - it looked like the save had not
+        // persisted when the furniture table had it all along. The log is an
+        // audit trail; `furniture` is the source of truth, and rendering should
+        // read the second.
+        //
+        // Only definitions actually in this room travel, which is normally a
+        // handful and often none.
         var edited = PlusEnvironment.Game?.ItemManager?.EditedDefinitions;
-        if (edited is { Count: > 0 })
-        {
-            foreach (var definition in GetRoomItemHandler().GetWallAndFloor
-                         // the room's item collections can hold nulls - every
-                         // other loop over them guards, so this one does too
-                         .Where(item => item != null)
-                         .Select(item => item.Definition)
-                         .Where(definition => definition != null && edited.Contains(definition.Id))
-                         .DistinctBy(definition => definition.Id))
-                session.Send(new RpFurniFunctionComposer(definition));
-        }
+        foreach (var definition in GetRoomItemHandler().GetWallAndFloor
+                     // the room's item collections can hold nulls - every
+                     // other loop over them guards, so this one does too
+                     .Where(item => item != null)
+                     .Select(item => item.Definition)
+                     .Where(definition => definition != null
+                                          && (definition.HeightMarker
+                                              || (edited != null && edited.Contains(definition.Id))))
+                     .DistinctBy(definition => definition.Id))
+            session.Send(new RpFurniFunctionComposer(definition));
         session.Send(new ItemsComposer(GetRoomItemHandler().GetWall.ToArray(), this));
         // pixelrp jukebox: sent unconditionally, even with no jukebox in the
         // room — the packet is tiny and the client hides the panel itself
