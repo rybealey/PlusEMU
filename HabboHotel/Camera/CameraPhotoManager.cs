@@ -69,6 +69,20 @@ public class CameraPhotoManager : ICameraPhotoManager
         return url;
     }
 
+    /// <summary>
+    /// pixelrp: the file extension these bytes deserve, read from the bytes.
+    ///
+    /// The camera saves stills and, since the Video mode, animated GIFs, down
+    /// the same packet. Nothing on the wire says which - and nothing should:
+    /// a flag is a second source of truth that can disagree with the file it
+    /// describes, where the magic number cannot. A GIF opens "GIF8"; anything
+    /// else is written as the PNG this only ever used to produce.
+    /// </summary>
+    private static string ExtensionFor(byte[] bytes) =>
+        (bytes != null && bytes.Length >= 4 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38)
+            ? "gif"
+            : "png";
+
     public string StoreEditedPhoto(byte[] bytes)
     {
         var urlBase = UrlBase;
@@ -80,11 +94,15 @@ public class CameraPhotoManager : ICameraPhotoManager
 
         Directory.CreateDirectory(StoragePath);
         var photoId = Guid.NewGuid().ToString("N");
-        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}.png"), bytes);
+        var ext = ExtensionFor(bytes);
+        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}.{ext}"), bytes);
         // Same bytes for the _small variant — edits happen outside the
-        // capture flow, so there's no separate thumbnail render to use.
-        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}_small.png"), bytes);
-        return $"{urlBase}/photo_{photoId}.png";
+        // capture flow, so there's no separate thumbnail render to use. A GIF
+        // gets a GIF thumbnail: its first frame is the still everything else
+        // would have used, and decoding one here to flatten it would be work
+        // for a file the wall-item path never asks of a camera photo.
+        File.WriteAllBytes(Path.Combine(StoragePath, $"photo_{photoId}_small.{ext}"), bytes);
+        return $"{urlBase}/photo_{photoId}.{ext}";
     }
 
     public bool TryGetPending(int userId, out PendingPhoto pending) => _pendingPhotos.TryGetValue(userId, out pending);
