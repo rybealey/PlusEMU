@@ -1,5 +1,3 @@
-categories: 38   grouped: 399   left on page: 127
-after absorb -> categories: 38   grouped: 441   left on page: 85
 -- The same treatment 140 gave Bonus Rares, now for its sibling page.
 -- Rares is a harder shape: 526 lines, of which 441 are colour or one-off
 -- variants of 38 furni types and 85 are genuine one-offs - the Monolith,
