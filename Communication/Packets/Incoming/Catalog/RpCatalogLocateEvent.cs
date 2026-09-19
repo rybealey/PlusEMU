@@ -21,11 +21,14 @@ internal class RpCatalogLocateEvent : IPacketEvent
         var habbo = session.GetHabbo();
         // The catalog and purchase handlers are staff-only. A negative result
         // also lets the infostand hide Buy for furniture with no accessible shelf.
-        var item = habbo != null
+        var found = habbo != null
             ? CatalogLookup.FindFurniture(_catalog.Pages, spriteId, wall, habbo.IsStaff, habbo.Rank, habbo.VipRank)
-            : null;
+            : new CatalogLocation(null, CatalogLocateStatus.NotPermitted);
 
-        session.Send(new RpCatalogLocateComposer(requestId, item?.PageId ?? -1, item?.Id ?? -1));
+        // The reason rides back so a missing Buy button can be read: silence
+        // now means the reply was lost, never that the item is not for sale.
+        session.Send(new RpCatalogLocateComposer(requestId, found.Item?.PageId ?? -1, found.Item?.Id ?? -1,
+            (int)found.Status));
         return Task.CompletedTask;
     }
 }

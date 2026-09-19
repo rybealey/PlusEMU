@@ -23,7 +23,9 @@ public class GetCatalogPageEvent : IPacketEvent
         var cataMode = packet.ReadString();
         if (!_catalogManager.TryGetPage(pageId, out var page))
             return Task.CompletedTask;
-        if (!page.Enabled || !page.Visible || page.MinimumRank > session.GetHabbo().Rank || page.MinimumVip > session.GetHabbo().VipRank && session.GetHabbo().Rank == 1)
+        // The leaf half of CatalogLookup's rule, so what the shop will serve
+        // and what the search and Buy link offer stay one definition.
+        if (!CatalogLookup.IsOpenable(page, session.GetHabbo().Rank, session.GetHabbo().VipRank))
             return Task.CompletedTask;
         // Page offers use catalog_items.id, while legacy links use offer_id.
         itemId = CatalogLookup.ResolveSelection(page, itemId);

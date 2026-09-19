@@ -1,5 +1,6 @@
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.HabboHotel.Catalog;
+using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.GameClients;
 
@@ -14,11 +15,11 @@ namespace Plus.Communication.Packets.Incoming.Catalog;
 /// knowable: whether a piece is for sale is a fact about catalog_items, and the
 /// client is never sent more than the page it is looking at.
 ///
-/// VISIBILITY IS THE SAME TEST THE TREE USES. A page the player cannot see in
-/// the navigator must not leak its stock through the search box, so this
-/// mirrors CatalogIndexComposer.CanSee exactly - rank, VIP, enabled, visible -
-/// rather than inventing a second rule that can drift from it. Purchase
-/// re-checks all of it again anyway.
+/// VISIBILITY IS THE SAME TEST THE TREE USES, and now literally the same code:
+/// CatalogLookup.IsShoppable, shared with the infostand's Buy link. A page the
+/// player cannot see in the navigator must not leak its stock through the
+/// search box, and an item the box returns must be one Buy can link to.
+/// Purchase re-checks all of it again anyway.
 /// </summary>
 internal class RpCatalogSearchEvent : IPacketEvent
 {
@@ -58,12 +59,14 @@ internal class RpCatalogSearchEvent : IPacketEvent
         }
 
         var hits = new List<CatalogSearchHit>();
+        var pages = CatalogLookup.Index(_catalogManager.Pages);
 
         foreach (var page in _catalogManager.Pages)
         {
-            if (!page.Enabled || !page.Visible)
-                continue;
-            if (page.MinimumRank > habbo.Rank || (page.MinimumVip > habbo.VipRank && habbo.Rank == 1))
+            // The SAME test the infostand's Buy link uses. Two copies of this
+            // rule is what let the box return an item the Buy button then
+            // refused to link to.
+            if (!CatalogLookup.IsShoppable(pages, page, habbo.Rank, habbo.VipRank))
                 continue;
 
             foreach (var item in page.Items.Values)
