@@ -276,7 +276,7 @@ public static class MovementController
                 traceHadOld, traceOldFrom, traceOldTo, origin, w.Route.PeekNext());
 
         // 8. Future indexes (> e) may be restaged; indexes <= e never change.
-        StageCorrection(room, w, e + 1);
+        StageCorrection(room, w, e + 1, map);
         return true;
     }
 
@@ -828,12 +828,103 @@ public static class MovementController
     /// A redirect replaced future geometry: re-emit from the first index the new
     /// route describes. Indexes at or below the elapsing edge are never touched.
     /// </summary>
-    private static void StageCorrection(RoomMovement room, MovementState w, int fromEdgeIndex)
+    private static void StageCorrection(RoomMovement room, MovementState w, int fromEdgeIndex, Gamemap? map)
     {
         room.HasStagedWork = true;
         room.HasImmediateWork = true;
         if (fromEdgeIndex - 1 > w.EmittedThroughEdge)
             w.EmittedThroughEdge = fromEdgeIndex - 1;
+
+        PublishCorrectedEdgeEarly(room, w, fromEdgeIndex, map);
+    }
+
+    /// <summary>
+    /// EXPERIMENT: transmit the corrected first index as soon as the redirect
+    /// decides it, instead of waiting for the beat that stages it.
+    ///
+    /// THE PROBLEM THIS TESTS. StageCorrection sets HasImmediateWork and the
+    /// scheduler's immediate flush duly fires - but room.Staged holds nothing
+    /// for the corrected index, because that record is not built until the next
+    /// beat runs PlanNextEdge into StageEdge. That beat is queued at
+    /// EdgeStartTick(EdgeIndex) + IntervalMs, which IS this index's own
+    /// cycleStart. So the correction reaches the wire at the very moment the
+    /// client begins rendering the edge from lookahead, every time. The
+    /// immediate-flush path already exists and already runs on every redirect;
+    /// it simply has an empty payload. This gives it one.
+    ///
+    /// PUBLICATION TIMING ONLY. Nothing else moves: not TimelineOrigin, not
+    /// WalkSessionId, not the RouteRevision rules, not the 500ms interval, not
+    /// EmittedThroughEdge's meaning, not the lookahead policy, not the packet
+    /// format. The boundary is still e + 1 exactly as before, so there is no
+    /// added latency - a redirect still takes effect on the next edge.
+    ///
+    /// The record is PublishOnly: room.Staged is ALSO the server-truth commit
+    /// path, and committing a future edge early would move the avatar a tile
+    /// ahead and run its tile effects early. See MovementEdgeRecord.PublishOnly.
+    ///
+    /// Lookahead is deliberately EMPTY. Only the corrected index is
+    /// republished; e + 2 and later keep coming from the normal pipeline, which
+    /// refills lookahead when it stages this index again at the boundary.
+    /// </summary>
+    private static void PublishCorrectedEdgeEarly(
+        RoomMovement room, MovementState w, int index, Gamemap? map)
+    {
+        if (map == null || !w.Route.HasNext || w.Mode != MovementMode.Moving)
+            return;
+
+        // A captor's edges ride with a matching shadow record (StageShadow).
+        // Publishing the captor's alone would break that lockstep.
+        if (w.ShadowVirtualId != MovementState.NoShadow)
+        {
+            MovementCounters.CorrectionEPlus1Escort();
+            return;
+        }
+
+        // FRESH clock, and this is the whole point of the check. Re-deriving
+        // with the nowMs that produced e is vacuous - e + 1 > e by
+        // construction. The pathfind runs between those two points and can
+        // cross a boundary; if it has, this index is already elapsing and must
+        // not be rewritten.
+        var now = MovementScheduler.Instance.Clock.NowMs;
+        if (w.ElapsingEdgeIndex(now) >= index)
+        {
+            MovementCounters.CorrectionEPlus1NotFuture();
+            return;
+        }
+
+        if (w.LastEarlyPublishSession == w.WalkSessionId &&
+            w.LastEarlyPublishRevision == w.RouteRevision &&
+            w.LastEarlyPublishEdge == index)
+        {
+            MovementCounters.CorrectionEPlus1AlreadyStaged();
+            return;
+        }
+
+        // Geometry of the corrected index, read WITHOUT mutating the walker: it
+        // leaves the terminal of the elapsing edge and arrives on the new
+        // route's first tile. The cursor is NOT advanced here - the boundary
+        // beat still does that, and still stages the committing record.
+        var from = w.EdgeTo;
+        var to = w.Route.PeekNext();
+        var toZ = map.SqAbsoluteHeight(to.X, to.Y);
+
+        var flags = RpMovementV2Flags.Edge;
+        if (w.Route.Length - w.Route.Cursor <= 1)
+            flags |= RpMovementV2Flags.FinalEdge;
+
+        room.Staged.Add(new MovementEdgeRecord(
+            w.VirtualId, w.WalkSessionId, w.RouteRevision, index, flags,
+            MovementSettings.IntervalMs, w.EdgeStartTick(index),
+            from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
+            to.X, to.Y, MovementEdgeRecord.Z100(toZ),
+            toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
+            System.Array.Empty<LookaheadTile>(), 0, 0, publishOnly: true));
+
+        w.LastEarlyPublishSession = w.WalkSessionId;
+        w.LastEarlyPublishRevision = w.RouteRevision;
+        w.LastEarlyPublishEdge = index;
+
+        MovementCounters.CorrectionEPlus1ImmediateStaged();
     }
 
     private static void QueueTileEvents(RoomMovement room, MovementState w, Point left, Point entered)

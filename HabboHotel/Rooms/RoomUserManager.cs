@@ -854,6 +854,16 @@ public class RoomUserManager
         {
             foreach (var edge in frame)
             {
+                // A publish-only record is a TRANSMISSION, not a commit. It
+                // describes an edge that has not started yet, so none of the
+                // server-truth work below may run for it: that would move the
+                // avatar onto a tile it has not reached, fire this edge's tile
+                // effects early, and set "mv" ahead of the walk. The commit for
+                // this index happens later, from the normal record the boundary
+                // beat stages. It is still sent, in the second loop.
+                if (edge.PublishOnly)
+                    continue;
+
                 var user = GetRoomUserByVirtualId(edge.VirtualId);
                 if (user == null || !IsValid(user))
                     continue;

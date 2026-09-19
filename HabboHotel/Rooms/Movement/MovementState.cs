@@ -163,6 +163,17 @@ public sealed class MovementState : IDueHeapNode
     public long LastRepathAtMs = long.MinValue;
     public Point LastRepathTarget;
 
+    // ---- early correction publish (experiment) ----------------------------
+    /// <summary>
+    /// Identity of the last edge published early by StageCorrection, so the
+    /// same (session, revision, index) is never transmitted twice from there.
+    /// Deliberately does NOT suppress the normal boundary stage for that index:
+    /// that record performs the commit and carries the refreshed lookahead.
+    /// </summary>
+    public long LastEarlyPublishSession = -1;
+    public int LastEarlyPublishRevision = -1;
+    public int LastEarlyPublishEdge = -1;
+
     /// <summary>
     /// Real players only establish and hold the room phase. Bots and pets walk
     /// on their own timelines and are ignored entirely for alignment: a patrol

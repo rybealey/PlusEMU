@@ -158,6 +158,13 @@ public static class MovementCounters
     private static long _minRedirectMarginMs = long.MaxValue;
     private static long _redirectBehindElapsing;
 
+    // Early publication of a corrected e+1 (experiment). Cheap interlocked
+    // increments only - no strings and no I/O on the movement path.
+    private static long _correctionEPlus1ImmediateStaged;
+    private static long _correctionEPlus1NotFuture;
+    private static long _correctionEPlus1AlreadyStaged;
+    private static long _correctionEPlus1Escort;
+
     /// <summary>
     /// Milliseconds from this redirect to the start of the edge it restages.
     /// Small values are the exposure: the smaller it is, the more certain that
@@ -188,6 +195,30 @@ public static class MovementCounters
     /// at zero; it is here so that assumption is checked rather than trusted.
     /// </summary>
     public static void RedirectBehindElapsing() => Interlocked.Increment(ref _redirectBehindElapsing);
+
+    /// <summary>A corrected e+1 was transmitted as soon as the redirect decided it.</summary>
+    public static void CorrectionEPlus1ImmediateStaged() =>
+        Interlocked.Increment(ref _correctionEPlus1ImmediateStaged);
+
+    /// <summary>
+    /// The pathfind crossed a boundary: by the time the correction was staged the
+    /// index was no longer future, so it was left to the normal pipeline. This is
+    /// the counter that makes the freshness check meaningful rather than vacuous.
+    /// </summary>
+    public static void CorrectionEPlus1NotFuture() =>
+        Interlocked.Increment(ref _correctionEPlus1NotFuture);
+
+    /// <summary>Same (session, revision, index) had already been published early.</summary>
+    public static void CorrectionEPlus1AlreadyStaged() =>
+        Interlocked.Increment(ref _correctionEPlus1AlreadyStaged);
+
+    /// <summary>
+    /// Skipped because the walker is escorting. A captor's edges ride with a
+    /// matching shadow record staged by StageShadow; publishing the captor's
+    /// e+1 alone would break that lockstep, so escorts keep the normal path.
+    /// </summary>
+    public static void CorrectionEPlus1Escort() =>
+        Interlocked.Increment(ref _correctionEPlus1Escort);
 
     private static string MinRedirectMargin()
     {
@@ -228,7 +259,11 @@ public static class MovementCounters
         $"under100={Interlocked.Read(ref _redirectMarginUnder100)} " +
         $"under50={Interlocked.Read(ref _redirectMarginUnder50)} " +
         $"minRedirectMarginMs={MinRedirectMargin()} " +
-        $"redirectBehindElapsing={Interlocked.Read(ref _redirectBehindElapsing)}";
+        $"redirectBehindElapsing={Interlocked.Read(ref _redirectBehindElapsing)} " +
+        $"correctionEPlus1ImmediateStaged={Interlocked.Read(ref _correctionEPlus1ImmediateStaged)} " +
+        $"correctionEPlus1NotFuture={Interlocked.Read(ref _correctionEPlus1NotFuture)} " +
+        $"correctionEPlus1AlreadyStaged={Interlocked.Read(ref _correctionEPlus1AlreadyStaged)} " +
+        $"correctionEPlus1Escort={Interlocked.Read(ref _correctionEPlus1Escort)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
     public static void DrainDeferred() => Interlocked.Increment(ref _drainDeferred);
