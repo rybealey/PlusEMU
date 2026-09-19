@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using NLog;
 
 namespace Plus.HabboHotel.Rooms.Movement;
@@ -112,6 +112,22 @@ public static class MovementReplanTrace
         public int NewFromX, NewFromY, NewToX, NewToY;
 
         public Origin From;
+
+        /// <summary>
+        /// Movement-clock tick at which the record for FirstIndex was STAGED;
+        /// 0 = never.
+        ///
+        /// Distinct from both the revision and the send, and the gap that
+        /// matters. StageCorrection stages NO record - it only sets the room's
+        /// work flags - so a redirect's corrected geometry for e+1 is not built
+        /// until the next scheduler beat runs PlanNextEdge -&gt; StageEdge. That
+        /// beat is queued at EdgeStartTick(EdgeIndex) + IntervalMs, which IS
+        /// e+1's own cycleStart. If this timestamp lands at or after
+        /// FirstIndexStartTick every time, the race is STRUCTURAL for every
+        /// redirect rather than a near-boundary accident - which is exactly the
+        /// thing to know before anyone reaches for a safety threshold.
+        /// </summary>
+        public long StagedAtMs;
 
         /// <summary>Movement-clock tick at which the 4110 for FirstIndex went out; 0 = never.</summary>
         public long SentAtMs;
@@ -269,7 +285,46 @@ public static class MovementReplanTrace
             r.NewToX = newTo.X;
             r.NewToY = newTo.Y;
             r.From = origin;
+            r.StagedAtMs = 0;
             r.SentAtMs = 0;
+        }
+    }
+
+    /// <summary>
+    /// Stamp the moment the record for a revised first index is STAGED, which is
+    /// a different and earlier moment than the send. Called from PlanNextEdge
+    /// immediately after StageEdge, on the scheduler thread, in memory only.
+    ///
+    /// Does NOT emit: the line is still written at send time, so one record
+    /// carries revision, stage and send together.
+    /// </summary>
+    public static void OnEdgeStaged(MovementState w, long nowMs)
+    {
+        if (!_enabled)
+            return;
+
+        var filter = _unitFilter;
+        if (filter >= 0 && w.VirtualId != filter)
+            return;
+
+        lock (Gate)
+        {
+            if (!_enabled)
+                return;
+
+            for (var i = 0; i < Capacity; i++)
+            {
+                ref var r = ref Pending[i];
+                if (!r.InUse) continue;
+                if (r.StagedAtMs != 0) continue;
+                if (r.VirtualId != w.VirtualId) continue;
+                if (r.WalkSessionId != w.WalkSessionId) continue;
+                if (r.NewRevision != w.RouteRevision) continue;
+                if (r.FirstIndex != w.EdgeIndex) continue;
+
+                r.StagedAtMs = nowMs;
+                return;
+            }
         }
     }
 
@@ -383,18 +438,48 @@ public static class MovementReplanTrace
     {
         Interlocked.Increment(ref _emitted);
 
+        var interval = MovementSettings.IntervalMs;
+
+        // All derived from TimelineOrigin + ActiveEdge + the timestamps already
+        // held, so the capture path stays as cheap as it was.
+        var eStart = r.TimelineOrigin + (long)r.ActiveEdge * interval;
+        var eEnd = eStart + interval;
+        var e1Start = eEnd; // e+1's cycleStart IS e's end
+        var phaseInE = (r.ServerNowMs - eStart) / (double)interval;
+
         var offset = r.Offset >= 0 ? $"e+{r.Offset}" : $"e{r.Offset}";
         var old = r.HasOld ? $"{r.OldFromX},{r.OldFromY}->{r.OldToX},{r.OldToY}" : "none";
+
+        var staged = r.StagedAtMs <= 0 ? "never" : r.StagedAtMs.ToString();
+        var stageMargin = r.StagedAtMs <= 0 ? "nostage" : $"{r.FirstIndexStartTick - r.StagedAtMs}ms";
+        var revToStage = r.StagedAtMs <= 0 ? "n/a" : $"{r.StagedAtMs - r.ServerNowMs}ms";
+
         var sent = r.SentAtMs <= 0 ? "never" : r.SentAtMs.ToString();
         var sendMargin = r.SentAtMs <= 0 ? "nosend" : $"{r.SendMarginMs}ms";
+        var stageToSend = (r.SentAtMs <= 0 || r.StagedAtMs <= 0) ? "n/a" : $"{r.SentAtMs - r.StagedAtMs}ms";
+
+        // The server's elapsing index AT SEND, which is a different question
+        // from the one asked at plan time and must not share its name:
+        //   activeEdge      what the server believed when it PLANNED  -> test A
+        //   elapsingAtSend  what had become true by the time it SHIPPED -> test B
+        var elapsingAtSend = r.SentAtMs <= 0
+            ? "n/a"
+            : ((r.SentAtMs - r.TimelineOrigin) / interval).ToString();
+        var activeWhenSent = r.SentAtMs <= 0
+            ? "n/a"
+            : (((r.SentAtMs - r.TimelineOrigin) / interval) >= r.FirstIndex ? "yes" : "no");
 
         Log.Info(
             $"[MV2/replan {Verdict(r)}] unit={r.VirtualId} sess={r.WalkSessionId} src={r.From} " +
             $"rev={r.NewRevision} serverNow={r.ServerNowMs} timelineOrigin={r.TimelineOrigin} " +
-            $"activeEdge={r.ActiveEdge} " +
+            $"activeEdge={r.ActiveEdge} phaseInE={phaseInE:F4} " +
+            $"eWindow={eStart}..{eEnd} e1Start={e1Start} " +
             $"current={r.CurrentEdgeIndex}:{r.CurFromX},{r.CurFromY}->{r.CurToX},{r.CurToY} " +
             $"replacing={r.FirstIndex}({offset}) startTick={r.FirstIndexStartTick} " +
             $"old={old} new={r.NewFromX},{r.NewFromY}->{r.NewToX},{r.NewToY} " +
-            $"planMargin={r.FirstIndexStartTick - r.ServerNowMs}ms sentAt={sent} sendMargin={sendMargin}");
+            $"planMargin={r.FirstIndexStartTick - r.ServerNowMs}ms " +
+            $"stagedAt={staged} stageMargin={stageMargin} revToStage={revToStage} " +
+            $"sentAt={sent} sendMargin={sendMargin} stageToSend={stageToSend} " +
+            $"elapsingAtSend={elapsingAtSend} alreadyActiveWhenSent={activeWhenSent}");
     }
 }

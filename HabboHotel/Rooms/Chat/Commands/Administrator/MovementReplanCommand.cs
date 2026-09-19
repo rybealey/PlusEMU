@@ -37,6 +37,27 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.Administrator;
 ///
 /// A run of A_ACTIVE says fix the server. A run of B_LATE with no A_ACTIVE says
 /// the server was never wrong and the client is the only place left to stand.
+///
+/// THE THREE TIMESTAMPS, which are three different moments and routinely get
+/// conflated. For the replaced index:
+///
+///   serverNow  -&gt; stagedAt  -&gt; sentAt      against  startTick
+///   planMargin    stageMargin  sendMargin   = startTick minus each
+///   revToStage    stageToSend               = the gaps between them
+///
+/// A NEGATIVE MARGIN MEANS THAT MOMENT WAS ALREADY PAST THE EDGE'S OWN START.
+/// Read them together: a healthy planMargin with a negative stageMargin says
+/// the revision was decided in good time and the RECORD WAS NOT BUILT UNTIL THE
+/// BOUNDARY - which would make the race structural rather than incidental,
+/// because StageCorrection stages nothing and the next beat is queued at
+/// exactly e+1's cycleStart.
+///
+///   activeEdge / phaseInE        what the server believed when it PLANNED
+///   elapsingAtSend               what had become true by the time it SHIPPED
+///   alreadyActiveWhenSent        yes = the client had certainly begun it
+///
+/// Those last two are deliberately NOT called the same thing as activeEdge.
+/// One name spanning two causes is how this investigation lost months.
 /// </summary>
 internal class MovementReplanCommand : IChatCommand
 {

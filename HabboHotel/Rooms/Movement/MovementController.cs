@@ -481,6 +481,13 @@ public static class MovementController
 
         StageEdge(room, w, immediate);
 
+        // DIAGNOSTIC ONLY, off unless :movementreplan is armed. Stamps the
+        // moment this index's record was built, which is neither the moment the
+        // revision was created nor the moment the packet leaves. Changes
+        // nothing.
+        if (MovementReplanTrace.Enabled)
+            MovementReplanTrace.OnEdgeStaged(w, nowMs);
+
         var nextDue = w.EdgeStartTick(w.EdgeIndex) + MovementSettings.IntervalMs;
         room.Walkers.InsertOrUpdate(w, nextDue); // never a bare Push (I-1)
         w.Queued = true;
