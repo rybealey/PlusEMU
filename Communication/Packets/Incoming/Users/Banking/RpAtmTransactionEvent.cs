@@ -67,8 +67,11 @@ internal class RpAtmTransactionEvent : IPacketEvent
         string message;
         BankResult result;
 
+        // chargeFee: true is what makes this an ATM deposit rather than a
+        // deposit that happens to have been made at one. The teller does not
+        // pass it, so paying in at the counter still costs nothing.
         if (mode == Deposit)
-            result = BankUtility.Deposit(habbo, amount, source, out account, out message);
+            result = BankUtility.Deposit(habbo, amount, source, out account, out message, chargeFee: true);
         else
             result = BankUtility.Withdraw(habbo, amount, source, out account, out message);
 

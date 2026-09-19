@@ -51,6 +51,16 @@ public static class BankUtility
     /// </summary>
     public const int SavingsRateBps = 25;
 
+    /// <summary>
+    /// What the ATM keeps from a deposit, in basis points. 290 = 2.9%.
+    ///
+    /// The machine's cut, not the bank's: the teller takes nothing, which is
+    /// why <see cref="Deposit"/> only charges when its caller asks. If the
+    /// client's own copy of this number ever disagrees, the server wins - the
+    /// preview on the ATM screen is a courtesy, this is the money.
+    /// </summary>
+    public const int DepositFeeBps = 290;
+
     /// <summary>Online seconds that buy one interest payment.</summary>
     public const int InterestPeriodSeconds = 3600;
 
@@ -379,13 +389,35 @@ public static class BankUtility
     }
 
     /// <summary>
+    /// The machine's cut of a deposit: <see cref="DepositFeeBps"/> of the
+    /// amount, rounded DOWN, so the house never takes a fraction of a coin it
+    /// has not earned. Integer arithmetic throughout - a double here would
+    /// round 2.9% of some amounts up, and a fee that is a coin over what was
+    /// disclosed is worse than one a coin under.
+    ///
+    /// Always smaller than the amount (2.9% cannot reach 100%), so a deposit
+    /// can never be swallowed whole. Under 35c it rounds away to nothing,
+    /// which is the honest consequence of rounding down rather than a case
+    /// worth special-pleading.
+    /// </summary>
+    public static long DepositFee(long amount) =>
+        amount <= 0 ? 0 : amount * DepositFeeBps / 10000;
+
+    /// <summary>
     /// ATM: cash in hand into the checking account.
     ///
     /// The hand is debited FIRST. If anything fails between the two halves
     /// the money is lost rather than duplicated, which is the only acceptable
     /// direction for the error to point.
+    ///
+    /// <paramref name="chargeFee"/> is the ATM's cut. It is a parameter rather
+    /// than something read off <paramref name="source"/>, because `source` is
+    /// a sentence a player reads in their ledger - deciding policy by matching
+    /// on it would mean a room called "ATM Lounge" quietly charged people at
+    /// the teller. The caller knows which machine it is; this does not guess.
     /// </summary>
-    public static BankResult Deposit(Habbo habbo, long amount, string source, out BankAccount? account, out string message)
+    public static BankResult Deposit(Habbo habbo, long amount, string source, out BankAccount? account, out string message,
+        bool chargeFee = false)
     {
         account = null;
         message = string.Empty;
@@ -413,6 +445,13 @@ public static class BankUtility
                     message = "You do not have a bank account.";
                     return BankResult.NoAccount;
                 }
+                // The hand pays the whole amount; only what is left after the
+                // machine's cut reaches the account. The fee is not moved
+                // anywhere - it leaves the economy here, which is the point of
+                // charging it.
+                var fee = chargeFee ? DepositFee(amount) : 0;
+                var credited = amount - fee;
+
                 // Habbo.Credits is the authority; the users row is a crash
                 // hedge that the logout save will rewrite from memory anyway.
                 habbo.Credits -= (int)amount;
@@ -420,10 +459,12 @@ public static class BankUtility
 
                 var rows = connection.Execute(
                     "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` + @amount " +
-                    "WHERE `user_id` = @userId LIMIT 1", new { userId = habbo.Id, amount });
+                    "WHERE `user_id` = @userId LIMIT 1", new { userId = habbo.Id, amount = credited });
                 if (rows == 0)
                 {
-                    // Put it back: the bank never took it.
+                    // Put it back: the bank never took it. The whole amount,
+                    // fee included - nothing was charged for a deposit that
+                    // did not happen.
                     habbo.Credits += (int)amount;
                     PersistHandCredits(connection, habbo.Id, amount);
                     message = "You do not have a bank account.";
@@ -432,8 +473,12 @@ public static class BankUtility
                 account = Refresh(connection, habbo.Id);
                 if (account == null)
                     return BankResult.Failed;
+                // The ledger records what ARRIVED, because that is what moved
+                // the balance next to it. The gap is explained in `source`
+                // rather than left for the player to find by subtraction.
                 LogMovement(connection, habbo.Id, habbo.Username, BankTransactionKind.Deposit,
-                    BankAccountKind.Current, amount, account.Current, source);
+                    BankAccountKind.Current, credited, account.Current,
+                    fee > 0 ? Fit($"{source} (less {fee}c fee)") : source);
                 return BankResult.Ok;
             }
             catch (Exception e)
@@ -630,6 +675,19 @@ public static class BankUtility
     private static void PersistHandCredits(IDbConnection connection, int userId, long delta) =>
         connection.Execute("UPDATE `users` SET `credits` = `credits` + @delta WHERE `id` = @userId LIMIT 1",
             new { userId, delta });
+
+    /// <summary>
+    /// `source` is varchar(96) and the ATM already spends most of it on a room
+    /// name. Anything appended after that can push past the column, where MySQL
+    /// would either truncate it or refuse the INSERT depending on strict mode -
+    /// so the trim happens here, where the width is known.
+    /// </summary>
+    private const int SourceWidth = 96;
+
+    private static string Fit(string source) =>
+        string.IsNullOrEmpty(source) || source.Length <= SourceWidth
+            ? source ?? string.Empty
+            : source.Substring(0, SourceWidth);
 
     private static void LogMovement(IDbConnection connection, int userId, string username, string kind,
         BankAccountKind account, long amount, long balanceAfter, string source)
