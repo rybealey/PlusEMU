@@ -206,10 +206,14 @@ public sealed class MovementState : IDueHeapNode
     /// The click is kept here and retried on a later beat instead of being
     /// dropped, because the commit path is the only thing that brings EdgeIndex
     /// forward.
+    ///
+    /// null means none. This was a bool beside a Point, which let "flagged but
+    /// no target" and "target set but not flagged" be written independently -
+    /// neither is a real state, and every read had to trust that two fields
+    /// agreed. One nullable makes both unrepresentable, and lets the retry bind
+    /// the value in the very test that asks whether there is one.
     /// </summary>
-    public bool HasDeferredRedirect;
-
-    public Point DeferredRedirectTarget;
+    public Point? DeferredRedirectTarget;
 
     // ---- early correction publish (experiment) ----------------------------
     /// <summary>
@@ -263,7 +267,7 @@ public sealed class MovementState : IDueHeapNode
         TileZ = tileZ;
         EdgeTo = tile;
         EdgeToZ = tileZ;
-        HasDeferredRedirect = false;
+        DeferredRedirectTarget = null;
         Route.Clear();
     }
 

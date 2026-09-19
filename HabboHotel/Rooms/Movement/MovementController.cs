@@ -270,7 +270,6 @@ public static class MovementController
         // w.EdgeIndex up to the elapsing index.
         if (w.EdgeIndex < e)
         {
-            w.HasDeferredRedirect = true;
             w.DeferredRedirectTarget = target;
             MovementCounters.RedirectDeferredBehindElapsing();
             return false;
@@ -312,7 +311,7 @@ public static class MovementController
 
         // 5/6/7. Route identity advances; the movement clock does not.
         MovementCounters.Redirect();
-        w.HasDeferredRedirect = false;
+        w.DeferredRedirectTarget = null;
         w.RouteRevision++;
         w.Target = target;
         w.LastRepathAtMs = nowMs;
@@ -423,10 +422,9 @@ public static class MovementController
         // for any other reason (no route, debounce) drops the click exactly as
         // an ordinary redirect would, rather than re-arming itself every beat
         // against a target that may never be reachable.
-        if (w.HasDeferredRedirect && w.Mode == MovementMode.Moving)
+        if (w.DeferredRedirectTarget is { } deferredTarget && w.Mode == MovementMode.Moving)
         {
-            var deferredTarget = w.DeferredRedirectTarget;
-            w.HasDeferredRedirect = false;
+            w.DeferredRedirectTarget = null;
 
             if (w.EdgeIndex == w.ElapsingEdgeIndex(nowMs))
             {
@@ -580,7 +578,7 @@ public static class MovementController
         w.Mode = MovementMode.Standing;
         w.EdgeTo = w.Tile;
         w.EdgeToZ = w.TileZ;
-        w.HasDeferredRedirect = false;
+        w.DeferredRedirectTarget = null;
         w.Route.Clear();
         w.AwaitingEventsThroughEdge = -1;
 
