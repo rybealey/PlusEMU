@@ -61,6 +61,32 @@ public static class BankUtility
     /// </summary>
     public const int DepositFeeBps = 290;
 
+    /// <summary>
+    /// Charged on top of <see cref="DepositFeeBps"/>, per deposit. A flat coin
+    /// makes small deposits expensive on purpose: 2.9% of 10c is nothing, and
+    /// without this the machine is free for anyone willing to use it often.
+    /// </summary>
+    public const int DepositFeeFlat = 3;
+
+    /// <summary>
+    /// The smallest deposit the ATM will take - the first amount whose fee
+    /// leaves anything behind.
+    ///
+    /// Computed rather than written down. With the fee at 2.9% + 3c this is
+    /// 4c, but "flat + 1" is only right while the percentage rounds away at
+    /// that size; raise the flat fee to 100c and the true answer is 104c, not
+    /// 101c. Deriving it means the refusal message cannot drift from the rule.
+    /// </summary>
+    public static readonly long MinimumAtmDeposit = SmallestViableDeposit();
+
+    private static long SmallestViableDeposit()
+    {
+        for (long amount = 1; amount <= 100000; amount++)
+            if (amount > DepositFee(amount))
+                return amount;
+        return 100000;
+    }
+
     /// <summary>Online seconds that buy one interest payment.</summary>
     public const int InterestPeriodSeconds = 3600;
 
@@ -390,18 +416,18 @@ public static class BankUtility
 
     /// <summary>
     /// The machine's cut of a deposit: <see cref="DepositFeeBps"/> of the
-    /// amount, rounded DOWN, so the house never takes a fraction of a coin it
-    /// has not earned. Integer arithmetic throughout - a double here would
-    /// round 2.9% of some amounts up, and a fee that is a coin over what was
-    /// disclosed is worse than one a coin under.
+    /// amount, rounded DOWN, plus <see cref="DepositFeeFlat"/>. Integer
+    /// arithmetic throughout - a double here would round 2.9% of some amounts
+    /// up, and a fee that is a coin over what was disclosed is worse than one
+    /// a coin under. Only the percentage rounds; the flat coin is exact.
     ///
-    /// Always smaller than the amount (2.9% cannot reach 100%), so a deposit
-    /// can never be swallowed whole. Under 35c it rounds away to nothing,
-    /// which is the honest consequence of rounding down rather than a case
-    /// worth special-pleading.
+    /// Unlike the percentage on its own, this CAN reach or exceed the amount:
+    /// 3c of flat fee on a 2c deposit would credit a negative balance. So it
+    /// is not enough to compute the fee and subtract - <see cref="Deposit"/>
+    /// refuses anything below <see cref="MinimumAtmDeposit"/>.
     /// </summary>
     public static long DepositFee(long amount) =>
-        amount <= 0 ? 0 : amount * DepositFeeBps / 10000;
+        amount <= 0 ? 0 : amount * DepositFeeBps / 10000 + DepositFeeFlat;
 
     /// <summary>
     /// ATM: cash in hand into the checking account.
@@ -428,6 +454,15 @@ public static class BankUtility
             message = "Enter an amount to deposit.";
             return BankResult.InvalidAmount;
         }
+        // The flat half of the fee can equal or exceed a small enough deposit,
+        // which would credit a negative balance. Refused up here, before the
+        // hand is touched, so nothing has to be unwound.
+        var fee = chargeFee ? DepositFee(amount) : 0;
+        if (fee >= amount)
+        {
+            message = $"The machine's fee on that is {fee}c. Pay in at least {MinimumAtmDeposit}c.";
+            return BankResult.InvalidAmount;
+        }
         if (amount > habbo.Credits)
         {
             account = Get(habbo.Id);
@@ -448,8 +483,8 @@ public static class BankUtility
                 // The hand pays the whole amount; only what is left after the
                 // machine's cut reaches the account. The fee is not moved
                 // anywhere - it leaves the economy here, which is the point of
-                // charging it.
-                var fee = chargeFee ? DepositFee(amount) : 0;
+                // charging it. `fee` was settled above, where it could still
+                // refuse the deposit outright.
                 var credited = amount - fee;
 
                 // Habbo.Credits is the authority; the users row is a crash
