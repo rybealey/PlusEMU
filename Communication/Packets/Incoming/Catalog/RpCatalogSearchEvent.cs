@@ -15,11 +15,16 @@ namespace Plus.Communication.Packets.Incoming.Catalog;
 /// knowable: whether a piece is for sale is a fact about catalog_items, and the
 /// client is never sent more than the page it is looking at.
 ///
-/// VISIBILITY IS THE SAME TEST THE TREE USES, and now literally the same code:
-/// CatalogLookup.IsShoppable, shared with the infostand's Buy link. A page the
-/// player cannot see in the navigator must not leak its stock through the
-/// search box, and an item the box returns must be one Buy can link to.
-/// Purchase re-checks all of it again anyway.
+/// VISIBILITY IS THE LEAF TEST - CatalogLookup.IsOpenable: enabled, visible,
+/// rank, VIP. Exactly the pages GetCatalogPageEvent will serve, so everything
+/// the box returns can be bought from it. Purchase re-checks it all anyway.
+///
+/// Deliberately NOT IsShoppable, the stricter test the infostand's Buy link
+/// uses. That one also walks the ancestors, because a LINK needs a page to
+/// land on, while a search hit only needs to be purchasable. They were briefly
+/// made identical and the box went empty: this catalog holds stock on pages
+/// whose chain to the root does not survive that walk. Searching found
+/// nothing, which is far worse than a hit whose category cannot be browsed to.
 /// </summary>
 internal class RpCatalogSearchEvent : IPacketEvent
 {
@@ -59,14 +64,10 @@ internal class RpCatalogSearchEvent : IPacketEvent
         }
 
         var hits = new List<CatalogSearchHit>();
-        var pages = CatalogLookup.Index(_catalogManager.Pages);
 
         foreach (var page in _catalogManager.Pages)
         {
-            // The SAME test the infostand's Buy link uses. Two copies of this
-            // rule is what let the box return an item the Buy button then
-            // refused to link to.
-            if (!CatalogLookup.IsShoppable(pages, page, habbo.Rank, habbo.VipRank))
+            if (!CatalogLookup.IsOpenable(page, habbo.Rank, habbo.VipRank))
                 continue;
 
             foreach (var item in page.Items.Values)
