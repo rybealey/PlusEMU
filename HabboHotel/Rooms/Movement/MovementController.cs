@@ -965,9 +965,9 @@ public static class MovementController
             return;
         }
 
-        if (w.LastEarlyPublishSession == w.WalkSessionId &&
-            w.LastEarlyPublishRevision == w.RouteRevision &&
-            w.LastEarlyPublishEdge == index)
+        var identity = new EdgeIdentity(w.WalkSessionId, w.RouteRevision, index);
+
+        if (w.LastEarlyPublish == identity)
         {
             MovementCounters.CorrectionEPlus1AlreadyStaged();
             return;
@@ -993,9 +993,7 @@ public static class MovementController
             toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
             System.Array.Empty<LookaheadTile>(), 0, 0, publishOnly: true));
 
-        w.LastEarlyPublishSession = w.WalkSessionId;
-        w.LastEarlyPublishRevision = w.RouteRevision;
-        w.LastEarlyPublishEdge = index;
+        w.LastEarlyPublish = identity;
 
         MovementCounters.CorrectionEPlus1ImmediateStaged();
     }

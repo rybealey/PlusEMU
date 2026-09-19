@@ -47,6 +47,17 @@ public enum PhaseDecision : byte
 }
 
 /// <summary>
+/// The identity of one edge record: (WalkSessionId, RouteRevision, EdgeIndex).
+///
+/// MovementState's own remarks call this a proven total order, and it is the
+/// key every consumer already matches on - the outbound trace, the replan log
+/// and the early-publish dedupe all compare exactly these three. Naming it
+/// means the triple is carried and compared as ONE value rather than three
+/// fields that have to be written and read in step.
+/// </summary>
+public readonly record struct EdgeIdentity(long WalkSessionId, int RouteRevision, int EdgeIndex);
+
+/// <summary>
 /// pixelrp Movement V2 (A4): the complete per-avatar movement state.
 ///
 /// Replaces roughly 25 scattered RoomUser fields. Every field here has exactly
@@ -221,10 +232,14 @@ public sealed class MovementState : IDueHeapNode
     /// same (session, revision, index) is never transmitted twice from there.
     /// Deliberately does NOT suppress the normal boundary stage for that index:
     /// that record performs the commit and carries the refreshed lookahead.
+    ///
+    /// null means nothing has been published early yet. This was three fields
+    /// initialised to -1, which worked only because no real triple can contain
+    /// a -1 - a sentinel that happened to be unreachable rather than one that
+    /// could not be expressed. Nothing clears it and nothing needs to: the
+    /// session component makes a stale value inert on the next walk.
     /// </summary>
-    public long LastEarlyPublishSession = -1;
-    public int LastEarlyPublishRevision = -1;
-    public int LastEarlyPublishEdge = -1;
+    public EdgeIdentity? LastEarlyPublish;
 
     /// <summary>
     /// Real players only establish and hold the room phase. Bots and pets walk
