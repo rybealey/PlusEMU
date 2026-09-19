@@ -146,9 +146,41 @@ public sealed class MovementState : IDueHeapNode
 
     // ---- promises ---------------------------------------------------------
     /// <summary>
-    /// Highest edge index already PROMISED on the wire for the current
-    /// (session, revision), counting advertised lookahead. Timing for every
-    /// index up to here is immutable (I-3).
+    /// Highest edge index for which a REAL 4110 record has been staged in this
+    /// session. Starts at -1, and only ever rises within a session.
+    ///
+    /// IT DOES NOT COUNT ADVERTISED LOOKAHEAD, and that is the whole point of
+    /// this comment. StageEdge raises it to w.EdgeIndex only - the index of the
+    /// record being staged - while that same record carries lookahead for up to
+    /// MovementSettings.LookaheadMax FURTHER indexes. So the client reliably
+    /// knows the geometry of indexes ABOVE this value, and begins rendering
+    /// them from that lookahead the instant their cycleStart passes.
+    ///
+    /// The previous wording here said it counted lookahead. It never has, and
+    /// the difference is not academic: it made "a redirect only ever restages
+    /// EmittedThroughEdge + 1, so it never touches an emitted edge" read as a
+    /// safety argument, when the index being restaged is one the client may
+    /// already be drawing.
+    ///
+    /// NOTHING GATES ON IT. It is not an enforced immutability boundary, and no
+    /// code consults it before replacing geometry. It has exactly two readers:
+    ///
+    ///   SyncCommitsTo  bounds the silent-commit loop, so a walker is never
+    ///                  advanced past an index for which nothing was put on the
+    ///                  wire
+    ///   StopWalk       the `neverEmitted` test - a Pending walker that emitted
+    ///                  nothing needs no walk-end, because the client was never
+    ///                  told the unit was moving
+    ///
+    /// Nor does it govern timing. Every edge start is DERIVED as
+    /// TimelineOrigin + k * IntervalMs, so timing immutability comes from
+    /// TimelineOrigin not moving - not from this field.
+    ///
+    /// StageCorrection also raises it to (fromEdgeIndex - 1), which can assert
+    /// an index that was never individually staged. That is deliberate: it is
+    /// what lets SyncCommitsTo reach the elapsing edge on a later beat. It does
+    /// mean the value reads as "the commit loop may advance this far", not as a
+    /// literal record of what went on the wire.
     /// </summary>
     public int EmittedThroughEdge = -1;
 

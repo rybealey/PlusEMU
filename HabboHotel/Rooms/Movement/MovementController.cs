@@ -900,6 +900,13 @@ public static class MovementController
     {
         room.HasStagedWork = true;
         room.HasImmediateWork = true;
+
+        // Asserts everything below the corrected index as "committable", which
+        // may include indexes no record was ever individually staged for. That
+        // is what lets SyncCommitsTo reach the elapsing edge on a later beat -
+        // it bounds on this value. See MovementState.EmittedThroughEdge: the
+        // field is that bound, not a transmission log, and it deliberately does
+        // NOT account for the lookahead the client is already rendering from.
         if (fromEdgeIndex - 1 > w.EmittedThroughEdge)
             w.EmittedThroughEdge = fromEdgeIndex - 1;
 
