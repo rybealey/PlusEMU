@@ -420,7 +420,6 @@ public sealed class MovementScheduler
                 }
 
                 room.Walkers.Remove(walker);
-                walker.Queued = false;
                 drained++;
                 progressed = true;
                 MovementCounters.DrainedWalker();

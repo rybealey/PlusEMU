@@ -202,8 +202,21 @@ public sealed class MovementState : IDueHeapNode
     public PhaseDecision LastPhaseDecision;
     public int LastStartDelayMs;
 
-    /// <summary>Set while this walker has a live scheduler queue entry (I-1).</summary>
-    public bool Queued;
+    /// <summary>
+    /// True while this walker holds a scheduler queue entry (I-1).
+    ///
+    /// DERIVED, never assigned. IndexedDueHeap owns HeapIndex and is the only
+    /// thing that may change it: InsertOrUpdate sets it, Remove clears it to -1
+    /// on EVERY path including the not-present one, Pop goes through Remove,
+    /// and Clear and Swap maintain it across every move. So "is this walker
+    /// queued" has exactly one source of truth, and a second copy cannot drift
+    /// out of step with it.
+    ///
+    /// This was a bool assigned by hand at seven sites across four files, each
+    /// one sitting immediately next to the heap call that had already decided
+    /// the answer.
+    /// </summary>
+    public bool Queued => HeapIndex >= 0;
 
     public void ResetForNewSession(long nowMs, Point tile, double tileZ)
     {

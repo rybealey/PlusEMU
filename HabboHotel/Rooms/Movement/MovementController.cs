@@ -75,7 +75,6 @@ public static class MovementController
             // until the boundary arrives - see MovementMode.Pending.
             w.Mode = MovementMode.Pending;
             room.Walkers.InsertOrUpdate(w, origin);
-            w.Queued = true;
             return true;
         }
 
@@ -550,16 +549,12 @@ public static class MovementController
 
         var nextDue = w.EdgeStartTick(w.EdgeIndex) + MovementSettings.IntervalMs;
         room.Walkers.InsertOrUpdate(w, nextDue); // never a bare Push (I-1)
-        w.Queued = true;
     }
 
     public static void StopWalk(RoomMovement room, MovementState w)
     {
         if (w.Queued)
-        {
             room.Walkers.Remove(w);
-            w.Queued = false;
-        }
 
         // A walker abandoned while still Pending never put anything on the wire,
         // so there is nothing to close off. A walk-end here would tell the client
@@ -605,7 +600,6 @@ public static class MovementController
                 ? Math.Max(nowMs, walker.TimelineOrigin)
                 : nowMs;
             room.Walkers.InsertOrUpdate(walker, due);
-            walker.Queued = true;
         }
     }
 
@@ -836,10 +830,7 @@ public static class MovementController
         if (s.Mode == MovementMode.Moving || s.Mode == MovementMode.Pending)
             StopWalk(room, s);
         if (s.Queued)
-        {
             room.Walkers.Remove(s);
-            s.Queued = false;
-        }
         s.WalkSessionId++; // "++ on every displacement" - the field's own contract
         s.RouteRevision = 0;
         s.EdgeIndex = 0;
