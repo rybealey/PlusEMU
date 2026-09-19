@@ -67,6 +67,22 @@ public static class MovementController
         w.Tile = tile;
         w.TileZ = tileZ;
 
+        // A NEW SESSION MUST NOT INHERIT THE PREVIOUS WALK'S DEBOUNCE. These
+        // two were the only fields StartWalk left carrying state across
+        // sessions, so a walk beginning within RepathMinIntervalMs of the last
+        // walk's final redirect would silently swallow a redirect to that same
+        // tile - a click that simply did nothing.
+        //
+        // Reset to "the window has just expired", NOT to the field's own
+        // long.MinValue initialiser. `nowMs - long.MinValue` overflows in an
+        // unchecked context and wraps NEGATIVE, which satisfies the `< interval`
+        // test rather than failing it - that sentinel is only harmless today
+        // because LastRepathTarget must match as well, and it defaults to 0,0,
+        // which is a real tile. Using it here would arm that hazard on every
+        // walk instead of once per walker.
+        w.LastRepathTarget = target;
+        w.LastRepathAtMs = nowMs - MovementSettings.RepathMinIntervalMs;
+
         MovementCounters.WalkStart();
 
         if (origin > nowMs)
