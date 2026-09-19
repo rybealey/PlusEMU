@@ -127,6 +127,8 @@ public static class InteractionTypes
                 return InteractionType.MusicDisc;
             case "pressure_pad":
                 return InteractionType.PressurePad;
+            case "corp_gate":
+                return InteractionType.CorpGate;
             case "wf_floor_switch1":
                 return InteractionType.WfFloorSwitch1;
             case "wf_floor_switch2":

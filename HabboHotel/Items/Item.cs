@@ -1165,7 +1165,11 @@ public class Item
             UpdateState(false, true);
             user.GetClient().Send(new InClientLinkComposer("avatar-editor/show"));
         }
-        if (Definition.InteractionType == InteractionType.PressurePad)
+        // A corp gate IS a pressure pad with a condition on it, so it lights
+        // the same way. By the time this fires the walker has already been
+        // allowed through, so there is nothing left to check here.
+        if (Definition.InteractionType == InteractionType.PressurePad ||
+            Definition.InteractionType == InteractionType.CorpGate)
             SetPressurePad(true, null);
         // The window asks for its own shelf once it shows, so stepping on the
         // furni only has to open it.
@@ -1195,7 +1199,8 @@ public class Item
         // (RoomUserManager's frame loop walks them off the old tile first), so
         // an occupancy check would otherwise still count them and the pad would
         // never go dark.
-        if (Definition.InteractionType == InteractionType.PressurePad)
+        if (Definition.InteractionType == InteractionType.PressurePad ||
+            Definition.InteractionType == InteractionType.CorpGate)
             SetPressurePad(false, user);
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
     }

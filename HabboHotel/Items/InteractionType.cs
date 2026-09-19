@@ -68,6 +68,15 @@ public enum InteractionType
 
     PressurePad,
 
+    /// <summary>
+    /// pixelrp: a pressure pad that only lets an on-duty worker across.
+    ///
+    /// Lights exactly as PressurePad does - it IS one, with a condition - but
+    /// anyone not clocked in cannot step onto it at all. Corporation-agnostic
+    /// on purpose: this marks staff-only ground, not one company's ground.
+    /// </summary>
+    CorpGate,
+
     WfFloorSwitch1,
     WfFloorSwitch2,
 

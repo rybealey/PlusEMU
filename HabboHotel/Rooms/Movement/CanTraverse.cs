@@ -59,13 +59,30 @@ public readonly struct TraverseContext
     public readonly CornerPolicy CornerPolicy;
     public readonly IGateAccess Gates;
 
+    /// <summary>
+    /// Whether this walker is clocked in, for <see cref="InteractionType.CorpGate"/>.
+    ///
+    /// Resolved once per search or commit like everything else here, and
+    /// deliberately a plain bool rather than another interface: the question is
+    /// the same for every corp gate in the hotel, so there is nothing per-gate
+    /// to ask. Which corporation they work for is not part of it.
+    ///
+    /// Defaults to TRUE - permissive, matching <see cref="AllowAllGateAccess"/>
+    /// - so a context built without one behaves exactly as it did before this
+    /// existed. Rollers and anything else that moves a body without a walker
+    /// therefore pass, which is correct: a gate stops people walking in, not
+    /// furniture from working.
+    /// </summary>
+    public readonly bool OnDuty;
+
     public TraverseContext(
         bool allowOverride = false,
         bool isRoller = false,
         bool isMounted = false,
         bool diagonalsAllowed = true,
         CornerPolicy cornerPolicy = CornerPolicy.Off,
-        IGateAccess? gates = null)
+        IGateAccess? gates = null,
+        bool onDuty = true)
     {
         AllowOverride = allowOverride;
         IsRoller = isRoller;
@@ -73,6 +90,7 @@ public readonly struct TraverseContext
         DiagonalsAllowed = diagonalsAllowed;
         CornerPolicy = cornerPolicy;
         Gates = gates ?? AllowAllGateAccess.Instance;
+        OnDuty = onDuty;
     }
 }
 
@@ -195,6 +213,14 @@ public static class CanTraverse
                 ? TraverseResult.Allowed
                 : TraverseResult.Blocked;
 
+        // 1b. Corporation gate. Blocks off-duty walkers and OTHERWISE SAYS
+        //     NOTHING - it falls through to the ordinary rules rather than
+        //     returning Allowed, because unlike a guild gate this furni is
+        //     flat and stacked on: whatever else is on the tile still decides.
+        //     A guild gate returns early because it IS the tile.
+        if (!ctx.OnDuty && HasCorpGate(items))
+            return TraverseResult.Blocked;
+
         // 2. Tile state byte. 0 = blocked, 1 = open, 2 = last step, 3 = door.
         var state = map.GameMap[to.X, to.Y];
         TraverseResult result;
@@ -280,6 +306,19 @@ public static class CanTraverse
                 return item;
         }
         return null;
+    }
+
+    private static bool HasCorpGate(List<Item> items)
+    {
+        if (items == null || items.Count == 0)
+            return false;
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            if (item?.Definition != null && item.Definition.InteractionType == InteractionType.CorpGate)
+                return true;
+        }
+        return false;
     }
 
     private static bool HighestIsSeat(List<Item> items)

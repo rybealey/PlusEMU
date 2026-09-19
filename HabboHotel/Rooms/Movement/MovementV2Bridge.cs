@@ -125,7 +125,8 @@ public static class MovementV2Bridge
         var ctx = new TraverseContext(
             allowOverride: user.AllowOverride,
             isMounted: user.RidingHorse,
-            cornerPolicy: CornerPolicy.Off);
+            cornerPolicy: CornerPolicy.Off,
+            onDuty: MovementDuty.IsOnDuty(user));
 
         lock (movement.MovementLock)
         {

@@ -326,7 +326,8 @@ public static class MovementController
         if (w.Mode == MovementMode.Pending)
         {
             w.Mode = MovementMode.Moving;
-            var startCtx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
+            var startCtx = new TraverseContext(cornerPolicy: CornerPolicy.Off,
+                onDuty: MovementDuty.IsOnDuty(room.Room, w.VirtualId));
             PlanNextEdge(room, w, map, startCtx, nowMs, immediate: true);
             return;
         }
@@ -347,7 +348,11 @@ public static class MovementController
         }
 
         // (c) plan the next edge
-        var ctx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
+        // Re-asked every beat rather than carried from the request, so somebody
+        // who clocks OFF mid-walk is stopped at the gate instead of coasting
+        // through on a permission they no longer hold.
+        var ctx = new TraverseContext(cornerPolicy: CornerPolicy.Off,
+            onDuty: MovementDuty.IsOnDuty(room.Room, w.VirtualId));
         PlanNextEdge(room, w, map, ctx, nowMs, immediate: false);
     }
 
@@ -622,6 +627,10 @@ public static class MovementController
         var tile = new Point(from.X + d.X, from.Y + d.Y);
         if (!CanTraverse.InBounds(map, tile.X, tile.Y))
             return from;
+        // No onDuty here, so corp gates do not apply. Deliberate: this is a
+        // geometry question about a tile in front of a captor, asked with no
+        // walker in hand to have a rota. The escorted body is being PUT there,
+        // not walking in.
         var ctx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
         return CanTraverse.IsPassable(CanTraverse.Evaluate(map, from, tile, isFinalStep: false, ctx), false) ? tile : from;
     }
