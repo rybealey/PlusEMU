@@ -165,6 +165,11 @@ public static class MovementCounters
     private static long _correctionEPlus1AlreadyStaged;
     private static long _correctionEPlus1Escort;
 
+    // Redirects held back because the walker was behind the elapsing index,
+    // and the ones that were later applied successfully.
+    private static long _redirectDeferredBehindElapsing;
+    private static long _redirectDeferredRecovered;
+
     /// <summary>
     /// Milliseconds from this redirect to the start of the edge it restages.
     /// Small values are the exposure: the smaller it is, the more certain that
@@ -220,6 +225,19 @@ public static class MovementCounters
     public static void CorrectionEPlus1Escort() =>
         Interlocked.Increment(ref _correctionEPlus1Escort);
 
+    /// <summary>
+    /// A redirect was NOT planned because EdgeIndex was behind the elapsing
+    /// index. The target was kept for a later beat. Pairs with
+    /// redirectBehindElapsing, which counts the same condition being reached;
+    /// with the deferral in place that counter should now stay flat.
+    /// </summary>
+    public static void RedirectDeferredBehindElapsing() =>
+        Interlocked.Increment(ref _redirectDeferredBehindElapsing);
+
+    /// <summary>A deferred redirect was retried on a later beat and applied.</summary>
+    public static void RedirectDeferredRecovered() =>
+        Interlocked.Increment(ref _redirectDeferredRecovered);
+
     private static string MinRedirectMargin()
     {
         var value = Interlocked.Read(ref _minRedirectMarginMs);
@@ -263,7 +281,9 @@ public static class MovementCounters
         $"correctionEPlus1ImmediateStaged={Interlocked.Read(ref _correctionEPlus1ImmediateStaged)} " +
         $"correctionEPlus1NotFuture={Interlocked.Read(ref _correctionEPlus1NotFuture)} " +
         $"correctionEPlus1AlreadyStaged={Interlocked.Read(ref _correctionEPlus1AlreadyStaged)} " +
-        $"correctionEPlus1Escort={Interlocked.Read(ref _correctionEPlus1Escort)}";
+        $"correctionEPlus1Escort={Interlocked.Read(ref _correctionEPlus1Escort)} " +
+        $"redirectDeferredBehindElapsing={Interlocked.Read(ref _redirectDeferredBehindElapsing)} " +
+        $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
     public static void DrainDeferred() => Interlocked.Increment(ref _drainDeferred);

@@ -233,6 +233,34 @@ public static class MovementController
         if (w.Mode != MovementMode.Moving)
             return false;
 
+        // 2b. DEFER WHEN THE WALKER IS BEHIND THE ELAPSING INDEX.
+        //
+        // Step 3 below takes the origin from w.EdgeTo - the terminal of edge
+        // w.EdgeIndex - while step 4 labels the route BaseIndex = e + 1. Those
+        // agree ONLY when w.EdgeIndex == e. SyncCommitsTo cannot always get
+        // there: it is bounded by w.EdgeIndex < w.EmittedThroughEdge, so a beat
+        // that ran late leaves the walker short.
+        //
+        // Planning anyway mislabels every index in the route by
+        // (e - w.EdgeIndex), and the same geometry then reaches the client
+        // under TWO indexes - once early as e + 1 from StageCorrection, and
+        // again at the boundary as w.EdgeIndex + 1 - so edge n's To and edge
+        // n + 1's From end up a tile apart and the avatar teleports across the
+        // hole. Both records carry the SAME RouteRevision, which is why the
+        // client cannot repair it: recordEdge only prunes on a strictly higher
+        // revision, so the second arrival is merged in place beside the first.
+        //
+        // Nothing is planned, renumbered or published here. The target is kept
+        // and retried from AdvanceWalker once the commit path has brought
+        // w.EdgeIndex up to the elapsing index.
+        if (w.EdgeIndex < e)
+        {
+            w.HasDeferredRedirect = true;
+            w.DeferredRedirectTarget = target;
+            MovementCounters.RedirectDeferredBehindElapsing();
+            return false;
+        }
+
         // 3. Origin = terminal of the CURRENT ELAPSING EDGE.
         //    NOT the last promised terminal: that would force the avatar to
         //    walk to the end of advertised lookahead (up to 1500ms) before
@@ -269,6 +297,7 @@ public static class MovementController
 
         // 5/6/7. Route identity advances; the movement clock does not.
         MovementCounters.Redirect();
+        w.HasDeferredRedirect = false;
         w.RouteRevision++;
         w.Target = target;
         w.LastRepathAtMs = nowMs;
@@ -368,6 +397,29 @@ public static class MovementController
         {
             var elapsing = w.ElapsingEdgeIndex(nowMs);
             SyncCommitsTo(room, w, elapsing, nowMs);
+        }
+
+        // (b2) a redirect deferred because the walker was behind the elapsing
+        // index. Retried HERE because the commit above is the only thing that
+        // brings w.EdgeIndex forward, and only while the two indexes now agree
+        // - Redirect would otherwise simply defer it again.
+        //
+        // The flag is cleared BEFORE the attempt on purpose: a retry that fails
+        // for any other reason (no route, debounce) drops the click exactly as
+        // an ordinary redirect would, rather than re-arming itself every beat
+        // against a target that may never be reachable.
+        if (w.HasDeferredRedirect && w.Mode == MovementMode.Moving)
+        {
+            var deferredTarget = w.DeferredRedirectTarget;
+            w.HasDeferredRedirect = false;
+
+            if (w.EdgeIndex == w.ElapsingEdgeIndex(nowMs))
+            {
+                var deferredCtx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
+
+                if (Redirect(room, w, deferredTarget, deferredCtx, nowMs))
+                    MovementCounters.RedirectDeferredRecovered();
+            }
         }
 
         // (c) plan the next edge
@@ -517,6 +569,7 @@ public static class MovementController
         w.Mode = MovementMode.Standing;
         w.EdgeTo = w.Tile;
         w.EdgeToZ = w.TileZ;
+        w.HasDeferredRedirect = false;
         w.Route.Clear();
         w.AwaitingEventsThroughEdge = -1;
 

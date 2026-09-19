@@ -163,6 +163,22 @@ public sealed class MovementState : IDueHeapNode
     public long LastRepathAtMs = long.MinValue;
     public Point LastRepathTarget;
 
+    // ---- deferred redirect ------------------------------------------------
+    /// <summary>
+    /// A redirect target held back because the walker had not yet caught up to
+    /// the elapsing edge index.
+    ///
+    /// Planning while EdgeIndex &lt; e labels the route BaseIndex = e + 1 while
+    /// planning it from EdgeTo - the terminal of an EARLIER edge - so every
+    /// index in it is wrong by (e - EdgeIndex) and the chain acquires a hole.
+    /// The click is kept here and retried on a later beat instead of being
+    /// dropped, because the commit path is the only thing that brings EdgeIndex
+    /// forward.
+    /// </summary>
+    public bool HasDeferredRedirect;
+
+    public Point DeferredRedirectTarget;
+
     // ---- early correction publish (experiment) ----------------------------
     /// <summary>
     /// Identity of the last edge published early by StageCorrection, so the
@@ -202,6 +218,7 @@ public sealed class MovementState : IDueHeapNode
         TileZ = tileZ;
         EdgeTo = tile;
         EdgeToZ = tileZ;
+        HasDeferredRedirect = false;
         Route.Clear();
     }
 
