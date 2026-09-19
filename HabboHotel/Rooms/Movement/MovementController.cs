@@ -46,7 +46,15 @@ public static class MovementController
 
         // THE ROOM ACTIVE PHASE ANCHOR. Caller holds MovementLock, so two
         // simultaneous Standing->Moving requests cannot establish two phases.
+        var phaseAnchorBefore = room.PhaseAnchor;
         var origin = ResolveStartOrigin(room, w, nowMs);
+
+        // DIAGNOSTIC ONLY, off unless :movementphase is armed. Reported from
+        // here rather than inside ResolveStartOrigin so one call covers all
+        // four of its exits, and so the anchor as it was BEFORE is still
+        // readable. Changes nothing.
+        if (MovementPhaseTrace.Enabled)
+            MovementPhaseTrace.OnWalkStart(room, w, nowMs, phaseAnchorBefore, origin);
 
         w.WalkSessionId++;
         w.RouteRevision = 0;
