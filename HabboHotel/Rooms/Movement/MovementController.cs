@@ -908,7 +908,7 @@ public static class MovementController
         if (fromEdgeIndex - 1 > w.EmittedThroughEdge)
             w.EmittedThroughEdge = fromEdgeIndex - 1;
 
-        PublishCorrectedEdgeEarly(room, w, fromEdgeIndex, map);
+        PublishCorrectedEdgeEarly(room, w, map);
     }
 
     /// <summary>
@@ -940,10 +940,35 @@ public static class MovementController
     /// refills lookahead when it stages this index again at the boundary.
     /// </summary>
     private static void PublishCorrectedEdgeEarly(
-        RoomMovement room, MovementState w, int index, Gamemap? map)
+        RoomMovement room, MovementState w, Gamemap? map)
     {
         if (map == null || !w.Route.HasNext || w.Mode != MovementMode.Moving)
             return;
+
+        // THE INDEX COMES FROM THE COUNTER THAT GOVERNS STAGING, NEVER FROM THE
+        // ROUTE'S LABEL, and it is derived here rather than passed in so it
+        // cannot be supplied wrongly.
+        //
+        // StageEdge always labels its record w.EdgeIndex, so the boundary
+        // record for the geometry below will be w.EdgeIndex + 1. This record
+        // describes that same geometry, so it must carry that same index.
+        //
+        // It used to take StageCorrection's fromEdgeIndex, which is e + 1 -
+        // derived from the TIMELINE, not from the counter. Those agree only
+        // when w.EdgeIndex == e. When they did not, this method published
+        // `w.EdgeTo -> PeekNext()` as index e + 1 while the boundary beat
+        // published the identical geometry as w.EdgeIndex + 1: two indexes, one
+        // pair of tiles, and a one-tile hole between edge n's To and edge
+        // n + 1's From. That was the full-tile teleport.
+        //
+        // The deferral in Redirect now guarantees w.EdgeIndex == e before this
+        // runs, so today this is the same number. It is derived anyway, because
+        // the correctness of this record should not rest on a guard three
+        // hundred lines away continuing to hold.
+        //
+        // Geometry agrees by construction: `from` is w.EdgeTo, the terminal of
+        // edge w.EdgeIndex, which IS where edge w.EdgeIndex + 1 begins.
+        var index = w.EdgeIndex + 1;
 
         // A captor's edges ride with a matching shadow record (StageShadow).
         // Publishing the captor's alone would break that lockstep.
