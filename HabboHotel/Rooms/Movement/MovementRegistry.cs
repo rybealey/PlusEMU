@@ -86,7 +86,6 @@ public static class MovementRegistry
                 movement.Close(); // steps 1, 2 and 4
 
             MovementScheduler.Instance.UnregisterRoom(movement); // step 3
-            MovementWorkQueues.ForgetRoom(roomId);
         }
         catch (Exception e)
         {
@@ -170,7 +169,6 @@ public static class MovementRegistry
                $"faults={MovementCounters.SchedulerFaults}) " +
                $"queues(alive={MovementWorkQueues.WorkersAlive} " +
                $"q1Age={MovementWorkQueues.OutboundAgeMs}ms q1Depth={MovementWorkQueues.OutboundDepth} " +
-               $"q2Age={MovementWorkQueues.EventAgeMs}ms " +
                $"frames={MovementWorkQueues.FramesHandedOff}) " +
                $"rooms={Rooms.Count} closedRooms={closed}";
     }

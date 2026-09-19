@@ -1,48 +1,52 @@
 ﻿using System.Collections.Concurrent;
-using System.Drawing;
 using Plus.Core;
 
 namespace Plus.HabboHotel.Rooms.Movement;
 
-/// <summary>One queued tile transition for Q2. Immutable.</summary>
-public readonly struct TileEventItem
-{
-    public readonly RoomMovement Room;
-    public readonly MovementState Walker;
-    public readonly long WalkSessionId;
-    public readonly int EdgeIndex;
-    public readonly Point Left;
-    public readonly Point Entered;
-
-    public TileEventItem(RoomMovement room, MovementState walker, Point left, Point entered)
-    {
-        Room = room;
-        Walker = walker;
-        WalkSessionId = walker.WalkSessionId;
-        EdgeIndex = walker.EdgeIndex;
-        Left = left;
-        Entered = entered;
-    }
-}
-
 /// <summary>
-/// pixelrp Movement V2 (A8): Q1 (outbound) and Q2 (room/tile events).
+/// pixelrp Movement V2 (A8): Q1, the outbound queue.
 ///
-/// Both are PER-ROOM FIFOs with exactly ONE active consumer, so per-room
-/// ordering is a property of the queue rather than of the thread that fills it.
-/// That is what lets the scheduler stay pure (I-5) while tile-leave/tile-enter
-/// pairs still execute in order.
+/// A PER-ROOM FIFO with exactly ONE active consumer, so per-room ordering is a
+/// property of the queue rather than of the thread that fills it. That is what
+/// lets the scheduler stay pure (I-5) - it seals a frame and hands it over,
+/// never composing or sending.
 ///
-/// The consumers are DEDICATED THREADS, not the .NET ThreadPool. This is not a
+/// The consumer is a DEDICATED THREAD, not the .NET ThreadPool. This is not a
 /// stylistic choice: Game.cs:137-147 documents that on this 2-core VPS a pooled
 /// continuation can wait indefinitely for a free worker, which is exactly the
-/// starvation V2 exists to remove. Using Task.Run here would silently reintroduce
-/// it on the outbound path.
+/// starvation V2 exists to remove. Using Task.Run here would silently
+/// reintroduce it on the outbound path.
+///
+/// THERE WAS A SECOND QUEUE, Q2, FOR TILE EVENTS. It is gone, and the reason
+/// matters more than the deletion:
+///
+///   TILE EFFECTS RUN INLINE, on this thread, inside
+///   RoomUserManager.ApplyMovementFrame. That method moves the user onto each
+///   record's from-tile and fires UserWalksOffFurni / UserWalksOnFurni for the
+///   move, under _cycleLock, in order with the commit.
+///
+/// Q2 was built to own that work so the scheduler could never block on a furni
+/// callback, together with a "movement barrier" that held a walker at a
+/// boundary until its tile events completed. Neither was ever switched on: the
+/// barrier was never armed, and Q2's handler body was an empty block with a
+/// comment saying effects would move there at cutover. So every committed edge
+/// enqueued an item, woke a thread, took the room's MovementLock and signalled
+/// the scheduler, to do nothing - while the effects it was meant to own were
+/// already running here.
+///
+/// IF TILE EFFECTS EVER MOVE OFF THIS THREAD, THE BARRIER COMES BACK WITH
+/// THEM. Without it a walker can commit past an edge whose effect has not run,
+/// and one of those effects is a mid-route teleport. Note also that "wired is
+/// off" is a CONTENT property and not a safety one: Item.UserWalksOnFurni
+/// reaches GetWired().TriggerEvent with no enabled guard, Room.cs runs
+/// GetWired().OnCycle() unconditionally, and 210 wf_* definitions exist in SQL
+/// - they are merely absent from the catalog, so any already-placed wired item
+/// fires today. The deleted design is in git history if it is needed again.
 /// </summary>
 public static class MovementWorkQueues
 {
     /// <summary>
-    /// ONE thread per queue, deliberately.
+    /// ONE outbound thread, deliberately.
     ///
     /// This was 2, which broke the ordering guarantee this class is supposed to
     /// provide: both threads pulled from the SAME queue with no per-room
@@ -59,17 +63,12 @@ public static class MovementWorkQueues
     private const int WorkerCount = 1;
 
     private static readonly ConcurrentQueue<(RoomMovement Room, MovementEdgeRecord[] Frame, long ServerNowMs)> OutboundRooms = new();
-    private static readonly ConcurrentQueue<RoomMovement> EventRooms = new();
-    private static readonly ConcurrentDictionary<uint, ConcurrentQueue<TileEventItem>> RoomEvents = new();
-
     private static readonly ManualResetEventSlim OutboundWake = new(false);
-    private static readonly ManualResetEventSlim EventWake = new(false);
 
     private static readonly List<Thread> Workers = new();
     private static volatile bool _running;
     private static long _framesHandedOff;
     private static long _lastOutboundLoopMs;
-    private static long _lastEventLoopMs;
 
     /// <summary>Frames handed from the scheduler to Q1. Health metric only.</summary>
     public static long FramesHandedOff => Interlocked.Read(ref _framesHandedOff);
@@ -80,10 +79,7 @@ public static class MovementWorkQueues
     /// <summary>ms since Q1 last completed a pass. Huge = the worker is wedged on _cycleLock.</summary>
     public static long OutboundAgeMs => SystemMovementClock.Instance.NowMs - Interlocked.Read(ref _lastOutboundLoopMs);
 
-    /// <summary>ms since Q2 last completed a pass.</summary>
-    public static long EventAgeMs => SystemMovementClock.Instance.NowMs - Interlocked.Read(ref _lastEventLoopMs);
-
-    /// <summary>Both queue threads alive? A dead Q1 freezes every avatar in the hotel.</summary>
+    /// <summary>Is the outbound thread alive? A dead Q1 freezes every avatar in the hotel.</summary>
     public static bool WorkersAlive
     {
         get
@@ -114,14 +110,6 @@ public static class MovementWorkQueues
             };
             outbound.Start();
             Workers.Add(outbound);
-
-            var events = new Thread(EventLoop)
-            {
-                IsBackground = true,
-                Name = $"PixelRPMovementEvt{i}"
-            };
-            events.Start();
-            Workers.Add(events);
         }
     }
 
@@ -129,7 +117,6 @@ public static class MovementWorkQueues
     {
         _running = false;
         OutboundWake.Set();
-        EventWake.Set();
         foreach (var worker in Workers)
             worker.Join(1000);
         Workers.Clear();
@@ -199,99 +186,4 @@ public static class MovementWorkQueues
 
         Interlocked.Exchange(ref _lastOutboundLoopMs, SystemMovementClock.Instance.NowMs);
     }
-
-    // ---- Q2: room / tile events ------------------------------------------
-
-    /// <summary>
-    /// Called by the scheduler under the room lock when an edge commits.
-    /// The callback itself NEVER runs on the scheduler thread.
-    /// </summary>
-    public static void EnqueueTileEvent(RoomMovement room, MovementState walker, Point left, Point entered)
-    {
-        if (room.Closed)
-            return;
-        var queue = RoomEvents.GetOrAdd(room.RoomId, static _ => new ConcurrentQueue<TileEventItem>());
-        queue.Enqueue(new TileEventItem(room, walker, left, entered));
-        EventRooms.Enqueue(room);
-        EventWake.Set();
-    }
-
-    private static void EventLoop()
-    {
-        while (_running)
-        {
-            try
-            {
-                EventPass();
-            }
-            catch (Exception e)
-            {
-                ExceptionLogger.LogCriticalException(e);
-                Thread.Sleep(1);
-            }
-        }
-    }
-
-    private static void EventPass()
-    {
-        EventWake.Wait(50);
-        EventWake.Reset();
-
-        while (EventRooms.TryDequeue(out var room))
-        {
-            if (room.Closed)
-                continue;
-            if (!RoomEvents.TryGetValue(room.RoomId, out var queue))
-                continue;
-
-            while (queue.TryDequeue(out var item))
-                ProcessTileEvent(item);
-        }
-
-        Interlocked.Exchange(ref _lastEventLoopMs, SystemMovementClock.Instance.NowMs);
-    }
-
-    /// <summary>
-    /// Process one tile transition and ALWAYS release the movement barrier.
-    ///
-    /// The finally block is mandatory. If an exception in a walk-on callback
-    /// skipped the release, AwaitingEventsThroughEdge would stay armed forever
-    /// and the walker would wait at a boundary permanently - and the watchdog
-    /// could not rescue it, because a walker blocked on a declared barrier is
-    /// legitimately waiting rather than orphaned.
-    /// </summary>
-    private static void ProcessTileEvent(TileEventItem item)
-    {
-        var room = item.Room;
-        var walker = item.Walker;
-        try
-        {
-            // Tile effects (furni walk-on/off, wired dispatch, game hooks) are
-            // invoked here at cutover, through the normal MovementController /
-            // displacement APIs. Nothing is invoked while V2 is inactive.
-        }
-        catch (Exception e)
-        {
-            ExceptionLogger.LogException(e);
-        }
-        finally
-        {
-            try
-            {
-                lock (room.MovementLock)
-                {
-                    if (!room.Closed && walker.WalkSessionId == item.WalkSessionId &&
-                        item.EdgeIndex > walker.EventsProcessedThroughEdge)
-                        walker.EventsProcessedThroughEdge = item.EdgeIndex;
-                }
-                MovementScheduler.Instance.Signal(room);
-            }
-            catch (Exception e)
-            {
-                ExceptionLogger.LogException(e);
-            }
-        }
-    }
-
-    public static void ForgetRoom(uint roomId) => RoomEvents.TryRemove(roomId, out _);
 }

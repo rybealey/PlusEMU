@@ -63,7 +63,6 @@ public static class MovementCounters
     private static long _drainDeferred;
     private static long _beatsLate;
     private static long _maxBeatLatenessMs;
-    private static long _barrierWaits;
     private static long _roomFaults;
     private static long _pathfindCalls;
     private static long _pathfindPartial;
@@ -287,7 +286,6 @@ public static class MovementCounters
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
     public static void DrainDeferred() => Interlocked.Increment(ref _drainDeferred);
-    public static void BarrierWait() => Interlocked.Increment(ref _barrierWaits);
     public static void RoomFault() => Interlocked.Increment(ref _roomFaults);
     public static void PathfindCall() => Interlocked.Increment(ref _pathfindCalls);
     public static void PathfindPartial() => Interlocked.Increment(ref _pathfindPartial);
@@ -309,7 +307,6 @@ public static class MovementCounters
         $"drainDeferred={Interlocked.Read(ref _drainDeferred)} " +
         $"beatsLate={Interlocked.Read(ref _beatsLate)} " +
         $"maxBeatLatenessMs={Interlocked.Read(ref _maxBeatLatenessMs)} " +
-        $"barrierWaits={Interlocked.Read(ref _barrierWaits)} " +
         $"roomFaults={Interlocked.Read(ref _roomFaults)} " +
         $"schedulerFaults={Interlocked.Read(ref _schedulerFaults)} " +
         $"spinGuards={Interlocked.Read(ref _spinGuards)} " +

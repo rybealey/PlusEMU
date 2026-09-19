@@ -61,8 +61,6 @@ public static class MovementController
         w.EdgeIndex = 0;
         w.TimelineOrigin = origin;
         w.EmittedThroughEdge = -1;
-        w.AwaitingEventsThroughEdge = -1;
-        w.EventsProcessedThroughEdge = -1;
         w.Target = target;
         w.Tile = tile;
         w.TileZ = tileZ;
@@ -360,7 +358,11 @@ public static class MovementController
 
     /// <summary>
     /// Commit the in-flight edge: Tile becomes EdgeTo, tile events are queued
-    /// for Q2 (never executed here), and EdgeIndex advances. Emits nothing.
+    /// and EdgeIndex advances. Emits nothing.
+    ///
+    /// Tile effects are NOT queued here. They run inline on the outbound thread
+    /// in RoomUserManager.ApplyMovementFrame, in order with the commit - see
+    /// MovementWorkQueues for why the queue that used to own them is gone.
     /// </summary>
     private static bool CommitEdgeSilently(RoomMovement room, MovementState w, long nowMs)
     {
@@ -368,12 +370,9 @@ public static class MovementController
             return false;
 
         MovementCounters.Commit();
-        var previous = w.Tile;
         w.Tile = w.EdgeTo;
         w.TileZ = w.EdgeToZ;
         w.EdgeIndex++;
-
-        QueueTileEvents(room, w, previous, w.Tile);
         return true;
     }
 
@@ -537,26 +536,11 @@ public static class MovementController
         w.EdgeToZ = map.SqAbsoluteHeight(next.X, next.Y);
         w.Facing = (byte)Rotation.Calculate(w.Tile.X, w.Tile.Y, next.X, next.Y);
 
-        // The movement-critical tile barrier (A9) is DELIBERATELY NOT ARMED yet.
-        //
-        // Two reasons, both discovered on the first beta test:
-        //
-        // 1. IT IS REDUNDANT IN THIS BUILD. ApplyMovementV2Frame mirrors V1 and
-        //    fires UserWalksOffFurni / UserWalksOnFurni inline under _cycleLock,
-        //    so tile effects already run in order with the commit. The Q2
-        //    handler body is still empty (effects move there at cutover), so
-        //    arming the barrier gates on events that do nothing.
-        //
-        // 2. ARMING IT HERE SELF-BLOCKS. Arming at PLAN time with w.EdgeIndex
-        //    means the scheduler's pre-commit check, BarrierBlocks(EdgeIndex+1),
-        //    is already true on the next beat - but the only thing that queues
-        //    edge k's tile event is CommitEdgeSilently, inside the very
-        //    AdvanceWalker call the barrier just blocked. The avatar freezes on
-        //    its first step and the room spins hot.
-        //
-        // When Q2 owns tile effects at cutover, arm it at COMMIT time (after
-        // EdgeIndex++ in CommitEdgeSilently) so the event is queued before the
-        // barrier can block anything, and re-check the drain-loop condition.
+        // No tile-event barrier is armed here, and there is no longer one to
+        // arm: tile effects run inline with the commit on the outbound thread,
+        // so there is nothing for a walker to wait on. If they are ever moved
+        // back onto a queue, the barrier has to come back with them - see
+        // MovementWorkQueues.
 
         StageEdge(room, w, immediate);
 
@@ -586,7 +570,6 @@ public static class MovementController
         w.EdgeToZ = w.TileZ;
         w.DeferredRedirectTarget = null;
         w.Route.Clear();
-        w.AwaitingEventsThroughEdge = -1;
 
         if (!neverEmitted)
             StageEdge(room, w, immediate: false); // walk-end marker slot
@@ -1029,8 +1012,4 @@ public static class MovementController
         MovementCounters.CorrectionEPlus1ImmediateStaged();
     }
 
-    private static void QueueTileEvents(RoomMovement room, MovementState w, Point left, Point entered)
-    {
-        MovementWorkQueues.EnqueueTileEvent(room, w, left, entered);
-    }
 }

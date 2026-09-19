@@ -195,13 +195,6 @@ public sealed class MovementState : IDueHeapNode
     /// </summary>
     public int EmittedThroughEdge = -1;
 
-    // ---- movement-critical tile barrier (A9) ------------------------------
-    /// <summary>Edge index whose tile events must complete before the NEXT commit. -1 = none.</summary>
-    public int AwaitingEventsThroughEdge = -1;
-
-    /// <summary>Highest edge index whose tile events Q2 has finished processing.</summary>
-    public int EventsProcessedThroughEdge = -1;
-
     // ---- bookkeeping ------------------------------------------------------
     public long LastRepathAtMs = long.MinValue;
     public Point LastRepathTarget;
@@ -276,8 +269,6 @@ public sealed class MovementState : IDueHeapNode
         EdgeIndex = 0;
         TimelineOrigin = nowMs;
         EmittedThroughEdge = -1;
-        AwaitingEventsThroughEdge = -1;
-        EventsProcessedThroughEdge = -1;
         Tile = tile;
         TileZ = tileZ;
         EdgeTo = tile;
@@ -313,10 +304,4 @@ public sealed class MovementState : IDueHeapNode
     /// <summary>Absolute start tick of an edge index on this session's timeline.</summary>
     public long EdgeStartTick(int edgeIndex) =>
         TimelineOrigin + (long)edgeIndex * MovementSettings.IntervalMs;
-
-    /// <summary>True when the barrier from A9 currently blocks committing the next edge.</summary>
-    public bool BarrierBlocks(int nextEdgeIndex) =>
-        AwaitingEventsThroughEdge >= 0 &&
-        EventsProcessedThroughEdge < AwaitingEventsThroughEdge &&
-        nextEdgeIndex > AwaitingEventsThroughEdge;
 }
