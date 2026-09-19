@@ -231,6 +231,15 @@ public static class MovementController
         //    turning, which is precisely the responsiveness bug this rule fixes.
         var origin = w.EdgeTo;
 
+        // DIAGNOSTIC ONLY, and off unless :movementreplan is armed. The
+        // geometry this revision is about to replace has to be read BEFORE the
+        // pathfinder overwrites the route buffer, which is why it is captured
+        // here rather than alongside the record below. Changes nothing.
+        var traceHadOld = false;
+        Point traceOldFrom = default, traceOldTo = default;
+        if (MovementReplanTrace.Enabled)
+            traceHadOld = MovementReplanTrace.ReadEdgeGeometry(w, e + 1, origin, out traceOldFrom, out traceOldTo);
+
         // 4. Plan from that origin.
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, origin, target, ctx,
@@ -258,6 +267,13 @@ public static class MovementController
         w.LastRepathTarget = target;
         // UNCHANGED, deliberately: WalkSessionId, TimelineOrigin, EdgeIndex,
         //                          DueTick / queue entry, timing alignment.
+
+        // DIAGNOSTIC ONLY. Recorded after the bump so the revision number is
+        // the one the wire will carry.
+        if (MovementReplanTrace.Enabled)
+            MovementReplanTrace.OnRevision(
+                w, MovementReplanTrace.Origin.Redirect, nowMs, e, e + 1,
+                traceHadOld, traceOldFrom, traceOldTo, origin, w.Route.PeekNext());
 
         // 8. Future indexes (> e) may be restaged; indexes <= e never change.
         StageCorrection(room, w, e + 1);
@@ -414,6 +430,9 @@ public static class MovementController
                 // client cannot have begun rendering an edge whose cycleStart
                 // is still in the future.
                 MovementCounters.Replan();
+                // DIAGNOSTIC ONLY: the tile this index promised before the
+                // re-plan, kept because `next` is about to be reassigned.
+                var traceReplanOldTo = next;
                 var replanned = AStarPathfinder.FindRoute(
                     map, room.Scratch, w.Route, w.Tile, w.Target, ctx,
                     baseIndex: w.EdgeIndex, allowPartial: true);
@@ -426,6 +445,11 @@ public static class MovementController
                 w.RouteRevision++;
                 next = w.Route.PeekNext();
                 isFinal = w.Route.IsLast;
+
+                if (MovementReplanTrace.Enabled)
+                    MovementReplanTrace.OnRevision(
+                        w, MovementReplanTrace.Origin.BlockedReplan, nowMs, elapsing, w.EdgeIndex,
+                        true, w.Tile, traceReplanOldTo, w.Tile, next);
             }
         }
 

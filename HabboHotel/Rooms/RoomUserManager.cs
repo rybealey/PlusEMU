@@ -944,6 +944,13 @@ public class RoomUserManager
                 // prints is exactly what went on the wire.
                 if (Movement.MovementTrace.Enabled)
                     Movement.MovementTrace.OnEdgeEmitted(edge, serverNowMs);
+
+                // Diagnostic only, and off unless :movementreplan is armed.
+                // Stamped HERE, next to the send, because "when did the 4110
+                // actually leave" against the edge's own cycleStart is the
+                // whole discriminator between the two hitch hypotheses.
+                if (Movement.MovementReplanTrace.Enabled)
+                    Movement.MovementReplanTrace.OnEdgeSent(edge, serverNowMs);
             }
         }
     }
