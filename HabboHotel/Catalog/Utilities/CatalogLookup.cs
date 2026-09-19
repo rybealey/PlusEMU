@@ -32,15 +32,24 @@ public static class CatalogLookup
     public static Dictionary<int, CatalogPage> Index(ICollection<CatalogPage> catalog) =>
         catalog.ToDictionary(page => page.Id);
 
-    /// <summary>ONE rule for "this page is on the shelf for this player", used
-    /// by the search box and by the infostand's Buy link so the two can never
-    /// disagree about the same item again.
+    /// <summary>Can this player be sent to this page? The leaf must be
+    /// openable, and every ancestor the walk can reach must pass CanSee.
     ///
-    /// The leaf must be openable. Every ancestor need only pass CanSee - NOT
-    /// Visible. An invisible parent is still written into the index, so its
-    /// children remain reachable by a direct link even though nobody can
-    /// browse to them; requiring ancestor visibility here was what hid Buy on
-    /// items the search box was happily returning.</summary>
+    /// Ancestors are held to rank and VIP only, NOT Visible. An invisible
+    /// parent is still written into the index along with its children, so a
+    /// link to a child lands even though nobody can browse to it.
+    ///
+    /// A PARENT ROW THAT DOES NOT EXIST ENDS THE WALK RATHER THAN FAILING IT.
+    /// Plenty of this catalog's stock sits under a parent_id pointing at a row
+    /// that is gone, and refusing there hid the Buy button on furniture that
+    /// sells perfectly well: there is no gate above a page whose parent does
+    /// not exist, and the client loads a page the navigation tree never listed
+    /// anyway. A CYCLE still fails - that is corrupt in a way this cannot
+    /// reason about, and it is caught before any ancestor is skipped.
+    ///
+    /// This is a PERMISSION test, not a reachability one. Do not give it to
+    /// the search box: a hit only has to be purchasable, and handing the box
+    /// this rule emptied it. See RpCatalogSearchEvent.</summary>
     public static bool IsShoppable(IReadOnlyDictionary<int, CatalogPage> pages, CatalogPage page, int rank, int vipRank)
     {
         if (!IsOpenable(page, rank, vipRank))
@@ -51,7 +60,7 @@ public static class CatalogLookup
         while (current.ParentId != -1)
         {
             if (!pages.TryGetValue(current.ParentId, out var parent))
-                return false;
+                return true;
             if (!visited.Add(parent.Id) || !CanSee(parent, rank, vipRank))
                 return false;
             current = parent;
