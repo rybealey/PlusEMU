@@ -250,24 +250,30 @@ public static class MovementController
 
         // 2b. DEFER WHEN THE WALKER IS BEHIND THE ELAPSING INDEX.
         //
-        // Step 3 below takes the origin from w.EdgeTo - the terminal of edge
-        // w.EdgeIndex - while step 4 labels the route BaseIndex = e + 1. Those
-        // agree ONLY when w.EdgeIndex == e. SyncCommitsTo cannot always get
-        // there: it is bounded by w.EdgeIndex < w.EmittedThroughEdge, so a beat
-        // that ran late leaves the walker short.
+        // w.EdgeIndex < e means the server has not yet committed the edge the
+        // CLIENT is already rendering: e is derived from the timeline, and the
+        // client began that edge from lookahead when its cycleStart passed.
+        // SyncCommitsTo cannot always close the gap - it is bounded by
+        // w.EdgeIndex < w.EmittedThroughEdge, so a beat that ran late leaves
+        // the walker short.
         //
-        // Planning anyway mislabels every index in the route by
-        // (e - w.EdgeIndex), and the same geometry then reaches the client
-        // under TWO indexes - once early as e + 1 from StageCorrection, and
-        // again at the boundary as w.EdgeIndex + 1 - so edge n's To and edge
-        // n + 1's From end up a tile apart and the avatar teleports across the
-        // hole. Both records carry the SAME RouteRevision, which is why the
-        // client cannot repair it: recordEdge only prunes on a strictly higher
-        // revision, so the second arrival is merged in place beside the first.
+        // Planning anyway would restage index w.EdgeIndex + 1 at the boundary,
+        // which in this state is at or before e - the edge in flight. Rewriting
+        // the geometry of an edge the client has already begun is the
+        // crossing/following hitch, measured directly as a sideways jump under
+        // a perfectly correct phase.
         //
-        // Nothing is planned, renumbered or published here. The target is kept
-        // and retried from AdvanceWalker once the commit path has brought
-        // w.EdgeIndex up to the elapsing index.
+        // HISTORICAL NOTE, because this guard used to carry a second
+        // justification that no longer applies: it also masked
+        // PublishCorrectedEdgeEarly taking its index from the route's label
+        // (e + 1) rather than from w.EdgeIndex + 1, which put one pair of tiles
+        // on the wire under two indexes and tore a one-tile hole in the chain.
+        // That is fixed at its source - the early publish derives its own index
+        // now - so this guard stands on the reason above alone.
+        //
+        // Nothing is planned or published here. The target is kept and retried
+        // from AdvanceWalker once the commit path has brought w.EdgeIndex up to
+        // the elapsing index.
         if (w.EdgeIndex < e)
         {
             w.DeferredRedirectTarget = target;
