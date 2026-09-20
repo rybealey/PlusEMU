@@ -85,7 +85,6 @@ public static class AStarPathfinder
         bool allowPartial,
         int maxExpansions = 0)
     {
-        route.Clear();
         MovementCounters.PathfindCall();
 
         if (map == null || map.Model == null)
@@ -106,6 +105,21 @@ public static class AStarPathfinder
         if (maxExpansions <= 0)
             maxExpansions = Math.Max(2000, 4 * scratch.CellCount);
 
+        // THE CALLER'S ROUTE IS NOT TOUCHED UNTIL A SEARCH IS ACTUALLY GOING
+        // TO RUN. This was the first line of the method, which made every
+        // early-out above destroy the route before returning None.
+        //
+        // MovementController.Redirect plans from w.EdgeTo - the tile the
+        // avatar is arriving at - and bails on None with "keep walking the
+        // existing route". Clicking that tile mid-walk hit the start == goal
+        // early-out, so the route it promised to keep had already been wiped
+        // and the next beat stopped the walk at StopRouteEnd. An out-of-bounds
+        // target and a null model did the same thing.
+        //
+        // Every caller tests the PathResult BEFORE it reads the route, so
+        // leaving the buffer intact on those paths changes nothing else.
+        // Do not move this back to the top.
+        route.Clear();
         scratch.NewGeneration();
 
         var startCell = scratch.Index(start.X, start.Y);

@@ -14,10 +14,25 @@ namespace Plus.HabboHotel.Rooms.PathFinding.V2;
 /// four independent chances to get an off-by-one wrong. Start-first removes the
 /// whole class.
 ///
-/// BaseIndex is the walk's EdgeIndex that Tiles[0] corresponds to. On a
-/// redirect the new route describes edges from e+1 onward, so BaseIndex = e + 1
-/// (LOCK NOTE 2.2). It is what lets promised future indexes be matched against
-/// the route without a separate promise ring.
+/// BaseIndex is the walk's EdgeIndex that Tiles[0] was PLANNED for.
+///
+/// IT IS A DIAGNOSTIC LABEL AND NOTHING MAY STAGE FROM IT. The only source for
+/// a staged record's index is MovementState.EdgeIndex, which StageEdge reads
+/// directly; BaseIndex has exactly one reader in the codebase,
+/// MovementReplanTrace.ReadEdgeGeometry, which needs it to say which index a
+/// route tile belonged to BEFORE the pathfinder overwrote the buffer.
+///
+/// It cannot be derived from EdgeIndex and Cursor, which is why it still
+/// exists: those advance at different moments - EdgeIndex in
+/// CommitEdgeSilently, Cursor in PlanNextEdge - and SyncCommitsTo advances
+/// EdgeIndex alone, so their offset is not fixed.
+///
+/// It CAN disagree with EdgeIndex, and has: a redirect labels the route e + 1
+/// while planning it from the terminal of edge EdgeIndex, and those are the
+/// same edge only when EdgeIndex == e. Code that published under this label
+/// instead of under EdgeIndex put one pair of tiles on the wire as two
+/// indexes and tore a one-tile hole in the chain. Read it to describe the
+/// past; never to address the future.
 /// </summary>
 public sealed class RouteBuffer
 {
@@ -41,9 +56,6 @@ public sealed class RouteBuffer
     public Point PeekNext() => _tiles[Cursor];
     public bool IsLast => Cursor == Length - 1;
     public void Advance() => Cursor++;
-
-    /// <summary>The edge index that <see cref="PeekNext"/> would occupy.</summary>
-    public int NextEdgeIndex => BaseIndex + Cursor;
 
     public void Clear()
     {

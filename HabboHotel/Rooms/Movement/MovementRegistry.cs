@@ -86,7 +86,6 @@ public static class MovementRegistry
                 movement.Close(); // steps 1, 2 and 4
 
             MovementScheduler.Instance.UnregisterRoom(movement); // step 3
-            MovementWorkQueues.ForgetRoom(roomId);
         }
         catch (Exception e)
         {
@@ -112,10 +111,18 @@ public static class MovementRegistry
     {
         if (!room.States.TryGetValue(virtualId, out var state))
             return;
+
+        // DIAGNOSTIC ONLY, off unless :movementphase is armed. Sampled before
+        // the removal so "did the last live walker just go" is answered by the
+        // data rather than inferred. Changes nothing.
+        var traceOn = MovementPhaseTrace.Enabled;
+        var anchorBefore = room.PhaseAnchor;
+        int movingBefore = 0, pendingBefore = 0;
+        if (traceOn)
+            MovementPhaseTrace.SampleBefore(room, out movingBefore, out pendingBefore);
         // Dequeue BEFORE removal, so nothing can be emitted for a unit that is
         // already gone.
         room.Walkers.Remove(state);
-        state.Queued = false;
         // pixelrp police escort: unlink either side of a shadow pairing, so a
         // suspect is never left frozen behind a captor who has gone, and a
         // captor never keeps staging edges for a suspect who has.
@@ -124,6 +131,11 @@ public static class MovementRegistry
         if (state.ShadowedBy != MovementState.NoShadow && room.States.TryGetValue(state.ShadowedBy, out var captor) && captor.ShadowVirtualId == virtualId)
             captor.ShadowVirtualId = MovementState.NoShadow;
         room.States.Remove(virtualId);
+
+        if (traceOn)
+            MovementPhaseTrace.OnUnitRemoved(
+                room, state, MovementScheduler.Instance.Clock.NowMs,
+                anchorBefore, movingBefore, pendingBefore);
     }
 
     public static string Snapshot() =>
@@ -157,7 +169,6 @@ public static class MovementRegistry
                $"faults={MovementCounters.SchedulerFaults}) " +
                $"queues(alive={MovementWorkQueues.WorkersAlive} " +
                $"q1Age={MovementWorkQueues.OutboundAgeMs}ms q1Depth={MovementWorkQueues.OutboundDepth} " +
-               $"q2Age={MovementWorkQueues.EventAgeMs}ms " +
                $"frames={MovementWorkQueues.FramesHandedOff}) " +
                $"rooms={Rooms.Count} closedRooms={closed}";
     }
@@ -233,6 +244,11 @@ public static class MovementRegistry
 
             foreach (var walker in room.States.Values)
             {
+                // queued and inHeap are both kept deliberately. queued is now
+                // HeapIndex >= 0; Contains additionally verifies that the slot
+                // really holds this walker. They used to disagree when a
+                // hand-maintained flag was missed - now a disagreement means
+                // the heap itself is corrupt, which is worth seeing.
                 lines.Add($"[MV2/unit {walker.VirtualId}] mode={walker.Mode} " +
                           $"session={walker.WalkSessionId} rev={walker.RouteRevision} edge={walker.EdgeIndex} " +
                           $"emittedThrough={walker.EmittedThroughEdge} " +

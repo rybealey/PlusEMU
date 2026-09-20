@@ -47,6 +47,17 @@ public enum PhaseDecision : byte
 }
 
 /// <summary>
+/// The identity of one edge record: (WalkSessionId, RouteRevision, EdgeIndex).
+///
+/// MovementState's own remarks call this a proven total order, and it is the
+/// key every consumer already matches on - the outbound trace, the replan log
+/// and the early-publish dedupe all compare exactly these three. Naming it
+/// means the triple is carried and compared as ONE value rather than three
+/// fields that have to be written and read in step.
+/// </summary>
+public readonly record struct EdgeIdentity(long WalkSessionId, int RouteRevision, int EdgeIndex);
+
+/// <summary>
 /// pixelrp Movement V2 (A4): the complete per-avatar movement state.
 ///
 /// Replaces roughly 25 scattered RoomUser fields. Every field here has exactly
@@ -146,22 +157,82 @@ public sealed class MovementState : IDueHeapNode
 
     // ---- promises ---------------------------------------------------------
     /// <summary>
-    /// Highest edge index already PROMISED on the wire for the current
-    /// (session, revision), counting advertised lookahead. Timing for every
-    /// index up to here is immutable (I-3).
+    /// Highest edge index for which a REAL 4110 record has been staged in this
+    /// session. Starts at -1, and only ever rises within a session.
+    ///
+    /// IT DOES NOT COUNT ADVERTISED LOOKAHEAD, and that is the whole point of
+    /// this comment. StageEdge raises it to w.EdgeIndex only - the index of the
+    /// record being staged - while that same record carries lookahead for up to
+    /// MovementSettings.LookaheadMax FURTHER indexes. So the client reliably
+    /// knows the geometry of indexes ABOVE this value, and begins rendering
+    /// them from that lookahead the instant their cycleStart passes.
+    ///
+    /// The previous wording here said it counted lookahead. It never has, and
+    /// the difference is not academic: it made "a redirect only ever restages
+    /// EmittedThroughEdge + 1, so it never touches an emitted edge" read as a
+    /// safety argument, when the index being restaged is one the client may
+    /// already be drawing.
+    ///
+    /// NOTHING GATES ON IT. It is not an enforced immutability boundary, and no
+    /// code consults it before replacing geometry. It has exactly two readers:
+    ///
+    ///   SyncCommitsTo  bounds the silent-commit loop, so a walker is never
+    ///                  advanced past an index for which nothing was put on the
+    ///                  wire
+    ///   StopWalk       the `neverEmitted` test - a Pending walker that emitted
+    ///                  nothing needs no walk-end, because the client was never
+    ///                  told the unit was moving
+    ///
+    /// Nor does it govern timing. Every edge start is DERIVED as
+    /// TimelineOrigin + k * IntervalMs, so timing immutability comes from
+    /// TimelineOrigin not moving - not from this field.
+    ///
+    /// StageCorrection also raises it to (fromEdgeIndex - 1), which can assert
+    /// an index that was never individually staged. That is deliberate: it is
+    /// what lets SyncCommitsTo reach the elapsing edge on a later beat. It does
+    /// mean the value reads as "the commit loop may advance this far", not as a
+    /// literal record of what went on the wire.
     /// </summary>
     public int EmittedThroughEdge = -1;
-
-    // ---- movement-critical tile barrier (A9) ------------------------------
-    /// <summary>Edge index whose tile events must complete before the NEXT commit. -1 = none.</summary>
-    public int AwaitingEventsThroughEdge = -1;
-
-    /// <summary>Highest edge index whose tile events Q2 has finished processing.</summary>
-    public int EventsProcessedThroughEdge = -1;
 
     // ---- bookkeeping ------------------------------------------------------
     public long LastRepathAtMs = long.MinValue;
     public Point LastRepathTarget;
+
+    // ---- deferred redirect ------------------------------------------------
+    /// <summary>
+    /// A redirect target held back because the walker had not yet caught up to
+    /// the elapsing edge index.
+    ///
+    /// Planning while EdgeIndex &lt; e labels the route BaseIndex = e + 1 while
+    /// planning it from EdgeTo - the terminal of an EARLIER edge - so every
+    /// index in it is wrong by (e - EdgeIndex) and the chain acquires a hole.
+    /// The click is kept here and retried on a later beat instead of being
+    /// dropped, because the commit path is the only thing that brings EdgeIndex
+    /// forward.
+    ///
+    /// null means none. This was a bool beside a Point, which let "flagged but
+    /// no target" and "target set but not flagged" be written independently -
+    /// neither is a real state, and every read had to trust that two fields
+    /// agreed. One nullable makes both unrepresentable, and lets the retry bind
+    /// the value in the very test that asks whether there is one.
+    /// </summary>
+    public Point? DeferredRedirectTarget;
+
+    // ---- early correction publish (experiment) ----------------------------
+    /// <summary>
+    /// Identity of the last edge published early by StageCorrection, so the
+    /// same (session, revision, index) is never transmitted twice from there.
+    /// Deliberately does NOT suppress the normal boundary stage for that index:
+    /// that record performs the commit and carries the refreshed lookahead.
+    ///
+    /// null means nothing has been published early yet. This was three fields
+    /// initialised to -1, which worked only because no real triple can contain
+    /// a -1 - a sentinel that happened to be unreachable rather than one that
+    /// could not be expressed. Nothing clears it and nothing needs to: the
+    /// session component makes a stale value inert on the next walk.
+    /// </summary>
+    public EdgeIdentity? LastEarlyPublish;
 
     /// <summary>
     /// Real players only establish and hold the room phase. Bots and pets walk
@@ -175,8 +246,21 @@ public sealed class MovementState : IDueHeapNode
     public PhaseDecision LastPhaseDecision;
     public int LastStartDelayMs;
 
-    /// <summary>Set while this walker has a live scheduler queue entry (I-1).</summary>
-    public bool Queued;
+    /// <summary>
+    /// True while this walker holds a scheduler queue entry (I-1).
+    ///
+    /// DERIVED, never assigned. IndexedDueHeap owns HeapIndex and is the only
+    /// thing that may change it: InsertOrUpdate sets it, Remove clears it to -1
+    /// on EVERY path including the not-present one, Pop goes through Remove,
+    /// and Clear and Swap maintain it across every move. So "is this walker
+    /// queued" has exactly one source of truth, and a second copy cannot drift
+    /// out of step with it.
+    ///
+    /// This was a bool assigned by hand at seven sites across four files, each
+    /// one sitting immediately next to the heap call that had already decided
+    /// the answer.
+    /// </summary>
+    public bool Queued => HeapIndex >= 0;
 
     public void ResetForNewSession(long nowMs, Point tile, double tileZ)
     {
@@ -185,12 +269,11 @@ public sealed class MovementState : IDueHeapNode
         EdgeIndex = 0;
         TimelineOrigin = nowMs;
         EmittedThroughEdge = -1;
-        AwaitingEventsThroughEdge = -1;
-        EventsProcessedThroughEdge = -1;
         Tile = tile;
         TileZ = tileZ;
         EdgeTo = tile;
         EdgeToZ = tileZ;
+        DeferredRedirectTarget = null;
         Route.Clear();
     }
 
@@ -221,10 +304,4 @@ public sealed class MovementState : IDueHeapNode
     /// <summary>Absolute start tick of an edge index on this session's timeline.</summary>
     public long EdgeStartTick(int edgeIndex) =>
         TimelineOrigin + (long)edgeIndex * MovementSettings.IntervalMs;
-
-    /// <summary>True when the barrier from A9 currently blocks committing the next edge.</summary>
-    public bool BarrierBlocks(int nextEdgeIndex) =>
-        AwaitingEventsThroughEdge >= 0 &&
-        EventsProcessedThroughEdge < AwaitingEventsThroughEdge &&
-        nextEdgeIndex > AwaitingEventsThroughEdge;
 }

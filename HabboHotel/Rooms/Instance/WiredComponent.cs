@@ -27,8 +27,9 @@ public class WiredComponent
     /// pixelrp Movement V2 (A9): does this room hold any wired box that reacts
     /// to a user walking onto or off a tile?
     ///
-    /// Read-only. Used by TileEffects to decide, at PLAN time, whether stepping
-    /// onto a tile must arm the movement barrier - a wired walk-on trigger can
+    /// Read-only. Written for the movement barrier's plan-time classifier,
+    /// which is gone along with the barrier; kept because the fact it reports
+    /// is still true - a wired walk-on trigger can
     /// reach TeleportUserBox and move the avatar mid-route, so that effect must
     /// never execute one edge late.
     ///

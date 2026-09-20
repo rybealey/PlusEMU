@@ -11,8 +11,15 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 /// </summary>
 internal class GangAlertCommand : IChatCommand
 {
-    // gang alerts get their own bubble (corporation alerts use 11)
-    private const int AlertBubble = 12;
+    // Gang alerts get their own GREEN bubble, and a private id for it.
+    //
+    // 12 was pink and, more to the point, a style any player can pick for
+    // themselves - room_chat_styles has a row for it with no required right.
+    // Sharing it meant a gang alert looked like anyone else's chat, and left
+    // Chat History unable to tell the two apart. 200 has no row at all, so
+    // nobody can select it; server-sent whispers do not consult that table.
+    // (Corporation alerts still use 11.)
+    private const int AlertBubble = 200;
 
     private readonly IGameClientManager _gameClientManager;
 

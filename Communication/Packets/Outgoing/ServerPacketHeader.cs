@@ -410,4 +410,5 @@ public static class ServerPacketHeader
     // must never be reused - a V1 client would mis-parse a V2 payload sent
     // there rather than reject it.
     public const uint RpMovementV2Composer = 4110;
+    public const uint RpCatalogLocateComposer = 4143;
 }

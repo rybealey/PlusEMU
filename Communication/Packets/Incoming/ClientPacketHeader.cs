@@ -520,6 +520,7 @@ public static class ClientPacketHeader
     public const uint RpGetBankLedgerEvent = 4119;
     public const uint RpTellerActionEvent = 4120;
     public const uint RpCatalogSearchEvent = 4121;
+    public const uint RpCatalogLocateEvent = 4143;
 
     // pixelrp Sitch. The const NAME must equal the handler class name -
     // PacketManager resolves it by reflection - and the value here is the

@@ -10,12 +10,14 @@ public class CatalogPageComposer : IServerPacket
 {
     private readonly CatalogPage _page;
     private readonly string _mode;
+    private readonly int _selectedItemId;
     public uint MessageId => ServerPacketHeader.CatalogPageComposer;
 
-    public CatalogPageComposer(CatalogPage page, string mode)
+    public CatalogPageComposer(CatalogPage page, string mode, int selectedItemId = -1)
     {
         _page = page;
         _mode = mode;
+        _selectedItemId = selectedItemId;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -111,7 +113,7 @@ public class CatalogPageComposer : IServerPacket
         }
         else
             packet.WriteInteger(0);
-        packet.WriteInteger(-1);
+        packet.WriteInteger(_selectedItemId);
         packet.WriteBoolean(false);
         packet.WriteInteger(PlusEnvironment.Game.Catalog.Promotions.ToList().Count); //Count
         foreach (var promotion in PlusEnvironment.Game.Catalog.Promotions.ToList())

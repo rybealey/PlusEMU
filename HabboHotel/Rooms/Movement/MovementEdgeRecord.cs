@@ -67,6 +67,25 @@ public readonly struct MovementEdgeRecord
     /// </summary>
     public readonly int StartDelayMs;
 
+    /// <summary>
+    /// SERVER-ONLY, and deliberately absent from RpMovementV2Composer.Compose -
+    /// the wire format is byte-identical whether this is set or not.
+    ///
+    /// room.Staged is NOT a packet queue. RoomUserManager.ApplyMovementFrame
+    /// treats every staged record as server truth: it moves the user onto the
+    /// record's from-tile, fires UserWalksOffFurni / UserWalksOnFurni for that
+    /// move, and sets facing and "mv" from it. Publishing a FUTURE edge early
+    /// through that path would teleport the avatar a tile forward, run tile
+    /// effects an edge ahead of time - including the ungated wired
+    /// TriggerWalkOnFurni -> TeleportUserBox route - and set "mv" to a tile the
+    /// avatar has not reached.
+    ///
+    /// A publish-only record skips all of that and is only transmitted. The
+    /// commit for the same index still happens later, from the normal record
+    /// the boundary beat stages.
+    /// </summary>
+    public readonly bool PublishOnly;
+
     public bool IsWalkEnd => (Flags & RpMovementV2Flags.WalkEnd) != 0;
     public bool IsDisplacement => (Flags & RpMovementV2Flags.Displacement) != 0;
 
@@ -75,7 +94,8 @@ public readonly struct MovementEdgeRecord
         int intervalMs, long cycleStartMs,
         int fromX, int fromY, int fromZ100,
         int toX, int toY, int toZ100, double toZ, byte facing,
-        LookaheadTile[] lookahead, int lookaheadCount, int startDelayMs = 0)
+        LookaheadTile[] lookahead, int lookaheadCount, int startDelayMs = 0,
+        bool publishOnly = false)
     {
         VirtualId = virtualId;
         WalkSessionId = walkSessionId;
@@ -95,6 +115,7 @@ public readonly struct MovementEdgeRecord
         Lookahead = lookahead;
         LookaheadCount = lookaheadCount;
         StartDelayMs = startDelayMs;
+        PublishOnly = publishOnly;
     }
 
     public static int Z100(double z) => (int)Math.Round(z * 100);
