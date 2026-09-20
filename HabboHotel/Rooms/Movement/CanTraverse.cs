@@ -232,10 +232,35 @@ public static class CanTraverse
                 result = TraverseResult.AllowedAsFinalOnly;
                 break;
             case 3:
-                // A seat on a door tile is walkable mid-route (V1 chair rule).
-                result = HighestIsSeat(items)
-                    ? TraverseResult.Allowed
-                    : TraverseResult.AllowedAsFinalOnly;
+                // A SEAT IS SOMEWHERE TO STOP, NOT SOMEWHERE TO WALK THROUGH.
+                //
+                // 3 covers the room's door AND every seat, bed and tent square
+                // (Gamemap.LeavesSquareSittable writes it), so final-only is
+                // the rule for all of them: you may end a route here - which is
+                // what sitting IS, the arrival adds the "sit" status - but you
+                // may not pass through.
+                //
+                // This used to make the square freely walkable when the highest
+                // item on it was a seat, ported from V1's IsValidStep, which
+                // carried the same `chair` carve-out. V1's COMMIT-time check,
+                // IsValidStep2, had no such exception, so V1 routed people
+                // through chairs and then refused the step - the mid-walk
+                // invalidStep abort this engine was built to remove. V2 kept
+                // the permissive half, which made walking through furniture
+                // consistent instead of intermittent.
+                //
+                // It was also inconsistent with everything around it. A room
+                // model's OWN seat squares are written 2, not 3
+                // (Gamemap.GenerateMaps), so built-in benches already blocked;
+                // beds and tents share byte 3 but were never covered by the
+                // carve-out, so they already blocked too. Only furni seats
+                // could be crossed. Now they match.
+                //
+                // The door is unaffected: a bare door tile is already 3 with no
+                // seat on it, so it was final-only before this and still is.
+                // Entry places a user ON the door rather than routing them to
+                // it, and stepping OFF a tile is never gated.
+                result = TraverseResult.AllowedAsFinalOnly;
                 break;
             default:
                 result = TraverseResult.Allowed;
@@ -319,24 +344,5 @@ public static class CanTraverse
                 return true;
         }
         return false;
-    }
-
-    private static bool HighestIsSeat(List<Item> items)
-    {
-        if (items == null || items.Count == 0)
-            return false;
-        var chair = false;
-        double highestZ = -1;
-        for (var i = 0; i < items.Count; i++)
-        {
-            var item = items[i];
-            if (item?.Definition == null)
-                continue;
-            if (item.GetZ < highestZ)
-                continue;
-            highestZ = item.GetZ;
-            chair = item.Definition.IsSeat;
-        }
-        return chair;
     }
 }
