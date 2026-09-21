@@ -165,6 +165,14 @@ public class RoomUserManager
             Movement.MovementV2Bridge.Halt(user);
             Chat.Commands.User.Police.PoliceState.OnKnockout(_room, user);
         }
+        else
+        {
+            // Back on their feet. A medical transport is over the moment its
+            // patient wakes up - UpdateRpKnockoutState has already handed them
+            // CanWalk back, and a free player still pinned to a captor is a
+            // player whose every click is silently refused.
+            Chat.Commands.User.Police.PoliceState.OnRevive(_room, user);
+        }
     }
 
     public bool AddAvatarToRoom(GameClient session)
@@ -916,11 +924,17 @@ public class RoomUserManager
                     user.X = edge.FromX;
                     user.Y = edge.FromY;
                     user.Z = edge.FromZ100 / 100.0;
-                    // A knocked-out unit lies 0.35 below floor height
+                    // A LYING unit lies 0.35 below floor height
                     // (UpdateRpKnockoutState) and UpdateUserStatus leaves a
                     // lying unit alone, so the offset has to travel with them.
                     // Only an escort close-out or displacement ever moves one.
-                    if (user.RpKnockedOut)
+                    //
+                    // Keyed on the POSE, not on the health. The offset belongs
+                    // to the lay, and the two stopped being the same thing when
+                    // medical transport began lifting a knocked-out patient off
+                    // the floor to carry them: testing RpKnockedOut there would
+                    // sink a standing patient below the floor on every arrival.
+                    if (user.IsLying)
                         user.Z -= 0.35;
 
                     foreach (var item in _room.GetGameMap().GetCoordinatedItems(arrived).ToList())

@@ -12,9 +12,14 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// the pair untestable and would leave a player unable to fight with no way
 /// back. Anyone may use it for now, like the rest of the chain.
 ///
-/// Uncuffing also ends any escort the player is in. An escort exists to move
-/// someone who is restrained; once the cuffs are off there is nothing holding
-/// them, and leaving the escort running would pin a free player to a captor.
+/// Uncuffing also ends any CUSTODY escort the player is in. That escort exists
+/// to move someone who is restrained; once the cuffs are off there is nothing
+/// holding them, and leaving it running would pin a free player to a captor.
+///
+/// A medical transport survives an uncuff, because the cuffs were never what
+/// justified it. A player can be both cuffed and unconscious - a suspect who
+/// lost a fight - and taking the cuffs off one who is being carried to hospital
+/// should not drop them on the pavement.
 /// </summary>
 internal class UncuffCommand : ITargetChatCommand
 {
@@ -51,9 +56,10 @@ internal class UncuffCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        // The cuffs were what justified the escort.
+        // The cuffs were what justified a custody escort. They justified
+        // nothing about an ambulance.
         var captorId = PoliceState.CaptorOf(target.Id);
-        if (captorId != 0)
+        if (captorId != 0 && !PoliceState.IsMedicalEscort(captorId))
             PoliceState.EndEscort(room, captorId, targetUser);
 
         room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*unlocks {target.Username}'s cuffs*", 0, FightBubble));

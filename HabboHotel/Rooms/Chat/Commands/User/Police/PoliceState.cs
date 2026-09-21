@@ -23,6 +23,13 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// not quietly time out from under the officer working it - any player can
 /// escort them, for as long as the cuffs are on.
 ///
+/// The escort registry since grew a SECOND user that is not police at all: a
+/// paramedic carrying an unconscious patient (<see cref="EscortKind"/>). It
+/// lives here, under a police-sounding name, because the mechanism is the same
+/// one - the same two dictionaries, the same shadow pairing, and above all the
+/// same teardown paths. Splitting it out would buy a better name and cost the
+/// guarantee that every way a player can vanish still unwinds every escort.
+///
 /// The one deliberate departure from the original: there are no scheduled
 /// tasks. Arcturus armed a ScheduledFuture per stun and ran the escort off its
 /// own 250ms timer; pixelrp already ticks every room at 500ms and already
@@ -52,6 +59,34 @@ public static class PoliceState
     /// </summary>
     public const int NoEffectId = 0;
 
+    /// <summary>
+    /// The ambulance a medical escort puts on BOTH players (Carambulance, per
+    /// nitro/overrides/gamedata/EffectMap.json). Custody escorts have no visual
+    /// at all; a medical transport is meant to read across the room as an
+    /// emergency, from either end of it.
+    /// </summary>
+    public const int AmbulanceEffectId = 20;
+
+    /// <summary>
+    /// Why an escort is running, which is the whole difference between the two.
+    ///
+    /// <see cref="Custody"/> is the police one: a cuffed, CONSCIOUS suspect
+    /// marched by an officer. <see cref="Medical"/> is its mirror: a patient who
+    /// is out cold, carried by a paramedic, with no cuffs involved. The
+    /// preconditions invert, and so does what ending it has to put back.
+    ///
+    /// Both live in the SAME registry below rather than in parallel ones. Those
+    /// two dictionaries are what every teardown path already unwinds - room
+    /// leave, the cycle sweep, disconnect, and the V2 registry's shadow unlink -
+    /// and a second pair would mean each of those paths quietly growing a second
+    /// call that is easy to miss and impossible to notice the absence of.
+    /// </summary>
+    public enum EscortKind
+    {
+        Custody,
+        Medical
+    }
+
     /// <summary>Stunned player id -> when the freeze lifts.</summary>
     private static readonly ConcurrentDictionary<int, DateTime> Stunned = new();
 
@@ -61,6 +96,16 @@ public static class PoliceState
     /// <summary>Captor -> suspect, and the reverse, for an active escort.</summary>
     private static readonly ConcurrentDictionary<int, int> EscortByCaptor = new();
     private static readonly ConcurrentDictionary<int, int> EscortBySuspect = new();
+
+    /// <summary>Captor -> why their escort is running. Absent means Custody.</summary>
+    private static readonly ConcurrentDictionary<int, EscortKind> KindByCaptor = new();
+
+    /// <summary>
+    /// Player id -> the enable they were wearing before a medical escort put an
+    /// ambulance on them, so ending one puts back what they had rather than
+    /// stripping them to nothing. Written for both parties, cleared by EndEscort.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, int> EffectBeforeEscort = new();
 
     /// <summary>
     /// Serialises starting and ending an escort. Each is two steps - the
@@ -174,13 +219,20 @@ public static class PoliceState
     public static int CaptorOf(int suspectId) => EscortBySuspect.TryGetValue(suspectId, out var id) ? id : 0;
 
     /// <summary>
+    /// Is this captor running a medical transport rather than an arrest?
+    /// False for no escort at all, so callers can ask without checking first.
+    /// </summary>
+    public static bool IsMedicalEscort(int captorId) =>
+        KindByCaptor.TryGetValue(captorId, out var kind) && kind == EscortKind.Medical;
+
+    /// <summary>
     /// Take a suspect into custody. From here the suspect does not walk: the
     /// movement engine makes them the captor's shadow, so every step the
     /// captor takes is mirrored onto them one tile in front, facing the same
     /// way, on the same beat (<see cref="MovementV2Bridge.Pair"/>). False when
     /// either side is already in an escort or the pair could not be made.
     /// </summary>
-    public static bool StartEscort(Room room, RoomUser captor, RoomUser suspect)
+    public static bool StartEscort(Room room, RoomUser captor, RoomUser suspect, EscortKind kind = EscortKind.Custody)
     {
         if (room == null || captor == null || suspect == null || captor == suspect)
             return false;
@@ -203,10 +255,101 @@ public static class PoliceState
                 EscortBySuspect.TryRemove(suspectId, out _);
                 return false;
             }
+            KindByCaptor[captorId] = kind;
             suspect.CanWalk = false;
             suspect.UpdateNeeded = true;
+            if (kind == EscortKind.Medical)
+            {
+                // The patient is out cold and therefore laid out on the floor.
+                // Being carried is the one thing that takes them off it: the
+                // pose lifts for the trip and comes back when they are put
+                // down. RpKnockedOut and CanWalk are NOT touched - they are
+                // still unconscious and still cannot walk, they are just on a
+                // stretcher rather than on the pavement.
+                LiftKnockoutPose(suspect);
+                WearAmbulance(captor);
+                WearAmbulance(suspect);
+            }
             return true;
         }
+    }
+
+    /// <summary>
+    /// Put the ambulance on one player, remembering what they had on first.
+    ///
+    /// Goes through ApplyEffect, so Effects.CurrentEffect really becomes 20,
+    /// rather than sending the composer straight to the room the way the "67"
+    /// gesture does (ChatEvent). That distinction is load-bearing: while the
+    /// slot still reads 0, UpdatePassiveEffect stamps the passive enable over
+    /// the top of it on the very next room tick, because it asserts whenever
+    /// the slot is free. Owning the slot is what keeps the ambulance on screen.
+    /// </summary>
+    private static void WearAmbulance(RoomUser user)
+    {
+        var effects = user?.GetClient()?.GetHabbo()?.Effects;
+        if (effects == null)
+            return;
+        EffectBeforeEscort[user.UserId] = effects.CurrentEffect;
+        user.ApplyEffect(AmbulanceEffectId);
+    }
+
+    /// <summary>
+    /// Take the ambulance off and give back whatever was underneath it.
+    ///
+    /// Only if it is still ours, the guard <see cref="Release"/> uses for the
+    /// stun visual: something else may have taken the slot in the meantime (a
+    /// swim tile, a mount, a fresh :enable), and an escort ending is no reason
+    /// to wipe it.
+    /// </summary>
+    private static void RestoreEffect(RoomUser user)
+    {
+        if (user == null)
+            return;
+        if (!EffectBeforeEscort.TryRemove(user.UserId, out var previous))
+            return;
+        var effects = user.GetClient()?.GetHabbo()?.Effects;
+        if (effects == null || effects.CurrentEffect != AmbulanceEffectId)
+            return;
+        user.ApplyEffect(previous);
+    }
+
+    /// <summary>
+    /// Take a knocked-out player off the floor for the length of a transport.
+    /// The inverse of the lift in RoomUser.UpdateRpKnockoutState, including the
+    /// 0.35 the lay owes back - UpdateUserStatus recomputes Z against the tile
+    /// only for a unit that is not lying, so the flag and the status have to
+    /// move together or the avatar's height stops being reconciled.
+    /// </summary>
+    private static void LiftKnockoutPose(RoomUser user)
+    {
+        if (user == null || !user.Statusses.ContainsKey("lay"))
+            return;
+        user.Statusses.Remove("lay");
+        user.Z += 0.35;
+        user.IsLying = false;
+        user.UpdateNeeded = true;
+    }
+
+    /// <summary>
+    /// Lay a patient back down, if they are still out cold when they are put
+    /// down. Someone healed mid-transport is left standing: their health no
+    /// longer holds the pose, and forcing them back onto the floor would undo a
+    /// revive that has already happened.
+    /// </summary>
+    private static void RestoreKnockoutPose(RoomUser user)
+    {
+        if (user == null || user.Statusses.ContainsKey("lay"))
+            return;
+        var habbo = user.GetClient()?.GetHabbo();
+        if (habbo == null || habbo.RpHealth > 0)
+            return;
+        if (user.RotBody % 2 != 0)
+            user.RotBody--;
+        user.RotHead = user.RotBody;
+        user.Statusses["lay"] = "1.0 null";
+        user.Z -= 0.35;
+        user.IsLying = true;
+        user.UpdateNeeded = true;
     }
 
     /// <summary>
@@ -222,11 +365,28 @@ public static class PoliceState
             if (!EscortByCaptor.TryRemove(captorId, out var suspectId))
                 return 0;
             EscortBySuspect.TryRemove(suspectId, out _);
+            KindByCaptor.TryRemove(captorId, out var kind);
 
             var manager = room?.GetRoomUserManager();
             var captorUser = manager?.GetRoomUserByHabbo(captorId);
             suspectUser ??= manager?.GetRoomUserByHabbo(suspectId);
             MovementV2Bridge.Unpair(room, captorUser, suspectUser);
+
+            if (kind == EscortKind.Medical)
+            {
+                // Put the patient down first, then take the ambulances off
+                // both. Either RoomUser may already be gone - a disconnect gets
+                // here with one side unresolvable - and every step below is a
+                // no-op on null, so what CAN be put back is.
+                RestoreKnockoutPose(suspectUser);
+                RestoreEffect(suspectUser);
+                RestoreEffect(captorUser);
+                // The snapshot is keyed by player id and outlives the RoomUser,
+                // so a party who has already left is dropped explicitly rather
+                // than left to sit in the dictionary for the emulator's uptime.
+                EffectBeforeEscort.TryRemove(suspectId, out _);
+                EffectBeforeEscort.TryRemove(captorId, out _);
+            }
 
             if (suspectUser != null)
             {
@@ -260,6 +420,11 @@ public static class PoliceState
     /// <summary>
     /// Somebody has just been knocked out. Nobody marches, or is marched,
     /// while out cold: an escort involving them ends. The cuffs stay on.
+    ///
+    /// EXCEPT a medical transport whose patient is the one who went down -
+    /// being out cold is the entire premise of that escort, not a reason to
+    /// abandon it. A medic who goes down still drops whoever they were
+    /// carrying, and every custody escort still ends either way.
     /// </summary>
     public static void OnKnockout(Room room, RoomUser user)
     {
@@ -268,7 +433,26 @@ public static class PoliceState
         if (IsEscorting(user.UserId))
             EndEscort(room, user.UserId, null);
         var captorId = CaptorOf(user.UserId);
-        if (captorId != 0)
+        if (captorId != 0 && !IsMedicalEscort(captorId))
+            EndEscort(room, captorId, user);
+    }
+
+    /// <summary>
+    /// Somebody has just been brought back above zero health. A medical
+    /// transport ends there and then: the premise is gone, and
+    /// UpdateRpKnockoutState has already handed them CanWalk back. Leaving the
+    /// pair standing would pin a player who is free to walk to a shadow that
+    /// refuses every click they make (MovementV2Bridge.RequestMove), which
+    /// reads as a frozen avatar with nothing visibly holding it.
+    ///
+    /// A custody escort is untouched: waking up is not release.
+    /// </summary>
+    public static void OnRevive(Room room, RoomUser user)
+    {
+        if (room == null || user == null || EscortBySuspect.IsEmpty)
+            return;
+        var captorId = CaptorOf(user.UserId);
+        if (captorId != 0 && IsMedicalEscort(captorId))
             EndEscort(room, captorId, user);
     }
 

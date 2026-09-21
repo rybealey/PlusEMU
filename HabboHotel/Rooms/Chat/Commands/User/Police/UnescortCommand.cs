@@ -5,13 +5,15 @@ using Plus.HabboHotel.Users;
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
 /// <summary>
-/// pixelrp police actions: :unescort - let the suspect go.
+/// pixelrp :unescort - put down whoever you are moving.
 ///
 /// Takes no target: you can only ever be escorting one person, so the command
 /// knows who. Ported alongside :escort because without it a suspect stays
 /// pinned until somebody leaves the room.
 ///
-/// The cuffs stay on - this ends the march, not the arrest.
+/// Ends either flavour, and says so in the right words. The cuffs stay on -
+/// this ends the march, not the arrest - and a patient put down still out cold
+/// is laid back on the floor by EndEscort.
 /// </summary>
 internal class UnescortCommand : IChatCommand
 {
@@ -20,7 +22,7 @@ internal class UnescortCommand : IChatCommand
 
     public string Parameters => "";
 
-    public string Description => "Stop escorting whoever you have in custody.";
+    public string Description => "Stop escorting whoever you are moving.";
 
     private const int FightBubble = 4;
 
@@ -38,13 +40,18 @@ internal class UnescortCommand : IChatCommand
         }
 
         var suspectUser = room.GetRoomUserManager().GetRoomUserByHabbo(suspectId);
+        // Asked BEFORE the escort ends, because ending it is what forgets which
+        // kind it was.
+        var medical = PoliceState.IsMedicalEscort(habbo.Id);
         PoliceState.EndEscort(room, habbo.Id, suspectUser);
 
         var thisUser = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
         if (thisUser == null)
             return;
 
-        var name = suspectUser?.GetClient()?.GetHabbo()?.Username ?? "their suspect";
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*releases {name} from custody*", 0, FightBubble));
+        var name = suspectUser?.GetClient()?.GetHabbo()?.Username ?? (medical ? "their patient" : "their suspect");
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, medical
+            ? $"*unloads {name} from the ambulance*"
+            : $"*releases {name} from custody*", 0, FightBubble));
     }
 }
