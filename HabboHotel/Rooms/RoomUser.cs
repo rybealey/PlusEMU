@@ -649,6 +649,12 @@ public class RoomUser
         }
     }
 
+    // pixelrp: the id of the medical bed currently treating this player, or 0.
+    // Set when a course of treatment STARTS, which is what tells a discharge
+    // apart from somebody who simply lay down already healthy - and what keeps
+    // the bed from cancelling a medkit it did not start. See MedicalBed.
+    public uint MedicalBedId;
+
     // pixelrp RP stats: knocked out at 0 health — forced to lay frozen where
     // they stand until healed above 0. State-driven: call after any health
     // change (or on room entry); it applies or lifts the state to match.
@@ -692,7 +698,12 @@ public class RoomUser
         {
             RpKnockedOut = false;
             CanWalk = true;
-            if (Statusses.ContainsKey("lay"))
+            // ONLY the knockout's own lay, which is the one carrying IsLying.
+            // A furni lay - a bed, a tent - is owned by UpdateUserStatus and
+            // keeps IsLying false; stripping that one here would drop a patient
+            // through the hospital bed they were just healed on, and hand back
+            // a 0.35 the furni never took.
+            if (IsLying && Statusses.ContainsKey("lay"))
             {
                 Statusses.Remove("lay");
                 Z += 0.35;

@@ -35,9 +35,21 @@ public sealed class RpRegen
     /// two snacks at once should not fill twice as fast, and the use handlers
     /// refuse a second one anyway.
     /// </summary>
-    public void Start(int max)
+    public void Start(int max) => Start(max, SecondsToFull);
+
+    /// <summary>
+    /// Begin filling a bar over a stated number of seconds, for sources that
+    /// are not a snack.
+    ///
+    /// A medical bed heals slower than a medkit (two minutes, one for VIP)
+    /// because it is a place you have to stay rather than something you carry,
+    /// so the duration belongs to the SOURCE and not to this class. The
+    /// constant stays the default so every consumable keeps its minute without
+    /// naming it.
+    /// </summary>
+    public void Start(int max, int secondsToFull)
     {
-        _perSecond = (max > 0) ? max / (double)SecondsToFull : 0;
+        _perSecond = (max > 0 && secondsToFull > 0) ? max / (double)secondsToFull : 0;
         _carry = 0;
         _lastTick = 0;
     }

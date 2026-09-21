@@ -2,6 +2,23 @@
 
 public static class InteractionTypes
 {
+    /// <summary>
+    /// pixelrp: the types you LIE DOWN on, as one answer instead of the same
+    /// two-term OR repeated across the map, the status pass and the drop-off.
+    ///
+    /// It existed as `Bed || TentSmall` at five sites, which was survivable
+    /// while the list could not grow. The medical bed is a third, and a third
+    /// term added to four of five places is exactly the kind of near-miss that
+    /// leaves a furni you can lie on but never stand up from.
+    ///
+    /// The client derives the same answer from the interaction type NAME, in
+    /// RpFurniMessages - the two lists have to be changed together.
+    /// </summary>
+    public static bool IsLayingSurface(InteractionType type) =>
+        type == InteractionType.Bed ||
+        type == InteractionType.TentSmall ||
+        type == InteractionType.MedicalBed;
+
     public static InteractionType GetTypeFromString(string type)
     {
         switch (type.ToLower())
@@ -131,6 +148,8 @@ public static class InteractionTypes
                 return InteractionType.CorpGate;
             case "paramedic_dropoff":
                 return InteractionType.ParamedicDropoff;
+            case "medical_bed":
+                return InteractionType.MedicalBed;
             case "wf_floor_switch1":
                 return InteractionType.WfFloorSwitch1;
             case "wf_floor_switch2":

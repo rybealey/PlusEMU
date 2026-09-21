@@ -32,6 +32,9 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// custody escort on :uncuff. A medical one also ends the moment the patient
 /// is healed above zero - the premise is gone.
 ///
+/// Neither flavour may lift somebody off a medical bed: treatment outranks
+/// both badges, and a patient mid-course is not available to be carried.
+///
 /// A medical escort ALSO ends on a second :escort naming the person already
 /// being carried: for a paramedic this command is a toggle, and that second
 /// use is the drop. On a `paramedic_dropoff` pad the patient goes on the
@@ -152,6 +155,17 @@ internal class EscortCommand : ITargetChatCommand
                 dropped == PoliceState.DropOffResult.LaidOnBed
                     ? $"*lays {target.Username} down on a bed*"
                     : $"*lays {target.Username} down*", 0, FightBubble));
+            return Task.CompletedTask;
+        }
+
+        // A bed outranks both badges. Somebody under treatment is not available
+        // to be carried off by anyone - a suspect who has been brought to
+        // hospital is a patient first, and a medic cannot pick a patient back
+        // up mid-course either. Checked before the branch because it is the one
+        // rule custody and medical share.
+        if (MedicalBed.Shields(room, targetUser))
+        {
+            session.SendWhisper($"{target.Username} is being treated and cannot be moved.");
             return Task.CompletedTask;
         }
 

@@ -1200,10 +1200,13 @@ public class Item
                 // The handover said out loud. The pad fires on arrival with
                 // nothing typed, so without this the only thing the room sees
                 // is a body moving across it on its own.
-                var medicName = user.GetClient().GetHabbo().Username;
+                //
+                // NO ACTOR NAME. The bubble already carries the speaker's, so
+                // writing it into the text too reads as "Piper Piper moves...".
+                // Same shape as the rest of the :escort family for that reason.
                 var patientName = patient?.GetClient()?.GetHabbo()?.Username ?? "their patient";
                 room.SendPacket(new ChatComposer(user.VirtualId,
-                    $"*{medicName} moves {patientName} onto the medical bed, stabilizing their health*", 0, ActionBubble));
+                    $"*moves {patientName} onto the medical bed, stabilizing their health*", 0, ActionBubble));
             }
         }
         // The window asks for its own shelf once it shows, so stepping on the
