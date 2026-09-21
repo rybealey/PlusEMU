@@ -812,6 +812,41 @@ public class RoomUserManager
             {
                 if (user == null || !user.UpdateNeeded || users.Contains(user))
                     continue;
+
+                // A UNIT CARRYING "mv" IS NOT SEATED, enforced HERE because
+                // this is the frame every UserUpdate is built from.
+                //
+                // The client has no priority rule: RoomMessageHandler walks the
+                // status actions and the LAST posture wins, so an "mv" + "sit"
+                // pair renders a MOVING avatar in the sitting pose - a tile of
+                // sliding along, with the facing snapped to the seat.
+                //
+                // ApplyMovementFrame already strips these where it sets "mv",
+                // but that is a moment rather than an invariant.
+                // UpdateUserStatus re-adds "sit" for any unit whose
+                // server-truth tile is a seat, with no check for whether a walk
+                // is in progress, and it runs on every furniture change and
+                // wired teleport. Server truth lags one edge behind the render,
+                // so the exposed case is the first step of a walk that BEGINS on
+                // a seat - standing up and walking away.
+                //
+                // WHY THE SEND POINT AND NOT THE WRITER. A guard inside
+                // UpdateUserStatus cannot tell those apart: on a walk-end frame
+                // ApplyMovementFrame processes the arrival BEFORE it clears
+                // "mv", so a walker-aware guard would refuse to seat somebody
+                // who has just finished walking onto a chair. By the time this
+                // runs the whole frame is applied and "mv" is gone, so the state
+                // here is settled - the writer only ever sees a half-applied one.
+                //
+                // A knockout lay is exempt: RpHealth owns it, and a knocked-out
+                // unit is moved by displacement, which clears "mv" on its own
+                // branch anyway.
+                if (!user.RpKnockedOut && user.Statusses.ContainsKey("mv"))
+                {
+                    user.Statusses.Remove("sit");
+                    user.Statusses.Remove("lay");
+                }
+
                 user.UpdateNeeded = false;
                 users.Add(user);
             }
