@@ -164,9 +164,13 @@ public class RoomUserManager
         {
             Movement.MovementV2Bridge.Halt(user);
             Chat.Commands.User.Police.PoliceState.OnKnockout(_room, user);
+            // The hospital's clock starts here: a few minutes for a paramedic
+            // to come, and after that the hospital collects them itself.
+            HospitalAdmission.OnKnockout(user);
         }
         else
         {
+            HospitalAdmission.Forget(user.UserId);
             // Back on their feet. A medical transport is over the moment its
             // patient wakes up - UpdateRpKnockoutState has already handed them
             // CanWalk back, and a free player still pinned to a captor is a
@@ -1199,6 +1203,9 @@ public class RoomUserManager
                     // pixelrp hospital: a medical bed heals whoever is on it,
                     // and discharges them once they are whole.
                     MedicalBed.Tick(_room, user);
+                    // pixelrp hospital: nobody lies on the pavement forever -
+                    // an uncollected casualty is admitted after a few minutes.
+                    HospitalAdmission.Tick(_room, user);
                     // pixelrp police: lift a stun whose few seconds are up.
                     Chat.Commands.User.Police.PoliceState.TickStun(user);
                     // pixelrp hospital: hold the ambulance on both ends of a
