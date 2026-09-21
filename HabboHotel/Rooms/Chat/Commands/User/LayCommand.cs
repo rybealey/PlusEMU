@@ -26,7 +26,12 @@ internal class LayCommand : IChatCommand
         }
         if (user.Statusses.ContainsKey("sit") || user.IsSitting || user.RidingHorse || user.IsWalking)
             return;
-        if (session.GetHabbo().Effects.CurrentEffect > 0)
+        // The enable comes off so the lay pose is the thing you see - except
+        // for a medic mid-transport, whose ambulance is re-asserted every tick
+        // (PoliceState.TickAmbulance). Clearing it here would not win, it would
+        // only flicker: off on the command, back on within half a second.
+        if (session.GetHabbo().Effects.CurrentEffect > 0 &&
+            !Police.PoliceState.InMedicalEscort(session.GetHabbo().Id))
             session.GetHabbo().Effects.ApplyEffect(0);
         if (!user.Statusses.ContainsKey("lay"))
         {

@@ -1201,6 +1201,9 @@ public class RoomUserManager
                     MedicalBed.Tick(_room, user);
                     // pixelrp police: lift a stun whose few seconds are up.
                     Chat.Commands.User.Police.PoliceState.TickStun(user);
+                    // pixelrp hospital: hold the ambulance on both ends of a
+                    // transport, against anything else that takes the slot.
+                    Chat.Commands.User.Police.PoliceState.TickAmbulance(user);
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));

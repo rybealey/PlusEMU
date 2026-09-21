@@ -305,6 +305,66 @@ public static class PoliceState
     }
 
     /// <summary>
+    /// Keep the ambulance on both parties for as long as the transport runs.
+    ///
+    /// Called once per player per room tick, and free for everybody else: two
+    /// dictionary emptiness checks before anything else happens.
+    ///
+    /// It re-asserts rather than trusting the effect to stay put, because the
+    /// effect slot has several other claimants and a medic loses to any of
+    /// them - a swim or skate tile applying its own, a wired box clearing one,
+    /// :lay clearing one to hold the pose, a mount. UpdatePassiveEffect already
+    /// solves exactly this for the staff duty enable by re-stamping it every
+    /// tick against ANY other enable, and this is the same problem with the
+    /// same answer.
+    ///
+    /// NO IsLying OR IsSitting EXCEPTION, deliberately, and that is the
+    /// difference from the passive enable. A medic who sits down or lies on a
+    /// furni mid-transport keeps the ambulance: they are still carrying
+    /// somebody, and an enable that falls off the moment they perch on a chair
+    /// is one they have to keep re-typing.
+    /// </summary>
+    public static void TickAmbulance(RoomUser user)
+    {
+        if (EscortByCaptor.IsEmpty && EscortBySuspect.IsEmpty)
+            return;
+        if (user == null || user.IsBot)
+            return;
+        var id = user.UserId;
+        // Either end of a MEDICAL escort. A custody escort has no visual, so
+        // an officer and their suspect are left entirely alone.
+        var captorId = CaptorOf(id);
+        var involved = (IsEscorting(id) && IsMedicalEscort(id)) || (captorId != 0 && IsMedicalEscort(captorId));
+        if (!involved)
+            return;
+        var effects = user.GetClient()?.GetHabbo()?.Effects;
+        if (effects == null || effects.CurrentEffect == AmbulanceEffectId)
+            return;
+        // The snapshot is NOT updated here. What gets handed back at the end
+        // is what they were wearing when they were picked up, not whatever
+        // happened to grab the slot for one tick in the middle - a swim tile
+        // they crossed should not become the enable they leave hospital in.
+        // Nothing is lost by ignoring it either: a tile effect re-applies
+        // itself from UpdateUserEffect on the next tick if they are still
+        // standing on the thing that gave it to them.
+        user.ApplyEffect(AmbulanceEffectId);
+    }
+
+    /// <summary>
+    /// Is this player either end of a medical transport? Asked by the few
+    /// places that clear an effect on purpose and should not clear this one.
+    /// </summary>
+    public static bool InMedicalEscort(int habboId)
+    {
+        if (EscortByCaptor.IsEmpty && EscortBySuspect.IsEmpty)
+            return false;
+        if (IsEscorting(habboId) && IsMedicalEscort(habboId))
+            return true;
+        var captorId = CaptorOf(habboId);
+        return captorId != 0 && IsMedicalEscort(captorId);
+    }
+
+    /// <summary>
     /// Take the ambulance off and give back whatever was underneath it.
     ///
     /// Only if it is still ours, the guard <see cref="Release"/> uses for the
