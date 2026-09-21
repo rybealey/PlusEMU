@@ -747,6 +747,26 @@ public class RoomUser
         UnIdle();
         FreezeInteracting = false;
         StandUpForWalk();
+        // WHERE THIS WALK IS HEADED, for the rest of the hotel to read.
+        //
+        // Not movement state - V2 owns the route and the timeline and never
+        // looks at these. They are how everything ELSE asks "did they mean to
+        // stop here?": a teleport arrow only fires when it IS the destination
+        // rather than a tile crossed on the way, and the freeze tiles and the
+        // one-way gate ask the same question.
+        //
+        // They were dropped at the V1 cutover for a reason that has since gone
+        // away. V2 walkers deliberately skipped them because "leaving them set
+        // would let a later V1 tick re-plan the same walk" - and then V1's tick
+        // was deleted, taking the hazard with it and leaving four features
+        // reading a pair of fields nothing wrote. Arrows stopped teleporting
+        // from that day; GoalX sat at 0, so the only arrow that could still
+        // fire was one placed on tile 0,0.
+        //
+        // PathRecalcNeeded is NOT restored alongside them: that one really was
+        // V1's, and there is no longer a pathfinder to ask for a recalculation.
+        GoalX = pX;
+        GoalY = pY;
         // pixelrp Movement V2 is the ONLY movement engine. There is deliberately
         // no V1 fallback here: if V2 cannot route this walk, nothing moves.
         // A fallback is what let two engines touch one avatar, and that is what
