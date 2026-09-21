@@ -38,11 +38,65 @@ public static class WantedUtility
     /// relative rather than as a timestamp so a client's clock cannot skew it.</remarks>
     public record WantedPlayer(int UserId, string Username, string Figure, int Level, int Remaining, List<WantedCharge> Charges);
 
+    /// <summary>
+    /// Who is in the hotel right now. THE list is the authority here rather
+    /// than `users`.`online`, which is a row written on the way past and can
+    /// outlive an unclean shutdown.
+    ///
+    /// Empty when nobody is connected, which every caller has to mean "nobody"
+    /// and not "no filter" - an empty IN list that fell through to no WHERE at
+    /// all would sweep the whole hotel's charges on an idle server.
+    /// </summary>
+    private static HashSet<int> OnlineUserIds()
+    {
+        var ids = new HashSet<int>();
+        foreach (var client in PlusEnvironment.Game.ClientManager.GetClients)
+        {
+            var habbo = client?.GetHabbo();
+            if (habbo != null)
+                ids.Add(habbo.Id);
+        }
+        return ids;
+    }
+
+    /// <summary>
+    /// Resume a returning player's clock where they left it.
+    ///
+    /// The countdown only runs while somebody is IN the hotel: logging out
+    /// freezes it, logging back in starts it again from the same number. Since
+    /// the clock is stored as the moment of the charge, freezing it means
+    /// pushing that moment forward by however long they were away.
+    ///
+    /// Capped at now, so a player who was charged and immediately vanished for
+    /// a week comes back to the full window rather than to a charge dated in
+    /// the future.
+    ///
+    /// `last_online` is written on logout, so it is exactly the moment the
+    /// clock stopped. A crash that never wrote it leaves the gap overstated
+    /// and hands back more time than was earned - the forgiving direction, and
+    /// the only one available without a heartbeat.
+    /// </summary>
+    public static void ResumeAfterOffline(int userId)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery(
+            "UPDATE `rp_charges` ch " +
+            "JOIN `users` u ON u.`id` = ch.`user_id` " +
+            "SET ch.`charged_at` = LEAST(ch.`charged_at` + (UNIX_TIMESTAMP() - u.`last_online`), UNIX_TIMESTAMP()) " +
+            "WHERE ch.`user_id` = @userId AND ch.`dropped_at` = 0 " +
+            "  AND u.`last_online` > 0 AND u.`last_online` < UNIX_TIMESTAMP()");
+        dbClient.AddParameter("userId", userId);
+        dbClient.RunQuery();
+    }
+
     public static List<WantedPlayer> GetWanted()
     {
         var wanted = new List<WantedPlayer>();
+        var online = OnlineUserIds();
+        if (online.Count == 0)
+            return wanted;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        ExpireLapsed(dbClient);
+        ExpireLapsed(dbClient, online);
         // Severity is the star count, so MAX(severity) IS the wanted level.
         // MAX(charged_at) is the latest charge, which is what the countdown
         // runs from. The HAVING is redundant after the sweep above - a lapsed
@@ -67,6 +121,12 @@ public static class WantedUtility
         foreach (System.Data.DataRow row in table.Rows)
         {
             var userId = Convert.ToInt32(row["user_id"]);
+            // Offline players are off the noticeboard. Their sheet is intact
+            // and their clock is stopped (see ExpireLapsed and
+            // ResumeAfterOffline) - they simply are not here to be wanted, and
+            // an officer cannot act on a name that cannot be found in a room.
+            if (!online.Contains(userId))
+                continue;
             var remaining = (int)Math.Max(1, Convert.ToInt64(row["latest"]) + WantedSeconds - now);
             wanted.Add(new WantedPlayer(
                 userId,
@@ -124,14 +184,21 @@ public static class WantedUtility
     /// hotel where nobody logs in or charges anyone leaves lapsed rows sitting
     /// open until it wakes up.
     /// </summary>
-    private static void ExpireLapsed(Plus.Database.Interfaces.IQueryAdapter dbClient)
+    private static void ExpireLapsed(Plus.Database.Interfaces.IQueryAdapter dbClient, HashSet<int> online)
     {
+        // ONLY the sheets of players who are here. A clock that keeps running
+        // while somebody is logged out would expire their charges in absentia,
+        // which is the opposite of freezing it - they would return to a clean
+        // sheet having simply waited the hotel out.
+        if (online.Count == 0)
+            return;
         dbClient.SetQuery(
             "UPDATE `rp_charges` ch " +
             "JOIN (SELECT `user_id`, MAX(`charged_at`) AS latest FROM `rp_charges` " +
             "      WHERE `dropped_at` = 0 GROUP BY `user_id`) sheet ON sheet.`user_id` = ch.`user_id` " +
             "SET ch.`dropped_at` = UNIX_TIMESTAMP() " +
-            "WHERE ch.`dropped_at` = 0 AND sheet.`latest` <= UNIX_TIMESTAMP() - @window");
+            "WHERE ch.`dropped_at` = 0 AND sheet.`latest` <= UNIX_TIMESTAMP() - @window " +
+            "  AND ch.`user_id` IN (" + string.Join(",", online) + ")");
         dbClient.AddParameter("window", WantedSeconds);
         dbClient.RunQuery();
     }
@@ -142,8 +209,11 @@ public static class WantedUtility
     /// </summary>
     public static void ExpireLapsed()
     {
+        var online = OnlineUserIds();
+        if (online.Count == 0)
+            return;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        ExpireLapsed(dbClient);
+        ExpireLapsed(dbClient, online);
     }
 
     /// <summary>What a dropped count leaves behind, for the officer's whisper.</summary>
