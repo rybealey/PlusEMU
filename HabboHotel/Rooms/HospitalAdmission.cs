@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Drawing;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users;
 
