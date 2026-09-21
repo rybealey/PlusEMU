@@ -77,6 +77,20 @@ public enum InteractionType
     /// </summary>
     CorpGate,
 
+    /// <summary>
+    /// pixelrp: the hospital's drop-off point.
+    ///
+    /// Inert for everyone except a paramedic who is carrying somebody: when one
+    /// steps onto it, the patient they are escorting is laid on the nearest bed
+    /// in the room and the transport ends. Anyone else - including a police
+    /// officer marching a suspect across it - walks over an ordinary tile.
+    ///
+    /// The behaviour is on the TILE rather than on the bed so a hospital can
+    /// decide where the ambulance bay is, and so a ward can be rearranged
+    /// without re-flagging every bed in it.
+    /// </summary>
+    ParamedicDropoff,
+
     WfFloorSwitch1,
     WfFloorSwitch2,
 

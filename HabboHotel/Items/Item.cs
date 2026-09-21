@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.Core;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Items.Interactor;
 using Plus.HabboHotel.Items.Wired;
@@ -1171,6 +1172,17 @@ public class Item
         if (Definition.InteractionType == InteractionType.PressurePad ||
             Definition.InteractionType == InteractionType.CorpGate)
             SetPressurePad(true, null);
+        // The hospital drop-off. Inert unless the arriving walker is a paramedic
+        // with somebody in their care; see PoliceState.TryDropOff.
+        if (Definition.InteractionType == InteractionType.ParamedicDropoff)
+        {
+            var dropOff = Rooms.Chat.Commands.User.Police.PoliceState.TryDropOff(room, user, this);
+            // Walking onto a bare bay keeps the patient in their medic's care.
+            // Dumping them here would be worse than doing nothing, and silence
+            // would leave the medic wondering why the pad did not fire.
+            if (dropOff == Rooms.Chat.Commands.User.Police.PoliceState.DropOffResult.NoBed)
+                user.GetClient().SendWhisper("There is no bed here to lay them on - use :escort to put them down anyway.");
+        }
         // The window asks for its own shelf once it shows, so stepping on the
         // furni only has to open it.
         if (Definition.InteractionType == InteractionType.ZaraShop)
