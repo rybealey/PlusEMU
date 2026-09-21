@@ -31,6 +31,12 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// It ends on :unescort, when either of them leaves the room, and for a
 /// custody escort on :uncuff. A medical one also ends the moment the patient
 /// is healed above zero - the premise is gone.
+///
+/// A medical escort ALSO ends on a second :escort naming the person already
+/// being carried: for a paramedic this command is a toggle, and that second
+/// use is the drop. On a `paramedic_dropoff` pad the patient goes on the
+/// nearest bed; anywhere else they lie back down where they are. Custody does
+/// not toggle - an officer frees a prisoner with :unescort, deliberately.
 /// </summary>
 internal class EscortCommand : ITargetChatCommand
 {
@@ -39,7 +45,7 @@ internal class EscortCommand : ITargetChatCommand
 
     public string Parameters => "%target%";
 
-    public string Description => "Escort a cuffed suspect, or carry an unconscious patient.";
+    public string Description => "Escort a cuffed suspect, or carry an unconscious patient (again to put them down).";
 
     public bool MustBeInSameRoom => true;
 
@@ -58,6 +64,13 @@ internal class EscortCommand : ITargetChatCommand
         if (PoliceUtility.IsOnDutyOfficer(habbo.Id))
             kind = PoliceState.EscortKind.Custody;
         else if (MedicalUtility.IsOnDutyParamedic(habbo.Id))
+            kind = PoliceState.EscortKind.Medical;
+        // Letting go never needs a badge. A medic who clocks off mid-transport
+        // is still holding somebody, and refusing them here would leave the
+        // patient in the arms of someone the command no longer recognises -
+        // with :unescort as the only way out, which is exactly the reach for a
+        // second verb this toggle exists to remove.
+        else if (PoliceState.IsMedicalEscort(habbo.Id) && PoliceState.SuspectOf(habbo.Id) == target.Id)
             kind = PoliceState.EscortKind.Medical;
         else
         {
@@ -107,9 +120,38 @@ internal class EscortCommand : ITargetChatCommand
         if (PoliceState.IsEscorting(habbo.Id))
         {
             var current = PoliceState.SuspectOf(habbo.Id);
-            session.SendWhisper(current == target.Id
-                ? $"You are already escorting {target.Username}."
-                : "You are already escorting someone. Use :unescort first.");
+            if (current != target.Id)
+            {
+                session.SendWhisper("You are already escorting someone. Use :unescort first.");
+                return Task.CompletedTask;
+            }
+
+            // MEDICAL ONLY: the command that picked them up puts them down.
+            // A medic's hands are the whole interface - naming the person they
+            // are already carrying is how they let go, and it saves reaching
+            // for a second verb mid-emergency. Custody keeps the old refusal:
+            // an officer releases a prisoner deliberately, with :unescort, and
+            // a mistyped :escort should not free one.
+            //
+            // Asked of the ESCORT rather than of the caller's job, which is the
+            // truth of it - only a paramedic can have started a medical escort,
+            // but this reads what is actually running rather than re-deriving
+            // who they work for.
+            if (!PoliceState.IsMedicalEscort(habbo.Id))
+            {
+                session.SendWhisper($"You are already escorting {target.Username}.");
+                return Task.CompletedTask;
+            }
+
+            // On a drop-off pad they go on the nearest bed; anywhere else they
+            // lie back down on the spot. Either way the medic lets go.
+            var dropped = PoliceState.PutDown(room, thisUser, targetUser);
+            if (dropped == PoliceState.DropOffResult.NoBed)
+                session.SendWhisper("There is no bed here, so they are laid down where they are.");
+            room.SendPacket(new ChatComposer(thisUser.VirtualId,
+                dropped == PoliceState.DropOffResult.LaidOnBed
+                    ? $"*lays {target.Username} down on a bed*"
+                    : $"*lays {target.Username} down*", 0, FightBubble));
             return Task.CompletedTask;
         }
 

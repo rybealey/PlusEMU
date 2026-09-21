@@ -469,44 +469,74 @@ public static class PoliceState
     }
 
     /// <summary>
-    /// A paramedic has stepped onto a drop-off pad while carrying somebody:
-    /// lay the patient on the nearest bed and end the transport.
+    /// How a drop-off attempt turned out. Three outcomes rather than a bool,
+    /// because the two callers want different things from the middle one: the
+    /// pad a medic walks onto keeps them carrying the patient and says why,
+    /// while :escort used as a drop puts the patient down regardless and only
+    /// wants to know whether a bed was involved.
+    /// </summary>
+    public enum DropOffResult
+    {
+        /// <summary>Nothing to put down - not a medical escort, or the patient is gone.</summary>
+        NotCarrying,
+
+        /// <summary>Carrying somebody, but the room has nothing to lay them on.</summary>
+        NoBed,
+
+        /// <summary>Done: the patient is on a bed and the transport has ended.</summary>
+        LaidOnBed
+    }
+
+    /// <summary>
+    /// The drop-off pad under a unit, or null. Cheap enough to ask per command;
+    /// the walk-on path already has the pad in hand and does not use this.
+    /// </summary>
+    public static Item? DropoffPadUnder(Room room, RoomUser user)
+    {
+        var items = room?.GetGameMap()?.GetAllRoomItemForSquare(user?.X ?? 0, user?.Y ?? 0);
+        if (user == null || items == null)
+            return null;
+        foreach (var item in items)
+        {
+            if (item?.Definition != null && item.Definition.InteractionType == InteractionType.ParamedicDropoff)
+                return item;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A paramedic is on a drop-off pad while carrying somebody: lay the
+    /// patient on the nearest bed and end the transport.
     ///
     /// Gated on the ESCORT, not on the job. Only an on-duty paramedic can have
     /// started a medical escort in the first place, so the dictionary probe
-    /// already answers "is this a qualified medic" - and this runs on every
-    /// step onto the pad, where re-asking the database would be a query per
-    /// tile. An officer marching a suspect across the same pad finds it inert.
+    /// already answers "is this a qualified medic" - and the walk-on caller
+    /// runs this on every step onto the pad, where re-asking the database would
+    /// be a query per tile. An officer marching a suspect across the same pad
+    /// finds it inert.
     ///
     /// Note the patient crosses the pad BEFORE their medic does: a shadow is
     /// staged one tile in front. That step is inert for the same reason - the
     /// patient is nobody's captor - and the drop-off fires on the beat the
     /// medic themselves arrives.
-    ///
-    /// False when there was nothing to drop off, or nowhere to put them.
     /// </summary>
-    public static bool TryDropOff(Room room, RoomUser captor, Item pad)
+    public static DropOffResult TryDropOff(Room room, RoomUser captor, Item pad)
     {
         if (room == null || captor == null || pad == null || captor.IsBot)
-            return false;
+            return DropOffResult.NotCarrying;
         if (!IsMedicalEscort(captor.UserId))
-            return false;
+            return DropOffResult.NotCarrying;
         var patientId = SuspectOf(captor.UserId);
         if (patientId == 0)
-            return false;
+            return DropOffResult.NotCarrying;
         var manager = room.GetRoomUserManager();
         var patient = manager?.GetRoomUserByHabbo(patientId);
         if (patient == null)
-            return false;
+            return DropOffResult.NotCarrying;
 
         var bed = NearestLayable(room, pad);
         if (bed == null)
-        {
-            // Keep carrying them. Silently ending the escort here would leave a
-            // patient face down on the ambulance bay with nothing to say why.
-            captor.GetClient()?.SendWhisper("There is no bed here to lay them on.");
-            return false;
-        }
+            return DropOffResult.NoBed;
 
         // ORDER IS THE WHOLE TRICK, and it is not interchangeable:
         //
@@ -521,7 +551,31 @@ public static class PoliceState
         EndEscort(room, captor.UserId, patient, restorePose: false);
         manager.UpdateUserStatus(patient, false);
         patient.UpdateNeeded = true;
-        return true;
+        return DropOffResult.LaidOnBed;
+    }
+
+    /// <summary>
+    /// Put the patient down deliberately, which is what :escort does when the
+    /// medic is already carrying the person they named.
+    ///
+    /// On a drop-off pad with a bed to reach, they go on the bed. ANYWHERE
+    /// ELSE - off the pad, or on a pad in a room with no bed - the transport
+    /// simply ends and they lie back down where they are. A drop command that
+    /// refuses to drop would leave a medic stuck carrying somebody with no way
+    /// to let go but :unescort, which is the thing this exists to replace.
+    /// </summary>
+    public static DropOffResult PutDown(Room room, RoomUser captor, RoomUser patient)
+    {
+        if (room == null || captor == null)
+            return DropOffResult.NotCarrying;
+        var pad = DropoffPadUnder(room, captor);
+        var result = pad == null ? DropOffResult.NotCarrying : TryDropOff(room, captor, pad);
+        if (result == DropOffResult.LaidOnBed)
+            return result;
+        // The ordinary release: EndEscort lays them back down where they stand,
+        // because they are still out cold and nothing here supplies a pose.
+        EndEscort(room, captor.UserId, patient);
+        return result == DropOffResult.NoBed ? DropOffResult.NoBed : DropOffResult.NotCarrying;
     }
 
     /// <summary>
