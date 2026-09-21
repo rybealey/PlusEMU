@@ -129,6 +129,8 @@ public static class InteractionTypes
                 return InteractionType.PressurePad;
             case "corp_gate":
                 return InteractionType.CorpGate;
+            case "paramedic_dropoff":
+                return InteractionType.ParamedicDropoff;
             case "wf_floor_switch1":
                 return InteractionType.WfFloorSwitch1;
             case "wf_floor_switch2":

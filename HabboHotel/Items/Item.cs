@@ -1171,6 +1171,10 @@ public class Item
         if (Definition.InteractionType == InteractionType.PressurePad ||
             Definition.InteractionType == InteractionType.CorpGate)
             SetPressurePad(true, null);
+        // The hospital drop-off. Inert unless the arriving walker is a paramedic
+        // with somebody in their care; see PoliceState.TryDropOff.
+        if (Definition.InteractionType == InteractionType.ParamedicDropoff)
+            Rooms.Chat.Commands.User.Police.PoliceState.TryDropOff(room, user, this);
         // The window asks for its own shelf once it shows, so stepping on the
         // furni only has to open it.
         if (Definition.InteractionType == InteractionType.ZaraShop)

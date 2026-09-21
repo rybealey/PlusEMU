@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Drawing;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.Movement;
 using Plus.HabboHotel.Users;
 
@@ -358,7 +361,7 @@ public static class PoliceState
     /// back unless something else holds it. Returns the suspect's id, or 0
     /// when there was no escort to end. Either user may already have left.
     /// </summary>
-    public static int EndEscort(Room? room, int captorId, RoomUser? suspectUser)
+    public static int EndEscort(Room? room, int captorId, RoomUser? suspectUser, bool restorePose = true)
     {
         lock (EscortSync)
         {
@@ -378,7 +381,13 @@ public static class PoliceState
                 // both. Either RoomUser may already be gone - a disconnect gets
                 // here with one side unresolvable - and every step below is a
                 // no-op on null, so what CAN be put back is.
-                RestoreKnockoutPose(suspectUser);
+                // Not when the caller is about to put them somewhere that
+                // supplies its own pose: a bed's lay comes from the furni and
+                // is refused for anyone already flagged as lying
+                // (UpdateUserStatus returns early), so laying them on the floor
+                // first is what would STOP them lying on the bed.
+                if (restorePose)
+                    RestoreKnockoutPose(suspectUser);
                 RestoreEffect(suspectUser);
                 RestoreEffect(captorUser);
                 // The snapshot is keyed by player id and outlives the RoomUser,
@@ -400,6 +409,119 @@ public static class PoliceState
             }
             return suspectId;
         }
+    }
+
+    // ---- drop-off -----------------------------------------------------------
+
+    /// <summary>
+    /// How much worse an occupied bed is than an empty one, in squared tiles.
+    /// Bigger than any distance a room can hold (the largest model is well
+    /// under 1000x1000), so a free bed anywhere beats a taken one next door -
+    /// but a taken bed is still better than nothing, which is why this is a
+    /// penalty and not a filter.
+    /// </summary>
+    private const long OccupiedBedPenalty = 1_000_000;
+
+    /// <summary>
+    /// Somewhere a patient can be laid down. The hotel's two laying types, the
+    /// same pair ItemFunctionOverrides.IsLayingType names - laying is derived
+    /// client-side from the interaction type, so this list is not ours to
+    /// extend on the server alone.
+    /// </summary>
+    private static bool IsLayable(Item item) =>
+        item?.Definition != null &&
+        (item.Definition.InteractionType == InteractionType.Bed ||
+         item.Definition.InteractionType == InteractionType.TentSmall);
+
+    /// <summary>
+    /// The bed to use, measured from the DROP-OFF PAD rather than from the
+    /// patient: the pad is the fixed thing a hospital lays out its ward around,
+    /// and the patient is wherever the last step happened to leave them.
+    ///
+    /// An occupied bed is not refused, only heavily penalised. PixelRP has
+    /// global tile overlap, so two people in one bed is legal and nothing else
+    /// would prevent it - but a ward with a free bed should never fill an
+    /// occupied one first.
+    /// </summary>
+    private static Item? NearestLayable(Room room, Item pad)
+    {
+        var items = room.GetRoomItemHandler()?.GetFloor;
+        if (items == null)
+            return null;
+        var map = room.GetGameMap();
+        Item? best = null;
+        var bestScore = long.MaxValue;
+        foreach (var item in items)
+        {
+            if (!IsLayable(item))
+                continue;
+            long dx = item.GetX - pad.GetX;
+            long dy = item.GetY - pad.GetY;
+            var score = dx * dx + dy * dy;
+            if (map != null && map.MapGotUser(new Point(item.GetX, item.GetY)))
+                score += OccupiedBedPenalty;
+            if (score >= bestScore)
+                continue;
+            bestScore = score;
+            best = item;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// A paramedic has stepped onto a drop-off pad while carrying somebody:
+    /// lay the patient on the nearest bed and end the transport.
+    ///
+    /// Gated on the ESCORT, not on the job. Only an on-duty paramedic can have
+    /// started a medical escort in the first place, so the dictionary probe
+    /// already answers "is this a qualified medic" - and this runs on every
+    /// step onto the pad, where re-asking the database would be a query per
+    /// tile. An officer marching a suspect across the same pad finds it inert.
+    ///
+    /// Note the patient crosses the pad BEFORE their medic does: a shadow is
+    /// staged one tile in front. That step is inert for the same reason - the
+    /// patient is nobody's captor - and the drop-off fires on the beat the
+    /// medic themselves arrives.
+    ///
+    /// False when there was nothing to drop off, or nowhere to put them.
+    /// </summary>
+    public static bool TryDropOff(Room room, RoomUser captor, Item pad)
+    {
+        if (room == null || captor == null || pad == null || captor.IsBot)
+            return false;
+        if (!IsMedicalEscort(captor.UserId))
+            return false;
+        var patientId = SuspectOf(captor.UserId);
+        if (patientId == 0)
+            return false;
+        var manager = room.GetRoomUserManager();
+        var patient = manager?.GetRoomUserByHabbo(patientId);
+        if (patient == null)
+            return false;
+
+        var bed = NearestLayable(room, pad);
+        if (bed == null)
+        {
+            // Keep carrying them. Silently ending the escort here would leave a
+            // patient face down on the ambulance bay with nothing to say why.
+            captor.GetClient()?.SendWhisper("There is no bed here to lay them on.");
+            return false;
+        }
+
+        // ORDER IS THE WHOLE TRICK, and it is not interchangeable:
+        //
+        //   1. put the patient on the bed
+        //   2. tell V2 that is where they are (Relocate), so the walk-end that
+        //      Unpair stages rests on the bed instead of dragging them back to
+        //      the tile the escort last stepped to
+        //   3. end the escort WITHOUT the floor pose - the bed supplies its own
+        //   4. let UpdateUserStatus read the square and apply the bed's lay
+        room.GetGameMap().TeleportToItem(patient, bed);
+        MovementV2Bridge.Relocate(room, patient, patient.X, patient.Y, patient.Z);
+        EndEscort(room, captor.UserId, patient, restorePose: false);
+        manager.UpdateUserStatus(patient, false);
+        patient.UpdateNeeded = true;
+        return true;
     }
 
     /// <summary>
