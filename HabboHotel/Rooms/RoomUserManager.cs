@@ -1196,6 +1196,9 @@ public class RoomUserManager
                             habboFed.IsRpPassive ? 1 : 0, habboFed.Rank >= 5 ? 1 : 0));
                     }
                 }
+                    // pixelrp hospital: a medical bed heals whoever is on it,
+                    // and discharges them once they are whole.
+                    MedicalBed.Tick(_room, user);
                     // pixelrp police: lift a stun whose few seconds are up.
                     Chat.Commands.User.Police.PoliceState.TickStun(user);
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
@@ -1420,6 +1423,7 @@ public class RoomUserManager
                 {
                     case InteractionType.Bed:
                     case InteractionType.TentSmall:
+                    case InteractionType.MedicalBed:
                         {
                             if (!user.Statusses.ContainsKey("lay"))
                                 user.Statusses.Add("lay", $"{TextHandling.GetString(item.Definition.Height)} null");

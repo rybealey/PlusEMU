@@ -42,7 +42,7 @@ public static class ItemFunctionOverrides
     /// it to every copy or to none.
     /// </summary>
     public static bool IsLayingType(string interactionTypeName) =>
-        interactionTypeName is "bed" or "tent_small";
+        interactionTypeName is "bed" or "tent_small" or "medical_bed";
 
     /// <summary>Every override for a set of items, as {itemId: {field: value}}.</summary>
     public static Dictionary<uint, Dictionary<string, string>> ForItems(IEnumerable<uint> itemIds)

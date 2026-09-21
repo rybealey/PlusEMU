@@ -91,6 +91,20 @@ public enum InteractionType
     /// </summary>
     ParamedicDropoff,
 
+    /// <summary>
+    /// pixelrp: a hospital bed that actually treats people.
+    ///
+    /// Three things at once, which is why it is a behaviour and not three:
+    /// anyone resting on it has their health refilled (two minutes, one for
+    /// VIP), nobody can be escorted off it, and once they are whole again they
+    /// are discharged to one of the furni named in the behaviour's id list.
+    ///
+    /// The immunity is the part that is easy to miss the point of: without it
+    /// a patient mid-treatment could simply be carried away, which makes the
+    /// bed a decoration rather than a place that finishes a job.
+    /// </summary>
+    MedicalBed,
+
     WfFloorSwitch1,
     WfFloorSwitch2,
 

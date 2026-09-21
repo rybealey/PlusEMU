@@ -429,9 +429,16 @@ public static class PoliceState
     /// extend on the server alone.
     /// </summary>
     private static bool IsLayable(Item item) =>
-        item?.Definition != null &&
-        (item.Definition.InteractionType == InteractionType.Bed ||
-         item.Definition.InteractionType == InteractionType.TentSmall);
+        item?.Definition != null && InteractionTypes.IsLayingSurface(item.Definition.InteractionType);
+
+    /// <summary>
+    /// How much better a real medical bed is than any other thing you can lie
+    /// on. Large enough to outrank distance outright: a ward's own bed is the
+    /// point of the trip, and a sofa nearer the door is not a substitute for
+    /// it. Still a score rather than a filter, so a room with no medical bed
+    /// falls back to whatever it does have.
+    /// </summary>
+    private const long NonMedicalBedPenalty = 10_000_000;
 
     /// <summary>
     /// The bed to use, measured from the DROP-OFF PAD rather than from the
@@ -458,6 +465,8 @@ public static class PoliceState
             long dx = item.GetX - pad.GetX;
             long dy = item.GetY - pad.GetY;
             var score = dx * dx + dy * dy;
+            if (item.Definition.InteractionType != InteractionType.MedicalBed)
+                score += NonMedicalBedPenalty;
             if (map != null && map.MapGotUser(new Point(item.GetX, item.GetY)))
                 score += OccupiedBedPenalty;
             if (score >= bestScore)
