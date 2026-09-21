@@ -15,6 +15,10 @@ public enum TraverseResult : byte
 /// <summary>
 /// Diagonal corner handling. LOCKED DEFAULT FOR ROLLOUT: <see cref="Off"/>.
 ///
+/// (GameMap.IsValidStep survives - ROLLERS still call it. IsValidStep2 was
+/// deleted on 2026-09-21, having had no callers since V1 went; references to
+/// it below describe what it did, and it is no longer there to read.)
+///
 /// V1 has NO corner check anywhere (verified: GameMap.IsValidStep / IsValidStep2
 /// contain no orthogonal-neighbour test), so players can currently cut through a
 /// fully sealed diagonal. Shipping Lenient in the same change as the new A*

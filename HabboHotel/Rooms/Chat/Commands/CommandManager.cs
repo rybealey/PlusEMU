@@ -130,16 +130,6 @@ public class CommandManager : ICommandManager
         return false;
     }
 
-    /// <summary>
-    /// Registers a Chat Command.
-    /// </summary>
-    /// <param name="commandText">Text to type for this command.</param>
-    /// <param name="command">The command to execute.</param>
-    public void Register(string commandText, ICommandBase command)
-    {
-        _commands.TryAdd(commandText, command);
-    }
-
     public static string MergeParams(string[] @params, int start = 0)
     {
         var merged = new StringBuilder();

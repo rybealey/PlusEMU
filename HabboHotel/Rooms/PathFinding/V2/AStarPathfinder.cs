@@ -20,6 +20,11 @@ public enum PathResult : byte
 ///
 /// Every one of V1's four search defects is fixed here, deliberately:
 ///
+/// NOTE: V1's pathfinder (PathFinder.cs, PathFinderNode.cs, MinHeap.cs) WAS DELETED
+/// on 2026-09-21 once it had no callers left. The line numbers below refer to
+/// it as it stood and are kept deliberately: they are the reasoning for why
+/// this file is shaped the way it is. Read them as history, not as a path.
+///
 ///   V1 PathFinder.cs:79   cost = current.Cost + diff + GetDistanceSquared(end)
 ///                         -> the heuristic was ADDED INTO the stored cost and
 ///                            therefore ACCUMULATED along the path. That is not

@@ -166,16 +166,32 @@ public static class MovementRegistry
 
         return "[MV2/health] " +
                $"sched(alive={scheduler.IsRunning} loopAge={scheduler.LoopAgeMs}ms " +
-               $"faults={MovementCounters.SchedulerFaults}) " +
+               $"faults={MovementCounters.SchedulerFaults} " +
+               // Counted since the freeze and, until 2026-09-21, printed
+               // nowhere - so the one number that means "the scheduler caught
+               // itself spinning" was invisible. Any value but 0 is a bug.
+               $"spins={MovementCounters.SpinGuards} lastSpinRoom={MovementCounters.LastSpinRoomId}) " +
                $"queues(alive={MovementWorkQueues.WorkersAlive} " +
                $"q1Age={MovementWorkQueues.OutboundAgeMs}ms q1Depth={MovementWorkQueues.OutboundDepth} " +
                $"frames={MovementWorkQueues.FramesHandedOff}) " +
                $"rooms={Rooms.Count} closedRooms={closed}";
     }
 
-    /// <summary>Type and site of the last fault that escaped a scheduler beat.</summary>
-    public static string LastFault() =>
-        $"[MV2/lastFault] {MovementCounters.LastSchedulerFault}";
+    /// <summary>
+    /// Type and site of the last fault that escaped a scheduler beat, and how
+    /// long ago it happened.
+    ///
+    /// The timestamp was recorded from the first fault onward and printed
+    /// nowhere until 2026-09-21. Reported as an AGE rather than a clock
+    /// reading because the only question worth asking of a fault time is
+    /// whether it is recent - a raw NowMs value means nothing to a reader.
+    /// </summary>
+    public static string LastFault()
+    {
+        var at = MovementCounters.LastSchedulerFaultAtMs;
+        var age = at <= 0 ? "never" : $"{SystemMovementClock.Instance.NowMs - at}ms ago";
+        return $"[MV2/lastFault] {MovementCounters.LastSchedulerFault} (last={age})";
+    }
 
     /// <summary>
     /// One room's scheduling state plus every unit V2 knows about in it.
