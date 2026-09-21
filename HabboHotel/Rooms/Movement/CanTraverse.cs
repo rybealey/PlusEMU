@@ -104,8 +104,10 @@ public readonly struct TraverseContext
 /// PURE. No mutation, no I/O, no logging, no packet sends, no item state changes.
 /// This is the single most important property here: V1's commit-time validator
 /// (Gamemap.IsValidStep2) cleared user.Path and set user.PathRecalcNeeded FROM
-/// INSIDE A PREDICATE (GameMap.cs:797-828), which is why route state could
-/// change as a side effect of merely asking whether a tile was walkable.
+/// INSIDE A PREDICATE, which is why route state could change as a side effect
+/// of merely asking whether a tile was walkable. That method, and both fields
+/// it wrote, were DELETED on 2026-09-21 - so this is now the reason the file
+/// is shaped this way rather than a thing you can go and read.
 ///
 /// Search and commit MUST both go through <see cref="IsPassable"/> so they can
 /// never disagree. V1 used two different functions with different rules, which
@@ -118,6 +120,16 @@ public readonly struct TraverseContext
 /// cost is paid once per tile per search rather than per edge examined.
 /// Making it truly allocation-free needs a maintained height map on Gamemap;
 /// that is a follow-up, not a V2 blocker.
+///
+/// ONE TILE PER STEP, and this is the only rule here about the STEP rather
+/// than the destination. Every other rule answers "what is on that tile?" and
+/// will answer it just as readily for a tile across the room, so until
+/// 2026-09-21 a step of any length passed as long as the destination itself
+/// was fine. Adjacency was guaranteed by the CALLERS - the A* offers only
+/// neighbours, FrontTile builds from a unit direction - except in
+/// PlanNextEdge, which pairs the route's next tile with where the avatar
+/// stands. Those two agree only while route and position agree, and when they
+/// drifted this file said yes. See <see cref="IsOneStep"/>.
 ///
 /// OCCUPANCY IS NEVER CONSULTED. Players and bots do not block any tile,
 /// including as a route terminus. In V1 this was an accident of a dead feature
@@ -146,6 +158,14 @@ public static class CanTraverse
             return TraverseResult.Blocked;
         if (!InBounds(map, to.X, to.Y))
             return TraverseResult.Blocked;
+
+        // DISTANCE FIRST, AND ABOVE THE OVERRIDE SHORT-CIRCUIT.
+        //
+        // Walking through a wall and crossing the room in one step are
+        // different permissions, and :override grants only the first.
+        if (!IsOneStep(to.X - from.X, to.Y - from.Y))
+            return TraverseResult.Blocked;
+
         if (ctx.AllowOverride)
             return TraverseResult.Allowed;
 
@@ -177,6 +197,14 @@ public static class CanTraverse
             return TraverseResult.Blocked;
         if (!InBounds(map, to.X, to.Y))
             return TraverseResult.Blocked;
+
+        // DISTANCE FIRST, AND ABOVE THE OVERRIDE SHORT-CIRCUIT.
+        //
+        // Walking through a wall and crossing the room in one step are
+        // different permissions, and :override grants only the first.
+        if (!IsOneStep(to.X - from.X, to.Y - from.Y))
+            return TraverseResult.Blocked;
+
         if (ctx.AllowOverride)
             return TraverseResult.Allowed;
 
@@ -192,6 +220,36 @@ public static class CanTraverse
 
         return EvaluateStep(map, from, to, isFinalStep, ctx, fromHeight, toHeight);
     }
+
+    /// <summary>
+    /// One tile, in any of the eight directions - or nowhere at all.
+    ///
+    /// THE ONLY RULE IN THIS FILE ABOUT THE STEP RATHER THAN THE DESTINATION,
+    /// and it exists because everything else here answers "what is on that
+    /// tile?" and would happily answer it for a tile on the far side of the
+    /// room. Nothing used to ask how far away it was: dx/dy were computed only
+    /// to decide whether the move was diagonal, so (10,10) -> (2,3) read as a
+    /// diagonal and passed.
+    ///
+    /// That was safe by CONVENTION, not by construction. The A* only ever
+    /// offers neighbours and FrontTile builds its tile from a unit direction,
+    /// but PlanNextEdge pairs the ROUTE'S next tile with where the avatar
+    /// actually stands - and those agree only while route and position agree.
+    /// When they drifted, this file said yes: that is the full-tile teleport
+    /// (index 34, revision 14 -> 15) and the shape of any future drift.
+    ///
+    /// Blocking it does not merely stop the slide, it REPAIRS it. A blocked
+    /// verdict on a not-yet-started index sends PlanNextEdge to re-plan from
+    /// w.Tile, so the next route is correct from the avatar's real position.
+    /// The one bounded exception is a late beat, where an index that has
+    /// already begun is honoured as advertised and re-evaluated next beat.
+    ///
+    /// A ZERO STEP IS ALLOWED. from == to means "stay", which StageShadow
+    /// already relies on when the tile beyond a captor is blocked, and
+    /// refusing it would be a behaviour change rather than a guard.
+    /// </summary>
+    private static bool IsOneStep(int dx, int dy) =>
+        dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1;
 
     /// <summary>
     /// Orthogonal-only tile rules. Contains NO diagonal logic, which is what
