@@ -125,18 +125,28 @@ public static class MovementController
         // Bots and pets neither establish, hold nor follow a phase. A patrol bot
         // is almost always moving, so letting one hold the phase would charge
         // every player click the alignment wait, permanently.
+        w.JoinStackedAtRequest = false;
+
         if (!w.IsRealUser)
         {
             w.LastPhaseDecision = PhaseDecision.None;
             return nowMs;
         }
 
-        if (!HasLivePhase(room, w))
+        var holder = PhaseHolder(room, w);
+
+        if (holder == null)
         {
             room.PhaseAnchor = nowMs;
             w.LastPhaseDecision = PhaseDecision.Established;
             return nowMs;
         }
+
+        // DIAGNOSTIC ONLY, and the whole reason PhaseHolder returns the walker
+        // rather than a bool: whether the two were stacked AT THE REQUEST is
+        // only knowable here. The holder is moving, so by the time edge 0 is
+        // staged an interval later its tile has already changed.
+        w.JoinStackedAtRequest = holder.Tile == w.Tile;
 
         var interval = MovementSettings.IntervalMs;
         var delta = ((room.PhaseAnchor - nowMs) % interval + interval) % interval;
@@ -170,16 +180,16 @@ public static class MovementController
     ///
     /// Caller MUST hold MovementLock.
     /// </summary>
-    private static bool HasLivePhase(RoomMovement room, MovementState self)
+    private static MovementState? PhaseHolder(RoomMovement room, MovementState self)
     {
         foreach (var other in room.States.Values)
         {
             if (ReferenceEquals(other, self) || !other.IsRealUser)
                 continue;
             if (other.Mode == MovementMode.Moving || other.Mode == MovementMode.Pending)
-                return true;
+                return other;
         }
-        return false;
+        return null;
     }
 
     /// <summary>
@@ -640,6 +650,9 @@ public static class MovementController
             : RpMovementV2Flags.WalkEnd;
         if (moving && !w.Route.HasNext)
             flags |= RpMovementV2Flags.FinalEdge;
+        // TEMPORARY DIAGNOSTIC, edge 0 only - see RpMovementV2Flags.
+        if (w.EdgeIndex == 0 && w.JoinStackedAtRequest)
+            flags |= RpMovementV2Flags.JoinStackedAtRequest;
 
         // Lookahead: the walker's next REAL route tiles. The cursor already sits
         // past the edge being emitted, so these are genuinely future tiles, not

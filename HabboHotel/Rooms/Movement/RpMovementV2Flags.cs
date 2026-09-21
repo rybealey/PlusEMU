@@ -28,4 +28,20 @@ public static class RpMovementV2Flags
     /// <summary>Arrival happens at the end of this edge.</summary>
     public const int FinalEdge = 0x0020;
 
+    /// <summary>
+    /// TEMPORARY DIAGNOSTIC, on edge 0 only. The walker was standing on the
+    /// SAME TILE as the walker whose phase it aligned to, at the instant the
+    /// request was made - not at the instant it started, which is up to an
+    /// interval later and which the client can work out for itself.
+    ///
+    /// A FLAG BIT RATHER THAN A FIELD, deliberately. flags is already an int on
+    /// the wire, so this changes no packet length and the two halves stay
+    /// compatible in both directions: an older client ignores the bit, and a
+    /// newer client reading an unset bit simply gets false. A new field would
+    /// have forced client and emulator to deploy in the same instant.
+    ///
+    /// Remove with StartDelayMs and the [MV2/JOIN-START] log.
+    /// </summary>
+    public const int JoinStackedAtRequest = 0x0080;
+
 }

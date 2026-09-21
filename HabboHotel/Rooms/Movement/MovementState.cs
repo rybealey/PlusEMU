@@ -247,6 +247,17 @@ public sealed class MovementState : IDueHeapNode
     public int LastStartDelayMs;
 
     /// <summary>
+    /// TEMPORARY DIAGNOSTIC. Was this walker on the same tile as the phase
+    /// holder when the walk was REQUESTED? Resolved in ResolveStartOrigin,
+    /// because that is the only moment it is knowable - the holder is walking,
+    /// so by the time edge 0 is staged its tile has moved on.
+    ///
+    /// Written on every walk start, both branches, so it can never be read
+    /// stale from a previous session.
+    /// </summary>
+    public bool JoinStackedAtRequest;
+
+    /// <summary>
     /// True while this walker holds a scheduler queue entry (I-1).
     ///
     /// DERIVED, never assigned. IndexedDueHeap owns HeapIndex and is the only
