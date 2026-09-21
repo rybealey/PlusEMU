@@ -132,6 +132,15 @@ public class CommandManager : ICommandManager
 
     /// <summary>
     /// Registers a Chat Command.
+    ///
+    /// NO IN-TREE CALLERS, AND IT STILL HAS TO EXIST. Every command in this
+    /// build arrives through the constructor instead - Program.cs scans the
+    /// assembly for ICommandBase and the ctor keys them by command.Key - so
+    /// grepping for callers of this finds nothing and it reads as dead code.
+    /// It was deleted on that basis on 2026-09-21 and broke the build: it is
+    /// declared on ICommandManager, and an interface member has no callers by
+    /// definition. Plugins are loaded as separate assemblies (Program.cs
+    /// AddPlugin), so a caller need not be in this repo at all.
     /// </summary>
     /// <param name="commandText">Text to type for this command.</param>
     /// <param name="command">The command to execute.</param>

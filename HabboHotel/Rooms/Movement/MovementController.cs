@@ -398,8 +398,7 @@ public static class MovementController
         if (w.Mode == MovementMode.Pending)
         {
             w.Mode = MovementMode.Moving;
-            var startCtx = new TraverseContext(cornerPolicy: CornerPolicy.Off,
-                onDuty: MovementDuty.IsOnDuty(room.Room, w.VirtualId));
+            var startCtx = MovementWalkerContext.For(room.Room, w.VirtualId);
             PlanNextEdge(room, w, map, startCtx, nowMs, immediate: true);
             return;
         }
@@ -434,7 +433,7 @@ public static class MovementController
 
             if (w.EdgeIndex == w.ElapsingEdgeIndex(nowMs))
             {
-                var deferredCtx = new TraverseContext(cornerPolicy: CornerPolicy.Off);
+                var deferredCtx = MovementWalkerContext.For(room.Room, w.VirtualId);
 
                 if (Redirect(room, w, deferredTarget, deferredCtx, nowMs))
                     MovementCounters.RedirectDeferredRecovered();
@@ -444,9 +443,10 @@ public static class MovementController
         // (c) plan the next edge
         // Re-asked every beat rather than carried from the request, so somebody
         // who clocks OFF mid-walk is stopped at the gate instead of coasting
-        // through on a permission they no longer hold.
-        var ctx = new TraverseContext(cornerPolicy: CornerPolicy.Off,
-            onDuty: MovementDuty.IsOnDuty(room.Room, w.VirtualId));
+        // through on a permission they no longer hold. That now covers ALL of
+        // the walker's permissions, not just duty: :override and riding used to
+        // be rebuilt as false here, so they survived exactly one tile.
+        var ctx = MovementWalkerContext.For(room.Room, w.VirtualId);
         PlanNextEdge(room, w, map, ctx, nowMs, immediate: false);
     }
 

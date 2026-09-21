@@ -8,7 +8,6 @@ using Plus.HabboHotel.Items.Wired;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.HabboHotel.Rooms.Games.Freeze;
 using Plus.HabboHotel.Rooms.Games.Teams;
-using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms;
@@ -179,9 +178,6 @@ public class RoomUser
     public int LockedTilesCount;
     public bool MoonwalkEnabled = false;
 
-    public List<Vector2D> Path = new();
-    public bool PathRecalcNeeded;
-    public int PathStep = 1;
     public Pet PetData;
 
     public int PrevTime;
@@ -676,7 +672,6 @@ public class RoomUser
         {
             RpKnockedOut = true;
             ClearMovement(false);
-            PathRecalcNeeded = false;
             CanWalk = false;
             if (Statusses.ContainsKey("sit"))
             {

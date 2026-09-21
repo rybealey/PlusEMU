@@ -9,7 +9,10 @@ namespace Plus.HabboHotel.Rooms.PathFinding.V2;
 ///   Tiles[Length - 1]   = the goal
 ///
 /// V1 returned a GOAL-FIRST list, which is why every consumer indexed it as
-/// <c>Path[Path.Count - PathStep - 1]</c> - an expression that appears in
+/// <c>Path[Path.Count - PathStep - 1]</c> - an expression that appeared in
+/// V1, whose Path/PathStep fields on RoomUser were deleted on 2026-09-21.
+/// Quoted because the expression is the point, not because it still exists:
+/// it appeared in
 /// ProcessUserMovement, both formation functions and the lookahead peek, i.e.
 /// four independent chances to get an off-by-one wrong. Start-first removes the
 /// whole class.

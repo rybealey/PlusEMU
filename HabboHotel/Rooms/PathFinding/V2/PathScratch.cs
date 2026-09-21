@@ -6,6 +6,11 @@
 ///
 /// Two V1 defects are fixed structurally here:
 ///
+/// NOTE: V1's pathfinder (PathFinder.cs, PathFinderNode.cs, MinHeap.cs) WAS DELETED
+/// on 2026-09-21 once it had no callers left. The line numbers below refer to
+/// it as it stood and are kept deliberately: they are the reasoning for why
+/// this file is shaped the way it is. Read them as history, not as a path.
+///
 ///  1. ALLOCATION. V1's FindPathReversed allocated a fresh
 ///     PathFinderNode[MapSizeX, MapSizeY] on EVERY search (PathFinder.cs:45) -
 ///     2500 references per call on a 50x50 model, garbage every click. Here the

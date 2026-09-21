@@ -122,11 +122,9 @@ public static class MovementV2Bridge
 
         var now = MovementScheduler.Instance.Clock.NowMs;
         var target = new Point(targetX, targetY);
-        var ctx = new TraverseContext(
-            allowOverride: user.AllowOverride,
-            isMounted: user.RidingHorse,
-            cornerPolicy: CornerPolicy.Off,
-            onDuty: MovementDuty.IsOnDuty(user));
+        // The SAME function the per-beat sites use. Built here from the user
+        // in hand; rebuilt there from the virtual id. Two call sites, one rule.
+        var ctx = MovementWalkerContext.For(user);
 
         lock (movement.MovementLock)
         {

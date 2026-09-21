@@ -1,33 +1,18 @@
 ﻿namespace Plus.HabboHotel.Rooms.Movement;
 
 /// <summary>
-/// pixelrp Movement V2: the locked constants, plus the single kill switch that
-/// decides whether V2 owns movement at all.
+/// pixelrp Movement V2: the locked constants.
 ///
-/// While <see cref="Enabled"/> is false the V2 scheduler exists, runs and can be
-/// measured, but never owns or moves a normal user - V1 keeps every walker.
-/// The flip to true is the hard cutover and is NOT part of this pass.
+/// THERE IS NO KILL SWITCH, by design. V2 shipped behind
+/// `movement.v2.enabled` while the foundation was being wired up, and an
+/// `Enabled` const outlived it - always true, read by nothing, and deleted on
+/// 2026-09-21 because a switch that looks live and is not is worse than none.
+/// V1 was removed outright, so there is no second engine to fall back to:
+/// rolling back means reverting the emulator commit and deploying. The legacy
+/// server_settings row is ignored; SQL updates 69-72 are left as history.
 /// </summary>
 public static class MovementSettings
 {
-    /// <summary>
-    /// V2 is ALWAYS ON. There is no runtime kill switch by design.
-    ///
-    /// It shipped behind `movement.v2.enabled` while the foundation was being
-    /// wired up, but a flag that can be half-on is its own hazard: it makes
-    /// "which system is actually moving this avatar?" a question you have to
-    /// answer before you can debug anything, and it leaves V1 and V2 both
-    /// reachable in the same build.
-    ///
-    /// ROLLING BACK now means reverting the emulator commit and deploying -
-    /// a few minutes, and it puts the hotel in one unambiguous state rather
-    /// than a mixed one.
-    ///
-    /// The legacy server_settings row is simply ignored; updates 69-72 are
-    /// left in place as history and are harmless.
-    /// </summary>
-    public const bool Enabled = true;
-
     /// <summary>
     /// THE interval. One validated tile per 500ms, for every walker, always.
     /// There is no fast/superfast walking in V2 and no per-session interval:
