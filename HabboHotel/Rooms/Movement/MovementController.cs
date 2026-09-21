@@ -730,6 +730,18 @@ public static class MovementController
     /// Occupancy is deliberately not consulted - this hotel lets players share
     /// tiles (I-10).
     /// </summary>
+    /// <summary>
+    /// The tile a shadow sits on relative to its captor: one step along the
+    /// facing when it leads, one step against it when it trails.
+    ///
+    /// Reversing the FACING rather than negating the delta keeps this one
+    /// question with one answer - FrontTile owns the bounds check and the
+    /// traversability check, and a trailing shadow needs both just as much.
+    /// Facings run 0-7 clockwise, so the opposite of any of them is +4 mod 8.
+    /// </summary>
+    public static Point ShadowTile(Gamemap map, Point from, byte facing, bool behind) =>
+        FrontTile(map, from, behind ? (byte)((facing + 4) % 8) : facing);
+
     public static Point FrontTile(Gamemap map, Point from, byte facing)
     {
         var d = FacingDelta(facing);
@@ -779,12 +791,14 @@ public static class MovementController
         if (moving)
         {
             from = s.EdgeTo;
-            to = FrontTile(map, w.EdgeTo, w.Facing);
+            to = ShadowTile(map, w.EdgeTo, w.Facing, w.ShadowBehind);
             s.Facing = w.Facing;
             if (from == to)
             {
-                // The captor is stepping onto the suspect's tile and the tile
-                // beyond is blocked: there is nothing to walk. Rest for the
+                // The shadow's next tile is the one it already rests on -
+                // the captor is stepping onto it and the tile past is
+                // blocked, or (trailing) the captor has not left the tile
+                // behind them. There is nothing to walk. Rest for the
                 // beat rather than animate a walk to nowhere; the next real
                 // edge picks the unit up again in the same session.
                 moving = false;
@@ -793,13 +807,13 @@ public static class MovementController
         }
         else
         {
-            // Walk end: the suspect comes to rest in front of wherever the
-            // captor actually stopped. For a walk that ran its course that is
+            // Walk end: the suspect comes to rest on their side of wherever
+            // the captor actually stopped. For a walk that ran its course that is
             // the tile the last shadow edge was already heading to; for one
             // halted mid-step (a stun, a block) the captor snaps back to Tile
             // and the suspect is put in front of THAT rather than left two
             // tiles ahead.
-            from = FrontTile(map, w.Tile, w.Facing);
+            from = ShadowTile(map, w.Tile, w.Facing, w.ShadowBehind);
             to = from;
             s.Facing = w.Facing;
         }
@@ -837,7 +851,7 @@ public static class MovementController
                 {
                     var tile = w.Route[w.Route.Cursor + i];
                     var f = (byte)Rotation.Calculate(prev.X, prev.Y, tile.X, tile.Y);
-                    var ahead = FrontTile(map, tile, f);
+                    var ahead = ShadowTile(map, tile, f, w.ShadowBehind);
                     lookahead[i] = new LookaheadTile(ahead.X, ahead.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(ahead.X, ahead.Y)));
                     prev = tile;
                 }

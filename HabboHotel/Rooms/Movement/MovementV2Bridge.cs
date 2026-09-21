@@ -208,7 +208,7 @@ public static class MovementV2Bridge
     /// heading if they are mid-walk - facing the captor's way. False when
     /// either unit is unknown to V2 or already in a pair.
     /// </summary>
-    public static bool Pair(Room? room, RoomUser? captor, RoomUser? suspect)
+    public static bool Pair(Room? room, RoomUser? captor, RoomUser? suspect, bool behind = false)
     {
         if (room == null || captor == null || suspect == null || captor == suspect)
             return false;
@@ -251,8 +251,13 @@ public static class MovementV2Bridge
             }
 
             c.ShadowVirtualId = s.VirtualId;
+            c.ShadowBehind = behind;
             s.ShadowedBy = c.VirtualId;
-            MovementController.StageDisplacement(movement, s, MovementController.FrontTile(map, anchor, facing), facing, map, now);
+            // Seated on the side they will ride on, so the pairing does not
+            // begin with the shadow jumping across the captor on the first
+            // step. Same facing either way: a patient being pulled faces the
+            // way they are going, not back at the person pulling them.
+            MovementController.StageDisplacement(movement, s, MovementController.ShadowTile(map, anchor, facing, behind), facing, map, now);
         }
         MovementScheduler.Instance.Signal(movement);
         return true;
@@ -289,7 +294,10 @@ public static class MovementV2Bridge
                 movement.States.TryGetValue(c.ShadowVirtualId, out s);
 
             if (c != null)
+            {
                 c.ShadowVirtualId = MovementState.NoShadow;
+                c.ShadowBehind = false;
+            }
             if (s != null && s.ShadowedBy != MovementState.NoShadow)
             {
                 s.ShadowedBy = MovementState.NoShadow;

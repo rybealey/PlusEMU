@@ -252,7 +252,10 @@ public static class PoliceState
                 EscortByCaptor.TryRemove(captorId, out _);
                 return false;
             }
-            if (!MovementV2Bridge.Pair(room, captor, suspect))
+            // Which side the passenger rides on is the flavour's, not the
+            // engine's: an officer marches a suspect ahead where they can be
+            // watched, a paramedic leads and the patient follows.
+            if (!MovementV2Bridge.Pair(room, captor, suspect, behind: kind == EscortKind.Medical))
             {
                 EscortByCaptor.TryRemove(captorId, out _);
                 EscortBySuspect.TryRemove(suspectId, out _);

@@ -129,7 +129,10 @@ public static class MovementRegistry
         if (state.ShadowVirtualId != MovementState.NoShadow && room.States.TryGetValue(state.ShadowVirtualId, out var shadow) && shadow.ShadowedBy == virtualId)
             shadow.ShadowedBy = MovementState.NoShadow;
         if (state.ShadowedBy != MovementState.NoShadow && room.States.TryGetValue(state.ShadowedBy, out var captor) && captor.ShadowVirtualId == virtualId)
+        {
             captor.ShadowVirtualId = MovementState.NoShadow;
+            captor.ShadowBehind = false;
+        }
         room.States.Remove(virtualId);
 
         if (traceOn)

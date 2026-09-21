@@ -147,6 +147,22 @@ public sealed class MovementState : IDueHeapNode
     public int ShadowVirtualId = NoShadow;
 
     /// <summary>
+    /// Which SIDE of this walker its shadow rides on: false in front, the
+    /// default, true behind.
+    ///
+    /// Not a formation system, and not the start of one - it is one bit
+    /// choosing between two tiles, on a mechanism that still carries exactly
+    /// one unit. An officer marches a suspect ahead of them where they can
+    /// watch them; a paramedic leads, and a patient dragged along in front of
+    /// the person pulling them reads backwards.
+    ///
+    /// Lives on the CAPTOR, beside ShadowVirtualId, because it is a property
+    /// of the pairing rather than of either unit, and the captor is the side
+    /// that stages both.
+    /// </summary>
+    public bool ShadowBehind;
+
+    /// <summary>
     /// VirtualId of the walker this unit is the shadow of, or
     /// <see cref="NoShadow"/>. While set, this
     /// unit's own walk requests are refused at RequestMove - nothing may give a
