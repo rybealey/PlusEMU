@@ -87,6 +87,27 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
+    /// True when V2 has this unit enrolled. Bots and pets included - there is
+    /// no second engine for them to fall back to.
+    ///
+    /// CALLED UNQUALIFIED, FROM INSIDE THIS FILE. RequestMove uses it as its
+    /// first gate. It was deleted on 2026-09-21 after a search for
+    /// `MovementV2Bridge.Owns` found nothing and broke the build: a call from
+    /// within the same class needs no type prefix, so a pattern anchored on the
+    /// type name cannot see it. Before deleting anything from this file, search
+    /// the bare name in the file itself as well.
+    /// </summary>
+    public static bool Owns(RoomUser? user)
+    {
+        if (user == null)
+            return false;
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return false;
+        lock (movement.MovementLock)
+            return movement.States.ContainsKey(user.VirtualId);
+    }
+
+    /// <summary>
     /// Route a walk request to V2. Returns void: there is no fallback engine,
     /// so an unroutable click is simply a no-op.
     /// </summary>
