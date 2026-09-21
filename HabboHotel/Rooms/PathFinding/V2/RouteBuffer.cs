@@ -92,6 +92,4 @@ public sealed class RouteBuffer
         BaseIndex = baseIndex;
         IsPartial = partial;
     }
-
-    public Point Goal => Length > 0 ? _tiles[Length - 1] : Point.Empty;
 }

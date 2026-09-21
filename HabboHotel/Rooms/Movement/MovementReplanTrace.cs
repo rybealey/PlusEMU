@@ -157,7 +157,6 @@ public static class MovementReplanTrace
 
     public static bool Enabled => _enabled;
 
-    public static int UnitFilter => _unitFilter;
 
     public static long Seen => Interlocked.Read(ref _seen);
 

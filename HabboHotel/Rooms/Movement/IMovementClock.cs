@@ -37,19 +37,3 @@ public sealed class SystemMovementClock : IMovementClock
     public long NowMs => _stopwatch.ElapsedMilliseconds;
 }
 
-/// <summary>
-/// Test clock. Time only advances when a test advances it, so a 500ms beat, a
-/// 700ms stall or a 2s stall are all instantaneous and exactly reproducible.
-/// </summary>
-public sealed class ManualMovementClock : IMovementClock
-{
-    private long _nowMs;
-
-    public ManualMovementClock(long startMs = 0) => _nowMs = startMs;
-
-    public long NowMs => Interlocked.Read(ref _nowMs);
-
-    public void Advance(long deltaMs) => Interlocked.Add(ref _nowMs, deltaMs);
-
-    public void SetTo(long absoluteMs) => Interlocked.Exchange(ref _nowMs, absoluteMs);
-}

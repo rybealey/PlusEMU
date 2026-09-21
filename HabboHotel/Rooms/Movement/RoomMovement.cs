@@ -162,6 +162,4 @@ public sealed class RoomMovement : IDueHeapNode
         return due;
     }
 
-    /// <summary>Caller must hold <see cref="MovementLock"/>.</summary>
-    public bool HasWork => !Closed && ComputeNextDue() != long.MaxValue;
 }

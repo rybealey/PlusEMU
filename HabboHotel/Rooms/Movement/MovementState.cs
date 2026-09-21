@@ -262,21 +262,6 @@ public sealed class MovementState : IDueHeapNode
     /// </summary>
     public bool Queued => HeapIndex >= 0;
 
-    public void ResetForNewSession(long nowMs, Point tile, double tileZ)
-    {
-        WalkSessionId++;
-        RouteRevision = 0;
-        EdgeIndex = 0;
-        TimelineOrigin = nowMs;
-        EmittedThroughEdge = -1;
-        Tile = tile;
-        TileZ = tileZ;
-        EdgeTo = tile;
-        EdgeToZ = tileZ;
-        DeferredRedirectTarget = null;
-        Route.Clear();
-    }
-
     /// <summary>
     /// THE elapsing-edge derivation. LOCK NOTE 2.2 requires exactly ONE of
     /// these to exist - revision 2 of the architecture had three subtly

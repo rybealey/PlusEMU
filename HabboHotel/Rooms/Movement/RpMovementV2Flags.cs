@@ -28,10 +28,4 @@ public static class RpMovementV2Flags
     /// <summary>Arrival happens at the end of this edge.</summary>
     public const int FinalEdge = 0x0020;
 
-    /// <summary>
-    /// This edge index was previously advertised with different geometry,
-    /// because a redirect raised RouteRevision. Timing is unchanged - only the
-    /// geometry of indexes STRICTLY AFTER the elapsing edge may be replaced.
-    /// </summary>
-    public const int Correction = 0x0040;
 }

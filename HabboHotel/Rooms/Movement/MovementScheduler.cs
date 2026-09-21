@@ -15,8 +15,16 @@ namespace Plus.HabboHotel.Rooms.Movement;
 ///
 /// THIS THREAD MAY ONLY: mutate MovementState, commit due edges, plan routes,
 /// stage frames, and manage its heaps and queues. It may NOT touch the database,
-/// a socket, a wired/furni callback, disconnect logic, or any blocking sink -
-/// see MovementSchedulerGuard, which asserts this in DEBUG.
+/// a socket, a wired/furni callback, disconnect logic, or any blocking sink.
+///
+/// THAT RULE IS ENFORCED BY REVIEW, NOT BY CODE, and it is worth being honest
+/// about it. A MovementSchedulerGuard type existed to assert it at the
+/// dangerous entry points; those entry points were never annotated, so its
+/// Assert had no call sites at all - and being [Conditional("DEBUG")] it could
+/// not have fired anyway, because CI and the Docker image both build Release.
+/// It was deleted on 2026-09-21 rather than left looking like a safety net.
+/// Re-adding one means annotating the DB helpers and socket sends, and
+/// building Debug somewhere for it to matter.
 ///
 /// V2 is always on; there is no runtime kill switch to reason about.
 /// </summary>
@@ -38,9 +46,6 @@ public sealed class MovementScheduler
     public IMovementClock Clock { get; private set; } = SystemMovementClock.Instance;
 
     private MovementScheduler() { }
-
-    /// <summary>Test seam: swap in a ManualMovementClock before Start().</summary>
-    public void UseClock(IMovementClock clock) => Clock = clock;
 
     /// <summary>
     /// TRUE ONLY IF THE THREAD IS ACTUALLY ALIVE.
@@ -78,7 +83,6 @@ public sealed class MovementScheduler
         _wake.Set();
         _thread?.Join(2000);
         _thread = null;
-        MovementSchedulerGuard.ClearSchedulerThread();
     }
 
     // ---- room registration ------------------------------------------------
@@ -154,28 +158,20 @@ public sealed class MovementScheduler
     /// </summary>
     private void Loop()
     {
-        MovementSchedulerGuard.MarkCurrentThreadAsScheduler();
-        try
+        while (_running)
         {
-            while (_running)
+            try
             {
-                try
-                {
-                    LoopOnce();
-                }
-                catch (Exception e)
-                {
-                    // Never rethrow: surviving is the entire point.
-                    MovementCounters.SchedulerFault(e);
-                    // A pathological throw before the wait would otherwise spin
-                    // this AboveNormal thread against both cores.
-                    Thread.Sleep(1);
-                }
+                LoopOnce();
             }
-        }
-        finally
-        {
-            MovementSchedulerGuard.ClearSchedulerThread();
+            catch (Exception e)
+            {
+                // Never rethrow: surviving is the entire point.
+                MovementCounters.SchedulerFault(e);
+                // A pathological throw before the wait would otherwise spin
+                // this AboveNormal thread against both cores.
+                Thread.Sleep(1);
+            }
         }
     }
 

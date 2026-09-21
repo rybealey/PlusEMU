@@ -38,9 +38,6 @@ public static class MovementTrace
 
     public static bool Enabled => _sink != null;
 
-    public static int IdA => _idA;
-
-    public static int IdB => _idB;
 
     public static void Start(GameClient sink, int virtualIdA, int virtualIdB)
     {

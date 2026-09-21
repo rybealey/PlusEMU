@@ -17,28 +17,6 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// </summary>
 public static class MovementV2Bridge
 {
-    /// <summary>
-    /// True when V2 has this unit enrolled. Bots and pets included - there is
-    /// no second engine for them to fall back to.
-    /// </summary>
-    public static bool Owns(RoomUser? user)
-    {
-        if (user == null)
-            return false;
-        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
-            return false;
-        lock (movement.MovementLock)
-            return movement.States.ContainsKey(user.VirtualId);
-    }
-
-    /// <summary>Attach a room to the scheduler.</summary>
-    public static void OnRoomLoaded(Room room)
-    {
-        if (room == null)
-            return;
-        MovementRegistry.Attach(room);
-    }
-
     /// <summary>Enrol a unit. Humans, bots and pets alike.</summary>
     public static void OnUserEnter(Room room, RoomUser user)
     {
