@@ -5,10 +5,16 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// <summary>
 /// pixelrp: "is this walker clocked in?", for the CorpGate interaction.
 ///
-/// One place, because the answer is needed at four separate context-building
-/// sites and getting it wrong at any of them means a gate that leaks. The
-/// traversal predicate itself stays pure - it only ever reads the bool that was
-/// resolved here.
+/// One place, because getting it wrong anywhere means a gate that leaks. It
+/// used to be asked at four separate context-building sites; it is now asked
+/// once, by MovementWalkerContext. The traversal predicate itself stays pure -
+/// it only ever reads the bool that was resolved here.
+///
+/// Asked about a RoomUser, never about a virtual id: resolving an id to a
+/// walker is <see cref="MovementWalkerContext"/>'s job, and it asks this while
+/// it has the user in hand. An id-taking overload used to live here, and
+/// having it invited exactly the bug that helper exists to prevent - a context
+/// built with duty resolved and the walker's other permissions left false.
 ///
 /// FAILS CLOSED for a walker but OPEN for a non-walker. A RoomUser with no
 /// client is a bot or a pet, which is not somebody a duty rota applies to and
@@ -31,16 +37,5 @@ internal static class MovementDuty
             return false;
 
         return ShiftManager.IsOnDuty(habbo.Id);
-    }
-
-    /// <summary>
-    /// The same question from inside the movement engine, which knows a walker
-    /// by its virtual id rather than by its RoomUser.
-    /// </summary>
-    public static bool IsOnDuty(Room? room, int virtualId)
-    {
-        if (room == null)
-            return true;
-        return IsOnDuty(room.GetRoomUserManager()?.GetRoomUserByVirtualId(virtualId));
     }
 }
