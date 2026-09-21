@@ -41,6 +41,13 @@ public static class MovementV2Bridge
             state.Target = state.Tile;
             state.Facing = (byte)user.RotBody;
             state.Mode = MovementMode.Standing;
+            // A unit entering a room walks at the hotel's pace. Said here
+            // rather than left to the fact that OnUserLeave drops the state:
+            // GetOrCreateState can hand back an existing one, and a pace that
+            // rode a recycled virtual id into somebody else's walk would be a
+            // player who is mysteriously, permanently fast.
+            state.IntervalMs = MovementSettings.IntervalMs;
+            state.DesiredIntervalMs = MovementSettings.IntervalMs;
         }
     }
 
@@ -290,6 +297,35 @@ public static class MovementV2Bridge
             }
         }
         MovementScheduler.Instance.Signal(movement);
+    }
+
+    /// <summary>
+    /// Set how fast this walker's NEXT walk runs, in milliseconds per tile.
+    ///
+    /// The only way anything outside the engine changes a pace, and it is
+    /// deliberately not a speed setting: the one caller is the paramedic
+    /// escort, and the only value it ever passes besides the default is
+    /// <see cref="MovementSettings.EscortIntervalMs"/>.
+    ///
+    /// Takes effect at the next walk SESSION, never mid-stride. Every edge
+    /// start is derived as TimelineOrigin + k * interval, so re-dividing a
+    /// timeline that is already on the wire would move edges the client has
+    /// been told about. A medic who grabs somebody mid-step therefore finishes
+    /// that step at walking pace and runs from the next click.
+    /// </summary>
+    public static void SetWalkPace(RoomUser? user, int intervalMs)
+    {
+        if (user == null || intervalMs <= 0)
+            return;
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return;
+            if (movement.States.TryGetValue(user.VirtualId, out var state) && state != null)
+                state.DesiredIntervalMs = intervalMs;
+        }
     }
 
     /// <summary>

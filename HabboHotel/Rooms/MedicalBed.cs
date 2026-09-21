@@ -134,6 +134,15 @@ public static class MedicalBed
         // back the moment health passes zero, which for a patient carried in on
         // nothing is the very first tick of their treatment.
         //
+        // THE HOLD IS ON THEIR OWN FEET, NOT ON THEM. CanWalk gates exactly one
+        // thing - MoveAvatarEvent, the player's own click. Everything that
+        // moves somebody ELSE goes through RoomUser.MoveTo, which never reads
+        // it, so a patient under treatment stays pushable and pullable by the
+        // people around them. That is deliberate: a medic should be able to
+        // shift somebody who is in the way, and being treated is not the same
+        // as being furniture. Pushed off the bed, the course simply ends on the
+        // next tick with the branch above.
+        //
         // The hold is as long as the injury, not a flat two minutes - the rate
         // is read off the maximum, so somebody a point short of full waits
         // about a second and somebody on the floor waits the whole course.

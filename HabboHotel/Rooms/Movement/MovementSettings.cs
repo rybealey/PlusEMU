@@ -14,11 +14,37 @@
 public static class MovementSettings
 {
     /// <summary>
-    /// THE interval. One validated tile per 500ms, for every walker, always.
-    /// There is no fast/superfast walking in V2 and no per-session interval:
-    /// this is a constant, not a tunable (LOCK NOTE section 8).
+    /// THE interval. One validated tile per 500ms, and the default for every
+    /// walker. It is still not a tunable: nothing reads a speed out of config
+    /// and no command changes one (LOCK NOTE section 8).
+    ///
+    /// It is no longer a hard constant either, and the wording above used to
+    /// say it was. Exactly ONE thing overrides it, per walker and per walk
+    /// session - see <see cref="EscortIntervalMs"/>.
     /// </summary>
     public const int IntervalMs = 500;
+
+    /// <summary>
+    /// THE ONE EXCEPTION: an ambulance run, four times normal pace.
+    ///
+    /// A paramedic carrying an unconscious patient moves at one tile per
+    /// 125ms. Nothing else in the hotel does, and nothing else may: this is
+    /// not a speed setting, it is a property of one escort flavour, latched
+    /// onto the walker that is running it (MovementState.IntervalMs).
+    ///
+    /// 125 IS A DIVISOR OF 500, and that is load-bearing rather than tidy.
+    /// The room's movement phase is a 500ms grid, and a walk still joins it on
+    /// a 500ms boundary, so a fast walker's edges land on 0, 125, 250, 375,
+    /// 500 - every fourth one on the room grid, and its TimelineOrigin still
+    /// satisfies the "one cycleStart % 500" property the phase diagnostic
+    /// checks. An interval that did not divide 500 would drift off that grid
+    /// and make the diagnostic read as a fault.
+    ///
+    /// The client needs nothing for this: the interval has always travelled
+    /// per edge on the wire, and the renderer interpolates and chains its
+    /// lookahead from the edge's own value (500 is only its fallback).
+    /// </summary>
+    public const int EscortIntervalMs = 125;
 
     /// <summary>Future edges advertised alongside a real edge. LOCK NOTE: 3.</summary>
     public const int LookaheadMax = 3;

@@ -273,6 +273,27 @@ public sealed class MovementState : IDueHeapNode
     /// </summary>
     public bool Queued => HeapIndex >= 0;
 
+    // ---- pace ---------------------------------------------------------------
+    /// <summary>
+    /// This SESSION's milliseconds per tile. Latched at StartWalk and never
+    /// touched again while the session runs, because every edge start is
+    /// derived as TimelineOrigin + k * this: change it mid-walk and every
+    /// already-published edge silently moves to a time it was not sent for.
+    ///
+    /// Defaults to <see cref="MovementSettings.IntervalMs"/>, which is what
+    /// every walker in the hotel has except a paramedic running an escort.
+    /// </summary>
+    public int IntervalMs = MovementSettings.IntervalMs;
+
+    /// <summary>
+    /// What the NEXT session should latch. The only field of the pair that
+    /// anything outside the engine sets (MovementV2Bridge.SetWalkPace), and
+    /// the reason there are two: an escort can begin while its medic is
+    /// already mid-stride, and the walk they are in the middle of has to
+    /// finish at the pace it was published at.
+    /// </summary>
+    public int DesiredIntervalMs = MovementSettings.IntervalMs;
+
     /// <summary>
     /// THE elapsing-edge derivation. LOCK NOTE 2.2 requires exactly ONE of
     /// these to exist - revision 2 of the architecture had three subtly
@@ -294,10 +315,10 @@ public sealed class MovementState : IDueHeapNode
         var delta = nowMs - TimelineOrigin;
         if (delta <= 0)
             return 0;
-        return (int)(delta / MovementSettings.IntervalMs);
+        return (int)(delta / IntervalMs);
     }
 
     /// <summary>Absolute start tick of an edge index on this session's timeline.</summary>
     public long EdgeStartTick(int edgeIndex) =>
-        TimelineOrigin + (long)edgeIndex * MovementSettings.IntervalMs;
+        TimelineOrigin + (long)edgeIndex * IntervalMs;
 }

@@ -60,6 +60,13 @@ public static class MovementController
         w.RouteRevision = 0;
         w.EdgeIndex = 0;
         w.TimelineOrigin = origin;
+        // LATCHED HERE AND NOWHERE ELSE. Every edge start in this session is
+        // TimelineOrigin + k * IntervalMs, so the pace has to be fixed for as
+        // long as the timeline it divides. Picking it up at the session
+        // boundary is also what lets an escort that began mid-stride take
+        // effect on the medic's next walk instead of rewriting the one they
+        // are already halfway through.
+        w.IntervalMs = w.DesiredIntervalMs;
         w.EmittedThroughEdge = -1;
         w.Target = target;
         w.Tile = tile;
@@ -417,14 +424,14 @@ public static class MovementController
 
         MovementCounters.Advance();
         var lateMs = nowMs - scheduledTick;
-        if (lateMs > MovementSettings.IntervalMs)
+        if (lateMs > w.IntervalMs)
             MovementCounters.BeatLate(lateMs);
 
         // (a) commit the edge that just finished
         CommitEdgeSilently(room, w, nowMs);
 
         // (b) lateness: honour promises, never contradict them.
-        if (lateMs > MovementSettings.IntervalMs)
+        if (lateMs > w.IntervalMs)
         {
             var elapsing = w.ElapsingEdgeIndex(nowMs);
             SyncCommitsTo(room, w, elapsing, nowMs);
@@ -568,7 +575,7 @@ public static class MovementController
         if (MovementReplanTrace.Enabled)
             MovementReplanTrace.OnEdgeStaged(w, nowMs);
 
-        var nextDue = w.EdgeStartTick(w.EdgeIndex) + MovementSettings.IntervalMs;
+        var nextDue = w.EdgeStartTick(w.EdgeIndex) + w.IntervalMs;
         room.Walkers.InsertOrUpdate(w, nextDue); // never a bare Push (I-1)
     }
 
@@ -679,7 +686,7 @@ public static class MovementController
 
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
-            MovementSettings.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
+            w.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
             w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
             w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             w.EdgeToZ, w.Facing, lookahead, lookCount, w.LastStartDelayMs));
@@ -808,6 +815,9 @@ public static class MovementController
         s.RouteRevision = w.RouteRevision;
         s.EdgeIndex = w.EdgeIndex;
         s.TimelineOrigin = w.TimelineOrigin;
+        // The pace too, or the close-out Unpair stages from s.EdgeStartTick
+        // would be timed on a 500ms grid the captor's edges never used.
+        s.IntervalMs = w.IntervalMs;
         s.Mode = MovementMode.Standing;
 
         var lookahead = System.Array.Empty<LookaheadTile>();
@@ -837,7 +847,7 @@ public static class MovementController
 
         room.Staged.Add(new MovementEdgeRecord(
             s.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
-            MovementSettings.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
+            w.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
             from.X, from.Y, MovementEdgeRecord.Z100(fromZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
             toZ, s.Facing, lookahead, lookCount, w.LastStartDelayMs));
@@ -872,7 +882,7 @@ public static class MovementController
         var z100 = MovementEdgeRecord.Z100(s.TileZ);
         room.Staged.Add(new MovementEdgeRecord(
             s.VirtualId, s.WalkSessionId, 0, 0, RpMovementV2Flags.Displacement,
-            MovementSettings.IntervalMs, nowMs,
+            s.IntervalMs, nowMs,
             tile.X, tile.Y, z100, tile.X, tile.Y, z100, s.TileZ, facing,
             System.Array.Empty<LookaheadTile>(), 0));
         room.HasStagedWork = true;
@@ -896,7 +906,7 @@ public static class MovementController
         var z100 = MovementEdgeRecord.Z100(s.TileZ);
         room.Staged.Add(new MovementEdgeRecord(
             s.VirtualId, s.WalkSessionId, s.RouteRevision, s.EdgeIndex + 1, RpMovementV2Flags.WalkEnd,
-            MovementSettings.IntervalMs, s.EdgeStartTick(s.EdgeIndex + 1),
+            s.IntervalMs, s.EdgeStartTick(s.EdgeIndex + 1),
             s.Tile.X, s.Tile.Y, z100, s.Tile.X, s.Tile.Y, z100, s.TileZ, s.Facing,
             System.Array.Empty<LookaheadTile>(), 0));
         room.HasStagedWork = true;
@@ -1025,7 +1035,7 @@ public static class MovementController
 
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, index, flags,
-            MovementSettings.IntervalMs, w.EdgeStartTick(index),
+            w.IntervalMs, w.EdgeStartTick(index),
             from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
             toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
