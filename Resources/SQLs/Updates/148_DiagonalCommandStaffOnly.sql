@@ -1,0 +1,14 @@
+-- :disablediagonal restricted to staff (rank >= 5), matching the project's
+-- staff convention. Stock mapping was 1, i.e. EVERY registered player - the
+-- command additionally checks room rights, so any player could turn diagonal
+-- walking off in a room they own.
+--
+-- Why it matters beyond the setting itself: DiagonalEnabled has exactly one
+-- reader, AStarPathfinder.FindRoute, which uses it to pick the 4-neighbour
+-- set. CanTraverse.Evaluate - the per-beat validator - does not consult it.
+-- So a route planned before the toggle keeps its diagonal steps and every
+-- per-beat check approves them, which is a search/commit disagreement in a
+-- system whose central claim is that those two cannot disagree. PixelRP is
+-- diagonal at all times by design, so the state is being made unreachable to
+-- players rather than the mismatch being fixed.
+UPDATE `permissions_commands` SET `group_id` = '5' WHERE `command` = 'command_disable_diagonal';

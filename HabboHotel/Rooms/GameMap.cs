@@ -454,24 +454,34 @@ public class Gamemap
         return true;
     }
 
+    /// <summary>
+    /// UNDER THE SAME LOCK <see cref="GetItemsFromIds"/> TAKES.
+    ///
+    /// _coordinatedItems is concurrent, but its VALUES are plain List&lt;uint&gt;
+    /// and GetItemsFromIds reads one as `lock (input) { input.ToList() }`. This
+    /// method used to mutate a published list with no lock at all, and a lock
+    /// only one side takes protects nothing. The reader is the MOVEMENT
+    /// SCHEDULER: CanTraverse's height rule asks Gamemap.SqAbsoluteHeight for
+    /// every tile it evaluates, several times per walker per beat. So placing
+    /// or picking up furniture while somebody walked over that tile could
+    /// throw out of ToList() (the list resized mid-copy) or hand the predicate
+    /// a torn snapshot and therefore a wrong walk height.
+    ///
+    /// GetOrAdd also closes a lost update that the old TryGetValue/TryAdd pair
+    /// left open: two threads could both miss, both build a list, and TryAdd
+    /// would keep one - silently discarding the other thread's item. GetOrAdd
+    /// is atomic, so every caller mutates the one list the dictionary holds.
+    ///
+    /// Lock ordering is unchanged and still one-way: the scheduler takes the
+    /// room's MovementLock and then this list; nothing here takes MovementLock.
+    /// </summary>
     public void AddCoordinatedItem(Item item, Point coord)
     {
-        var items = new List<uint>(); //mCoordinatedItems[CoordForItem];
-        if (!_coordinatedItems.TryGetValue(coord, out items))
-        {
-            items = new();
-            if (!items.Contains(item.Id))
-                items.Add(item.Id);
-            if (!_coordinatedItems.ContainsKey(coord))
-                _coordinatedItems.TryAdd(coord, items);
-        }
-        else
+        var items = _coordinatedItems.GetOrAdd(coord, _ => new List<uint>());
+        lock (items)
         {
             if (!items.Contains(item.Id))
-            {
                 items.Add(item.Id);
-                _coordinatedItems[coord] = items;
-            }
         }
     }
 
@@ -488,12 +498,22 @@ public class Gamemap
         return new();
     }
 
+    /// <summary>
+    /// The other half of the lock in <see cref="AddCoordinatedItem"/>.
+    /// RemoveAll on a list the movement scheduler may be reading was the more
+    /// dangerous of the two, because it shrinks the list under a copy.
+    ///
+    /// TryGetValue rather than ContainsKey plus the indexer: the pair could
+    /// throw KeyNotFoundException if the tile's entry went between the two
+    /// calls. Same return value - true when the tile had an entry.
+    /// </summary>
     public bool RemoveCoordinatedItem(Item item, Point coord)
     {
         var point = new Point(coord.X, coord.Y);
-        if (_coordinatedItems != null && _coordinatedItems.ContainsKey(point))
+        if (_coordinatedItems != null && _coordinatedItems.TryGetValue(point, out var ids))
         {
-            _coordinatedItems[point].RemoveAll(x => x == item.Id);
+            lock (ids)
+                ids.RemoveAll(x => x == item.Id);
             return true;
         }
         return false;
@@ -1103,21 +1123,43 @@ public class Gamemap
         return pointList;
     }
 
+    /// <summary>
+    /// SNAPSHOT UNDER THE LOCK, RESOLVE OUTSIDE IT.
+    ///
+    /// The lock used to span the whole resolve loop, which called out into
+    /// RoomItemHandler.GetItem while holding it. Nothing deadlocks today -
+    /// GetItem only reads ConcurrentDictionaries and takes no lock - but
+    /// holding a lock across a call into another subsystem becomes a deadlock
+    /// the moment that call grows one, and now that AddCoordinatedItem and
+    /// RemoveCoordinatedItem take this same lock, furniture writers would
+    /// block for the whole loop rather than for a copy.
+    ///
+    /// Same ids, same order, same de-duplication. The second .ToList() on the
+    /// way out is gone: `items` is already a fresh local list, so copying it
+    /// again bought nothing and cost an allocation on a path the movement
+    /// scheduler walks several times per walker per beat.
+    /// </summary>
     public List<Item> GetItemsFromIds(List<uint> input)
     {
-        if (input == null || input.Count == 0)
+        if (input == null)
             return new();
-        var items = new List<Item>();
+
+        List<uint> ids;
         lock (input)
         {
-            foreach (var id in input.ToList())
-            {
-                var itm = _room.GetRoomItemHandler().GetItem(id);
-                if (itm != null && !items.Contains(itm))
-                    items.Add(itm);
-            }
+            if (input.Count == 0)
+                return new();
+            ids = input.ToList();
         }
-        return items.ToList();
+
+        var items = new List<Item>();
+        foreach (var id in ids)
+        {
+            var itm = _room.GetRoomItemHandler().GetItem(id);
+            if (itm != null && !items.Contains(itm))
+                items.Add(itm);
+        }
+        return items;
     }
 
     public List<Item> GetRoomItemForSquare(int pX, int pY, double minZ)
