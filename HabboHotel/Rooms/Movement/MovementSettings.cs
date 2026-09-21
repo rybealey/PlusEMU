@@ -25,26 +25,33 @@ public static class MovementSettings
     public const int IntervalMs = 500;
 
     /// <summary>
-    /// THE ONE EXCEPTION: an ambulance run, four times normal pace.
+    /// THE ONE EXCEPTION: an ambulance run, twice normal pace.
     ///
     /// A paramedic carrying an unconscious patient moves at one tile per
-    /// 125ms. Nothing else in the hotel does, and nothing else may: this is
+    /// 250ms. Nothing else in the hotel does, and nothing else may: this is
     /// not a speed setting, it is a property of one escort flavour, latched
     /// onto the walker that is running it (MovementState.IntervalMs).
     ///
-    /// 125 IS A DIVISOR OF 500, and that is load-bearing rather than tidy.
-    /// The room's movement phase is a 500ms grid, and a walk still joins it on
-    /// a 500ms boundary, so a fast walker's edges land on 0, 125, 250, 375,
-    /// 500 - every fourth one on the room grid, and its TimelineOrigin still
-    /// satisfies the "one cycleStart % 500" property the phase diagnostic
-    /// checks. An interval that did not divide 500 would drift off that grid
-    /// and make the diagnostic read as a fault.
+    /// It was 125 - four times pace - for exactly one build, and was halved
+    /// after seeing it on beta. Worth knowing if it is ever raised again: the
+    /// avatar's walk animation runs at its own fixed rate whatever the tile
+    /// interval, so the faster this gets the more the avatar slides rather
+    /// than walks. That is a rendering limit, not something the server can
+    /// tune away.
+    ///
+    /// IT MUST DIVIDE 500, and that is load-bearing rather than tidy. The
+    /// room's movement phase is a 500ms grid, and a walk still joins it on a
+    /// 500ms boundary, so a fast walker's edges land on 0, 250, 500 - every
+    /// second one on the room grid, and its TimelineOrigin still satisfies the
+    /// "one cycleStart % 500" property the phase diagnostic checks. An
+    /// interval that did not divide 500 would drift off that grid and make the
+    /// diagnostic read as a fault. 125 and 250 both hold; 200 and 300 do not.
     ///
     /// The client needs nothing for this: the interval has always travelled
     /// per edge on the wire, and the renderer interpolates and chains its
     /// lookahead from the edge's own value (500 is only its fallback).
     /// </summary>
-    public const int EscortIntervalMs = 125;
+    public const int EscortIntervalMs = 250;
 
     /// <summary>Future edges advertised alongside a real edge. LOCK NOTE: 3.</summary>
     public const int LookaheadMax = 3;

@@ -272,7 +272,7 @@ public static class PoliceState
                 LiftKnockoutPose(suspect);
                 WearAmbulance(captor);
                 WearAmbulance(suspect);
-                // An ambulance run: four times walking pace, from the medic's
+                // An ambulance run: twice walking pace, from the medic's
                 // next step. The patient needs nothing - a shadow has no walk
                 // of its own and is staged on the captor's timeline, so it
                 // inherits the pace along with everything else about it.
