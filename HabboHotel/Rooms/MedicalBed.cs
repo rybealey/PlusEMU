@@ -14,9 +14,12 @@ namespace Plus.HabboHotel.Rooms;
 ///            one for VIP. Proportional, so somebody half hurt waits half as
 ///            long (RpRegen's rate is read off the maximum).
 ///
-///   SHIELDS  nobody on it can be escorted, by medic or officer. Without this
-///            a patient mid-treatment could simply be carried off, which makes
-///            the bed scenery rather than somewhere a job finishes.
+///   SHIELDS  nobody on it can be escorted, by medic or officer, and the
+///            patient cannot walk off it either - they are held until the
+///            course finishes. Without both halves a treatment is something
+///            anyone can interrupt, which makes the bed scenery rather than
+///            somewhere a job finishes. The hold is as long as the injury, not
+///            a flat two minutes: a point short of full is about a second.
 ///
 ///   DISCHARGES once they are whole again they are moved to one of the furni
 ///            named in the behaviour's id list, so a ward empties itself
@@ -75,10 +78,16 @@ public static class MedicalBed
         {
             // Got up, or was moved. Only a regen THIS bed started is stopped:
             // a medkit swallowed on the way out is not the bed's to cancel.
+            //
+            // A course in progress cannot normally end this way - the patient
+            // is frozen for its duration - but a roller, a :summon or a wired
+            // teleport can still take them off the bed, and a hold nothing
+            // releases would last the rest of their session.
             if (user.MedicalBedId != 0)
             {
                 user.MedicalBedId = 0;
                 habbo.RpHealthRegen.Stop();
+                ReleaseHold(user, habbo);
             }
             return;
         }
@@ -111,6 +120,27 @@ public static class MedicalBed
         {
             user.MedicalBedId = bed.Id;
             habbo.RpHealthRegen.Start(habbo.RpHealthMax, habbo.IsVip ? SecondsToFullVip : SecondsToFull);
+            // Stop a walk that is still running. CanWalk below refuses the NEXT
+            // click, but somebody who crossed this tile on their way somewhere
+            // else already has a route, and blocking new clicks would let them
+            // stroll off the bed they are now being treated on. ClearMovement
+            // is V1's fields; the walk itself belongs to V2.
+            user.ClearMovement(true);
+            Movement.MovementV2Bridge.Halt(user);
+        }
+
+        // Held for the duration of the course, and re-asserted every tick
+        // rather than set once: the knockout lift above hands CanWalk straight
+        // back the moment health passes zero, which for a patient carried in on
+        // nothing is the very first tick of their treatment.
+        //
+        // The hold is as long as the injury, not a flat two minutes - the rate
+        // is read off the maximum, so somebody a point short of full waits
+        // about a second and somebody on the floor waits the whole course.
+        if (user.MedicalBedId == bed.Id && user.CanWalk)
+        {
+            user.CanWalk = false;
+            user.UpdateNeeded = true;
         }
     }
 
@@ -124,6 +154,10 @@ public static class MedicalBed
         user.MedicalBedId = 0;
         var habbo = user.GetClient()?.GetHabbo();
         habbo?.RpHealthRegen.Stop();
+        // Treated and done: walking comes back whether or not there is anywhere
+        // to send them. A ward with no discharge point should leave somebody
+        // free to get up, not pinned to the bed that healed them.
+        ReleaseHold(user, habbo);
 
         var exit = PickExit(room, bed);
         if (exit == null)
@@ -134,6 +168,26 @@ public static class MedicalBed
         // (IsLying stays false for it), so UpdateUserStatus strips it and
         // applies whatever the discharge point is - a seat, or nothing.
         room.GetRoomUserManager()?.UpdateUserStatus(user, false);
+        user.UpdateNeeded = true;
+    }
+
+    /// <summary>
+    /// Hand walking back at the end of a course - but only if nothing ELSE is
+    /// holding it. The same test PoliceState.Release makes, for the same
+    /// reason: a patient who is still out cold, still stunned or being carried
+    /// is held by that, and a bed releasing them would let them walk out of a
+    /// state they are supposed to be stuck in.
+    /// </summary>
+    private static void ReleaseHold(RoomUser user, Users.Habbo? habbo)
+    {
+        if (user == null)
+            return;
+        if (habbo != null && habbo.RpHealth <= 0)
+            return;
+        if (Chat.Commands.User.Police.PoliceState.IsStunned(user.UserId) ||
+            Chat.Commands.User.Police.PoliceState.IsBeingEscorted(user.UserId))
+            return;
+        user.CanWalk = true;
         user.UpdateNeeded = true;
     }
 
