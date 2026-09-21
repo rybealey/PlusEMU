@@ -275,6 +275,10 @@ public static class MovementController
         if (w.EdgeIndex < e)
         {
             w.DeferredRedirectTarget = target;
+            // THE counter for this condition. A second one, redirectBehindElapsing,
+            // used to be incremented further down after planning; this guard made
+            // it unreachable and it was removed on 2026-09-21. If you are asking
+            // how often a redirect lands behind the elapsing index, it is this.
             MovementCounters.RedirectDeferredBehindElapsing();
             return false;
         }
@@ -310,8 +314,6 @@ public static class MovementController
         // Counted here rather than earlier so only replans that actually
         // stage are counted - a failed pathfind restages nothing.
         MovementCounters.RedirectMargin(w.EdgeStartTick(e + 1) - nowMs);
-        if (w.EdgeIndex < e)
-            MovementCounters.RedirectBehindElapsing();
 
         // 5/6/7. Route identity advances; the movement clock does not.
         MovementCounters.Redirect();

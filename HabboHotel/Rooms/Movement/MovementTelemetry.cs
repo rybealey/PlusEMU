@@ -103,7 +103,6 @@ public static class MovementCounters
     private static long _redirectMarginUnder100;
     private static long _redirectMarginUnder250;
     private static long _minRedirectMarginMs = long.MaxValue;
-    private static long _redirectBehindElapsing;
 
     // Early publication of a corrected e+1 (experiment). Cheap interlocked
     // increments only - no strings and no I/O on the movement path.
@@ -138,15 +137,6 @@ public static class MovementCounters
                 break;
         }
     }
-
-    /// <summary>
-    /// A redirect whose walker could not be advanced to the elapsing index,
-    /// because nothing had been emitted that far. The origin it plans from is
-    /// then the terminal of an EARLIER edge than the one the client is
-    /// rendering, which is a second way the two can disagree. Expected to stay
-    /// at zero; it is here so that assumption is checked rather than trusted.
-    /// </summary>
-    public static void RedirectBehindElapsing() => Interlocked.Increment(ref _redirectBehindElapsing);
 
     /// <summary>A corrected e+1 was transmitted as soon as the redirect decided it.</summary>
     public static void CorrectionEPlus1ImmediateStaged() =>
@@ -224,7 +214,6 @@ public static class MovementCounters
         $"under100={Interlocked.Read(ref _redirectMarginUnder100)} " +
         $"under50={Interlocked.Read(ref _redirectMarginUnder50)} " +
         $"minRedirectMarginMs={MinRedirectMargin()} " +
-        $"redirectBehindElapsing={Interlocked.Read(ref _redirectBehindElapsing)} " +
         $"correctionEPlus1ImmediateStaged={Interlocked.Read(ref _correctionEPlus1ImmediateStaged)} " +
         $"correctionEPlus1NotFuture={Interlocked.Read(ref _correctionEPlus1NotFuture)} " +
         $"correctionEPlus1AlreadyStaged={Interlocked.Read(ref _correctionEPlus1AlreadyStaged)} " +
