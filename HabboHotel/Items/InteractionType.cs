@@ -77,6 +77,34 @@ public enum InteractionType
     /// </summary>
     CorpGate,
 
+    /// <summary>
+    /// pixelrp: the hospital's drop-off point.
+    ///
+    /// Inert for everyone except a paramedic who is carrying somebody: when one
+    /// steps onto it, the patient they are escorting is laid on the nearest bed
+    /// in the room and the transport ends. Anyone else - including a police
+    /// officer marching a suspect across it - walks over an ordinary tile.
+    ///
+    /// The behaviour is on the TILE rather than on the bed so a hospital can
+    /// decide where the ambulance bay is, and so a ward can be rearranged
+    /// without re-flagging every bed in it.
+    /// </summary>
+    ParamedicDropoff,
+
+    /// <summary>
+    /// pixelrp: a hospital bed that actually treats people.
+    ///
+    /// Three things at once, which is why it is a behaviour and not three:
+    /// anyone resting on it has their health refilled (two minutes, one for
+    /// VIP), nobody can be escorted off it, and once they are whole again they
+    /// are discharged to one of the furni named in the behaviour's id list.
+    ///
+    /// The immunity is the part that is easy to miss the point of: without it
+    /// a patient mid-treatment could simply be carried away, which makes the
+    /// bed a decoration rather than a place that finishes a job.
+    /// </summary>
+    MedicalBed,
+
     WfFloorSwitch1,
     WfFloorSwitch2,
 

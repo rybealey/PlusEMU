@@ -1,8 +1,10 @@
 ﻿using System.Drawing;
 using Plus.Communication.Packets.Outgoing.Avatar;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
 using Plus.Core;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Items.Interactor;
 using Plus.HabboHotel.Items.Wired;
@@ -16,6 +18,13 @@ namespace Plus.HabboHotel.Items;
 
 public class Item
 {
+    /// <summary>
+    /// pixelrp: the roleplay action bubble, the same style the :escort family
+    /// speaks in, so a drop-off the pad performs by itself reads as the same
+    /// kind of event as one somebody typed.
+    /// </summary>
+    private const int ActionBubble = 4;
+
     public uint Id { get; set; }
     public uint OwnerId { get; set; }
     public uint RoomId { get; set; }
@@ -1171,6 +1180,35 @@ public class Item
         if (Definition.InteractionType == InteractionType.PressurePad ||
             Definition.InteractionType == InteractionType.CorpGate)
             SetPressurePad(true, null);
+        // The hospital drop-off. Inert unless the arriving walker is a paramedic
+        // with somebody in their care; see PoliceState.TryDropOff.
+        if (Definition.InteractionType == InteractionType.ParamedicDropoff)
+        {
+            // Asked BEFORE the drop, because the drop is what clears the link:
+            // afterwards there is no escort left to say who was being carried.
+            var patientId = Rooms.Chat.Commands.User.Police.PoliceState.SuspectOf(user.UserId);
+            var patient = patientId != 0 ? room.GetRoomUserManager().GetRoomUserByHabbo(patientId) : null;
+
+            var dropOff = Rooms.Chat.Commands.User.Police.PoliceState.TryDropOff(room, user, this);
+            // Walking onto a bare bay keeps the patient in their medic's care.
+            // Dumping them here would be worse than doing nothing, and silence
+            // would leave the medic wondering why the pad did not fire.
+            if (dropOff == Rooms.Chat.Commands.User.Police.PoliceState.DropOffResult.NoBed)
+                user.GetClient().SendWhisper("There is no bed here to lay them on - use :escort to put them down anyway.");
+            else if (dropOff == Rooms.Chat.Commands.User.Police.PoliceState.DropOffResult.LaidOnBed)
+            {
+                // The handover said out loud. The pad fires on arrival with
+                // nothing typed, so without this the only thing the room sees
+                // is a body moving across it on its own.
+                //
+                // NO ACTOR NAME. The bubble already carries the speaker's, so
+                // writing it into the text too reads as "Piper Piper moves...".
+                // Same shape as the rest of the :escort family for that reason.
+                var patientName = patient?.GetClient()?.GetHabbo()?.Username ?? "their patient";
+                room.SendPacket(new ChatComposer(user.VirtualId,
+                    $"*moves {patientName} onto the medical bed, stabilizing their health*", 0, ActionBubble));
+            }
+        }
         // The window asks for its own shelf once it shows, so stepping on the
         // furni only has to open it.
         if (Definition.InteractionType == InteractionType.ZaraShop)

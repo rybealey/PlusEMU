@@ -294,6 +294,48 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
+    /// Tell V2 that a unit has been PUT somewhere by something other than a
+    /// walk, so its state agrees with the RoomUser again.
+    ///
+    /// Written for the paramedic drop-off, and it exists because of the order
+    /// those two steps have to happen in. <see cref="Unpair"/> closes a shadow
+    /// out with a walk-end resting on `EdgeTo` - the tile the shadow was last
+    /// heading to - and ApplyMovementFrame treats a record whose from-tile is
+    /// not where the avatar stands as an ARRIVAL and moves them onto it. Lay a
+    /// patient on a bed and then unpair, and that walk-end drags them straight
+    /// back off it a frame later, for no visible reason.
+    ///
+    /// So the caller relocates FIRST and unpairs second: the end is then staged
+    /// on the bed, the from-tile matches, and no arrival fires.
+    ///
+    /// Deliberately narrow. It moves the geometry a resting unit is anchored
+    /// to and nothing else - no session, no revision, no timeline. A unit that
+    /// is mid-walk is left alone, because moving the anchor under a live
+    /// timeline would put its already-published edges somewhere they never
+    /// were.
+    /// </summary>
+    public static void Relocate(Room? room, RoomUser? user, int x, int y, double z)
+    {
+        if (room == null || user == null)
+            return;
+        if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return;
+            if (!movement.States.TryGetValue(user.VirtualId, out var state) || state == null)
+                return;
+            if (state.Mode == MovementMode.Moving)
+                return;
+            state.Tile = new Point(x, y);
+            state.TileZ = z;
+            state.EdgeTo = state.Tile;
+            state.EdgeToZ = z;
+        }
+    }
+
+    /// <summary>
     /// The captor turned on the spot. Facing is otherwise only set by walks,
     /// so record it. Ignored while the captor is mid-walk - the edge owns their
     /// facing then, and the client does not send LookTo for a walking avatar

@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Drawing;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.Movement;
 using Plus.HabboHotel.Users;
 
@@ -358,7 +361,7 @@ public static class PoliceState
     /// back unless something else holds it. Returns the suspect's id, or 0
     /// when there was no escort to end. Either user may already have left.
     /// </summary>
-    public static int EndEscort(Room? room, int captorId, RoomUser? suspectUser)
+    public static int EndEscort(Room? room, int captorId, RoomUser? suspectUser, bool restorePose = true)
     {
         lock (EscortSync)
         {
@@ -378,7 +381,13 @@ public static class PoliceState
                 // both. Either RoomUser may already be gone - a disconnect gets
                 // here with one side unresolvable - and every step below is a
                 // no-op on null, so what CAN be put back is.
-                RestoreKnockoutPose(suspectUser);
+                // Not when the caller is about to put them somewhere that
+                // supplies its own pose: a bed's lay comes from the furni and
+                // is refused for anyone already flagged as lying
+                // (UpdateUserStatus returns early), so laying them on the floor
+                // first is what would STOP them lying on the bed.
+                if (restorePose)
+                    RestoreKnockoutPose(suspectUser);
                 RestoreEffect(suspectUser);
                 RestoreEffect(captorUser);
                 // The snapshot is keyed by player id and outlives the RoomUser,
@@ -400,6 +409,182 @@ public static class PoliceState
             }
             return suspectId;
         }
+    }
+
+    // ---- drop-off -----------------------------------------------------------
+
+    /// <summary>
+    /// How much worse an occupied bed is than an empty one, in squared tiles.
+    /// Bigger than any distance a room can hold (the largest model is well
+    /// under 1000x1000), so a free bed anywhere beats a taken one next door -
+    /// but a taken bed is still better than nothing, which is why this is a
+    /// penalty and not a filter.
+    /// </summary>
+    private const long OccupiedBedPenalty = 1_000_000;
+
+    /// <summary>
+    /// Somewhere a patient can be laid down. The hotel's two laying types, the
+    /// same pair ItemFunctionOverrides.IsLayingType names - laying is derived
+    /// client-side from the interaction type, so this list is not ours to
+    /// extend on the server alone.
+    /// </summary>
+    private static bool IsLayable(Item item) =>
+        item?.Definition != null && InteractionTypes.IsLayingSurface(item.Definition.InteractionType);
+
+    /// <summary>
+    /// How much better a real medical bed is than any other thing you can lie
+    /// on. Large enough to outrank distance outright: a ward's own bed is the
+    /// point of the trip, and a sofa nearer the door is not a substitute for
+    /// it. Still a score rather than a filter, so a room with no medical bed
+    /// falls back to whatever it does have.
+    /// </summary>
+    private const long NonMedicalBedPenalty = 10_000_000;
+
+    /// <summary>
+    /// The bed to use, measured from the DROP-OFF PAD rather than from the
+    /// patient: the pad is the fixed thing a hospital lays out its ward around,
+    /// and the patient is wherever the last step happened to leave them.
+    ///
+    /// An occupied bed is not refused, only heavily penalised. PixelRP has
+    /// global tile overlap, so two people in one bed is legal and nothing else
+    /// would prevent it - but a ward with a free bed should never fill an
+    /// occupied one first.
+    /// </summary>
+    private static Item? NearestLayable(Room room, Item pad)
+    {
+        var items = room.GetRoomItemHandler()?.GetFloor;
+        if (items == null)
+            return null;
+        var map = room.GetGameMap();
+        Item? best = null;
+        var bestScore = long.MaxValue;
+        foreach (var item in items)
+        {
+            if (!IsLayable(item))
+                continue;
+            long dx = item.GetX - pad.GetX;
+            long dy = item.GetY - pad.GetY;
+            var score = dx * dx + dy * dy;
+            if (item.Definition.InteractionType != InteractionType.MedicalBed)
+                score += NonMedicalBedPenalty;
+            if (map != null && map.MapGotUser(new Point(item.GetX, item.GetY)))
+                score += OccupiedBedPenalty;
+            if (score >= bestScore)
+                continue;
+            bestScore = score;
+            best = item;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// How a drop-off attempt turned out. Three outcomes rather than a bool,
+    /// because the two callers want different things from the middle one: the
+    /// pad a medic walks onto keeps them carrying the patient and says why,
+    /// while :escort used as a drop puts the patient down regardless and only
+    /// wants to know whether a bed was involved.
+    /// </summary>
+    public enum DropOffResult
+    {
+        /// <summary>Nothing to put down - not a medical escort, or the patient is gone.</summary>
+        NotCarrying,
+
+        /// <summary>Carrying somebody, but the room has nothing to lay them on.</summary>
+        NoBed,
+
+        /// <summary>Done: the patient is on a bed and the transport has ended.</summary>
+        LaidOnBed
+    }
+
+    /// <summary>
+    /// The drop-off pad under a unit, or null. Cheap enough to ask per command;
+    /// the walk-on path already has the pad in hand and does not use this.
+    /// </summary>
+    public static Item? DropoffPadUnder(Room room, RoomUser user)
+    {
+        var items = room?.GetGameMap()?.GetAllRoomItemForSquare(user?.X ?? 0, user?.Y ?? 0);
+        if (user == null || items == null)
+            return null;
+        foreach (var item in items)
+        {
+            if (item?.Definition != null && item.Definition.InteractionType == InteractionType.ParamedicDropoff)
+                return item;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A paramedic is on a drop-off pad while carrying somebody: lay the
+    /// patient on the nearest bed and end the transport.
+    ///
+    /// Gated on the ESCORT, not on the job. Only an on-duty paramedic can have
+    /// started a medical escort in the first place, so the dictionary probe
+    /// already answers "is this a qualified medic" - and the walk-on caller
+    /// runs this on every step onto the pad, where re-asking the database would
+    /// be a query per tile. An officer marching a suspect across the same pad
+    /// finds it inert.
+    ///
+    /// Note the patient crosses the pad BEFORE their medic does: a shadow is
+    /// staged one tile in front. That step is inert for the same reason - the
+    /// patient is nobody's captor - and the drop-off fires on the beat the
+    /// medic themselves arrives.
+    /// </summary>
+    public static DropOffResult TryDropOff(Room room, RoomUser captor, Item pad)
+    {
+        if (room == null || captor == null || pad == null || captor.IsBot)
+            return DropOffResult.NotCarrying;
+        if (!IsMedicalEscort(captor.UserId))
+            return DropOffResult.NotCarrying;
+        var patientId = SuspectOf(captor.UserId);
+        if (patientId == 0)
+            return DropOffResult.NotCarrying;
+        var manager = room.GetRoomUserManager();
+        var patient = manager?.GetRoomUserByHabbo(patientId);
+        if (patient == null)
+            return DropOffResult.NotCarrying;
+
+        var bed = NearestLayable(room, pad);
+        if (bed == null)
+            return DropOffResult.NoBed;
+
+        // ORDER IS THE WHOLE TRICK, and it is not interchangeable:
+        //
+        //   1. put the patient on the bed
+        //   2. tell V2 that is where they are (Relocate), so the walk-end that
+        //      Unpair stages rests on the bed instead of dragging them back to
+        //      the tile the escort last stepped to
+        //   3. end the escort WITHOUT the floor pose - the bed supplies its own
+        //   4. let UpdateUserStatus read the square and apply the bed's lay
+        room.GetGameMap().TeleportToItem(patient, bed);
+        MovementV2Bridge.Relocate(room, patient, patient.X, patient.Y, patient.Z);
+        EndEscort(room, captor.UserId, patient, restorePose: false);
+        manager.UpdateUserStatus(patient, false);
+        patient.UpdateNeeded = true;
+        return DropOffResult.LaidOnBed;
+    }
+
+    /// <summary>
+    /// Put the patient down deliberately, which is what :escort does when the
+    /// medic is already carrying the person they named.
+    ///
+    /// On a drop-off pad with a bed to reach, they go on the bed. ANYWHERE
+    /// ELSE - off the pad, or on a pad in a room with no bed - the transport
+    /// simply ends and they lie back down where they are. A drop command that
+    /// refuses to drop would leave a medic stuck carrying somebody with no way
+    /// to let go but :unescort, which is the thing this exists to replace.
+    /// </summary>
+    public static DropOffResult PutDown(Room room, RoomUser captor, RoomUser patient)
+    {
+        if (room == null || captor == null)
+            return DropOffResult.NotCarrying;
+        var pad = DropoffPadUnder(room, captor);
+        var result = pad == null ? DropOffResult.NotCarrying : TryDropOff(room, captor, pad);
+        if (result == DropOffResult.LaidOnBed)
+            return result;
+        // The ordinary release: EndEscort lays them back down where they stand,
+        // because they are still out cold and nothing here supplies a pose.
+        EndEscort(room, captor.UserId, patient);
+        return result == DropOffResult.NoBed ? DropOffResult.NoBed : DropOffResult.NotCarrying;
     }
 
     /// <summary>

@@ -358,9 +358,7 @@ public class Gamemap
     /// lying, and the map marks the square 3 rather than 1.</summary>
     private static bool LeavesSquareSittable(ItemDefinition definition) =>
         definition != null &&
-        (definition.IsSeat ||
-         definition.InteractionType == InteractionType.Bed ||
-         definition.InteractionType == InteractionType.TentSmall);
+        (definition.IsSeat || InteractionTypes.IsLayingSurface(definition.InteractionType));
 
     /// <summary>
     /// May a walker step up onto this square however far up it is?
@@ -446,7 +444,7 @@ public class Gamemap
             }
 
             // Set bad maps
-            if (item.Definition.InteractionType == InteractionType.Bed || item.Definition.InteractionType == InteractionType.TentSmall)
+            if (InteractionTypes.IsLayingSurface(item.Definition.InteractionType))
                 GameMap[coord.X, coord.Y] = 3;
         }
         catch (Exception e)
@@ -1012,7 +1010,7 @@ public class Gamemap
                     var surface = WalkSurfaceOf(item, x, y);
                     if (surface > highestStack)
                     {
-                        if (item.Definition.IsSeat || item.Definition.InteractionType == InteractionType.Bed || item.Definition.InteractionType == InteractionType.TentSmall)
+                        if (item.Definition.IsSeat || InteractionTypes.IsLayingSurface(item.Definition.InteractionType))
                         {
                             deduct = true;
                             deductable = item.Definition.Height;
