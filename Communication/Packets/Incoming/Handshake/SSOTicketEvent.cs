@@ -147,9 +147,16 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: their own region, so Settings > General opens on the right
             // one and their profile reads correctly to themselves.
             session.Send(new RpUserRegionComposer(session.GetHabbo().Id, session.GetHabbo().RpRegion));
+            // pixelrp: the clock on a charge only runs while its owner is in
+            // the hotel, so a returning player's sheet is pushed forward by
+            // however long they were away BEFORE the list is built from it.
+            HabboHotel.Corporations.WantedUtility.ResumeAfterOffline(session.GetHabbo().Id);
             // pixelrp: the wanted list, so the Wanted window has its rows and the
             // HUD can draw stars over whoever this player looks at.
             session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));
+            // ...and to everyone else, since arriving is what puts this player
+            // BACK on a list they dropped off when they left.
+            HabboHotel.Corporations.WantedUtility.Broadcast();
             // pixelrp: whether this player's global room rights are live. Rank
             // alone is what opens the client's furni tools, and those rights
             // now follow the City Government clock - so the client has to be

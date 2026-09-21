@@ -620,6 +620,15 @@ public class Habbo
             if (Permissions.HasRight("mod_tickets"))
                 dbClient.RunQuery($"UPDATE `moderation_tickets` SET `status` = 'open', `moderator_id` = '0' WHERE `status` ='picked' AND `moderator_id` = '{Id}'");
         }
+        // pixelrp: the Wanted list only carries players who are HERE, so
+        // leaving has to be announced or the rest of the hotel keeps a row for
+        // somebody who has gone - and with the clock frozen it would sit there
+        // at a fixed number forever rather than counting itself off.
+        //
+        // AFTER UnregisterClient above, deliberately: the broadcast rebuilds
+        // the list from who is registered, so running it any earlier would
+        // send one that still had this player on it.
+        Corporations.WantedUtility.Broadcast();
         // pixelrp discord sync: drop the Online role shortly after logout.
         Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(Id, "logout");
         Dispose();
