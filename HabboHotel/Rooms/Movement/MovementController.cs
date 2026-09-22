@@ -220,9 +220,26 @@ public static class MovementController
     /// <summary>
     /// Moving -> Moving. THE redirect. See the class remarks and LOCK NOTE 2.2.
     /// </summary>
+    /// <param name="stageCorrection">
+    /// Whether to publish the corrected edge early. TRUE for every caller that
+    /// redirects a walker MID-EDGE, which is all of them except one.
+    ///
+    /// FALSE ONLY FROM THE DEFERRED RETRY IN AdvanceWalker, and only because
+    /// there is nothing there for an early publish to beat. Early publication
+    /// exists to overtake the client's lookahead: the client begins drawing the
+    /// next edge the moment its cycleStart passes, without waiting for a
+    /// packet, so a mid-edge correction has to arrive before that. At the retry
+    /// the next edge has not been advertised at all yet - PlanNextEdge is about
+    /// to stage it, moments later, already carrying this new route.
+    ///
+    /// Publishing anyway put the SAME pair of tiles on the wire twice: once
+    /// here as w.EdgeIndex + 1, and once from PlanNextEdge as w.EdgeIndex. The
+    /// client walked the step, was told to walk it again, and jumped back to
+    /// do so. That is the flicker seen on beta on 2026-09-22.
+    /// </param>
     public static bool Redirect(
         RoomMovement room, MovementState w, Point target, in TraverseContext ctx,
-        long nowMs, bool allowPartial = true)
+        long nowMs, bool allowPartial = true, bool stageCorrection = true)
     {
         if (room.Closed || w.Mode != MovementMode.Moving)
             return false;
@@ -321,7 +338,13 @@ public static class MovementController
         //                          DueTick / queue entry, timing alignment.
 
         // 8. Future indexes (> e) may be restaged; indexes <= e never change.
-        StageCorrection(room, w, e + 1, map);
+        //
+        // Skipped from the deferred retry, where the next edge has not been
+        // staged yet and the staging about to happen already carries this
+        // route - see the stageCorrection parameter. The route swap above
+        // still stands either way; only the extra packet is withheld.
+        if (stageCorrection)
+            StageCorrection(room, w, e + 1, map);
         return true;
     }
 
@@ -425,7 +448,16 @@ public static class MovementController
             {
                 var deferredCtx = MovementWalkerContext.For(room.Room, w.VirtualId);
 
-                if (Redirect(room, w, deferredTarget, deferredCtx, nowMs))
+                // NO EARLY PUBLISH FROM HERE. CommitEdgeSilently has just set
+                // Tile = EdgeTo, so the walker is standing still between edges
+                // and this plans from exactly where it is - the route swap is
+                // correct. What would NOT be correct is the correction packet:
+                // PlanNextEdge runs a few lines below and stages this same
+                // geometry as w.EdgeIndex, so publishing it here as
+                // w.EdgeIndex + 1 puts one pair of tiles on the wire under two
+                // indexes, and the avatar walks the step then jumps back to
+                // walk it again.
+                if (Redirect(room, w, deferredTarget, deferredCtx, nowMs, stageCorrection: false))
                     MovementCounters.RedirectDeferredRecovered();
             }
         }
