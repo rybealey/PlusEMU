@@ -348,6 +348,9 @@ public class RoomUserManager
         // pixelrp Movement V2: enrol this user with the movement scheduler.
         // Bots and pets stay on V1, so this only enrols human users.
         Movement.MovementV2Bridge.OnUserEnter(_room, user);
+        // pixelrp police: an escort survives a room change. After the enrol,
+        // because putting the pair back needs both units known to V2.
+        Chat.Commands.User.Police.PoliceState.OnRoomEntered(_room, user);
         foreach (var bot in _bots.Values.ToList())
         {
             if (bot == null || bot.BotAi == null)
@@ -372,9 +375,11 @@ public class RoomUserManager
             if (session.GetHabbo().TentId > 0)
                 session.GetHabbo().TentId = 0;
             session.GetHabbo().CurrentRoom = null;
-            // pixelrp police: a stun, a cuff and an escort are all things that
-            // happen in a room - none of them follow anyone out of it.
-            Chat.Commands.User.Police.PoliceState.Forget(_room, session.GetHabbo().Id);
+            // pixelrp police: a stun and a cuff happen in a room and do not
+            // follow anyone out of it - but an ESCORT does. OnRoomLeave keeps
+            // the pairing alive across the change and lets the arrival put it
+            // back together; everyone not in one is forgotten as before.
+            Chat.Commands.User.Police.PoliceState.OnRoomLeave(_room, session.GetHabbo().Id);
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
@@ -1211,6 +1216,9 @@ public class RoomUserManager
                     // pixelrp hospital: hold the ambulance on both ends of a
                     // transport, against anything else that takes the slot.
                     Chat.Commands.User.Police.PoliceState.TickAmbulance(user);
+                    // pixelrp police: let go of anybody who could not follow
+                    // their captor through a room change.
+                    Chat.Commands.User.Police.PoliceState.TickTravel(_room, user);
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));

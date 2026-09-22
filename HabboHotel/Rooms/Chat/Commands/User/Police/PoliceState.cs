@@ -714,6 +714,161 @@ public static class PoliceState
             EndEscort(room, captorId, user);
     }
 
+    // ---- travelling --------------------------------------------------------
+
+    /// <summary>
+    /// How long a half-arrived escort is given to become whole again before it
+    /// is abandoned. Generous: a room change is a client round trip, and a
+    /// heavy room can take a while to send. Short enough that a suspect whose
+    /// captor never turns up is not stuck for the session.
+    /// </summary>
+    private const int TravelGraceSeconds = 20;
+
+    /// <summary>Captor id -> when the pair was last split across rooms.</summary>
+    private static readonly ConcurrentDictionary<int, DateTime> Travelling = new();
+
+    /// <summary>Is this player either end of an escort?</summary>
+    private static bool InAnyEscort(int habboId) => IsEscorting(habboId) || IsBeingEscorted(habboId);
+
+    /// <summary>
+    /// A player is leaving a room the tidy way.
+    ///
+    /// AN ESCORT TRAVELS; a stun and a cuff on anybody NOT in one do not. The
+    /// cuffs of an escorted pair travel with them, because a custody escort
+    /// whose cuffs came off in the doorway is not an escort any more.
+    ///
+    /// Nothing is unpaired here by hand. The movement link lives in the room's
+    /// own registry, and MovementRegistry.RemoveState unlinks both sides as the
+    /// leaver's state is dropped - so the pair breaks itself, and what survives
+    /// is the registry entry that says these two are still together.
+    /// </summary>
+    public static void OnRoomLeave(Room? room, int habboId)
+    {
+        if (InAnyEscort(habboId))
+        {
+            var captorId = IsEscorting(habboId) ? habboId : CaptorOf(habboId);
+            if (captorId != 0)
+                Travelling[captorId] = DateTime.UtcNow;
+            return;
+        }
+        Forget(room, habboId);
+    }
+
+    /// <summary>
+    /// A player has arrived in a room. If they are in an escort, put it back
+    /// together: re-pair if both are here, and send for the other one if not.
+    ///
+    /// Driven from ARRIVAL rather than from the leave, because the leave does
+    /// not know where anybody is going - a door, a teleport and a hopper all
+    /// look the same on the way out and only name a destination on the way in.
+    /// </summary>
+    public static void OnRoomEntered(Room room, RoomUser user)
+    {
+        if (room == null || user == null || user.IsBot)
+            return;
+        if (EscortByCaptor.IsEmpty && EscortBySuspect.IsEmpty)
+            return;
+        var id = user.UserId;
+        var captorId = IsEscorting(id) ? id : CaptorOf(id);
+        if (captorId == 0)
+            return;
+        var suspectId = SuspectOf(captorId);
+        if (suspectId == 0)
+            return;
+
+        var manager = room.GetRoomUserManager();
+        var captorUser = manager?.GetRoomUserByHabbo(captorId);
+        var suspectUser = manager?.GetRoomUserByHabbo(suspectId);
+
+        if (captorUser != null && suspectUser != null)
+        {
+            Travelling.TryRemove(captorId, out _);
+            RePair(room, captorUser, suspectUser);
+            return;
+        }
+
+        // Only the captor sends for anybody. A suspect arriving alone waits to
+        // be collected: they cannot walk, so there is nothing for them to do,
+        // and having both ends able to summon the other is how two players
+        // chase each other between rooms forever.
+        if (captorUser == null)
+            return;
+        Travelling[captorId] = DateTime.UtcNow;
+        var suspectHabbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(suspectId)?.GetHabbo();
+        if (suspectHabbo == null)
+            return;
+        suspectHabbo.PendingRestore = new PendingRoomRestore(room.RoomId, captorUser.X, captorUser.Y, captorUser.RotBody);
+        if (!suspectHabbo.InRoom)
+            suspectHabbo.Client?.SendRoomForward(room.Id);
+        else
+            suspectHabbo.PrepareRoom(room.Id, "");
+    }
+
+    /// <summary>
+    /// Put the movement pairing back after a room change, along with the
+    /// things that ride on it. Safe to call when the pair is already linked -
+    /// Pair refuses a unit that already has a shadow, and the rest is
+    /// idempotent.
+    /// </summary>
+    private static void RePair(Room room, RoomUser captor, RoomUser suspect)
+    {
+        lock (EscortSync)
+        {
+            if (SuspectOf(captor.UserId) != suspect.UserId)
+                return;
+            var medical = IsMedicalEscort(captor.UserId);
+            MovementV2Bridge.Pair(room, captor, suspect, behind: medical);
+            suspect.CanWalk = false;
+            suspect.UpdateNeeded = true;
+            if (medical)
+            {
+                // The patient re-entered laying and frozen (AddAvatarToRoom
+                // calls UpdateRpKnockoutState), so the pose has to come back
+                // off for the carry. The ambulance is left to TickAmbulance,
+                // which re-asserts it on the next tick anyway.
+                LiftKnockoutPose(suspect);
+                MovementV2Bridge.SetWalkPace(captor, MovementSettings.EscortIntervalMs);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One tick of the split-pair watchdog. Ends an escort whose two halves
+    /// have been in different rooms for too long.
+    ///
+    /// THIS IS THE SAFETY NET AND IT IS NOT OPTIONAL. A suspect keeps CanWalk
+    /// false for as long as the escort exists, so an escort that can outlive a
+    /// room is an escort that can strand somebody who cannot walk, in a room
+    /// their captor never comes back to - a forward that was refused because
+    /// the room was full, locked, or simply never acted on. EndEscort hands
+    /// walking back wherever they happen to be.
+    /// </summary>
+    public static void TickTravel(Room room, RoomUser user)
+    {
+        if (Travelling.IsEmpty || room == null || user == null || user.IsBot)
+            return;
+        var captorId = user.UserId;
+        if (!Travelling.TryGetValue(captorId, out var since))
+            return;
+        if (!IsEscorting(captorId))
+        {
+            Travelling.TryRemove(captorId, out _);
+            return;
+        }
+        var manager = room.GetRoomUserManager();
+        if (manager?.GetRoomUserByHabbo(SuspectOf(captorId)) != null)
+        {
+            // They made it. Nothing to do here - OnRoomEntered re-paired them.
+            Travelling.TryRemove(captorId, out _);
+            return;
+        }
+        if ((DateTime.UtcNow - since).TotalSeconds < TravelGraceSeconds)
+            return;
+        Travelling.TryRemove(captorId, out _);
+        EndEscort(room, captorId, null);
+        user.GetClient()?.SendWhisper("They could not follow you, so you have let them go.");
+    }
+
     // ---- leaving -----------------------------------------------------------
 
     /// <summary>
@@ -741,6 +896,7 @@ public static class PoliceState
     {
         Stunned.TryRemove(habboId, out _);
         Cuffed.TryRemove(habboId, out _);
+        Travelling.TryRemove(habboId, out _);
         if (IsEscorting(habboId))
             EndEscort(room, habboId, null);
         var captorId = CaptorOf(habboId);
