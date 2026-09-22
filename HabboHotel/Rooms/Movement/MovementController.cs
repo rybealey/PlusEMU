@@ -283,44 +283,6 @@ public static class MovementController
             return false;
         }
 
-        // 2c. DEFER WHEN e + 1 IS TOO CLOSE TO ITS OWN BOUNDARY.
-        //
-        // THE EDGE THIS WOULD RESTAGE IS THE ONE THE CLIENT IS ABOUT TO DRAW.
-        // It starts drawing e + 1 from lookahead the instant that edge's
-        // cycleStart passes, without waiting for a packet - so geometry
-        // corrected a few milliseconds before the boundary lands AFTER the old
-        // geometry is already on screen, and the avatar snaps sideways.
-        // Measured on beta: the closest observed was 2ms, with 51 redirects
-        // inside 50ms.
-        //
-        // THE GUARD IN PublishCorrectedEdgeEarly DOES NOT COVER THIS, and its
-        // counter reading 0 is the proof rather than a contradiction. It asks
-        // whether the edge has started ON THE SERVER; at two milliseconds to go
-        // the honest answer is "not yet", so it publishes. Whether the packet
-        // can beat the CLIENT to the draw is a different question, and this is
-        // where it is asked.
-        //
-        // HELD, NOT DROPPED. The target goes into DeferredRedirectTarget and
-        // the SAME retry that recovers a behind-elapsing deferral picks it up
-        // on the next beat - by which point e has advanced, so it plans against
-        // the following edge with a full interval of lead. That is what
-        // "apply it to the next future edge" means here, and it costs the click
-        // one beat rather than losing it.
-        //
-        // IT CANNOT LOOP. That retry runs from AdvanceWalker AT a boundary, so
-        // the margin it measures is a full interval unless the scheduler is
-        // running more than (IntervalMs - this) late - and a beat that late has
-        // already been through SyncCommitsTo. maxBeatLatenessMs reads 0.
-        //
-        // Asked BEFORE the pathfind, so a deferred redirect costs no A* at all.
-        var boundaryMarginMs = w.EdgeStartTick(e + 1) - nowMs;
-        if (boundaryMarginMs < MovementSettings.RedirectSafetyMarginMs)
-        {
-            w.DeferredRedirectTarget = target;
-            MovementCounters.RedirectDeferredNearBoundary();
-            return false;
-        }
-
         // 3. Origin = terminal of the CURRENT ELAPSING EDGE.
         //    NOT the last promised terminal: that would force the avatar to
         //    walk to the end of advertised lookahead (up to 1500ms) before

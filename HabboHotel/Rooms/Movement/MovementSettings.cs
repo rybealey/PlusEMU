@@ -53,38 +53,6 @@ public static class MovementSettings
     /// </summary>
     public const int EscortIntervalMs = 250;
 
-    /// <summary>
-    /// How close to an edge's boundary a redirect may be decided before it is
-    /// held back to the NEXT edge instead of restaging that one.
-    ///
-    /// THE PROBLEM IT SOLVES. The client begins drawing an edge from lookahead
-    /// the instant its cycleStart passes - it does not wait to be told again.
-    /// A redirect decided a few milliseconds before that boundary sends
-    /// corrected geometry that arrives AFTER the client has already started
-    /// drawing the old one, and the avatar snaps sideways. Measured on beta:
-    /// minRedirectMarginMs=2, with 51 redirects inside 50ms.
-    ///
-    /// WHY A THRESHOLD AND NOT A TEST. "Has the client started drawing this
-    /// yet" is not answerable on the server: it depends on the packet's flight
-    /// time, which the server cannot see. The existing guard in
-    /// PublishCorrectedEdgeEarly asks the question the server CAN answer - has
-    /// the edge started here - and correctly reads 0, because at two
-    /// milliseconds to go the honest answer is "not yet". This constant is the
-    /// flight time we assume instead of measuring.
-    ///
-    /// 50 IS A STARTING VALUE, NOT A MEASUREMENT. It is the smallest bucket
-    /// :movementstats already counts, which makes it the one number the
-    /// existing data can speak to. Tune it from the counters: compare
-    /// redirectDeferredNearBoundary against redirects, expect roughly 3% at
-    /// this value and 8.5% at 100, and raise it only while the snapping is
-    /// still visible in [MV2/FORCED] with alreadyDrawing=true.
-    ///
-    /// THE COST is paid by the redirects that fall inside it: the new
-    /// direction takes effect one beat later, up to one interval. Everything
-    /// above the threshold is untouched.
-    /// </summary>
-    public const int RedirectSafetyMarginMs = 50;
-
     /// <summary>Future edges advertised alongside a real edge. LOCK NOTE: 3.</summary>
     public const int LookaheadMax = 3;
 
