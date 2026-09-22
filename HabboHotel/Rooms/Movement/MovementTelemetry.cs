@@ -116,6 +116,13 @@ public static class MovementCounters
     private static long _redirectDeferredBehindElapsing;
     private static long _redirectDeferredRecovered;
 
+    // Redirects held back because e+1's boundary was too close to restage it
+    // safely. THE TUNING SIGNAL for MovementSettings.RedirectSafetyMarginMs:
+    // read it as a fraction of `redirects`. Both deferral counters feed the
+    // same redirectDeferredRecovered, since both are recovered by the same
+    // retry in AdvanceWalker.
+    private static long _redirectDeferredNearBoundary;
+
     /// <summary>
     /// Milliseconds from this redirect to the start of the edge it restages.
     /// Small values are the exposure: the smaller it is, the more certain that
@@ -171,6 +178,9 @@ public static class MovementCounters
     public static void RedirectDeferredBehindElapsing() =>
         Interlocked.Increment(ref _redirectDeferredBehindElapsing);
 
+    public static void RedirectDeferredNearBoundary() =>
+        Interlocked.Increment(ref _redirectDeferredNearBoundary);
+
     /// <summary>A deferred redirect was retried on a later beat and applied.</summary>
     public static void RedirectDeferredRecovered() =>
         Interlocked.Increment(ref _redirectDeferredRecovered);
@@ -219,6 +229,7 @@ public static class MovementCounters
         $"correctionEPlus1AlreadyStaged={Interlocked.Read(ref _correctionEPlus1AlreadyStaged)} " +
         $"correctionEPlus1Escort={Interlocked.Read(ref _correctionEPlus1Escort)} " +
         $"redirectDeferredBehindElapsing={Interlocked.Read(ref _redirectDeferredBehindElapsing)} " +
+        $"redirectDeferredNearBoundary={Interlocked.Read(ref _redirectDeferredNearBoundary)} " +
         $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
