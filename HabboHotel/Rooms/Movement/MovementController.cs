@@ -1081,13 +1081,55 @@ public static class MovementController
             forcedMarginMs = w.ForcedRedirectMarginMs;
         }
 
+        // LOOKAHEAD, OFF A CURSOR THAT HAS NOT MOVED - and that difference is
+        // the whole reason this is not a copy of StageEdge's loop.
+        //
+        // There, PlanNextEdge has already called Route.Advance before staging,
+        // so Route[Cursor] is the tile AFTER the edge being emitted. Here the
+        // cursor is deliberately left alone (see above), so Route[Cursor] IS
+        // this record's own destination - `to`. Starting at Cursor would
+        // advertise a first future edge running from `to` to `to`, a
+        // zero-length step, and shift the whole chain one tile back. That is
+        // the same shape of fault as publishing one pair of tiles under two
+        // indexes, and it is why the offset is Cursor + 1.
+        //
+        // WHY SEND IT AT ALL. A correction makes the client drop every edge at
+        // or after this index - `edges.filter(e => e.edgeIndex < edgeIndex)` -
+        // so without these it is left holding exactly one edge at the moment it
+        // has just thrown the rest away, and does not get another until the
+        // boundary beat's record arrives one flight time into the next edge.
+        // Every other staged record carries lookahead; this one carried none,
+        // which was an omission rather than a decision.
+        //
+        // The client anchors each preview to the previous one's terminal
+        // (sx: prev.gx), so preview 0 already BEGINS at this edge's new
+        // destination. It only needs telling where that step ends.
+        var lookahead = System.Array.Empty<LookaheadTile>();
+        var lookCount = 0;
+        var available = w.Route.Length - w.Route.Cursor - 1;
+
+        if (available > 0)
+        {
+            var max = System.Math.Min(MovementSettings.LookaheadMax, available);
+            lookahead = new LookaheadTile[max];
+
+            for (var i = 0; i < max; i++)
+            {
+                var tile = w.Route[w.Route.Cursor + 1 + i];
+                lookahead[i] = new LookaheadTile(
+                    tile.X, tile.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(tile.X, tile.Y)));
+            }
+
+            lookCount = max;
+        }
+
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, index, flags,
             w.IntervalMs, w.EdgeStartTick(index),
             from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
             toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
-            System.Array.Empty<LookaheadTile>(), 0, forcedMarginMs, publishOnly: true));
+            lookahead, lookCount, forcedMarginMs, publishOnly: true));
 
         w.LastEarlyPublish = identity;
 
