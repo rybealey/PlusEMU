@@ -99,12 +99,16 @@ public static class MovementController
     /// <summary>
     /// Pick this walk's TimelineOrigin, joining the room's movement phase.
     ///
-    /// With the ceiling at IntervalMs this ALWAYS joins, because the distance to
-    /// the next boundary is 0..499 and therefore never exceeds it. Alignment is
-    /// then guaranteed rather than opportunistic, at a cost of up to 499ms of
-    /// input latency (~250ms average) on any walk begun while someone else is
-    /// already walking. Lowering the ceiling reverts to opportunistic with no
-    /// other change.
+    /// IT ALWAYS JOINS. The distance to the next boundary is 0..IntervalMs-1,
+    /// so there is no longer anything for it to exceed: alignment is guaranteed
+    /// rather than opportunistic. The cost is up to one interval of input
+    /// latency (~250ms on average) on any walk begun while somebody else is
+    /// already walking.
+    ///
+    /// Trading that back for responsiveness is a real change and not a number -
+    /// the ceiling that used to gate it, and the "did not join" case it
+    /// selected, were both deleted once the ceiling equalling IntervalMs made
+    /// them unreachable. MovementSettings says what restoring them takes.
     ///
     /// Snapping BACKWARD is not an option: edge 0 would already be part-elapsed
     /// when emitted, so the client would render the avatar instantly a fraction
