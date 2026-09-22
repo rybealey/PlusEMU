@@ -304,11 +304,29 @@ public static class MovementController
             return false;
         }
 
-        // 3. Origin = terminal of the CURRENT ELAPSING EDGE.
+        // 2c. IS e + 1 ALREADY SPOKEN FOR?
+        //
+        // The client holds e+1's geometry as lookahead a full interval before
+        // it starts, and begins drawing it the instant its cycleStart passes
+        // without waiting for a packet. Inside this window a correction cannot
+        // arrive first, and the client's upsert has no guard for an edge in
+        // progress - it swaps the geometry underneath the frame and the avatar
+        // jumps. See MovementSettings.RedirectSafetyMarginMs.
+        //
+        // NOTHING IS DELAYED. The redirect still lands on this click; it is
+        // planned from the promised edge's destination rather than from the
+        // walker, so e+1 stands as advertised and e+2 onward carry the change.
+        var protectNext = (w.EdgeStartTick(e + 1) - nowMs) < MovementSettings.RedirectSafetyMarginMs
+                          && w.Route.HasNext;
+
+        // 3. Origin = terminal of the CURRENT ELAPSING EDGE, or of the edge
+        //    after it when that one is already spoken for.
         //    NOT the last promised terminal: that would force the avatar to
         //    walk to the end of advertised lookahead (up to 1500ms) before
         //    turning, which is precisely the responsiveness bug this rule fixes.
-        var origin = w.EdgeTo;
+        //    One edge is the most this ever skips.
+        var promised = protectNext ? w.Route.PeekNext() : default;
+        var origin = protectNext ? promised : w.EdgeTo;
 
         // 4. Plan from that origin.
         var result = AStarPathfinder.FindRoute(
@@ -317,6 +335,21 @@ public static class MovementController
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false; // keep walking the existing route
+
+        // The protected edge's destination goes back on the front, so the route
+        // reads [e+1 as promised, then the new way to target]. THAT IS WHAT
+        // KEEPS THIS CHANGE SMALL: every reader downstream - PlanNextEdge,
+        // StageEdge, the lookahead it attaches, and the early correction below
+        // - sees the shape it has always seen, and none of them needs to know
+        // an edge was protected. The early correction republishes e+1's own
+        // unchanged geometry, which costs one packet and buys the client
+        // dropping its now-stale previews of e+2 and beyond a full interval
+        // before it needs them.
+        if (protectNext)
+        {
+            w.Route.PrependPromised(promised);
+            MovementCounters.RedirectProtectedNextEdge();
+        }
 
         // MEASUREMENT ONLY, changing nothing. How near the boundary of the
         // edge it is about to restage this replan lands. The client begins

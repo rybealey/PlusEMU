@@ -69,6 +69,33 @@ public sealed class RouteBuffer
     }
 
     /// <summary>
+    /// Put one ALREADY-PROMISED tile back at the front of the route.
+    ///
+    /// FOR EXACTLY ONE CALLER: a redirect that must not rewrite the edge the
+    /// client is about to start drawing. That redirect plans from the promised
+    /// edge's DESTINATION rather than from where the walker is, so the route it
+    /// gets back begins one tile too far along. This puts the promised tile
+    /// back on the front, and the route then reads exactly as it would have if
+    /// only the tiles after it had changed.
+    ///
+    /// That is the whole point: everything downstream - PlanNextEdge, StageEdge,
+    /// the lookahead and the early correction - keeps working unchanged,
+    /// because the shape it sees is the shape it has always seen.
+    ///
+    /// NOT a general insert. It restores a tile the walker was already
+    /// committed to, which is why it cannot make the route illegal: that step
+    /// was validated when it was first planned and nothing has moved since.
+    /// </summary>
+    public void PrependPromised(Point tile)
+    {
+        EnsureCapacity(Length + 1);
+        for (var i = Length; i > Cursor; i--)
+            _tiles[i] = _tiles[i - 1];
+        _tiles[Cursor] = tile;
+        Length++;
+    }
+
+    /// <summary>
     /// Fill from a reversed (goal-first) walk of parent links, flipping it to
     /// start-first. <paramref name="count"/> excludes the start tile.
     /// </summary>

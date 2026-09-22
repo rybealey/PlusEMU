@@ -53,6 +53,39 @@ public static class MovementSettings
     /// </summary>
     public const int EscortIntervalMs = 250;
 
+    /// <summary>
+    /// How close to an edge's start a redirect may be decided before that edge
+    /// is treated as already spoken for.
+    ///
+    /// THE CLIENT IS A STEP AHEAD OF THE SERVER, and that is the whole reason
+    /// this exists. Every staged edge carries a preview of the next few tiles,
+    /// so the client holds e+1's geometry a full interval before e+1 starts -
+    /// and begins drawing it the moment its cycleStart passes, without waiting
+    /// for a packet. The server considers e+1 safely in the future right up to
+    /// that instant. Both are right; they just mean different things by
+    /// "started".
+    ///
+    /// So a redirect decided a few milliseconds before that boundary sends
+    /// corrected geometry that lands AFTER the client began drawing the old,
+    /// and upsert on the client replaces it outright - there is no check there
+    /// for an edge already in progress. The avatar jumps. Measured on beta:
+    /// minRedirectMarginMs=1, and with three players following each other 109
+    /// of 958 redirects landed inside 50ms.
+    ///
+    /// WHAT HAPPENS INSIDE THE WINDOW is not a delay. The redirect still takes
+    /// effect on this click; it is simply planned from the promised edge's
+    /// destination instead of from the walker, so the already-advertised step
+    /// stands and everything after it changes. The avatar finishes the step it
+    /// had been promised, then turns.
+    ///
+    /// 50 IS A STARTING VALUE. It is the smallest bucket :movementstats already
+    /// counts, so it is the one number the existing data can speak to. Tune it
+    /// from redirectProtectedNextEdge as a share of redirects - roughly 11% at
+    /// this value on the following sample, 21% at 100 - and raise it only while
+    /// [MV2/FORCED] still reports alreadyDrawing=true.
+    /// </summary>
+    public const int RedirectSafetyMarginMs = 50;
+
     /// <summary>Future edges advertised alongside a real edge. LOCK NOTE: 3.</summary>
     public const int LookaheadMax = 3;
 
