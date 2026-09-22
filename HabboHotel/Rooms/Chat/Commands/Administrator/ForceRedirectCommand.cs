@@ -25,12 +25,13 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.Administrator;
 ///
 /// HOW TO USE IT. Get a second player walking in the room, start walking
 /// yourself so you join their phase, and the harness fires on its own from
-/// there. It disarms itself after the run count. Arm :movementreplan first and
-/// every forced redirect lands in the same log with its own A_ACTIVE / B_LATE
-/// verdict beside the margin it was fired at - that pairing is the point.
+/// there. It disarms itself after the run count.
 ///
-/// Records go to the emulator console log, tagged [MV2/force]. Read them with
-/// `docker logs` on the host; this command only arms and disarms.
+/// READ IT IN THE BROWSER. Open the console (F12) and every forced redirect
+/// prints [MV2/FORCED] on its own - no switch to arm, no VPS access - carrying
+/// the margin the server achieved beside the client's own phaseNow, which says
+/// whether that edge was already being drawn when the rewrite landed. The same
+/// runs are also logged emulator-side as [MV2/force] for anyone on the host.
 /// </summary>
 internal class ForceRedirectCommand : IChatCommand
 {

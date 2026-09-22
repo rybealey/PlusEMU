@@ -6,9 +6,8 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// <summary>
 /// pixelrp Movement V2: reproduce the near-boundary redirect hitch on demand.
 ///
-/// THE ONE MOVEMENT COMMAND THAT IS NOT READ-ONLY, and the header of every
-/// other one says so for a reason. :movementstats, :movementphase,
-/// :movementtrace and :movementreplan all observe. This one INJECTS - it issues
+/// THE ONE MOVEMENT COMMAND THAT IS NOT READ-ONLY. :movementstats, the only
+/// other one left, observes. This one INJECTS - it issues
 /// a redirect the player never clicked, at a moment they could not have clicked
 /// it. Armed deliberately, on one named unit, for a bounded number of runs, and
 /// it disarms itself at the end of them.
@@ -45,10 +44,11 @@ namespace Plus.HabboHotel.Rooms.Movement;
 /// lock is taken to read a few numbers and to make the one Redirect call, and
 /// every wait and every log line happens after it has been let go.
 ///
-/// Records go to the emulator console log tagged [MV2/force], like
-/// [MV2/replan]. Arm :movementreplan alongside this and each injected redirect
-/// gets its own A_ACTIVE / B_LATE verdict, which is the pairing the whole
-/// exercise is for.
+/// Records go to the emulator console log tagged [MV2/force], and to the
+/// BROWSER console tagged [MV2/FORCED] - the latter carrying this margin beside
+/// the client's own phaseNow, which says whether that edge was already being
+/// drawn when the rewrite landed. The browser half is the one to read: it needs
+/// no VPS access and it measures the race on the side that renders it.
 /// </summary>
 public static class MovementForceRedirect
 {
@@ -512,8 +512,9 @@ public static class MovementForceRedirect
     /// the route it is on, and off A's.
     ///
     /// THREE THINGS DISQUALIFY A TILE. It is where B was going anyway, in which
-    /// case the replan restages the same geometry and :movementreplan correctly
-    /// reports SAME - a wasted run. It is on A's remaining route, which is not
+    /// case the redirect restages the geometry it already had and the run is
+    /// wasted - the browser log would show joinerTargetBefore and
+    /// joinerTargetAfter identical. It is on A's remaining route, which is not
     /// leaving A at all. Or it is not walkable, which the pathfinder would
     /// reject a moment later anyway.
     ///

@@ -21,9 +21,15 @@ namespace Plus.HabboHotel.Rooms.PathFinding.V2;
 ///
 /// IT IS A DIAGNOSTIC LABEL AND NOTHING MAY STAGE FROM IT. The only source for
 /// a staged record's index is MovementState.EdgeIndex, which StageEdge reads
-/// directly; BaseIndex has exactly one reader in the codebase,
-/// MovementReplanTrace.ReadEdgeGeometry, which needs it to say which index a
-/// route tile belonged to BEFORE the pathfinder overwrote the buffer.
+/// directly.
+///
+/// IT CURRENTLY HAS NO READER AT ALL. Its one reader was
+/// MovementReplanTrace.ReadEdgeGeometry, which needed it to say which index a
+/// route tile belonged to BEFORE the pathfinder overwrote the buffer; that
+/// trace was deleted with :movementreplan. The field is kept because it is
+/// written for free by the pathfinder and is the only record of what the
+/// buffer was planned FOR - but it is dead weight until something reads it
+/// again, and a reader that stages from it is a bug.
 ///
 /// It cannot be derived from EdgeIndex and Cursor, which is why it still
 /// exists: those advance at different moments - EdgeIndex in

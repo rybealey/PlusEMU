@@ -112,14 +112,6 @@ public static class MovementRegistry
         if (!room.States.TryGetValue(virtualId, out var state))
             return;
 
-        // DIAGNOSTIC ONLY, off unless :movementphase is armed. Sampled before
-        // the removal so "did the last live walker just go" is answered by the
-        // data rather than inferred. Changes nothing.
-        var traceOn = MovementPhaseTrace.Enabled;
-        var anchorBefore = room.PhaseAnchor;
-        int movingBefore = 0, pendingBefore = 0;
-        if (traceOn)
-            MovementPhaseTrace.SampleBefore(room, out movingBefore, out pendingBefore);
         // Dequeue BEFORE removal, so nothing can be emitted for a unit that is
         // already gone.
         room.Walkers.Remove(state);
@@ -134,11 +126,6 @@ public static class MovementRegistry
             captor.ShadowBehind = false;
         }
         room.States.Remove(virtualId);
-
-        if (traceOn)
-            MovementPhaseTrace.OnUnitRemoved(
-                room, state, MovementScheduler.Instance.Clock.NowMs,
-                anchorBefore, movingBefore, pendingBefore);
     }
 
     public static string Snapshot() =>
