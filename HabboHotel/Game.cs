@@ -177,6 +177,11 @@ public class Game : IGame
             // once a second, and an empty hotel returns on a dictionary check,
             // so this costs nothing at the 5ms poll rate.
             Jam.JamManager.Cycle();
+            // pixelrp support: the round-robin has no room to tick it either -
+            // a support queue belongs to the hotel, not to wherever the player
+            // happens to be standing. Self-gated to once a second, and a hotel
+            // with an empty queue returns on one indexed count.
+            Support.SupportUtility.Cycle();
             var tTotal = sw.ElapsedMilliseconds;
             if (tTotal > 250)
                 Log.Warn($"[stall] Game cycle iteration took {tTotal}ms (roomManager={tRooms}ms, clientManager={tTotal - tRooms}ms)");
