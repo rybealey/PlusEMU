@@ -83,13 +83,25 @@ public class SsoTicketEvent : IPacketEvent
         if (error == null)
         {
             // pixelrp beta: the beta hotel (compose.beta.yaml) sets
-            // STAFF_ONLY_LOGIN=1 so only staff (rank >= 5) can enter; a
-            // disconnect here gives the same clear "Handshake Failed" the
-            // auth-failure path below produces. Unset in prod.
-            if (Environment.GetEnvironmentVariable("STAFF_ONLY_LOGIN") == "1" && session.GetHabbo().Rank < 5)
+            // STAFF_ONLY_LOGIN=1 so only staff can enter; a disconnect here
+            // gives the same clear failure the auth path below produces.
+            // Unset in prod.
+            //
+            // The rank that decides this is the ACCOUNT's, not this
+            // character's. A character is created at rank 1
+            // (AccountUtility.Create), so testing session.GetHabbo().Rank
+            // locked a staff member out of beta the moment they made a second
+            // character and switched to it - and locked them out for good,
+            // because the Wallet is the only way to switch back and the Wallet
+            // is behind this login. Clearing the pointer on refusal is the
+            // second half of that: nobody is ever stranded on a character that
+            // cannot get in.
+            if (Environment.GetEnvironmentVariable("STAFF_ONLY_LOGIN") == "1" &&
+                HabboHotel.Users.Accounts.AccountUtility.AccountRank(session.GetHabbo().Id) < 5)
             {
-                _logger.LogWarning("Staff-only hotel: rejecting login for {user} (rank {rank}).",
+                _logger.LogWarning("Staff-only hotel: rejecting login for {user} (character rank {rank}).",
                     session.GetHabbo().Username, session.GetHabbo().Rank);
+                HabboHotel.Users.Accounts.AccountUtility.ClearActive(session.GetHabbo().Id);
                 session.Disconnect();
                 return;
             }

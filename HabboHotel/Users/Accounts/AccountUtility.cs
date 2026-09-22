@@ -86,6 +86,47 @@ public static class AccountUtility
     }
 
     /// <summary>
+    /// The highest rank held by ANY character on this account.
+    ///
+    /// Rank is a property of the person, not of the doll they are wearing. A
+    /// new character is created at rank 1 (see Create), so asking a character
+    /// its own rank tells you nothing about who is holding it - and anything
+    /// that gates entry on it will shut a staff member out of their own
+    /// account the moment they make a second character.
+    /// </summary>
+    public static int AccountRank(int userId)
+    {
+        if (userId <= 0)
+            return 0;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        var root = RootOf(dbClient, userId);
+        dbClient.SetQuery("SELECT MAX(`rank`) FROM `users` WHERE `id` = @root OR `parent_id` = @root");
+        dbClient.AddParameter("root", root);
+        return dbClient.GetInteger();
+    }
+
+    /// <summary>
+    /// Send the account back to its root character on the next /game load.
+    ///
+    /// The Wallet is the only thing that points an account at a character, and
+    /// the Wallet is inside the hotel. So any rejection that happens AFTER the
+    /// pointer is written and BEFORE the player is in strands the account
+    /// permanently: every load mints a ticket for the character that cannot
+    /// get in, and the only screen that could change it is behind that login.
+    /// Clearing the pointer on a refused login is the way out.
+    /// </summary>
+    public static void ClearActive(int userId)
+    {
+        if (userId <= 0)
+            return;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        var root = RootOf(dbClient, userId);
+        dbClient.SetQuery("UPDATE `users` SET `active_character_id` = NULL WHERE `id` = @root LIMIT 1");
+        dbClient.AddParameter("root", root);
+        dbClient.RunQuery();
+    }
+
+    /// <summary>
     /// Point the account at a character, so the next /game load enters as
     /// them. Written on the ROOT row, which is the one the CMS authenticates.
     /// </summary>
