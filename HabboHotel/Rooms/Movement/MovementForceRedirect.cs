@@ -150,7 +150,14 @@ public static class MovementForceRedirect
             _late = 0;
             _refused = 0;
             _missed = 0;
-            _lastAttemptTick = long.MinValue;
+            // NOT long.MinValue, which is the obvious way to say "never" and is
+            // wrong. The gap check is a SUBTRACTION - now - _lastAttemptTick -
+            // and subtracting long.MinValue overflows in an unchecked context,
+            // wrapping to a large NEGATIVE number. That reads as less than
+            // MinGapMs, so the check returns at every cycle and the harness can
+            // never fire at all. One interval back from now says the same thing
+            // and says it in numbers the subtraction can hold.
+            _lastAttemptTick = MovementScheduler.Instance.Clock.NowMs - MinGapMs;
             _enabled = true;
 
             EnsureThread();
