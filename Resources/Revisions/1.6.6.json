@@ -389,7 +389,12 @@
     "RpPhoneVisibleEvent": 4139,
     "RpGetSitchTrendingEvent": 4140,
     "RpSitchSuppressTagEvent": 4141,
-    "RpCatalogRenameFurniEvent": 4142
+    "RpCatalogRenameFurniEvent": 4142,
+    "RpSupportOpenEvent": 4046,
+    "RpSupportStartEvent": 4047,
+    "RpSupportSendEvent": 4048,
+    "RpSupportStaffEvent": 4049,
+    "RpSupportAvailabilityEvent": 4050
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -720,6 +725,8 @@
     "RpSitchProfileComposer": 4128,
     "RpSitchActivityComposer": 4129,
     "RpSitchSearchComposer": 4138,
-    "RpSitchTrendingComposer": 4139
+    "RpSitchTrendingComposer": 4139,
+    "RpSupportComposer": 4144,
+    "RpSupportQueueComposer": 4145
   }
 }
