@@ -223,33 +223,58 @@ public static class SupportUtility
 
     // ---- the rotation -------------------------------------------------------
 
-    private static long _nextTick;
+    private static Thread? _worker;
+    private static readonly object _workerSync = new();
+    private static readonly ManualResetEventSlim _wake = new(false);
 
     /// <summary>Something happened that could give the rotation work; look now.</summary>
-    private static void Wake() => _nextTick = 0;
+    private static void Wake() => _wake.Set();
 
     /// <summary>
-    /// One beat of the queue, from the game loop. Self-gating: the loop runs
-    /// every few milliseconds and this does its work once a second at most.
+    /// Start the rotation's own thread. Called once at startup.
     ///
-    /// The whole body is a no-op on a hotel with nothing waiting, which is the
-    /// normal state - one SELECT COUNT against an indexed column, and only
-    /// every few seconds at that.
+    /// IT IS NOT ON THE GAME LOOP, and that is the entire point of this
+    /// method. The loop runs every 5ms on ONE thread that ticks every room and
+    /// every client, and its own comment says it: either call blocking there
+    /// delays every room tick. This work is a handful of database round trips
+    /// a second, which is precisely the thing that must not sit on it - a slow
+    /// query would stall the whole hotel, not just the queue.
+    ///
+    /// JamManager can live on the loop because it only touches memory. This
+    /// cannot, and putting it there was a mistake.
     /// </summary>
-    public static void Cycle()
+    public static void Start()
     {
-        var now = Environment.TickCount64;
-        if (now < _nextTick)
-            return;
-        _nextTick = now + 1000;
-        try
+        lock (_workerSync)
         {
-            ExpireOffers();
-            OfferWaiting();
+            if (_worker != null)
+                return;
+            _worker = new Thread(Loop)
+            {
+                IsBackground = true,
+                Name = "SupportRotation"
+            };
+            _worker.Start();
         }
-        catch (Exception e)
+    }
+
+    private static void Loop()
+    {
+        while (true)
         {
-            ExceptionLogger.LogException(e);
+            // A second between passes, cut short when something has just been
+            // queued so a player is not left waiting on the clock.
+            _wake.Wait(1000);
+            _wake.Reset();
+            try
+            {
+                ExpireOffers();
+                OfferWaiting();
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+            }
         }
     }
 

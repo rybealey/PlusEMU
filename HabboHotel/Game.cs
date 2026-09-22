@@ -157,6 +157,11 @@ public class Game : IGame
             Priority = ThreadPriority.AboveNormal
         };
         _gameCycle.Start();
+        // pixelrp support: its own thread, deliberately NOT this one. The
+        // rotation is database work, and the comment above is the history of
+        // what database work does to a 2-core VPS when it shares a thread with
+        // the room beat.
+        Support.SupportUtility.Start();
     }
 
     private void GameCycle()
@@ -177,11 +182,6 @@ public class Game : IGame
             // once a second, and an empty hotel returns on a dictionary check,
             // so this costs nothing at the 5ms poll rate.
             Jam.JamManager.Cycle();
-            // pixelrp support: the round-robin has no room to tick it either -
-            // a support queue belongs to the hotel, not to wherever the player
-            // happens to be standing. Self-gated to once a second, and a hotel
-            // with an empty queue returns on one indexed count.
-            Support.SupportUtility.Cycle();
             var tTotal = sw.ElapsedMilliseconds;
             if (tTotal > 250)
                 Log.Warn($"[stall] Game cycle iteration took {tTotal}ms (roomManager={tRooms}ms, clientManager={tTotal - tRooms}ms)");
