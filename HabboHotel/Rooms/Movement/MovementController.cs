@@ -1047,13 +1047,26 @@ public static class MovementController
         if (w.Route.Length - w.Route.Cursor <= 1)
             flags |= RpMovementV2Flags.FinalEdge;
 
+        // TEMPORARY DIAGNOSTIC - see RpMovementV2Flags.ForcedRedirect. THIS
+        // record is the one worth marking, of the two this redirect produces:
+        // it is the packet that races the client's lookahead, and the boundary
+        // beat's own record arrives afterwards, describing a rewrite the client
+        // has already been told about. Marking both would double-count a single
+        // forced redirect in the browser log.
+        var forcedMarginMs = 0;
+        if (w.ForcedRedirectMarginMs != MovementState.NotForced)
+        {
+            flags |= RpMovementV2Flags.ForcedRedirect;
+            forcedMarginMs = w.ForcedRedirectMarginMs;
+        }
+
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, index, flags,
             w.IntervalMs, w.EdgeStartTick(index),
             from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
             toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
-            System.Array.Empty<LookaheadTile>(), 0, 0, publishOnly: true));
+            System.Array.Empty<LookaheadTile>(), 0, forcedMarginMs, publishOnly: true));
 
         w.LastEarlyPublish = identity;
 

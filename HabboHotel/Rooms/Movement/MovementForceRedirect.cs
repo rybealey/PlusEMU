@@ -409,7 +409,21 @@ public static class MovementForceRedirect
         var revBefore = w.RouteRevision;
 
         // THE NORMAL PATH. Same call, same context, same lock as a click.
-        accepted = MovementController.Redirect(room, w, target, ctx, now);
+        //
+        // The achieved margin is latched onto the walker for the duration of
+        // this ONE call, so the corrected-edge packet it stages carries the
+        // number to the browser and nothing else does. Cleared in a finally
+        // because a Redirect that throws must not leave the next click looking
+        // like a forced one.
+        w.ForcedRedirectMarginMs = (int)actualMargin;
+        try
+        {
+            accepted = MovementController.Redirect(room, w, target, ctx, now);
+        }
+        finally
+        {
+            w.ForcedRedirectMarginMs = MovementState.NotForced;
+        }
 
         string verdict;
         if (!accepted)

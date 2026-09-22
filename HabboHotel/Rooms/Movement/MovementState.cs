@@ -274,6 +274,32 @@ public sealed class MovementState : IDueHeapNode
     public bool JoinStackedAtRequest;
 
     /// <summary>
+    /// TEMPORARY DIAGNOSTIC. Set by :forceredirect for the duration of ONE
+    /// Redirect call, carrying the margin that call achieved in milliseconds
+    /// before the boundary. <see cref="NotForced"/> at every other moment.
+    ///
+    /// Scoped to the call rather than to the walk on purpose. The harness sets
+    /// it, calls Redirect, and clears it in a finally - so exactly the records
+    /// that redirect stages carry the mark, and a later click by the same
+    /// player is never mistaken for a forced one.
+    ///
+    /// Remove with the whole :forceredirect harness.
+    /// </summary>
+    public int ForcedRedirectMarginMs = NotForced;
+
+    /// <summary>
+    /// Sentinel for <see cref="ForcedRedirectMarginMs"/>: not a forced
+    /// redirect.
+    ///
+    /// int.MinValue rather than -1 because the margin can legitimately be
+    /// NEGATIVE - the harness aims at a few milliseconds before a boundary and
+    /// can overshoot it - and a real margin of -1ms must not read as "no forced
+    /// redirect here". Only ever compared for equality, never subtracted from,
+    /// so the usual hazard with this constant does not apply.
+    /// </summary>
+    public const int NotForced = int.MinValue;
+
+    /// <summary>
     /// True while this walker holds a scheduler queue entry (I-1).
     ///
     /// DERIVED, never assigned. IndexedDueHeap owns HeapIndex and is the only
