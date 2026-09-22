@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using NLog;
 
 namespace Plus.HabboHotel.Rooms.Movement;
@@ -468,6 +468,13 @@ public static class MovementForceRedirect
     /// their captor goes and nowhere else - MovementV2Bridge.RequestMove closes
     /// that door for clicks and this closes the same one for the harness.
     ///
+    /// The holder comes from MovementController.PhaseHolder, the same scan the
+    /// engine itself uses to decide whether a walk joins. This had its own copy
+    /// of that loop until PhaseHolder was widened to internal; one scan with one
+    /// answer is worth more than a diagnostic that keeps its hands off the
+    /// engine's surface, because a copy that drifts reports a different holder
+    /// than the one the walk actually aligned to.
+    ///
     /// Caller MUST hold MovementLock.
     /// </summary>
     private static bool IsCandidate(RoomMovement room, MovementState w, out MovementState? holder)
@@ -483,28 +490,8 @@ public static class MovementForceRedirect
         if (w.LastPhaseDecision != PhaseDecision.Aligned)
             return false;
 
-        holder = FindHolder(room, w);
+        holder = MovementController.PhaseHolder(room, w);
         return true;
-    }
-
-    /// <summary>
-    /// The other real user this one is walking alongside - A, to the harness's
-    /// B. Scanned rather than stored, for the same reason MovementController
-    /// scans for the phase holder: a counter with a missed decrement is a fault
-    /// that only shows up intermittently.
-    ///
-    /// Caller MUST hold MovementLock.
-    /// </summary>
-    private static MovementState? FindHolder(RoomMovement room, MovementState self)
-    {
-        foreach (var other in room.States.Values)
-        {
-            if (ReferenceEquals(other, self) || !other.IsRealUser)
-                continue;
-            if (other.Mode == MovementMode.Moving || other.Mode == MovementMode.Pending)
-                return other;
-        }
-        return null;
     }
 
     /// <summary>
@@ -539,7 +526,7 @@ public static class MovementForceRedirect
 
         for (var facing = 0; facing < 8; facing++)
         {
-            var d = Delta((byte)facing);
+            var d = MovementController.FacingDelta((byte)facing);
             var candidate = new Point(origin.X + d.X, origin.Y + d.Y);
 
             if (candidate == origin || candidate == wouldBe)
@@ -567,7 +554,7 @@ public static class MovementForceRedirect
         if (best < 0)
             return false;
 
-        var chosen = Delta((byte)best);
+        var chosen = MovementController.FacingDelta((byte)best);
         firstStep = new Point(origin.X + chosen.X, origin.Y + chosen.Y);
 
         // Push the destination along the same direction for as long as it stays
@@ -611,22 +598,4 @@ public static class MovementForceRedirect
         return false;
     }
 
-    /// <summary>
-    /// The eight facings as tile deltas. A local copy of MovementController's
-    /// table rather than a widening of its visibility: a diagnostic should not
-    /// change the surface of the thing it is diagnosing, and eight lines is a
-    /// cheaper price than an internal that outlives the investigation.
-    /// </summary>
-    private static Point Delta(byte facing) => facing switch
-    {
-        0 => new Point(0, -1),
-        1 => new Point(1, -1),
-        2 => new Point(1, 0),
-        3 => new Point(1, 1),
-        4 => new Point(0, 1),
-        5 => new Point(-1, 1),
-        6 => new Point(-1, 0),
-        7 => new Point(-1, -1),
-        _ => new Point(0, 0),
-    };
 }

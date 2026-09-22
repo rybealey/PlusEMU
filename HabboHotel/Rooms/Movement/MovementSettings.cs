@@ -65,24 +65,30 @@ public static class MovementSettings
     /// <summary>A due time within this window of now is treated as due.</summary>
     public const int TickSlackMs = 2;
 
-    /// <summary>
-    /// Ceiling on how long a Standing-&gt;Moving click may be held back to join the
-    /// room's movement phase.
-    ///
-    /// AT <see cref="IntervalMs"/> ALIGNMENT IS GUARANTEED: the distance to the
-    /// next boundary is always 0..499, so it can never exceed the ceiling and a
-    /// real user's walk always joins. That is what makes "every concurrently
-    /// moving real user shares one cycleStart % 500" a property of the design
-    /// rather than a coincidence of timing.
-    ///
-    /// THE COST IS INPUT LATENCY: up to 499ms before the avatar moves, ~250ms on
-    /// average, on every walk started while somebody else is already walking.
-    /// Lowering this makes alignment opportunistic again - walks whose boundary
-    /// is further away start immediately and simply do not join, which trades
-    /// perfect alignment for responsiveness. Nothing else needs to change to
-    /// make that trade; PhaseDecision.Skipped already covers it.
-    /// </summary>
-    public const int MaxStartDelayMs = IntervalMs;
+    /* ALIGNMENT IS UNCONDITIONAL, and there is no ceiling constant any more.
+     *
+     * A Standing->Moving click by a real user ALWAYS waits for the room's next
+     * phase boundary. The distance to it is 0..IntervalMs-1, so it was always
+     * within the old MaxStartDelayMs ceiling (which equalled IntervalMs) and
+     * the "too far, start unaligned" branch could never be taken. The ceiling,
+     * that branch and PhaseDecision.Skipped were all deleted on 2026-09-22 -
+     * they were dead at this value, not merely unused.
+     *
+     * That guarantee is what makes "every concurrently moving real user shares
+     * one cycleStart % IntervalMs" a property of the design rather than a
+     * coincidence of timing.
+     *
+     * THE COST IS INPUT LATENCY: up to one interval before the avatar moves,
+     * half of one on average, on every walk started while somebody else is
+     * already walking.
+     *
+     * TO TRADE THAT BACK FOR RESPONSIVENESS, alignment has to become
+     * opportunistic again: restore the ceiling, restore the comparison in
+     * ResolveStartOrigin, and give the walker a phase decision for "did not
+     * join". It is a real change, not a number - which is the honest position,
+     * because the number alone has done nothing for as long as it equalled
+     * IntervalMs.
+     */
 
     /// <summary>
     /// Ceiling on rooms processed in one scheduler pass, so the loop always

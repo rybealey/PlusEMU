@@ -238,8 +238,7 @@ public static class MovementRegistry
             // next real walker establishes a fresh one.
             lines.Add($"[MV2/phase {roomId}] anchor={room.PhaseAnchor} " +
                       $"phase={((room.PhaseAnchor % interval) + interval) % interval} " +
-                      $"holders={holders} inPhase={(holders > 1 ? inPhase.ToString() : "n/a")} " +
-                      $"maxStartDelay={MovementSettings.MaxStartDelayMs}ms");
+                      $"holders={holders} inPhase={(holders > 1 ? inPhase.ToString() : "n/a")}");
 
             lines.Add($"[MV2/room {roomId}] units={room.States.Count} queued={room.Walkers.Count} " +
                       $"staged={room.Staged.Count} hasStaged={room.HasStagedWork} hasImmediate={room.HasImmediateWork} " +

@@ -18,8 +18,8 @@ public enum MovementMode : byte
     Displaced = 3,
 
     /// <summary>
-    /// Enrolled and routed, waiting for a phase boundary that is at most
-    /// MaxStartDelayMs away. NOTHING has been emitted: no "mv", no 4110, no
+    /// Enrolled and routed, waiting for a phase boundary less than one interval
+    /// away. NOTHING has been emitted: no "mv", no 4110, no
     /// staged edge. The walker holds exactly one scheduler entry, due at
     /// TimelineOrigin, and becomes Moving on that beat.
     ///
@@ -39,11 +39,13 @@ public enum PhaseDecision : byte
     /// <summary>No live phase; this walk established one.</summary>
     Established = 1,
 
-    /// <summary>Joined an existing phase, waiting up to MaxStartDelayMs.</summary>
-    Aligned = 2,
-
-    /// <summary>Boundary was too far off; started immediately, unaligned.</summary>
-    Skipped = 3
+    /// <summary>
+    /// Joined an existing phase, waiting up to one interval for its boundary.
+    /// The only outcome for a real user who finds a phase holder: alignment is
+    /// unconditional, so there is no "did not join" member here. There was one,
+    /// Skipped = 3, and it was unreachable - see MovementSettings.
+    /// </summary>
+    Aligned = 2
 }
 
 /// <summary>

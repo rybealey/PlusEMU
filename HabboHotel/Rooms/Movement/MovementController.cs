@@ -97,8 +97,7 @@ public static class MovementController
     }
 
     /// <summary>
-    /// Pick this walk's TimelineOrigin, joining the room's movement phase when
-    /// that costs at most <see cref="MovementSettings.MaxStartDelayMs"/>.
+    /// Pick this walk's TimelineOrigin, joining the room's movement phase.
     ///
     /// With the ceiling at IntervalMs this ALWAYS joins, because the distance to
     /// the next boundary is 0..499 and therefore never exceeds it. Alignment is
@@ -150,22 +149,14 @@ public static class MovementController
         var interval = MovementSettings.IntervalMs;
         var delta = ((room.PhaseAnchor - nowMs) % interval + interval) % interval;
 
-        if (delta == 0)
-        {
-            // Already exactly on the boundary: aligned at zero cost.
-            w.LastPhaseDecision = PhaseDecision.Aligned;
-            return nowMs;
-        }
-
-        if (delta <= MovementSettings.MaxStartDelayMs)
-        {
-            w.LastPhaseDecision = PhaseDecision.Aligned;
-            w.LastStartDelayMs = (int)delta;
-            return nowMs + delta;
-        }
-
-        w.LastPhaseDecision = PhaseDecision.Skipped;
-        return nowMs;
+        // ALWAYS JOINS. delta is 0..IntervalMs-1 by construction, so there is no
+        // "too far to bother" case to test for - see MovementSettings, where the
+        // ceiling that used to gate this lived. delta == 0 needs no branch of
+        // its own either: it is already on the boundary, and this returns nowMs
+        // with a zero delay, which is exactly that.
+        w.LastPhaseDecision = PhaseDecision.Aligned;
+        w.LastStartDelayMs = (int)delta;
+        return nowMs + delta;
     }
 
     /// <summary>
@@ -179,7 +170,7 @@ public static class MovementController
     ///
     /// Caller MUST hold MovementLock.
     /// </summary>
-    private static MovementState? PhaseHolder(RoomMovement room, MovementState self)
+    internal static MovementState? PhaseHolder(RoomMovement room, MovementState self)
     {
         foreach (var other in room.States.Values)
         {
@@ -666,7 +657,7 @@ public static class MovementController
     // allowed to do (MovementSchedulerGuard, invariant I-5).
 
     /// <summary>The (dx, dy) of one step in a facing - the inverse of Rotation.Calculate.</summary>
-    private static Point FacingDelta(byte facing) => facing switch
+    internal static Point FacingDelta(byte facing) => facing switch
     {
         0 => new Point(0, -1),
         1 => new Point(1, -1),
