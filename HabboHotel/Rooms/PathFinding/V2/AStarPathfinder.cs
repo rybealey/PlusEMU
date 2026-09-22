@@ -86,7 +86,6 @@ public static class AStarPathfinder
         Point start,
         Point goal,
         in TraverseContext ctx,
-        int baseIndex,
         bool allowPartial,
         int maxExpansions = 0)
     {
@@ -211,12 +210,12 @@ public static class AStarPathfinder
                 return PathResult.None;
             }
             MovementCounters.PathfindPartial();
-            return Reconstruct(scratch, route, startCell, bestCell, baseIndex, true)
+            return Reconstruct(scratch, route, startCell, bestCell, true)
                 ? PathResult.Partial
                 : PathResult.None;
         }
 
-        return Reconstruct(scratch, route, startCell, goalCell, baseIndex, false)
+        return Reconstruct(scratch, route, startCell, goalCell, false)
             ? PathResult.Complete
             : PathResult.None;
     }
@@ -235,7 +234,7 @@ public static class AStarPathfinder
     /// The start tile is excluded: route[0] is the first tile stepped ONTO.
     /// </summary>
     private static bool Reconstruct(
-        PathScratch scratch, RouteBuffer route, int startCell, int endCell, int baseIndex, bool partial)
+        PathScratch scratch, RouteBuffer route, int startCell, int endCell, bool partial)
     {
         var count = 0;
         for (var cell = endCell; cell != startCell && cell >= 0; cell = scratch.Parent(cell))
@@ -254,7 +253,7 @@ public static class AStarPathfinder
         for (var cell = endCell; cell != startCell && cell >= 0; cell = scratch.Parent(cell))
             reversed[index++] = new Point(scratch.XOf(cell), scratch.YOf(cell));
 
-        route.SetFromReversed(reversed, count, baseIndex, partial);
+        route.SetFromReversed(reversed, count, partial);
         return true;
     }
 }

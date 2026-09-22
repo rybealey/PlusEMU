@@ -36,7 +36,7 @@ public static class MovementController
 
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, w.Tile, target, ctx,
-            baseIndex: 0, allowPartial: allowPartial);
+            allowPartial: allowPartial);
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false;
@@ -208,7 +208,7 @@ public static class MovementController
 
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, w.Tile, target, ctx,
-            baseIndex: 0, allowPartial: true);
+            allowPartial: true);
 
         if (result == PathResult.None || !w.Route.HasNext)
         {
@@ -301,7 +301,7 @@ public static class MovementController
         // 4. Plan from that origin.
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, origin, target, ctx,
-            baseIndex: e + 1, allowPartial: allowPartial);
+            allowPartial: allowPartial);
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false; // keep walking the existing route
@@ -508,11 +508,9 @@ public static class MovementController
                 // client cannot have begun rendering an edge whose cycleStart
                 // is still in the future.
                 MovementCounters.Replan();
-                // DIAGNOSTIC ONLY: the tile this index promised before the
-                // re-plan, kept because `next` is about to be reassigned.
                 var replanned = AStarPathfinder.FindRoute(
                     map, room.Scratch, w.Route, w.Tile, w.Target, ctx,
-                    baseIndex: w.EdgeIndex, allowPartial: true);
+                    allowPartial: true);
                 if (replanned == PathResult.None || !w.Route.HasNext)
                 {
                     MovementCounters.StopBlocked();

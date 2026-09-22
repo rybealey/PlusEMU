@@ -49,11 +49,15 @@ public enum PhaseDecision : byte
 /// <summary>
 /// The identity of one edge record: (WalkSessionId, RouteRevision, EdgeIndex).
 ///
-/// MovementState's own remarks call this a proven total order, and it is the
-/// key every consumer already matches on - the outbound trace, the replan log
-/// and the early-publish dedupe all compare exactly these three. Naming it
-/// means the triple is carried and compared as ONE value rather than three
-/// fields that have to be written and read in step.
+/// MovementState's own remarks call this a proven total order. Naming it means
+/// the triple is carried and compared as ONE value rather than three fields
+/// that have to be written and read in step.
+///
+/// IT HAS ONE CONSUMER LEFT: the early-publish dedupe (LastEarlyPublish). It
+/// had three - the outbound trace and the replan log matched on the same triple
+/// - and both went with :movementtrace and :movementreplan. Kept as a type
+/// rather than inlined back into three fields because the dedupe compares the
+/// whole identity at once, which is the property that made it worth naming.
 /// </summary>
 public readonly record struct EdgeIdentity(long WalkSessionId, int RouteRevision, int EdgeIndex);
 
@@ -67,8 +71,8 @@ public readonly record struct EdgeIdentity(long WalkSessionId, int RouteRevision
 /// DELIBERATELY ABSENT - do not add these back:
 ///   MovementSeq       identity is (WalkSessionId, RouteRevision, EdgeIndex),
 ///                     proven a total order; a second counter can only disagree
-///   PromiseBuffer     superseded by EmittedThroughEdge + RouteBuffer.BaseIndex
-///                     + the COMMIT-BEFORE-REPLACE rule (LOCK NOTE 2.2)
+///   PromiseBuffer     superseded by EmittedThroughEdge + the
+///                     COMMIT-BEFORE-REPLACE rule (LOCK NOTE 2.2)
 ///   Formation*        no pairwise formation system exists in V2
 ///   TimingGroupId /
 ///   GroupAffinity     replaced by the phase-snap (LOCK NOTE 2.6)
@@ -220,9 +224,10 @@ public sealed class MovementState : IDueHeapNode
     /// A redirect target held back because the walker had not yet caught up to
     /// the elapsing edge index.
     ///
-    /// Planning while EdgeIndex &lt; e labels the route BaseIndex = e + 1 while
-    /// planning it from EdgeTo - the terminal of an EARLIER edge - so every
-    /// index in it is wrong by (e - EdgeIndex) and the chain acquires a hole.
+    /// Planning while EdgeIndex &lt; e would plan from EdgeTo - the terminal of
+    /// an EARLIER edge - while the indexes it is staged under run from e + 1, so
+    /// every index in it is wrong by (e - EdgeIndex) and the chain acquires a
+    /// hole.
     /// The click is kept here and retried on a later beat instead of being
     /// dropped, because the commit path is the only thing that brings EdgeIndex
     /// forward.

@@ -17,31 +17,19 @@ namespace Plus.HabboHotel.Rooms.PathFinding.V2;
 /// four independent chances to get an off-by-one wrong. Start-first removes the
 /// whole class.
 ///
-/// BaseIndex is the walk's EdgeIndex that Tiles[0] was PLANNED for.
+/// THERE IS NO ROUTE-SIDE EDGE LABEL, and deliberately so. A BaseIndex field
+/// lived here until 2026-09-22, carrying the EdgeIndex that Tiles[0] was
+/// planned for. It was removed with its last reader
+/// (MovementReplanTrace.ReadEdgeGeometry) rather than left dead.
 ///
-/// IT IS A DIAGNOSTIC LABEL AND NOTHING MAY STAGE FROM IT. The only source for
-/// a staged record's index is MovementState.EdgeIndex, which StageEdge reads
+/// IF IT IS EVER WANTED BACK, the reason it was dangerous is worth keeping:
+/// it could disagree with MovementState.EdgeIndex, and did. A redirect labels
+/// the route e + 1 while planning it from the terminal of edge EdgeIndex, and
+/// those are the same edge only when EdgeIndex == e. Code that published under
+/// that label instead of under EdgeIndex put one pair of tiles on the wire as
+/// two indexes and tore a one-tile hole in the chain. The only source for a
+/// staged record's index is MovementState.EdgeIndex, which StageEdge reads
 /// directly.
-///
-/// IT CURRENTLY HAS NO READER AT ALL. Its one reader was
-/// MovementReplanTrace.ReadEdgeGeometry, which needed it to say which index a
-/// route tile belonged to BEFORE the pathfinder overwrote the buffer; that
-/// trace was deleted with :movementreplan. The field is kept because it is
-/// written for free by the pathfinder and is the only record of what the
-/// buffer was planned FOR - but it is dead weight until something reads it
-/// again, and a reader that stages from it is a bug.
-///
-/// It cannot be derived from EdgeIndex and Cursor, which is why it still
-/// exists: those advance at different moments - EdgeIndex in
-/// CommitEdgeSilently, Cursor in PlanNextEdge - and SyncCommitsTo advances
-/// EdgeIndex alone, so their offset is not fixed.
-///
-/// It CAN disagree with EdgeIndex, and has: a redirect labels the route e + 1
-/// while planning it from the terminal of edge EdgeIndex, and those are the
-/// same edge only when EdgeIndex == e. Code that published under this label
-/// instead of under EdgeIndex put one pair of tiles on the wire as two
-/// indexes and tore a one-tile hole in the chain. Read it to describe the
-/// past; never to address the future.
 /// </summary>
 public sealed class RouteBuffer
 {
@@ -51,9 +39,6 @@ public sealed class RouteBuffer
 
     /// <summary>Cursor into <see cref="Tiles"/>: the next tile to be emitted.</summary>
     public int Cursor { get; private set; }
-
-    /// <summary>The EdgeIndex that Tiles[0] represents.</summary>
-    public int BaseIndex { get; private set; }
 
     /// <summary>True when the search stopped short of the requested target.</summary>
     public bool IsPartial { get; private set; }
@@ -70,7 +55,6 @@ public sealed class RouteBuffer
     {
         Length = 0;
         Cursor = 0;
-        BaseIndex = 0;
         IsPartial = false;
     }
 
@@ -88,14 +72,13 @@ public sealed class RouteBuffer
     /// Fill from a reversed (goal-first) walk of parent links, flipping it to
     /// start-first. <paramref name="count"/> excludes the start tile.
     /// </summary>
-    public void SetFromReversed(Span<Point> reversedExcludingStart, int count, int baseIndex, bool partial)
+    public void SetFromReversed(Span<Point> reversedExcludingStart, int count, bool partial)
     {
         EnsureCapacity(count);
         for (var i = 0; i < count; i++)
             _tiles[i] = reversedExcludingStart[count - 1 - i];
         Length = count;
         Cursor = 0;
-        BaseIndex = baseIndex;
         IsPartial = partial;
     }
 }
