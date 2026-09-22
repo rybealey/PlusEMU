@@ -1,5 +1,8 @@
 using Dapper;
+using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Core;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.News;
 using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Support;
@@ -76,6 +79,10 @@ public static class SupportUtility
         public int Offers { get; set; }
         public int CreatedAt { get; set; }
         public int UpdatedAt { get; set; }
+        /// <summary>The player who opened it. Staff-side only - never composed to a player.</summary>
+        public string PlayerName { get; set; } = "";
+        /// <summary>Whoever holds it. Staff-side ONLY: composing this to a player is the leak the byline exists to prevent.</summary>
+        public string StaffName { get; set; } = "";
     }
 
     public class MessageRow
@@ -371,11 +378,38 @@ public static class SupportUtility
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<ThreadRow>(
-            "SELECT `id` AS Id, `player_id` AS PlayerId, `category` AS Category, `status` AS Status, " +
-            "`staff_id` AS StaffId, `offered_until` AS OfferedUntil, `offers` AS Offers, " +
-            "`created_at` AS CreatedAt, `updated_at` AS UpdatedAt " +
-            "FROM `rp_support_threads` WHERE `status` <> 'resolved' ORDER BY `created_at` ASC LIMIT 60",
+            "SELECT t.`id` AS Id, t.`player_id` AS PlayerId, t.`category` AS Category, t.`status` AS Status, " +
+            "t.`staff_id` AS StaffId, t.`offered_until` AS OfferedUntil, t.`offers` AS Offers, " +
+            "t.`created_at` AS CreatedAt, t.`updated_at` AS UpdatedAt, " +
+            "COALESCE(p.`username`, '') AS PlayerName, COALESCE(s.`username`, '') AS StaffName " +
+            "FROM `rp_support_threads` t " +
+            "LEFT JOIN `users` p ON p.`id` = t.`player_id` " +
+            "LEFT JOIN `users` s ON s.`id` = t.`staff_id` " +
+            "WHERE t.`status` <> 'resolved' ORDER BY t.`created_at` ASC LIMIT 60",
             null).ToList();
+    }
+
+    /// <summary>
+    /// The last line of each of these threads, for a list preview. One query
+    /// rather than one per thread.
+    /// </summary>
+    public static Dictionary<int, MessageRow> LastMessages(List<int> threadIds)
+    {
+        var result = new Dictionary<int, MessageRow>();
+        if (threadIds == null || threadIds.Count == 0)
+            return result;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var rows = connection.Query<MessageRow>(
+            "SELECT m.`id` AS Id, m.`thread_id` AS ThreadId, m.`author_id` AS AuthorId, " +
+            "m.`from_staff` AS FromStaff, m.`body` AS Body, m.`created_at` AS CreatedAt " +
+            "FROM `rp_support_messages` m " +
+            "JOIN (SELECT `thread_id`, MAX(`id`) AS `top` FROM `rp_support_messages` " +
+            "      WHERE `thread_id` IN @ids GROUP BY `thread_id`) l " +
+            "  ON l.`thread_id` = m.`thread_id` AND l.`top` = m.`id`",
+            new { ids = threadIds });
+        foreach (var row in rows)
+            result[row.ThreadId] = row;
+        return result;
     }
 
     /// <summary>How many staff are taking chats right now - the player's "Trina is online".</summary>
@@ -384,5 +418,65 @@ public static class SupportUtility
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.ExecuteScalar<int>(
             "SELECT COUNT(*) FROM `rp_support_rotation` WHERE `available` = 1");
+    }
+
+    // ---- pushing the view --------------------------------------------------
+
+    /// <summary>
+    /// Send one viewer their own half of the app: the staff queue when they
+    /// are staff, the player's Trina view when they are not.
+    ///
+    /// WHICH COMPOSER IS DECIDED HERE AND NOWHERE ELSE, so a player can never
+    /// be sent the queue by some other path forgetting to check. The player
+    /// composer has no field for a staff name to leak into.
+    /// </summary>
+    public static void SendView(GameClient? session, int openThreadId = 0)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null)
+            return;
+
+        if (IsStaff(habbo))
+        {
+            var queue = StaffQueue();
+            var messages = openThreadId > 0 ? MessagesFor(openThreadId) : new List<MessageRow>();
+            session!.Send(new RpSupportQueueComposer(
+                IsAvailable(habbo.Id) ? 1 : 0, AvailableCount(), habbo.Id,
+                queue, LastMessages(queue.Select(t => t.Id).ToList()), openThreadId, messages));
+            return;
+        }
+
+        var threads = ThreadsForPlayer(habbo.Id);
+        // A player may only open their OWN thread. Checked here rather than at
+        // each caller, because this is the one place that turns an id into
+        // messages.
+        var open = openThreadId > 0 && threads.Any(t => t.Id == openThreadId) ? openThreadId : 0;
+        session!.Send(new RpSupportComposer(
+            NewsUtility.GetByline(), AvailableCount(),
+            threads, LastMessages(threads.Select(t => t.Id).ToList()),
+            open, open > 0 ? MessagesFor(open) : new List<MessageRow>()));
+    }
+
+    /// <summary>Refresh one player, if they are online.</summary>
+    public static void PushToPlayer(int playerId)
+    {
+        if (playerId <= 0)
+            return;
+        SendView(PlusEnvironment.Game.ClientManager.GetClientByUserId(playerId));
+    }
+
+    /// <summary>
+    /// Refresh every staff member online. The queue is shared, so anything
+    /// that changes it changes it for all of them - and the rotation is only
+    /// legible if everyone is looking at the same list.
+    /// </summary>
+    public static void PushToStaff()
+    {
+        foreach (var client in PlusEnvironment.Game.ClientManager.GetClients.ToList())
+        {
+            if (client?.GetHabbo() == null || !IsStaff(client.GetHabbo()))
+                continue;
+            SendView(client);
+        }
     }
 }

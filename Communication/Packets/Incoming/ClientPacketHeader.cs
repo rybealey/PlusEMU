@@ -491,6 +491,12 @@ public static class ClientPacketHeader
     public const uint RpJamKickEvent = 4043;
     public const uint RpJamMoveEvent = 4044;
     public const uint RpJukeboxMoveEvent = 4045;
+    // pixelrp Support app
+    public const uint RpSupportOpenEvent = 4046;
+    public const uint RpSupportStartEvent = 4047;
+    public const uint RpSupportSendEvent = 4048;
+    public const uint RpSupportStaffEvent = 4049;
+    public const uint RpSupportAvailabilityEvent = 4050;
     public const uint RpRoomZoneSaveEvent = 3923;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958

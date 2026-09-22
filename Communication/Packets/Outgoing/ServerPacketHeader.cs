@@ -411,4 +411,8 @@ public static class ServerPacketHeader
     // there rather than reject it.
     public const uint RpMovementV2Composer = 4110;
     public const uint RpCatalogLocateComposer = 4143;
+    // pixelrp Support: two views of one queue. The player's carries Trina and
+    // no staff identity at all; the staff one carries real names and no byline.
+    public const uint RpSupportComposer = 4144;
+    public const uint RpSupportQueueComposer = 4145;
 }
