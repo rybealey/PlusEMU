@@ -5,6 +5,7 @@ using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Clothing;
 using Plus.HabboHotel.GameClients;
+using Plus.Utilities;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -76,7 +77,7 @@ internal class RpBuyClothingEvent : IPacketEvent
         var total = basket.Sum(item => item.Price);
         if (habbo.Credits < total)
         {
-            Fail(RpBuyClothingResultComposer.InsufficientCredits, $"That comes to {total} credits - you have {habbo.Credits}.");
+            Fail(RpBuyClothingResultComposer.InsufficientCredits, $"That comes to {TextHandling.GetMoney(total)} - you have {TextHandling.GetMoney(habbo.Credits)}.");
             return Task.CompletedTask;
         }
 
@@ -141,7 +142,7 @@ internal class RpBuyClothingEvent : IPacketEvent
             lines.Add($"Bought {string.Join(", ", unlocked)} - now in Choose Your Looks.");
         if (tokens.Count > 0)
             lines.Add($"{string.Join(", ", tokens)} {(tokens.Count == 1 ? "is" : "are")} in your backpack as a token - use it to wear it.");
-        session.SendNotification($"{string.Join(" ", lines)} ({charged} credits)");
+        session.SendNotification($"{string.Join(" ", lines)} ({TextHandling.GetMoney(charged)})");
         session.Send(new RpBuyClothingResultComposer(RpBuyClothingResultComposer.Ok, unlocked.Count, tokens.Count));
         return Task.CompletedTask;
     }

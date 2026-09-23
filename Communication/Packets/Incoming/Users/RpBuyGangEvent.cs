@@ -5,6 +5,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Gangs;
 using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Rooms.Chat.Filter;
+using Plus.Utilities;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -68,7 +69,7 @@ internal class RpBuyGangEvent : IPacketEvent
         var cost = GangUtility.GangCost();
         if (habbo.Credits < cost)
         {
-            session.SendNotification($"Founding a gang costs {cost} credits - you only have {habbo.Credits}.");
+            session.SendNotification($"Founding a gang costs {TextHandling.GetMoney(cost)} - you only have {TextHandling.GetMoney(habbo.Credits)}.");
             Refresh();
             return Task.CompletedTask;
         }

@@ -70,7 +70,7 @@ internal class BuyOfferEvent : IPacketEvent
             }
             if (Convert.ToInt32(row["total_price"]) > session.GetHabbo().Credits)
             {
-                session.SendNotification("Oops, you do not have enough credits for this.");
+                session.SendNotification("Oops, you do not have enough cash for this.");
                 return Task.CompletedTask;
             }
             session.GetHabbo().Credits -= Convert.ToInt32(row["total_price"]);

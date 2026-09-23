@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Plus.HabboHotel.GameClients;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
@@ -21,7 +22,7 @@ internal class StatsCommand : IChatCommand
         var habboInfo = new StringBuilder();
         habboInfo.Append("Your account stats:\r\r");
         habboInfo.Append("Currency Info:\r");
-        habboInfo.Append($"Credits: {session.GetHabbo().Credits}\r");
+        habboInfo.Append($"Cash: {TextHandling.GetMoney(session.GetHabbo().Credits)}\r");
         habboInfo.Append($"Duckets: {session.GetHabbo().Duckets}\r");
         habboInfo.Append($"Diamonds: {session.GetHabbo().Diamonds}\r");
         habboInfo.Append($"Online Time: {onlineTime} Hour{s}\r");

@@ -38,7 +38,7 @@ internal class GiveCommand : ITargetChatCommand
     /// pretending otherwise would be security theatre. If handing over large
     /// sums needs to be genuinely bounded, that wants a per-day ledger.
     /// </summary>
-    private const int MaxCoins = 10000;
+    private const int MaxCash = 10000;
 
     private const int MaxDiamonds = 100;
 
@@ -62,7 +62,7 @@ internal class GiveCommand : ITargetChatCommand
         // left is the currency and the amount.
         if (parameters.Length < 2)
         {
-            session.SendWhisper("Give what? :give <username> <coins|diamonds> <amount>");
+            session.SendWhisper("Give what? :give <username> <cash|diamonds> <amount>");
             return Task.CompletedTask;
         }
 
@@ -81,17 +81,23 @@ internal class GiveCommand : ITargetChatCommand
         var currency = parameters[0].ToLowerInvariant();
         switch (currency)
         {
+            // "cash" is what it is called now; the old names still work,
+            // because a command somebody has typed a hundred times should not
+            // stop working over a rename.
+            case "cash":
+            case "money":
+            case "dollars":
             case "coins":
             case "credits":
             {
-                if (amount > MaxCoins)
+                if (amount > MaxCash)
                 {
-                    session.SendWhisper($"You can hand over at most {TextHandling.GetNumber(MaxCoins)} coins at a time.");
+                    session.SendWhisper($"You can hand over at most {TextHandling.GetMoney(MaxCash)} at a time.");
                     return Task.CompletedTask;
                 }
                 if (habbo.Credits < amount)
                 {
-                    session.SendWhisper($"You only have {TextHandling.GetNumber(habbo.Credits)} coins on you.");
+                    session.SendWhisper($"You only have {TextHandling.GetMoney(habbo.Credits)} on you.");
                     return Task.CompletedTask;
                 }
                 // Nobody can hold more than an int, and a purse that wrapped
@@ -106,7 +112,7 @@ internal class GiveCommand : ITargetChatCommand
                 target.Credits += amount;
                 session.Send(new CreditBalanceComposer(habbo.Credits));
                 target.Client?.Send(new CreditBalanceComposer(target.Credits));
-                Announce(room, habbo, target, amount, (amount == 1) ? "coin" : "coins");
+                Announce(room, habbo, target, TextHandling.GetMoney(amount));
                 break;
             }
             case "diamonds":
@@ -133,11 +139,11 @@ internal class GiveCommand : ITargetChatCommand
                 // delta; 5 is the diamond currency type the purse renders.
                 session.Send(new HabboActivityPointNotificationComposer(habbo.Diamonds, -amount, 5));
                 target.Client?.Send(new HabboActivityPointNotificationComposer(target.Diamonds, amount, 5));
-                Announce(room, habbo, target, amount, (amount == 1) ? "diamond" : "diamonds");
+                Announce(room, habbo, target, $"{TextHandling.GetNumber(amount)} {((amount == 1) ? "diamond" : "diamonds")}");
                 break;
             }
             default:
-                session.SendWhisper($"'{parameters[0]}' is not something you can hand over. Try coins or diamonds.");
+                session.SendWhisper($"'{parameters[0]}' is not something you can hand over. Try cash or diamonds.");
                 break;
         }
 
@@ -150,14 +156,19 @@ internal class GiveCommand : ITargetChatCommand
     /// Leading AND trailing "*" matter: the client only reads a bubble as an
     /// action when the text is wrapped in them, and it then moves the opening
     /// marker ahead of the speaker's name - so this renders as
-    /// "*Yavn hands twist 7,500 coins*" rather than repeating the name.
+    /// "*Yavn hands twist $7,500*" rather than repeating the name.
+    ///
+    /// The sum arrives already written, because the two currencies are not
+    /// written the same way: money is a symbol in front ("$7,500") and
+    /// diamonds are a counted noun after ("5 diamonds"). A shared "amount plus
+    /// label" would force one of them into the other's shape.
     /// </summary>
-    private static void Announce(Room room, Habbo giver, Habbo target, int amount, string label)
+    private static void Announce(Room room, Habbo giver, Habbo target, string sum)
     {
         var giverUser = room?.GetRoomUserManager()?.GetRoomUserByHabbo(giver.Id);
 
         if (giverUser != null)
-            giverUser.OnChat(5, $"*hands {target.Username} {TextHandling.GetNumber(amount)} {label}*", true);
+            giverUser.OnChat(5, $"*hands {target.Username} {sum}*", true);
         else
             giver.Client?.SendWhisper($"You hand {target.Username} {TextHandling.GetNumber(amount)} {label}.");
     }

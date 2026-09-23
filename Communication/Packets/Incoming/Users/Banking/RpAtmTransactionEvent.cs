@@ -115,8 +115,8 @@ internal class RpAtmTransactionEvent : IPacketEvent
             return;
 
         var message = (mode == Deposit)
-            ? $"*deposits {TextHandling.GetCoins(amount)} into the bank*"
-            : $"*withdraws {TextHandling.GetCoins(amount)} from the bank*";
+            ? $"*deposits {TextHandling.GetMoney(amount)} into the bank*"
+            : $"*withdraws {TextHandling.GetMoney(amount)} from the bank*";
 
         room.SendPacket(new ChatComposer(user.VirtualId, message, 0, ActionBubble));
     }

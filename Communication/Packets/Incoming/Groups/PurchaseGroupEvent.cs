@@ -8,6 +8,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Filter;
+using Plus.Utilities;
 
 namespace Plus.Communication.Packets.Incoming.Groups;
 
@@ -34,7 +35,7 @@ internal class PurchaseGroupEvent : IPacketEvent
         var groupCost = Convert.ToInt32(_settingsManager.TryGetValue("catalog.group.purchase.cost"));
         if (session.GetHabbo().Credits < groupCost)
         {
-            session.SendNotification($"A group costs {groupCost} credits! You only have {session.GetHabbo().Credits}!");
+            session.SendNotification($"A group costs {TextHandling.GetMoney(groupCost)}! You only have {TextHandling.GetMoney(session.GetHabbo().Credits)}!");
             return Task.CompletedTask;
         }
         session.GetHabbo().Credits -= groupCost;

@@ -301,8 +301,8 @@ internal class BankerBot : BotAi
         var where = conversation.Account == BankAccountKind.Savings ? "savings" : "checking";
 
         Say(conversation.Withdrawing
-            ? $"{TextHandling.GetCoins(amount)} from {where}. Thank you, {Name(user)}."
-            : $"{TextHandling.GetCoins(amount)} into {where}. Thank you, {Name(user)}.");
+            ? $"{TextHandling.GetMoney(amount)} from {where}. Thank you, {Name(user)}."
+            : $"{TextHandling.GetMoney(amount)} into {where}. Thank you, {Name(user)}.");
     }
 
     /// <summary>

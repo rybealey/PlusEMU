@@ -1,5 +1,6 @@
 ﻿using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
@@ -39,7 +40,7 @@ internal class SellRoomCommand : IChatCommand
         }
         if (price == 0)
         {
-            session.SendWhisper("Oops, you cannot sell a room for 0 credits.");
+            session.SendWhisper("Oops, you cannot sell a room for nothing.");
             return;
         }
         using (var dbClient = _database.GetQueryReactor())
@@ -55,7 +56,7 @@ internal class SellRoomCommand : IChatCommand
         {
             if (user == null || user.GetClient() == null)
                 continue;
-            user.GetClient().SendWhisper($"Attention! This room has been put up for sale, you can buy it now for {price} credits! Use the :buyroom command.");
+            user.GetClient().SendWhisper($"Attention! This room has been put up for sale, you can buy it now for {TextHandling.GetMoney(price)}! Use the :buyroom command.");
         }
     }
 }

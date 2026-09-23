@@ -2,6 +2,7 @@ using Dapper;
 using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users.Accounts;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Users.Banking;
 
@@ -183,20 +184,20 @@ public static class PixelCash
 
         if (amount < Minimum)
         {
-            message = $"The smallest payment is {Minimum}c.";
+            message = $"The smallest payment is {TextHandling.GetMoney(Minimum)}.";
             return false;
         }
         if (amount > Maximum)
         {
-            message = $"The most you can send at once is {Maximum}c.";
+            message = $"The most you can send at once is {TextHandling.GetMoney(Maximum)}.";
             return false;
         }
         var remaining = RemainingToday(habbo.Id);
         if (amount > remaining)
         {
             message = remaining <= 0
-                ? $"You have sent your {DailyMaximum}c for today."
-                : $"You can send {remaining}c more today.";
+                ? $"You have sent your {TextHandling.GetMoney(DailyMaximum)} for today."
+                : $"You can send {TextHandling.GetMoney(remaining)} more today.";
             return false;
         }
 
@@ -239,7 +240,7 @@ public static class PixelCash
         {
             recipient.Send(new RpBankAccountsComposer(BankUtility.EnsureLoaded(recipientId)));
             recipient.Send(new RpPayReceiptComposer(record));
-            recipient.SendNotification($"{habbo.Username} sent you {amount}c." +
+            recipient.SendNotification($"{habbo.Username} sent you {TextHandling.GetMoney(amount)}." +
                 (clean.Length > 0 ? $" \"{clean}\"" : string.Empty));
         }
         return true;

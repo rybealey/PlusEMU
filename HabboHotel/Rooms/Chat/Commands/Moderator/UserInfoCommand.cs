@@ -2,6 +2,7 @@
 using System.Text;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 
@@ -72,7 +73,7 @@ internal class UserInfoCommand : IChatCommand
         habboInfo.Append($"Email: {Convert.ToString(userData["mail"])}\r");
         habboInfo.Append($"Online Status: {(targetClient != null ? "True" : "False")}\r\r");
         habboInfo.Append("Currency Info:\r");
-        habboInfo.Append($"Credits: {Convert.ToInt32(userData["credits"])}\r");
+        habboInfo.Append($"Cash: {TextHandling.GetMoney(Convert.ToInt32(userData["credits"]))}\r");
         habboInfo.Append($"Duckets: {Convert.ToInt32(userData["activity_points"])}\r");
         habboInfo.Append($"Diamonds: {Convert.ToInt32(userData["vip_points"])}\r");
         habboInfo.Append($"GOTW Points: {Convert.ToInt32(userData["gotw_points"])}\r\r");

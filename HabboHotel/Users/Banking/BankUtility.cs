@@ -62,7 +62,7 @@ public static class BankUtility
     public const int DepositFeeBps = 290;
 
     /// <summary>
-    /// Charged on top of <see cref="DepositFeeBps"/>, per deposit. A flat coin
+    /// Charged on top of <see cref="DepositFeeBps"/>, per deposit. A flat charge
     /// makes small deposits expensive on purpose: 2.9% of 10c is nothing, and
     /// without this the machine is free for anyone willing to use it often.
     /// </summary>
@@ -175,7 +175,7 @@ public static class BankUtility
         // startup path entirely.
         _timer = new System.Threading.Timer(_ => Tick(), null, TickSeconds * 1000, TickSeconds * 1000);
 
-        Log.Info("Banking: savings {0} bps/hour, ceiling {1}c.", SavingsRateBps, SavingsCap);
+        Log.Info("Banking: savings {0} bps/hour, ceiling {1}.", SavingsRateBps, TextHandling.GetMoney(SavingsCap));
     }
 
     /// <summary>
@@ -352,13 +352,13 @@ public static class BankUtility
                     if (room <= 0)
                     {
                         account = current;
-                        message = $"Your savings account is full at {TextHandling.GetCoins(SavingsCap)}.";
+                        message = $"Your savings account is full at {TextHandling.GetMoney(SavingsCap)}.";
                         return BankResult.SavingsFull;
                     }
                     if (amount > room)
                     {
                         account = current;
-                        message = $"Only {TextHandling.GetCoins(room)} fits before your savings account reaches {TextHandling.GetCoins(SavingsCap)}.";
+                        message = $"Only {TextHandling.GetMoney(room)} fits before your savings account reaches {TextHandling.GetMoney(SavingsCap)}.";
                         return BankResult.SavingsFull;
                     }
                 }
@@ -418,8 +418,8 @@ public static class BankUtility
     /// The machine's cut of a deposit: <see cref="DepositFeeBps"/> of the
     /// amount, rounded DOWN, plus <see cref="DepositFeeFlat"/>. Integer
     /// arithmetic throughout - a double here would round 2.9% of some amounts
-    /// up, and a fee that is a coin over what was disclosed is worse than one
-    /// a coin under. Only the percentage rounds; the flat coin is exact.
+    /// up, and a fee a dollar over what was disclosed is worse than one a dollar
+    /// under. Only the percentage rounds; the flat charge is exact.
     ///
     /// Unlike the percentage on its own, this CAN reach or exceed the amount:
     /// 3c of flat fee on a 2c deposit would credit a negative balance. So it
@@ -491,7 +491,7 @@ public static class BankUtility
                 if (debited == 0)
                 {
                     senderAccount = Refresh(connection, senderId);
-                    message = $"Checking only has {senderAccount?.Current ?? 0}c.";
+                    message = $"Checking only has {TextHandling.GetMoney(senderAccount?.Current ?? 0)}.";
                     return BankResult.InsufficientFunds;
                 }
 
@@ -570,7 +570,7 @@ public static class BankUtility
         var fee = chargeFee ? DepositFee(amount) : 0;
         if (fee >= amount)
         {
-            message = $"The machine's fee on that is {fee}c. Pay in at least {MinimumAtmDeposit}c.";
+            message = $"The machine's fee on that is {TextHandling.GetMoney(fee)}. Pay in at least {TextHandling.GetMoney(MinimumAtmDeposit)}.";
             return BankResult.InvalidAmount;
         }
         if (amount > habbo.Credits)
@@ -623,7 +623,7 @@ public static class BankUtility
                 // rather than left for the player to find by subtraction.
                 LogMovement(connection, habbo.Id, habbo.Username, BankTransactionKind.Deposit,
                     BankAccountKind.Current, credited, account.Current,
-                    fee > 0 ? Fit($"{source} (less {fee}c fee)") : source);
+                    fee > 0 ? Fit($"{source} (less {TextHandling.GetMoney(fee)} fee)") : source);
                 return BankResult.Ok;
             }
             catch (Exception e)
@@ -1028,7 +1028,7 @@ public static class BankUtility
         {
             LogMovement(connection, row.UserId, client?.GetHabbo()?.Username ?? string.Empty,
                 BankTransactionKind.Interest, BankAccountKind.Savings, interest, account.Savings,
-                $"{SavingsRateBps / 100m:0.00}% per hour on {TextHandling.GetCoins(row.Savings)}");
+                $"{SavingsRateBps / 100m:0.00}% per hour on {TextHandling.GetMoney(row.Savings)}");
         }
         if (client != null && account != null)
             client.Send(new RpBankAccountsComposer(account));

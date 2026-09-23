@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
@@ -59,13 +60,13 @@ internal class ConvertCreditsCommand : IChatCommand
                 }
             }
             if (totalValue > 0)
-                session.SendNotification($"All credits have successfully been converted!\r\r(Total value: {totalValue} credits!");
+                session.SendNotification($"Everything has been converted!\r\r(Total value: {TextHandling.GetMoney(totalValue)})");
             else
                 session.SendNotification("It appears you don't have any exchangeable items!");
         }
         catch
         {
-            session.SendNotification("Oops, an error occoured whilst converting your credits!");
+            session.SendNotification("Oops, an error occurred whilst converting those items!");
         }
     }
 }
