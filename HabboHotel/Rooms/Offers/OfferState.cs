@@ -1,12 +1,11 @@
 using System.Collections.Concurrent;
+using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Users;
-using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
-using Plus.HabboHotel.Users.Banking;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Offers;
@@ -25,6 +24,12 @@ namespace Plus.HabboHotel.Rooms.Offers;
 /// painkillers out of the packet in their hand and gives a shot with the
 /// syringe in their hand; walking to the counter to pick the thing up is the
 /// roleplay, and the check is what makes it one.
+///
+/// MONEY IS CASH IN HAND, NEVER THE BANK. A sale takes what the buyer is
+/// carrying and pays it straight into what the seller is carrying. That is the
+/// whole reason the hotel's ATMs exist: a balance you have to go and fetch is a
+/// trip and a machine to stand at, and a shop that quietly charged the card
+/// would make every one of those machines decorative.
 ///
 /// NOTHING MOVES UNTIL THE BUYER TAPS. An offer is a promise, not an escrow -
 /// no money is held, no item is reserved. Everything is therefore checked
@@ -136,7 +141,7 @@ public static class OfferState
         if (offer.Ware.GoesInBackpack && !CanTake(buyer, offer.Ware.Key, offer.Quantity))
             return "Your backpack is full";
         if (offer.Total > 0 && !CanAfford(buyer, offer.Total))
-            return $"You cannot afford {TextHandling.GetMoney(offer.Total)}";
+            return $"You are not carrying {TextHandling.GetMoney(offer.Total)}";
         return null;
     }
 
@@ -166,14 +171,16 @@ public static class OfferState
         return space >= quantity;
     }
 
-    /// <summary>Checking first, then what is in hand - the same order the charge uses.</summary>
-    public static bool CanAfford(Habbo buyer, long amount)
-    {
-        if (buyer == null || amount <= 0)
-            return true;
-        var account = BankUtility.Get(buyer.Id) ?? BankUtility.EnsureLoaded(buyer.Id);
-        return ((account?.Current ?? 0) >= amount) || (buyer.Credits >= amount);
-    }
+    /// <summary>
+    /// CASH IN HAND, and nothing else. A sale never reaches for the bank.
+    ///
+    /// Deliberate, and the whole reason the ATMs exist: money in an account is
+    /// money you have to go and fetch, which is a trip across the hotel and a
+    /// machine to stand at. A shop that quietly charged the card would make
+    /// every one of those machines decorative.
+    /// </summary>
+    public static bool CanAfford(Habbo buyer, long amount) =>
+        (buyer != null) && ((amount <= 0) || (buyer.Credits >= amount));
 
     // ---- making one ----------------------------------------------------------
 
@@ -357,37 +364,35 @@ public static class OfferState
     // ---- the money -----------------------------------------------------------
 
     /// <summary>
-    /// Checking first, the wallet second, exactly as asked. The two are not
-    /// mixed: a purchase is paid from ONE of them, because a charge that takes
-    /// half from each leaves a player unable to say what they paid with.
+    /// Hand to hand, and never the bank.
+    ///
+    /// Both sides are adjusted in the same breath with nothing between them
+    /// that can fail - the shape :give already uses, and for the same reason:
+    /// Habbo.Credits is the authority and the logout save writes it back
+    /// absolutely, so the only residual hazard is a crash between the two
+    /// saves. That is the hazard every credit change in this emulator carries,
+    /// buying furniture included.
+    ///
+    /// The buyer having enough was checked a moment ago and is checked again
+    /// here, because the moment was not free: they could have spent it at a
+    /// vending machine while the card stood there.
     /// </summary>
     private static bool Charge(Habbo buyer, Habbo seller, Offer offer)
     {
         var amount = offer.Total;
-        var note = $"{offer.Quantity} {offer.Label}";
-        var paid = BankUtility.TryDebitChecking(buyer.Id, buyer.Username, amount, $"Bought {note}", out var buyerAccount);
-        if (paid)
-        {
-            buyer.Client?.Send(new RpBankAccountsComposer(buyerAccount));
-        }
-        else
-        {
-            if (buyer.Credits < amount)
-                return false;
-            buyer.Credits -= (int)amount;
-            buyer.Client?.Send(new Communication.Packets.Outgoing.Inventory.Purse.CreditBalanceComposer(buyer.Credits));
-        }
+        if (amount <= 0)
+            return true;
+        if (buyer.Credits < amount)
+            return false;
+        // A purse that wrapped past int.MaxValue would be a far worse bug than
+        // a refused sale.
+        if (seller.Credits > int.MaxValue - amount)
+            return false;
 
-        // The seller is paid into checking when they have one, and in cash when
-        // they do not. Never refused: the buyer has already paid, and money
-        // that cannot be banked still has a pocket to go in.
-        if (BankUtility.CreditChecking(seller.Id, seller.Username, amount, $"Sold {note} to {buyer.Username}", out var sellerAccount))
-            seller.Client?.Send(new RpBankAccountsComposer(sellerAccount));
-        else
-        {
-            seller.Credits += (int)amount;
-            seller.Client?.Send(new Communication.Packets.Outgoing.Inventory.Purse.CreditBalanceComposer(seller.Credits));
-        }
+        buyer.Credits -= (int)amount;
+        seller.Credits += (int)amount;
+        buyer.Client?.Send(new CreditBalanceComposer(buyer.Credits));
+        seller.Client?.Send(new CreditBalanceComposer(seller.Credits));
         return true;
     }
 
