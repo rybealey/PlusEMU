@@ -11,6 +11,10 @@
 -- the one number every charge has (Logout is not ticketable).
 --   jail <= 3m -> 1 star    <= 6m -> 2    <= 10m -> 3    <= 20m -> 4    else 5
 --
+-- Trespass is the one charge off those steps - an $8 ticket but three HOURS
+-- inside, confirmed as meant - so by the same rule it is five stars: cheap to
+-- settle on the spot, and a long sit for anyone who will not pay.
+--
 -- AUTO charges (AC) are meant to be filed by the system - logging out while
 -- wanted, a kill - and manual ones (MC) by an officer. Nothing files charges
 -- automatically yet, so for now the description records which is which and
@@ -28,7 +32,7 @@ VALUES
   ('obstruction', 'Obstruction', 'Manual charge - filed by an officer.', 180, 1, 0, 1, 8, 1, 3),
   ('copassault', 'Cop Assault', 'Manual charge - filed by an officer.', 360, 2, 1, 1, 16, 1, 4),
   ('robbery', 'Robbery', 'Auto charge - filed by the system.', 540, 3, 0, 1, 24, 1, 5),
-  ('trespass', 'Trespass', 'Manual charge - filed by an officer.', 180, 1, 0, 1, 8, 1, 6),
+  ('trespass', 'Trespass', 'Manual charge - filed by an officer.', 10800, 5, 0, 1, 8, 1, 6),
   ('drugs', 'Drugs', 'Manual charge - filed by an officer.', 360, 2, 0, 1, 16, 1, 7),
   ('copmurder', 'Cop Murder', 'Auto charge - filed by the system.', 900, 4, 1, 1, 60, 1, 8),
   ('murder', 'Murder', 'Auto charge - filed by the system.', 360, 2, 1, 1, 16, 1, 9),
