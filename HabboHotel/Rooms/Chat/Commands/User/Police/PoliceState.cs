@@ -714,6 +714,67 @@ public static class PoliceState
             EndEscort(room, captorId, user);
     }
 
+    // ---- warping -----------------------------------------------------------
+
+    /// <summary>
+    /// A player has been put on a new tile WITHOUT walking there, and they are
+    /// in an escort. Bring the other half.
+    ///
+    /// THE PAIR IS A WALKING ARRANGEMENT, and a warp is not a walk. The shadow
+    /// follows its captor one staged edge at a time; a captor who arrives on a
+    /// far tile with no edges in between leaves the suspect standing where the
+    /// last step put them, still paired, still unable to walk, and now across
+    /// the room from the person holding them. Every same-room warp in the
+    /// hotel goes through Gamemap.TeleportToTile - the teleport arrows, the
+    /// booths, wired, :summon - so this hangs off that one place rather than
+    /// off each of them.
+    ///
+    /// The room change is somebody else's job: OnRoomEntered puts a pair back
+    /// together when the halves land in different rooms, and this only ever
+    /// looks inside the room it was called for.
+    ///
+    /// Called for BOTH ends, because either can be the one warped. Only a
+    /// captor brings anybody with them: a suspect moved out from under an
+    /// escort was moved by something that meant it - a bed discharge, a
+    /// moderator - and dragging their captor along behind them would undo it.
+    /// </summary>
+    public static void OnWarp(Room? room, RoomUser? user)
+    {
+        if (room == null || user == null || user.IsBot)
+            return;
+        if (EscortByCaptor.IsEmpty && EscortBySuspect.IsEmpty)
+            return;
+        if (!InAnyEscort(user.UserId))
+            return;
+
+        // V2 still believes they are on the tile they left. Nothing else tells
+        // it - TeleportToTile moves the RoomUser and no more - and the shadow's
+        // next edge is staged from the captor's recorded tile, so a stale one
+        // sends the pair back where they came from on the first step.
+        MovementV2Bridge.Relocate(room, user, user.X, user.Y, user.Z);
+
+        var suspectId = SuspectOf(user.UserId);
+        if (suspectId == 0)
+            return;
+
+        var suspect = room.GetRoomUserManager()?.GetRoomUserByHabbo(suspectId);
+        if (suspect == null || suspect.VirtualId == user.VirtualId)
+            return;
+
+        // Where the suspect stands relative to their captor is the same
+        // question the walk asks every step: in front for custody, behind for
+        // a stretcher. A blocked tile falls back to the captor's own, which is
+        // fine - tiles hold more than one person and the next step sorts it.
+        var behind = IsMedicalEscort(user.UserId);
+        var map = room.GetGameMap();
+        var tile = MovementController.ShadowTile(map, new Point(user.X, user.Y), (byte)user.RotBody, behind);
+
+        // Re-enters TeleportToTile, which calls back here for the suspect -
+        // who is not a captor, so it stops there.
+        map.TeleportToTile(suspect, tile.X, tile.Y, map.SqAbsoluteHeight(tile.X, tile.Y), user.RotBody);
+        RePair(room, user, suspect);
+    }
+
     // ---- travelling --------------------------------------------------------
 
     /// <summary>

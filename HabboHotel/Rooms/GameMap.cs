@@ -94,6 +94,13 @@ public class Gamemap
         user.SetStep = false;
         user.IsWalking = false;
         user.UpdateNeeded = true;
+        // pixelrp police: an escorted pair travels together, and a warp is not
+        // a walk - the shadow follows staged edges, so a captor who arrives on
+        // a far tile with none in between leaves their captive behind. This is
+        // the one place every same-room warp passes through (the arrows, the
+        // booths, wired, :summon), so the pair is put back here rather than at
+        // each of them. A no-op for anybody not in an escort.
+        Chat.Commands.User.Police.PoliceState.OnWarp(_room, user);
     }
 
     public void UpdateUserMovement(Point oldCoord, Point newCoord, RoomUser user)
