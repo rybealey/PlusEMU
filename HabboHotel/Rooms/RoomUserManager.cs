@@ -536,15 +536,32 @@ public class RoomUserManager
 
     private void RemoveRoomUser(RoomUser user)
     {
-        // pixelrp police: RemoveUserFromRoom clears these before it gets here, but
-        // OnCycle calls this method directly to sweep a user whose session has
-        // already died - the reload case - and that route would otherwise leave a
-        // player cuffed for good. Ahead of the dequeue below, so both sides of an
-        // escort are still known to V2 and the pair can be broken cleanly. Bots are
-        // excluded: this registry is keyed by player id, and a bot id comes from a
+        // pixelrp police: OnRoomLeave, not Forget.
+        //
+        // THIS LINE UNDID THE ESCORT-SURVIVES-A-ROOM-CHANGE WORK ENTIRELY. The
+        // tidy path forty lines up calls OnRoomLeave precisely to KEEP an
+        // escort across the change - and then reached here and ended it, every
+        // time, on every room change. The captive was released in the room the
+        // captor had just left, which is exactly what it looked like from the
+        // outside. The comment that used to sit here said RemoveUserFromRoom
+        // "clears these before it gets here", which was true when it was
+        // written and stopped being true the moment the leave started
+        // preserving instead of clearing.
+        //
+        // OnCycle also calls this method directly to sweep a user whose session
+        // has already died - the reload case - and that route would otherwise
+        // leave a player cuffed for good. OnRoomLeave still forgets everything
+        // for anybody NOT in an escort, so that case is covered as before; a
+        // player who is truly gone has their escort ended by the disconnect
+        // (Habbo.OnDisconnect), and a half-escort that never reassembles is
+        // ended by TickTravel's watchdog.
+        //
+        // Ahead of the dequeue below, so both sides of an escort are still
+        // known to V2 and the pair can be broken cleanly. Bots are excluded:
+        // this registry is keyed by player id, and a bot id comes from a
         // different space, so a bot could otherwise clear a real player's cuffs.
         if (!user.IsBot)
-            Chat.Commands.User.Police.PoliceState.Forget(_room, user.HabboId);
+            Chat.Commands.User.Police.PoliceState.OnRoomLeave(_room, user.HabboId);
         // pixelrp Movement V2: dequeue BEFORE the rest of teardown, so nothing
         // can be staged or emitted for a unit that is already gone.
         Movement.MovementV2Bridge.OnUserLeave(_room, user);
