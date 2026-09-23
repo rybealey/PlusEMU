@@ -394,7 +394,9 @@
     "RpSupportStartEvent": 4047,
     "RpSupportSendEvent": 4048,
     "RpSupportStaffEvent": 4049,
-    "RpSupportAvailabilityEvent": 4050
+    "RpSupportAvailabilityEvent": 4050,
+    "RpPayOpenEvent": 4051,
+    "RpPaySendEvent": 4052
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
@@ -727,6 +729,9 @@
     "RpSitchSearchComposer": 4138,
     "RpSitchTrendingComposer": 4139,
     "RpSupportComposer": 4144,
-    "RpSupportQueueComposer": 4145
+    "RpSupportQueueComposer": 4145,
+    "RpPayThreadComposer": 4146,
+    "RpPayReceiptComposer": 4147,
+    "RpPayResultComposer": 4148
   }
 }

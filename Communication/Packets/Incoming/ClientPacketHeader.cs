@@ -497,6 +497,9 @@ public static class ClientPacketHeader
     public const uint RpSupportSendEvent = 4048;
     public const uint RpSupportStaffEvent = 4049;
     public const uint RpSupportAvailabilityEvent = 4050;
+    // pixelrp Pixel Cash
+    public const uint RpPayOpenEvent = 4051;
+    public const uint RpPaySendEvent = 4052;
     public const uint RpRoomZoneSaveEvent = 3923;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958

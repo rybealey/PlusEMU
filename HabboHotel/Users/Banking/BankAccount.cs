@@ -77,4 +77,8 @@ public static class BankTransactionKind
     public const string TransferOut = "transfer_out";
     public const string Deposit = "deposit";
     public const string Withdraw = "withdraw";
+    /// <summary>Pixel Cash: paid to another player.</summary>
+    public const string PayOut = "pay_out";
+    /// <summary>Pixel Cash: received from another player.</summary>
+    public const string PayIn = "pay_in";
 }

@@ -426,6 +426,116 @@ public static class BankUtility
     /// is not enough to compute the fee and subtract - <see cref="Deposit"/>
     /// refuses anything below <see cref="MinimumAtmDeposit"/>.
     /// </summary>
+    /// <summary>
+    /// Pixel Cash: checking to somebody else's checking.
+    ///
+    /// The method above this one says a transfer "has no recipient to forge",
+    /// and that stays true of it - this is a second path, not a change to the
+    /// first. What makes a recipient safe here is that the caller does not
+    /// name one: the packet handler takes it from the messenger conversation
+    /// the player is looking at.
+    ///
+    /// SAVINGS IS NOT REACHABLE. Savings is rationed to three withdrawals a
+    /// week, and paying a friend out of it - who pays you back into checking -
+    /// would be a way around that ration with an extra step.
+    ///
+    /// BOTH LOCKS, LOWER ID FIRST. Two people paying each other at the same
+    /// moment is not a rare case in a hotel where people trade; taking the
+    /// locks in id order is what stops the pair deadlocking.
+    /// </summary>
+    public static BankResult Pay(int senderId, string senderName, int recipientId, string recipientName,
+        long amount, string note, out BankAccount? senderAccount, out string message)
+    {
+        senderAccount = null;
+        message = string.Empty;
+        if (senderId <= 0 || recipientId <= 0 || senderId == recipientId)
+        {
+            message = "That is not somebody you can pay.";
+            return BankResult.Failed;
+        }
+        if (amount <= 0)
+        {
+            message = "Enter an amount to send.";
+            return BankResult.InvalidAmount;
+        }
+
+        var first = Math.Min(senderId, recipientId);
+        var second = Math.Max(senderId, recipientId);
+        lock (LockFor(first))
+        lock (LockFor(second))
+        {
+            try
+            {
+                using var connection = PlusEnvironment.DatabaseManager.Connection();
+                // Whether the recipient was already in memory decides whether
+                // their row may stay there afterwards: paying somebody who is
+                // offline must not leave their account cached, because the
+                // cache is what the online paths write from.
+                var recipientWasLoaded = Accounts.ContainsKey(recipientId);
+
+                if (Load(connection, senderId) == null)
+                {
+                    Accounts.TryRemove(senderId, out _);
+                    message = "You do not have a bank account.";
+                    return BankResult.NoAccount;
+                }
+
+                // Debited first, under a guarded UPDATE, so a failure loses
+                // nothing rather than minting it. One statement does the funds
+                // check as well: reading the balance and then spending it are
+                // two moments, and somebody else's payment can land between.
+                var debited = connection.Execute(
+                    "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` - @amount " +
+                    "WHERE `user_id` = @userId AND `current_balance` >= @amount LIMIT 1",
+                    new { userId = senderId, amount });
+                if (debited == 0)
+                {
+                    senderAccount = Refresh(connection, senderId);
+                    message = $"Checking only has {senderAccount?.Current ?? 0}c.";
+                    return BankResult.InsufficientFunds;
+                }
+
+                var credited = connection.Execute(
+                    "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` + @amount " +
+                    "WHERE `user_id` = @userId LIMIT 1",
+                    new { userId = recipientId, amount });
+                if (credited == 0)
+                {
+                    // Put it straight back. The recipient's account went away
+                    // between the menu being drawn and this running, which is
+                    // rare and still has to be survivable.
+                    connection.Execute(
+                        "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` + @amount " +
+                        "WHERE `user_id` = @userId LIMIT 1",
+                        new { userId = senderId, amount });
+                    senderAccount = Refresh(connection, senderId);
+                    message = $"{recipientName} does not have a bank account.";
+                    return BankResult.NoAccount;
+                }
+
+                senderAccount = Refresh(connection, senderId);
+                var recipientAccount = Refresh(connection, recipientId);
+                if (!recipientWasLoaded)
+                    Accounts.TryRemove(recipientId, out _);
+
+                var memo = string.IsNullOrWhiteSpace(note) ? string.Empty : $" - {note.Trim()}";
+                LogMovement(connection, senderId, senderName, BankTransactionKind.PayOut,
+                    BankAccountKind.Current, -amount, senderAccount?.Current ?? 0,
+                    Fit($"Sent to {recipientName}{memo}"));
+                LogMovement(connection, recipientId, recipientName, BankTransactionKind.PayIn,
+                    BankAccountKind.Current, amount, recipientAccount?.Current ?? 0,
+                    Fit($"From {senderName}{memo}"));
+                return BankResult.Ok;
+            }
+            catch (Exception e)
+            {
+                Log.Error("Pay from {0} to {1} failed: {2}", senderId, recipientId, e.Message);
+                message = "That payment could not be completed.";
+                return BankResult.Failed;
+            }
+        }
+    }
+
     public static long DepositFee(long amount) =>
         amount <= 0 ? 0 : amount * DepositFeeBps / 10000 + DepositFeeFlat;
 

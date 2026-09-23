@@ -415,4 +415,8 @@ public static class ServerPacketHeader
     // no staff identity at all; the staff one carries real names and no byline.
     public const uint RpSupportComposer = 4144;
     public const uint RpSupportQueueComposer = 4145;
+    // pixelrp Pixel Cash
+    public const uint RpPayThreadComposer = 4146;
+    public const uint RpPayReceiptComposer = 4147;
+    public const uint RpPayResultComposer = 4148;
 }
