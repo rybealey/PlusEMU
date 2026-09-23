@@ -594,6 +594,8 @@ public class Habbo
         // pixelrp: and forget which support conversation they were reading -
         // the registry is keyed by player id and outlives the session.
         Support.SupportUtility.Forget(Id);
+        // pixelrp offers: and any sale they were half way through.
+        Rooms.Offers.OfferState.Forget(Id);
         // pixelrp police: a cuff, a stun and an escort are all session state, and
         // reloading the client ends the session - so the cuffs come off with it.
         // Done here rather than left to the room-leave path below because that

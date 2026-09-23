@@ -64,6 +64,27 @@ public static class MedicalUtility
     }
 
     /// <summary>
+    /// On the hospital's books at ANY rank and clocked in right now.
+    ///
+    /// The gate for selling, which is a counter job rather than an emergency
+    /// one: a receptionist may sell a medkit without being cleared to drive an
+    /// ambulance. What it does NOT drop is the clock - a sale is the hospital
+    /// trading, and the hospital is only trading while somebody is at work.
+    /// </summary>
+    public static bool IsOnDutyHospitalStaff(int userId)
+    {
+        if (userId <= 0)
+            return false;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery(
+            "SELECT 1 FROM `rp_corporation_employees` e " +
+            "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+            "WHERE e.`user_id` = @id AND c.`service_type` = 'medical' AND e.`on_duty` = 1 LIMIT 1");
+        dbClient.AddParameter("id", userId);
+        return dbClient.GetRow() != null;
+    }
+
+    /// <summary>
     /// Employed at the hospital at ALL, at any rank. Only used to tell a junior
     /// medic apart from a civilian in the refusal: "you are not qualified yet"
     /// is useful to a nurse and meaningless to a shopkeeper.

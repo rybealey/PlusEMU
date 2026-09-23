@@ -380,6 +380,9 @@ public class RoomUserManager
             // the pairing alive across the change and lets the arrival put it
             // back together; everyone not in one is forgotten as before.
             Chat.Commands.User.Police.PoliceState.OnRoomLeave(_room, session.GetHabbo().Id);
+            // pixelrp offers: a sale is a thing between two people standing in
+            // one room. Neither end of it survives the door.
+            Offers.OfferState.Forget(session.GetHabbo().Id);
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
@@ -1223,6 +1226,10 @@ public class RoomUserManager
                     // pixelrp police: let go of anybody who could not follow
                     // their captor through a room change.
                     Chat.Commands.User.Police.PoliceState.TickTravel(_room, user);
+                    // pixelrp offers: drop what has run out. Memory only - no
+                    // database, and packets only to the two people concerned -
+                    // so the game loop can carry it.
+                    Offers.OfferState.Tick();
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));

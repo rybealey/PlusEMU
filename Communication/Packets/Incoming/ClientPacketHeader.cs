@@ -500,6 +500,8 @@ public static class ClientPacketHeader
     // pixelrp Pixel Cash
     public const uint RpPayOpenEvent = 4051;
     public const uint RpPaySendEvent = 4052;
+    // pixelrp :offer / :sell
+    public const uint RpOfferReplyEvent = 4053;
     public const uint RpRoomZoneSaveEvent = 3923;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958

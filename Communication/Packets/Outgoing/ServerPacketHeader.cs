@@ -419,4 +419,6 @@ public static class ServerPacketHeader
     public const uint RpPayThreadComposer = 4146;
     public const uint RpPayReceiptComposer = 4147;
     public const uint RpPayResultComposer = 4148;
+    // pixelrp :offer / :sell
+    public const uint RpOfferComposer = 4149;
 }
