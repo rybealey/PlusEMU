@@ -1,6 +1,8 @@
 ﻿using Plus.Communication.Packets.Outgoing.FriendList;
+using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.Friends;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.Banking;
 using Plus.HabboHotel.Users.Messenger;
 
 namespace Plus.Communication.Packets.Incoming.FriendList;
@@ -44,5 +46,13 @@ internal class MessengerInitEvent : IPacketEvent
             if (sender?.GetHabbo()?.Messenger.GetFriend(session.GetHabbo().Id) != null)
                 sender.Send(new RpMessengerReceiptComposer(session.GetHabbo().Id, RpMessengerReceiptComposer.Delivered));
         }
+
+        // pixelrp Pixel Cash: payments made while they were away. After the
+        // offline messages and never before the buddy list, for the same
+        // reason those are: the client only opens a conversation with a
+        // friend it already knows about. Each is the live receipt the phone
+        // would have had, so it lands exactly as a new message does.
+        foreach (var record in PixelCash.TakeUndelivered(session.GetHabbo().Id))
+            session.Send(new RpPayReceiptComposer(record));
     }
 }
