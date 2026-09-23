@@ -222,7 +222,7 @@ public class SsoTicketEvent : IPacketEvent
             if (!_cacheManager.ContainsUser(session.GetHabbo().Id))
                 _cacheManager.GenerateUser(session.GetHabbo().Id);
             // pixelrp: login never strips club parts (soft lapse) - only outfit saves validate club access.
-            session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true);
+            session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().IsStaff);
             session.GetHabbo().InitProcess();
             if (session.GetHabbo().Permissions.HasRight("mod_tickets"))
             {
