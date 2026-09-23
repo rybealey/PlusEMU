@@ -224,6 +224,42 @@ public static class PoliceState
 
     public static bool IsCuffed(int habboId) => Cuffed.ContainsKey(habboId);
 
+    /// <summary>
+    /// What a cuffed player cannot do, by command key.
+    ///
+    /// A BLOCK LIST AND NOT AN ALLOW LIST, deliberately. Most of what a player
+    /// can type is meta - stats, info, settings, the moderator's whole toolbox
+    /// - and none of it is an act performed with the hands. An allow list would
+    /// have to name all of that to avoid cuffing a moderator out of moderating,
+    /// and would silently break every command added after it. This names the
+    /// physical things instead, which is the short list and the one that
+    /// matches what cuffs actually stop.
+    ///
+    /// Chat is untouched: a suspect can talk, and talking is most of what
+    /// being arrested consists of. So is answering an offer - that is a tap on
+    /// a card, not a pair of hands - and so is walking, which the cuffs never
+    /// took away in the first place.
+    /// </summary>
+    private static readonly HashSet<string> CuffedCannot = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Fighting.
+        "hit", "slap",
+        // Doing to somebody else what was done to you.
+        "stun", "cuff", "uncuff", "escort", "unescort",
+        // Trading, and handing things over.
+        "offer", "sell", "give", "heal"
+    };
+
+    /// <summary>
+    /// Whether the cuffs stop this command, and the sentence to say if so.
+    ///
+    /// One gate in CommandManager rather than a check inside each command:
+    /// eleven copies of the same three lines is eleven places for the next
+    /// verb to be forgotten, and the forgetting would look like a feature.
+    /// </summary>
+    public static bool Blocks(int habboId, string commandKey) =>
+        IsCuffed(habboId) && CuffedCannot.Contains(commandKey);
+
     /// <summary>Cuff a player. False when they already were.</summary>
     public static bool Cuff(int habboId) => Cuffed.TryAdd(habboId, true);
 

@@ -75,6 +75,13 @@ internal class EscortCommand : ITargetChatCommand
         // second verb this toggle exists to remove.
         else if (PoliceState.IsMedicalEscort(habbo.Id) && PoliceState.SuspectOf(habbo.Id) == target.Id)
             kind = PoliceState.EscortKind.Medical;
+        // THE CUFFS ARE THE AUTHORITY, not a badge. Once an officer has put
+        // them on, the prisoner is a prisoner to the whole room: anybody can
+        // take them along, and they stay takeable until somebody uncuffs them.
+        // Last of the four, so an on-duty officer or medic still gets the kind
+        // their job implies rather than falling through to this.
+        else if (PoliceState.IsCuffed(target.Id))
+            kind = PoliceState.EscortKind.Custody;
         else
         {
             // Refuse in the caller's own language. Telling a paramedic that
@@ -87,7 +94,7 @@ internal class EscortCommand : ITargetChatCommand
             else if (PoliceUtility.IsOfficer(habbo.Id))
                 PoliceUtility.RequireOnDuty(session, "escort someone");
             else
-                session.SendWhisper("Only police officers and paramedics can escort someone.");
+                session.SendWhisper($"{target.Username} is not cuffed. Escorting anybody who is not takes a badge.");
             return Task.CompletedTask;
         }
 
