@@ -54,12 +54,23 @@ public static class PoliceState
     public const int StunEffectId = 236;
 
     /// <summary>
-    /// The cuff has NO visual yet. The original rendered a custom overhead
-    /// handcuff (effect 1000, lib OverheadCuff) built from PNG frames by its
-    /// own build-effect-nitro.py; that bundle is not in this project and its
-    /// source frames are no longer in that one either. Cuffed players read as
-    /// cuffed from the emote and from being unable to fight.
+    /// The handcuffs, worn for as long as somebody is cuffed.
+    ///
+    /// 637 because the bundle says so and not because the number was free:
+    /// every asset inside it is named h_std_fx637_*, and the client resolves an
+    /// effect's sprites by those names - so the id is a property of the art,
+    /// and renaming it would mean rebuilding the pack.
+    ///
+    /// This used to read "the cuff has NO visual yet": the original rendered a
+    /// custom overhead handcuff whose bundle was not in this project and whose
+    /// source frames were gone from the other one. This is that bundle's
+    /// replacement.
     /// </summary>
+    public const int CuffEffectId = 637;
+
+    /// <summary>What a player was wearing when the cuffs went on. Habbo id -> effect.</summary>
+    private static readonly ConcurrentDictionary<int, int> EffectBeforeCuff = new();
+
     public const int NoEffectId = 0;
 
     /// <summary>
@@ -209,7 +220,59 @@ public static class PoliceState
     public static bool Cuff(int habboId) => Cuffed.TryAdd(habboId, true);
 
     /// <summary>Uncuff a player. False when they were not cuffed.</summary>
-    public static bool Uncuff(int habboId) => Cuffed.TryRemove(habboId, out _);
+    public static bool Uncuff(int habboId)
+    {
+        if (!Cuffed.TryRemove(habboId, out _))
+            return false;
+        TakeCuffsOff(habboId);
+        return true;
+    }
+
+    /// <summary>
+    /// Put the handcuffs on screen, and keep them there.
+    ///
+    /// ASSERTED EVERY TICK, which is what "overpowers any currently active
+    /// enable" actually means. Cuffs are not a thing you apply once: a swim
+    /// tile, a mount, a fresh :enable or the passive badge would each take the
+    /// slot back a moment later, and a suspect whose handcuffs flickered off
+    /// when they walked through water is not wearing handcuffs. Re-taking the
+    /// slot on every tick is the cheapest way to mean it.
+    ///
+    /// The snapshot underneath is taken ONCE - the first tick the cuffs go on -
+    /// and not refreshed, for the reason TickAmbulance gives: what is handed
+    /// back at the end is what they were wearing when they were arrested, not
+    /// whatever happened to hold the slot for one tick in the middle.
+    /// </summary>
+    public static void TickCuffs(RoomUser user)
+    {
+        if (user == null || user.IsBot || Cuffed.IsEmpty)
+            return;
+        if (!IsCuffed(user.UserId))
+            return;
+        var effects = user.GetClient()?.GetHabbo()?.Effects;
+        if (effects == null || effects.CurrentEffect == CuffEffectId)
+            return;
+        EffectBeforeCuff.TryAdd(user.UserId, effects.CurrentEffect);
+        user.ApplyEffect(CuffEffectId);
+    }
+
+    /// <summary>
+    /// Give back whatever was underneath, if the cuffs are still what is on.
+    ///
+    /// Same guard Release uses for the stun: something else may own the slot by
+    /// now, and an uncuff is no reason to wipe it.
+    /// </summary>
+    private static void TakeCuffsOff(int habboId)
+    {
+        if (!EffectBeforeCuff.TryRemove(habboId, out var before))
+            return;
+        var habbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.GetHabbo();
+        var user = habbo?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habboId);
+        if (user == null || habbo?.Effects == null)
+            return;
+        if (habbo.Effects.CurrentEffect == CuffEffectId)
+            user.ApplyEffect(before);
+    }
 
     // ---- escort ------------------------------------------------------------
 
@@ -331,6 +394,12 @@ public static class PoliceState
         if (user == null || user.IsBot)
             return;
         var id = user.UserId;
+        // CUFFS OUTRANK THE AMBULANCE. A cuffed patient being carried is still
+        // under arrest, and the handcuffs are the thing a room needs to be able
+        // to see. Without this the two would take the slot off each other on
+        // alternate ticks and neither would be legible.
+        if (IsCuffed(id))
+            return;
         // Either end of a MEDICAL escort. A custody escort has no visual, so
         // an officer and their suspect are left entirely alone.
         var captorId = CaptorOf(id);
@@ -979,6 +1048,11 @@ public static class PoliceState
     {
         Stunned.TryRemove(habboId, out _);
         Cuffed.TryRemove(habboId, out _);
+        // The snapshot under the cuffs goes with them. Nothing to restore - the
+        // player is on their way out - but this registry is process-global and
+        // keyed by player id, so an entry left behind is one that never
+        // expires, which is the hazard this whole method exists for.
+        EffectBeforeCuff.TryRemove(habboId, out _);
         Travelling.TryRemove(habboId, out _);
         if (IsEscorting(habboId))
             EndEscort(room, habboId, null);

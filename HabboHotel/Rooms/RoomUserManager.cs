@@ -1223,6 +1223,9 @@ public class RoomUserManager
                     // pixelrp hospital: hold the ambulance on both ends of a
                     // transport, against anything else that takes the slot.
                     Chat.Commands.User.Police.PoliceState.TickAmbulance(user);
+                    // pixelrp police: the handcuffs, re-asserted every tick so
+                    // nothing else can quietly take the slot back off them.
+                    Chat.Commands.User.Police.PoliceState.TickCuffs(user);
                     // pixelrp police: let go of anybody who could not follow
                     // their captor through a room change.
                     Chat.Commands.User.Police.PoliceState.TickTravel(_room, user);
