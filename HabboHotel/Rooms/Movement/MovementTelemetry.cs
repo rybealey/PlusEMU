@@ -113,6 +113,11 @@ public static class MovementCounters
 
     // Redirects held back because the walker was behind the elapsing index,
     // and the ones that were later applied successfully.
+    // Redirects planned from e+2 because e+1 was inside the safety margin.
+    // THE TUNING SIGNAL for MovementSettings.RedirectSafetyMarginMs: read it as
+    // a share of `redirects`.
+    private static long _redirectProtectedNextEdge;
+
     private static long _redirectDeferredBehindElapsing;
     private static long _redirectDeferredRecovered;
 
@@ -168,6 +173,9 @@ public static class MovementCounters
     /// redirectBehindElapsing, which counts the same condition being reached;
     /// with the deferral in place that counter should now stay flat.
     /// </summary>
+    public static void RedirectProtectedNextEdge() =>
+        Interlocked.Increment(ref _redirectProtectedNextEdge);
+
     public static void RedirectDeferredBehindElapsing() =>
         Interlocked.Increment(ref _redirectDeferredBehindElapsing);
 
@@ -218,6 +226,7 @@ public static class MovementCounters
         $"correctionEPlus1NotFuture={Interlocked.Read(ref _correctionEPlus1NotFuture)} " +
         $"correctionEPlus1AlreadyStaged={Interlocked.Read(ref _correctionEPlus1AlreadyStaged)} " +
         $"correctionEPlus1Escort={Interlocked.Read(ref _correctionEPlus1Escort)} " +
+        $"redirectProtectedNextEdge={Interlocked.Read(ref _redirectProtectedNextEdge)} " +
         $"redirectDeferredBehindElapsing={Interlocked.Read(ref _redirectDeferredBehindElapsing)} " +
         $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)}";
 

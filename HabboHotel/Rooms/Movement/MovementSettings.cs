@@ -53,6 +53,39 @@ public static class MovementSettings
     /// </summary>
     public const int EscortIntervalMs = 250;
 
+    /// <summary>
+    /// How close to an edge's start a redirect may be decided before that edge
+    /// is treated as already spoken for.
+    ///
+    /// THE CLIENT IS A STEP AHEAD OF THE SERVER, and that is the whole reason
+    /// this exists. Every staged edge carries a preview of the next few tiles,
+    /// so the client holds e+1's geometry a full interval before e+1 starts -
+    /// and begins drawing it the moment its cycleStart passes, without waiting
+    /// for a packet. The server considers e+1 safely in the future right up to
+    /// that instant. Both are right; they just mean different things by
+    /// "started".
+    ///
+    /// So a redirect decided a few milliseconds before that boundary sends
+    /// corrected geometry that lands AFTER the client began drawing the old,
+    /// and upsert on the client replaces it outright - there is no check there
+    /// for an edge already in progress. The avatar jumps. Measured on beta:
+    /// minRedirectMarginMs=1, and with three players following each other 109
+    /// of 958 redirects landed inside 50ms.
+    ///
+    /// WHAT HAPPENS INSIDE THE WINDOW is not a delay. The redirect still takes
+    /// effect on this click; it is simply planned from the promised edge's
+    /// destination instead of from the walker, so the already-advertised step
+    /// stands and everything after it changes. The avatar finishes the step it
+    /// had been promised, then turns.
+    ///
+    /// 50 IS A STARTING VALUE. It is the smallest bucket :movementstats already
+    /// counts, so it is the one number the existing data can speak to. Tune it
+    /// from redirectProtectedNextEdge as a share of redirects - roughly 11% at
+    /// this value on the following sample, 21% at 100 - and raise it only while
+    /// [MV2/FORCED] still reports alreadyDrawing=true.
+    /// </summary>
+    public const int RedirectSafetyMarginMs = 50;
+
     /// <summary>Future edges advertised alongside a real edge. LOCK NOTE: 3.</summary>
     public const int LookaheadMax = 3;
 
@@ -65,24 +98,30 @@ public static class MovementSettings
     /// <summary>A due time within this window of now is treated as due.</summary>
     public const int TickSlackMs = 2;
 
-    /// <summary>
-    /// Ceiling on how long a Standing-&gt;Moving click may be held back to join the
-    /// room's movement phase.
-    ///
-    /// AT <see cref="IntervalMs"/> ALIGNMENT IS GUARANTEED: the distance to the
-    /// next boundary is always 0..499, so it can never exceed the ceiling and a
-    /// real user's walk always joins. That is what makes "every concurrently
-    /// moving real user shares one cycleStart % 500" a property of the design
-    /// rather than a coincidence of timing.
-    ///
-    /// THE COST IS INPUT LATENCY: up to 499ms before the avatar moves, ~250ms on
-    /// average, on every walk started while somebody else is already walking.
-    /// Lowering this makes alignment opportunistic again - walks whose boundary
-    /// is further away start immediately and simply do not join, which trades
-    /// perfect alignment for responsiveness. Nothing else needs to change to
-    /// make that trade; PhaseDecision.Skipped already covers it.
-    /// </summary>
-    public const int MaxStartDelayMs = IntervalMs;
+    /* ALIGNMENT IS UNCONDITIONAL, and there is no ceiling constant any more.
+     *
+     * A Standing->Moving click by a real user ALWAYS waits for the room's next
+     * phase boundary. The distance to it is 0..IntervalMs-1, so it was always
+     * within the old MaxStartDelayMs ceiling (which equalled IntervalMs) and
+     * the "too far, start unaligned" branch could never be taken. The ceiling,
+     * that branch and PhaseDecision.Skipped were all deleted on 2026-09-22 -
+     * they were dead at this value, not merely unused.
+     *
+     * That guarantee is what makes "every concurrently moving real user shares
+     * one cycleStart % IntervalMs" a property of the design rather than a
+     * coincidence of timing.
+     *
+     * THE COST IS INPUT LATENCY: up to one interval before the avatar moves,
+     * half of one on average, on every walk started while somebody else is
+     * already walking.
+     *
+     * TO TRADE THAT BACK FOR RESPONSIVENESS, alignment has to become
+     * opportunistic again: restore the ceiling, restore the comparison in
+     * ResolveStartOrigin, and give the walker a phase decision for "did not
+     * join". It is a real change, not a number - which is the honest position,
+     * because the number alone has done nothing for as long as it equalled
+     * IntervalMs.
+     */
 
     /// <summary>
     /// Ceiling on rooms processed in one scheduler pass, so the loop always

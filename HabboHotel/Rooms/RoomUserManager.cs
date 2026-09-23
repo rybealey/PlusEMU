@@ -1006,19 +1006,6 @@ public class RoomUserManager
             foreach (var edge in frame)
             {
                 _room.SendPacket(new RpMovementV2Composer(edge, serverNowMs));
-
-                // Diagnostic only, and off unless :movementtrace named this
-                // unit. Reported HERE rather than at stage time so what it
-                // prints is exactly what went on the wire.
-                if (Movement.MovementTrace.Enabled)
-                    Movement.MovementTrace.OnEdgeEmitted(edge, serverNowMs);
-
-                // Diagnostic only, and off unless :movementreplan is armed.
-                // Stamped HERE, next to the send, because "when did the 4110
-                // actually leave" against the edge's own cycleStart is the
-                // whole discriminator between the two hitch hypotheses.
-                if (Movement.MovementReplanTrace.Enabled)
-                    Movement.MovementReplanTrace.OnEdgeSent(edge, serverNowMs);
             }
         }
     }

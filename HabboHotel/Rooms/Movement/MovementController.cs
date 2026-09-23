@@ -36,7 +36,7 @@ public static class MovementController
 
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, w.Tile, target, ctx,
-            baseIndex: 0, allowPartial: allowPartial);
+            allowPartial: allowPartial);
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false;
@@ -46,15 +46,7 @@ public static class MovementController
 
         // THE ROOM ACTIVE PHASE ANCHOR. Caller holds MovementLock, so two
         // simultaneous Standing->Moving requests cannot establish two phases.
-        var phaseAnchorBefore = room.PhaseAnchor;
         var origin = ResolveStartOrigin(room, w, nowMs);
-
-        // DIAGNOSTIC ONLY, off unless :movementphase is armed. Reported from
-        // here rather than inside ResolveStartOrigin so one call covers all
-        // four of its exits, and so the anchor as it was BEFORE is still
-        // readable. Changes nothing.
-        if (MovementPhaseTrace.Enabled)
-            MovementPhaseTrace.OnWalkStart(room, w, nowMs, phaseAnchorBefore, origin);
 
         w.WalkSessionId++;
         w.RouteRevision = 0;
@@ -105,15 +97,18 @@ public static class MovementController
     }
 
     /// <summary>
-    /// Pick this walk's TimelineOrigin, joining the room's movement phase when
-    /// that costs at most <see cref="MovementSettings.MaxStartDelayMs"/>.
+    /// Pick this walk's TimelineOrigin, joining the room's movement phase.
     ///
-    /// With the ceiling at IntervalMs this ALWAYS joins, because the distance to
-    /// the next boundary is 0..499 and therefore never exceeds it. Alignment is
-    /// then guaranteed rather than opportunistic, at a cost of up to 499ms of
-    /// input latency (~250ms average) on any walk begun while someone else is
-    /// already walking. Lowering the ceiling reverts to opportunistic with no
-    /// other change.
+    /// IT ALWAYS JOINS. The distance to the next boundary is 0..IntervalMs-1,
+    /// so there is no longer anything for it to exceed: alignment is guaranteed
+    /// rather than opportunistic. The cost is up to one interval of input
+    /// latency (~250ms on average) on any walk begun while somebody else is
+    /// already walking.
+    ///
+    /// Trading that back for responsiveness is a real change and not a number -
+    /// the ceiling that used to gate it, and the "did not join" case it
+    /// selected, were both deleted once the ceiling equalling IntervalMs made
+    /// them unreachable. MovementSettings says what restoring them takes.
     ///
     /// Snapping BACKWARD is not an option: edge 0 would already be part-elapsed
     /// when emitted, so the client would render the avatar instantly a fraction
@@ -158,22 +153,14 @@ public static class MovementController
         var interval = MovementSettings.IntervalMs;
         var delta = ((room.PhaseAnchor - nowMs) % interval + interval) % interval;
 
-        if (delta == 0)
-        {
-            // Already exactly on the boundary: aligned at zero cost.
-            w.LastPhaseDecision = PhaseDecision.Aligned;
-            return nowMs;
-        }
-
-        if (delta <= MovementSettings.MaxStartDelayMs)
-        {
-            w.LastPhaseDecision = PhaseDecision.Aligned;
-            w.LastStartDelayMs = (int)delta;
-            return nowMs + delta;
-        }
-
-        w.LastPhaseDecision = PhaseDecision.Skipped;
-        return nowMs;
+        // ALWAYS JOINS. delta is 0..IntervalMs-1 by construction, so there is no
+        // "too far to bother" case to test for - see MovementSettings, where the
+        // ceiling that used to gate this lived. delta == 0 needs no branch of
+        // its own either: it is already on the boundary, and this returns nowMs
+        // with a zero delay, which is exactly that.
+        w.LastPhaseDecision = PhaseDecision.Aligned;
+        w.LastStartDelayMs = (int)delta;
+        return nowMs + delta;
     }
 
     /// <summary>
@@ -187,7 +174,7 @@ public static class MovementController
     ///
     /// Caller MUST hold MovementLock.
     /// </summary>
-    private static MovementState? PhaseHolder(RoomMovement room, MovementState self)
+    internal static MovementState? PhaseHolder(RoomMovement room, MovementState self)
     {
         foreach (var other in room.States.Values)
         {
@@ -216,7 +203,7 @@ public static class MovementController
 
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, w.Tile, target, ctx,
-            baseIndex: 0, allowPartial: true);
+            allowPartial: true);
 
         if (result == PathResult.None || !w.Route.HasNext)
         {
@@ -233,9 +220,26 @@ public static class MovementController
     /// <summary>
     /// Moving -> Moving. THE redirect. See the class remarks and LOCK NOTE 2.2.
     /// </summary>
+    /// <param name="stageCorrection">
+    /// Whether to publish the corrected edge early. TRUE for every caller that
+    /// redirects a walker MID-EDGE, which is all of them except one.
+    ///
+    /// FALSE ONLY FROM THE DEFERRED RETRY IN AdvanceWalker, and only because
+    /// there is nothing there for an early publish to beat. Early publication
+    /// exists to overtake the client's lookahead: the client begins drawing the
+    /// next edge the moment its cycleStart passes, without waiting for a
+    /// packet, so a mid-edge correction has to arrive before that. At the retry
+    /// the next edge has not been advertised at all yet - PlanNextEdge is about
+    /// to stage it, moments later, already carrying this new route.
+    ///
+    /// Publishing anyway put the SAME pair of tiles on the wire twice: once
+    /// here as w.EdgeIndex + 1, and once from PlanNextEdge as w.EdgeIndex. The
+    /// client walked the step, was told to walk it again, and jumped back to
+    /// do so. That is the flicker seen on beta on 2026-09-22.
+    /// </param>
     public static bool Redirect(
         RoomMovement room, MovementState w, Point target, in TraverseContext ctx,
-        long nowMs, bool allowPartial = true)
+        long nowMs, bool allowPartial = true, bool stageCorrection = true)
     {
         if (room.Closed || w.Mode != MovementMode.Moving)
             return false;
@@ -300,28 +304,52 @@ public static class MovementController
             return false;
         }
 
-        // 3. Origin = terminal of the CURRENT ELAPSING EDGE.
+        // 2c. IS e + 1 ALREADY SPOKEN FOR?
+        //
+        // The client holds e+1's geometry as lookahead a full interval before
+        // it starts, and begins drawing it the instant its cycleStart passes
+        // without waiting for a packet. Inside this window a correction cannot
+        // arrive first, and the client's upsert has no guard for an edge in
+        // progress - it swaps the geometry underneath the frame and the avatar
+        // jumps. See MovementSettings.RedirectSafetyMarginMs.
+        //
+        // NOTHING IS DELAYED. The redirect still lands on this click; it is
+        // planned from the promised edge's destination rather than from the
+        // walker, so e+1 stands as advertised and e+2 onward carry the change.
+        var protectNext = (w.EdgeStartTick(e + 1) - nowMs) < MovementSettings.RedirectSafetyMarginMs
+                          && w.Route.HasNext;
+
+        // 3. Origin = terminal of the CURRENT ELAPSING EDGE, or of the edge
+        //    after it when that one is already spoken for.
         //    NOT the last promised terminal: that would force the avatar to
         //    walk to the end of advertised lookahead (up to 1500ms) before
         //    turning, which is precisely the responsiveness bug this rule fixes.
-        var origin = w.EdgeTo;
-
-        // DIAGNOSTIC ONLY, and off unless :movementreplan is armed. The
-        // geometry this revision is about to replace has to be read BEFORE the
-        // pathfinder overwrites the route buffer, which is why it is captured
-        // here rather than alongside the record below. Changes nothing.
-        var traceHadOld = false;
-        Point traceOldFrom = default, traceOldTo = default;
-        if (MovementReplanTrace.Enabled)
-            traceHadOld = MovementReplanTrace.ReadEdgeGeometry(w, e + 1, origin, out traceOldFrom, out traceOldTo);
+        //    One edge is the most this ever skips.
+        var promised = protectNext ? w.Route.PeekNext() : default;
+        var origin = protectNext ? promised : w.EdgeTo;
 
         // 4. Plan from that origin.
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, origin, target, ctx,
-            baseIndex: e + 1, allowPartial: allowPartial);
+            allowPartial: allowPartial);
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false; // keep walking the existing route
+
+        // The protected edge's destination goes back on the front, so the route
+        // reads [e+1 as promised, then the new way to target]. THAT IS WHAT
+        // KEEPS THIS CHANGE SMALL: every reader downstream - PlanNextEdge,
+        // StageEdge, the lookahead it attaches, and the early correction below
+        // - sees the shape it has always seen, and none of them needs to know
+        // an edge was protected. The early correction republishes e+1's own
+        // unchanged geometry, which costs one packet and buys the client
+        // dropping its now-stale previews of e+2 and beyond a full interval
+        // before it needs them.
+        if (protectNext)
+        {
+            w.Route.PrependPromised(promised);
+            MovementCounters.RedirectProtectedNextEdge();
+        }
 
         // MEASUREMENT ONLY, changing nothing. How near the boundary of the
         // edge it is about to restage this replan lands. The client begins
@@ -342,15 +370,14 @@ public static class MovementController
         // UNCHANGED, deliberately: WalkSessionId, TimelineOrigin, EdgeIndex,
         //                          DueTick / queue entry, timing alignment.
 
-        // DIAGNOSTIC ONLY. Recorded after the bump so the revision number is
-        // the one the wire will carry.
-        if (MovementReplanTrace.Enabled)
-            MovementReplanTrace.OnRevision(
-                w, MovementReplanTrace.Origin.Redirect, nowMs, e, e + 1,
-                traceHadOld, traceOldFrom, traceOldTo, origin, w.Route.PeekNext());
-
         // 8. Future indexes (> e) may be restaged; indexes <= e never change.
-        StageCorrection(room, w, e + 1, map);
+        //
+        // Skipped from the deferred retry, where the next edge has not been
+        // staged yet and the staging about to happen already carries this
+        // route - see the stageCorrection parameter. The route swap above
+        // still stands either way; only the extra packet is withheld.
+        if (stageCorrection)
+            StageCorrection(room, w, e + 1, map);
         return true;
     }
 
@@ -454,7 +481,16 @@ public static class MovementController
             {
                 var deferredCtx = MovementWalkerContext.For(room.Room, w.VirtualId);
 
-                if (Redirect(room, w, deferredTarget, deferredCtx, nowMs))
+                // NO EARLY PUBLISH FROM HERE. CommitEdgeSilently has just set
+                // Tile = EdgeTo, so the walker is standing still between edges
+                // and this plans from exactly where it is - the route swap is
+                // correct. What would NOT be correct is the correction packet:
+                // PlanNextEdge runs a few lines below and stages this same
+                // geometry as w.EdgeIndex, so publishing it here as
+                // w.EdgeIndex + 1 puts one pair of tiles on the wire under two
+                // indexes, and the avatar walks the step then jumps back to
+                // walk it again.
+                if (Redirect(room, w, deferredTarget, deferredCtx, nowMs, stageCorrection: false))
                     MovementCounters.RedirectDeferredRecovered();
             }
         }
@@ -532,12 +568,9 @@ public static class MovementController
                 // client cannot have begun rendering an edge whose cycleStart
                 // is still in the future.
                 MovementCounters.Replan();
-                // DIAGNOSTIC ONLY: the tile this index promised before the
-                // re-plan, kept because `next` is about to be reassigned.
-                var traceReplanOldTo = next;
                 var replanned = AStarPathfinder.FindRoute(
                     map, room.Scratch, w.Route, w.Tile, w.Target, ctx,
-                    baseIndex: w.EdgeIndex, allowPartial: true);
+                    allowPartial: true);
                 if (replanned == PathResult.None || !w.Route.HasNext)
                 {
                     MovementCounters.StopBlocked();
@@ -547,11 +580,6 @@ public static class MovementController
                 w.RouteRevision++;
                 next = w.Route.PeekNext();
                 isFinal = w.Route.IsLast;
-
-                if (MovementReplanTrace.Enabled)
-                    MovementReplanTrace.OnRevision(
-                        w, MovementReplanTrace.Origin.BlockedReplan, nowMs, elapsing, w.EdgeIndex,
-                        true, w.Tile, traceReplanOldTo, w.Tile, next);
             }
         }
 
@@ -567,13 +595,6 @@ public static class MovementController
         // MovementWorkQueues.
 
         StageEdge(room, w, immediate);
-
-        // DIAGNOSTIC ONLY, off unless :movementreplan is armed. Stamps the
-        // moment this index's record was built, which is neither the moment the
-        // revision was created nor the moment the packet leaves. Changes
-        // nothing.
-        if (MovementReplanTrace.Enabled)
-            MovementReplanTrace.OnEdgeStaged(w, nowMs);
 
         var nextDue = w.EdgeStartTick(w.EdgeIndex) + w.IntervalMs;
         room.Walkers.InsertOrUpdate(w, nextDue); // never a bare Push (I-1)
@@ -705,7 +726,7 @@ public static class MovementController
     // allowed to do (MovementSchedulerGuard, invariant I-5).
 
     /// <summary>The (dx, dy) of one step in a facing - the inverse of Rotation.Calculate.</summary>
-    private static Point FacingDelta(byte facing) => facing switch
+    internal static Point FacingDelta(byte facing) => facing switch
     {
         0 => new Point(0, -1),
         1 => new Point(1, -1),
@@ -1047,13 +1068,68 @@ public static class MovementController
         if (w.Route.Length - w.Route.Cursor <= 1)
             flags |= RpMovementV2Flags.FinalEdge;
 
+        // TEMPORARY DIAGNOSTIC - see RpMovementV2Flags.ForcedRedirect. THIS
+        // record is the one worth marking, of the two this redirect produces:
+        // it is the packet that races the client's lookahead, and the boundary
+        // beat's own record arrives afterwards, describing a rewrite the client
+        // has already been told about. Marking both would double-count a single
+        // forced redirect in the browser log.
+        var forcedMarginMs = 0;
+        if (w.ForcedRedirectMarginMs != MovementState.NotForced)
+        {
+            flags |= RpMovementV2Flags.ForcedRedirect;
+            forcedMarginMs = w.ForcedRedirectMarginMs;
+        }
+
+        // LOOKAHEAD, OFF A CURSOR THAT HAS NOT MOVED - and that difference is
+        // the whole reason this is not a copy of StageEdge's loop.
+        //
+        // There, PlanNextEdge has already called Route.Advance before staging,
+        // so Route[Cursor] is the tile AFTER the edge being emitted. Here the
+        // cursor is deliberately left alone (see above), so Route[Cursor] IS
+        // this record's own destination - `to`. Starting at Cursor would
+        // advertise a first future edge running from `to` to `to`, a
+        // zero-length step, and shift the whole chain one tile back. That is
+        // the same shape of fault as publishing one pair of tiles under two
+        // indexes, and it is why the offset is Cursor + 1.
+        //
+        // WHY SEND IT AT ALL. A correction makes the client drop every edge at
+        // or after this index - `edges.filter(e => e.edgeIndex < edgeIndex)` -
+        // so without these it is left holding exactly one edge at the moment it
+        // has just thrown the rest away, and does not get another until the
+        // boundary beat's record arrives one flight time into the next edge.
+        // Every other staged record carries lookahead; this one carried none,
+        // which was an omission rather than a decision.
+        //
+        // The client anchors each preview to the previous one's terminal
+        // (sx: prev.gx), so preview 0 already BEGINS at this edge's new
+        // destination. It only needs telling where that step ends.
+        var lookahead = System.Array.Empty<LookaheadTile>();
+        var lookCount = 0;
+        var available = w.Route.Length - w.Route.Cursor - 1;
+
+        if (available > 0)
+        {
+            var max = System.Math.Min(MovementSettings.LookaheadMax, available);
+            lookahead = new LookaheadTile[max];
+
+            for (var i = 0; i < max; i++)
+            {
+                var tile = w.Route[w.Route.Cursor + 1 + i];
+                lookahead[i] = new LookaheadTile(
+                    tile.X, tile.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(tile.X, tile.Y)));
+            }
+
+            lookCount = max;
+        }
+
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, index, flags,
             w.IntervalMs, w.EdgeStartTick(index),
             from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
             toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
-            System.Array.Empty<LookaheadTile>(), 0, 0, publishOnly: true));
+            lookahead, lookCount, forcedMarginMs, publishOnly: true));
 
         w.LastEarlyPublish = identity;
 

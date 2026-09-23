@@ -44,4 +44,24 @@ public static class RpMovementV2Flags
     /// </summary>
     public const int JoinStackedAtRequest = 0x0080;
 
+    /// <summary>
+    /// TEMPORARY DIAGNOSTIC. This edge's geometry was restaged by
+    /// :forceredirect rather than by a player's click.
+    ///
+    /// A FLAG BIT AND A BORROWED FIELD, for the reason the bit above gives: a
+    /// new field on the record would force client and emulator to deploy in the
+    /// same instant, and this is a diagnostic, not a feature. When the bit is
+    /// set, StartDelayMs carries the margin the harness ACTUALLY achieved, in
+    /// milliseconds before the boundary - the one number the client cannot work
+    /// out for itself, because it never sees the moment the server decided.
+    ///
+    /// Safe to borrow that field here: StartDelayMs is only meaningful on edge
+    /// 0, and a correction is never index 0 - the index it rewrites is e+1, and
+    /// e is at least 0. The two diagnostics therefore cannot collide on one
+    /// record.
+    ///
+    /// Remove with the whole :forceredirect harness.
+    /// </summary>
+    public const int ForcedRedirect = 0x0100;
+
 }

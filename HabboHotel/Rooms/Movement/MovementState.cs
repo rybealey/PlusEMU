@@ -18,8 +18,8 @@ public enum MovementMode : byte
     Displaced = 3,
 
     /// <summary>
-    /// Enrolled and routed, waiting for a phase boundary that is at most
-    /// MaxStartDelayMs away. NOTHING has been emitted: no "mv", no 4110, no
+    /// Enrolled and routed, waiting for a phase boundary less than one interval
+    /// away. NOTHING has been emitted: no "mv", no 4110, no
     /// staged edge. The walker holds exactly one scheduler entry, due at
     /// TimelineOrigin, and becomes Moving on that beat.
     ///
@@ -39,21 +39,27 @@ public enum PhaseDecision : byte
     /// <summary>No live phase; this walk established one.</summary>
     Established = 1,
 
-    /// <summary>Joined an existing phase, waiting up to MaxStartDelayMs.</summary>
-    Aligned = 2,
-
-    /// <summary>Boundary was too far off; started immediately, unaligned.</summary>
-    Skipped = 3
+    /// <summary>
+    /// Joined an existing phase, waiting up to one interval for its boundary.
+    /// The only outcome for a real user who finds a phase holder: alignment is
+    /// unconditional, so there is no "did not join" member here. There was one,
+    /// Skipped = 3, and it was unreachable - see MovementSettings.
+    /// </summary>
+    Aligned = 2
 }
 
 /// <summary>
 /// The identity of one edge record: (WalkSessionId, RouteRevision, EdgeIndex).
 ///
-/// MovementState's own remarks call this a proven total order, and it is the
-/// key every consumer already matches on - the outbound trace, the replan log
-/// and the early-publish dedupe all compare exactly these three. Naming it
-/// means the triple is carried and compared as ONE value rather than three
-/// fields that have to be written and read in step.
+/// MovementState's own remarks call this a proven total order. Naming it means
+/// the triple is carried and compared as ONE value rather than three fields
+/// that have to be written and read in step.
+///
+/// IT HAS ONE CONSUMER LEFT: the early-publish dedupe (LastEarlyPublish). It
+/// had three - the outbound trace and the replan log matched on the same triple
+/// - and both went with :movementtrace and :movementreplan. Kept as a type
+/// rather than inlined back into three fields because the dedupe compares the
+/// whole identity at once, which is the property that made it worth naming.
 /// </summary>
 public readonly record struct EdgeIdentity(long WalkSessionId, int RouteRevision, int EdgeIndex);
 
@@ -67,8 +73,8 @@ public readonly record struct EdgeIdentity(long WalkSessionId, int RouteRevision
 /// DELIBERATELY ABSENT - do not add these back:
 ///   MovementSeq       identity is (WalkSessionId, RouteRevision, EdgeIndex),
 ///                     proven a total order; a second counter can only disagree
-///   PromiseBuffer     superseded by EmittedThroughEdge + RouteBuffer.BaseIndex
-///                     + the COMMIT-BEFORE-REPLACE rule (LOCK NOTE 2.2)
+///   PromiseBuffer     superseded by EmittedThroughEdge + the
+///                     COMMIT-BEFORE-REPLACE rule (LOCK NOTE 2.2)
 ///   Formation*        no pairwise formation system exists in V2
 ///   TimingGroupId /
 ///   GroupAffinity     replaced by the phase-snap (LOCK NOTE 2.6)
@@ -220,9 +226,10 @@ public sealed class MovementState : IDueHeapNode
     /// A redirect target held back because the walker had not yet caught up to
     /// the elapsing edge index.
     ///
-    /// Planning while EdgeIndex &lt; e labels the route BaseIndex = e + 1 while
-    /// planning it from EdgeTo - the terminal of an EARLIER edge - so every
-    /// index in it is wrong by (e - EdgeIndex) and the chain acquires a hole.
+    /// Planning while EdgeIndex &lt; e would plan from EdgeTo - the terminal of
+    /// an EARLIER edge - while the indexes it is staged under run from e + 1, so
+    /// every index in it is wrong by (e - EdgeIndex) and the chain acquires a
+    /// hole.
     /// The click is kept here and retried on a later beat instead of being
     /// dropped, because the commit path is the only thing that brings EdgeIndex
     /// forward.
@@ -272,6 +279,32 @@ public sealed class MovementState : IDueHeapNode
     /// stale from a previous session.
     /// </summary>
     public bool JoinStackedAtRequest;
+
+    /// <summary>
+    /// TEMPORARY DIAGNOSTIC. Set by :forceredirect for the duration of ONE
+    /// Redirect call, carrying the margin that call achieved in milliseconds
+    /// before the boundary. <see cref="NotForced"/> at every other moment.
+    ///
+    /// Scoped to the call rather than to the walk on purpose. The harness sets
+    /// it, calls Redirect, and clears it in a finally - so exactly the records
+    /// that redirect stages carry the mark, and a later click by the same
+    /// player is never mistaken for a forced one.
+    ///
+    /// Remove with the whole :forceredirect harness.
+    /// </summary>
+    public int ForcedRedirectMarginMs = NotForced;
+
+    /// <summary>
+    /// Sentinel for <see cref="ForcedRedirectMarginMs"/>: not a forced
+    /// redirect.
+    ///
+    /// int.MinValue rather than -1 because the margin can legitimately be
+    /// NEGATIVE - the harness aims at a few milliseconds before a boundary and
+    /// can overshoot it - and a real margin of -1ms must not read as "no forced
+    /// redirect here". Only ever compared for equality, never subtracted from,
+    /// so the usual hazard with this constant does not apply.
+    /// </summary>
+    public const int NotForced = int.MinValue;
 
     /// <summary>
     /// True while this walker holds a scheduler queue entry (I-1).
