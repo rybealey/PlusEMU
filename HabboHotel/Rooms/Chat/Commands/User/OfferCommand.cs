@@ -107,9 +107,7 @@ internal class OfferCommand : ITargetChatCommand
         // client reads it as an action and moves the opening marker ahead of
         // the speaker's name, so this renders as "*Ryan offers Twist ...*".
         var sum = (offer!.Total > 0) ? $" for {TextHandling.GetMoney(offer.Total)}" : string.Empty;
-        var goods = ware.TakesQuantity
-            ? $"{TextHandling.GetNumber(offer.Quantity)} {offer.Label}"
-            : $"a {ware.One.ToLowerInvariant()}";
+        var goods = OfferState.Goods(offer);
         // NO WHISPER TO THE SELLER HERE. The bubble above their own head is
         // the receipt, and it is a better one - the whole room can see the
         // offer was made, which is the point of doing it in a room. A private

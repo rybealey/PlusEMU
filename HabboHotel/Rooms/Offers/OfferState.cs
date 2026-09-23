@@ -240,6 +240,7 @@ public static class OfferState
             return;
         Live.TryRemove(offerId, out _);
         Push(buyer.Id);
+        Announce(buyer.CurrentRoom, buyer.Id, $"turns down {offer.SellerName}'s offer");
         PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?
             .SendWhisper($"{buyer.Username} turned down your offer.");
     }
@@ -324,8 +325,33 @@ public static class OfferState
             sellerUser.CarryItem(0);
 
         var sum = (offer.Total > 0) ? $" for {TextHandling.GetMoney(offer.Total)}" : string.Empty;
-        sellerSession?.SendWhisper($"{buyer.Username} accepted {offer.Quantity} {offer.Label}{sum}.");
+        Announce(room, buyer.Id, $"takes {Goods(offer)} from {offer.SellerName}{sum}");
+        sellerSession?.SendWhisper($"{buyer.Username} accepted {Goods(offer)}{sum}.");
         return true;
+    }
+
+    /// <summary>
+    /// The goods as a person would say them: counted when they are things,
+    /// named when they are an act. "3 Medkits", "a heal".
+    /// </summary>
+    public static string Goods(Offer offer) =>
+        offer.Ware.TakesQuantity
+            ? $"{TextHandling.GetNumber(offer.Quantity)} {offer.Label}"
+            : $"a {offer.Ware.One.ToLowerInvariant()}";
+
+    /// <summary>
+    /// Bubble 5, wrapped in asterisks, from whoever did the thing.
+    ///
+    /// The room watched the offer being made, so it watches the answer too - a
+    /// deal that is public in one direction and private in the other reads as
+    /// half a scene. Same shape :give already uses: the client moves the
+    /// opening marker ahead of the speaker's name, so this renders as
+    /// "*Twist takes 3 Medkits from Ryan*".
+    /// </summary>
+    private static void Announce(Room? room, int habboId, string text)
+    {
+        var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habboId);
+        user?.OnChat(5, $"*{text}*", true);
     }
 
     // ---- the money -----------------------------------------------------------
