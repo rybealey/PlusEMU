@@ -195,6 +195,25 @@ public class Habbo
     public uint TeleportingRoomId { get; set; }
 
     /// <summary>
+    /// A teleport or a hopper is one trip, and this is the end of it.
+    ///
+    /// The V1 movement engine cleared these on the player's first step out of
+    /// the destination teleporter. V2 has no such step, and when V1 was deleted
+    /// nothing took the job over - so a single ride left IsTeleporting set for
+    /// the rest of the session, and PrepareRoom sent every later room change
+    /// that was not back to the teleport's own room to the hotel view. Called
+    /// on arrival, and on every way a teleport can end without one.
+    /// </summary>
+    public void EndTeleport()
+    {
+        IsTeleporting = false;
+        TeleportingRoomId = 0;
+        TeleporterId = 0;
+        IsHopping = false;
+        HopperId = 0;
+    }
+
+    /// <summary>
     /// Last room the server told this client to enter (RoomForwardComposer). Non-staff
     /// clients may only open a flat connection to a server-authorized target — anything
     /// else is an injected packet bypassing the staff-only navigator.
@@ -744,26 +763,29 @@ public class Habbo
             else
                 Client.GetHabbo().CurrentRoom = null;
         }
+        // An entry for any room but the teleport's own means the teleport is
+        // over - superseded by a summon, an escort, the navigator. It used to
+        // eject the player to the hotel view instead, which with the flag
+        // never cleared meant every room change after a single teleport. Every
+        // entry that gets this far was already chosen by the server or passed
+        // the injection gate, so there is nothing here left to refuse.
         if (Client.GetHabbo().IsTeleporting && Client.GetHabbo().TeleportingRoomId != id)
-        {
-            Client.Send(new CloseConnectionComposer());
-            return;
-        }
+            Client.GetHabbo().EndTeleport();
         if (!PlusEnvironment.Game.RoomManager.TryLoadRoom(id, out var room))
         {
-            Client.Send(new CloseConnectionComposer());
+            Eject();
             return;
         }
         if (room.IsCrashed)
         {
             Client.SendPopup("This room has crashed! :(");
-            Client.Send(new CloseConnectionComposer());
+            Eject();
             return;
         }
         if (room.GetRoomUserManager().UserCount >= room.UsersMax && !Client.GetHabbo().Permissions.HasRight("room_enter_full") && Client.GetHabbo().Id != room.OwnerId)
         {
             Client.Send(new CantConnectComposer(1));
-            Client.Send(new CloseConnectionComposer());
+            Eject();
             return;
         }
         if (!Permissions.HasRight("room_ban_override") && room.GetBans().IsBanned(Id))
@@ -771,7 +793,7 @@ public class Habbo
             RoomAuthOk = false;
             Client.GetHabbo().RoomAuthOk = false;
             Client.Send(new CantConnectComposer(4));
-            Client.Send(new CloseConnectionComposer());
+            Eject();
             return;
         }
         Client.Send(new OpenConnectionComposer());
@@ -786,7 +808,7 @@ public class Habbo
                     return;
                 }
                 Client.Send(new FlatAccessDeniedComposer(""));
-                Client.Send(new CloseConnectionComposer());
+                Eject();
                 return;
             }
             if (room.Access == RoomAccess.Password && !Client.GetHabbo().Permissions.HasRight("room_enter_locked"))
@@ -794,13 +816,21 @@ public class Habbo
                 if (password.ToLower() != room.Password.ToLower() || string.IsNullOrWhiteSpace(password))
                 {
                     Client.Send(new GenericErrorComposer(-100002));
-                    Client.Send(new CloseConnectionComposer());
+                    Eject();
                     return;
                 }
             }
         }
         if (!EnterRoom(room))
+            Eject();
+
+        // The hotel view, and the end of any teleport that was bringing them
+        // here: it did not arrive, so nothing else will clear it.
+        void Eject()
+        {
+            EndTeleport();
             Client.Send(new CloseConnectionComposer());
+        }
     }
 
     public bool EnterRoom(Room room)

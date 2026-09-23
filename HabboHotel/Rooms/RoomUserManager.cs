@@ -283,6 +283,10 @@ public class RoomUserManager
             // still be consumed here so it can't leak into a later manual entry.
             session.GetHabbo().PendingRestore = null;
         }
+        // The trip is over: the flags above have placed them and have nothing
+        // left to do. Left set, the next room change that is not back to this
+        // one is sent to the hotel view by PrepareRoom.
+        session.GetHabbo().EndTeleport();
         // pixelrp: a player who spawns on a seat SITS, rather than standing on
         // it. UpdateUserStatus is what applies a seat's pose, height and facing,
         // but it only ever ran from the movement path - on ARRIVAL at the end of
