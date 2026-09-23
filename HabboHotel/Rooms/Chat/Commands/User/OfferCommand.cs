@@ -110,8 +110,13 @@ internal class OfferCommand : ITargetChatCommand
         var goods = ware.TakesQuantity
             ? $"{TextHandling.GetNumber(offer.Quantity)} {offer.Label}"
             : $"a {ware.One.ToLowerInvariant()}";
+        // NO WHISPER TO THE SELLER HERE. The bubble above their own head is
+        // the receipt, and it is a better one - the whole room can see the
+        // offer was made, which is the point of doing it in a room. A private
+        // line repeating what they just typed, to the one person who already
+        // knows, is a line in their chat log for nothing. The answer, when it
+        // comes, is worth a whisper; the asking is not.
         sellerUser?.OnChat(5, $"*offers {target.Username} {goods}{sum}*", true);
-        session.SendWhisper($"Offered to {target.Username}. They have {OfferState.LifetimeSeconds} seconds to answer.");
         return Task.CompletedTask;
     }
 
