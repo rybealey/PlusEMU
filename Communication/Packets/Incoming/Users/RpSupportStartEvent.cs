@@ -17,12 +17,24 @@ internal class RpSupportStartEvent : IPacketEvent
         if (habbo == null)
             return Task.CompletedTask;
 
-        var threadId = SupportUtility.StartThread(habbo.Id, category, body);
+        var threadId = SupportUtility.StartThread(habbo.Id, category, body, out var failure);
         if (threadId == 0)
         {
-            // The only reason to refuse: they already have as many open as
-            // they are allowed. Say so rather than failing silently.
-            session.SendWhisper("You already have a support conversation open.");
+            // Say which thing went wrong. This used to whisper "you already
+            // have a conversation open" for every failure including the ones
+            // that were our fault, which sent players looking for a
+            // conversation that was not there.
+            session.SendWhisper(failure switch
+            {
+                SupportUtility.StartFailure.AtCap =>
+                    $"You already have {SupportUtility.PlayerOpenCap} support conversations open. Close one and try again.",
+                SupportUtility.StartFailure.Empty =>
+                    "Tell us what happened and we'll pass it on.",
+                _ => "Support could not open that conversation. Try again in a moment."
+            });
+            // The view goes back either way: it is what tells the app the
+            // start did not take, so it can hand the player their words back
+            // instead of sitting on a screen it cannot send from.
             SupportUtility.SendView(session);
             return Task.CompletedTask;
         }

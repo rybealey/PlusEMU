@@ -170,30 +170,50 @@ public static class SupportUtility
 
     // ---- the player's side --------------------------------------------------
 
+    /// <summary>Why a conversation could not be opened - so the refusal can say the truth.</summary>
+    public enum StartFailure { None, Empty, AtCap, Failed }
+
     /// <summary>
-    /// Open a conversation. Returns the new thread's id, or 0 when the player
-    /// already has as many open as they are allowed.
+    /// Open a conversation. Returns the new thread's id, or 0 with a reason.
     /// </summary>
-    public static int StartThread(int playerId, string category, string body)
+    public static int StartThread(int playerId, string category, string body, out StartFailure failure)
     {
+        failure = StartFailure.None;
         var text = Clean(body);
         if (playerId <= 0 || text.Length == 0)
+        {
+            failure = StartFailure.Empty;
             return 0;
+        }
+
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         var open = connection.ExecuteScalar<int>(
             "SELECT COUNT(*) FROM `rp_support_threads` WHERE `player_id` = @playerId AND `status` <> 'resolved'",
             new { playerId });
         if (open >= PlayerOpenCap)
+        {
+            failure = StartFailure.AtCap;
             return 0;
+        }
 
         var now = Now();
-        connection.Execute(
+        // ONE STATEMENT. LAST_INSERT_ID() is per-connection, and Connection()
+        // hands back a CLOSED MySqlConnection - so Dapper opens and closes it
+        // around every command, and a second call can be served by a different
+        // pooled connection whose session has been reset. Asking for the id
+        // separately therefore returned 0 at random: the thread was inserted,
+        // the caller was told it had failed, and the player got "you already
+        // have a conversation open" for a conversation that did not exist.
+        // Every other insert in this codebase already uses this form.
+        var threadId = connection.ExecuteScalar<int>(
             "INSERT INTO `rp_support_threads` (`player_id`,`category`,`status`,`created_at`,`updated_at`) " +
-            "VALUES (@playerId, @category, 'waiting', @now, @now)",
+            "VALUES (@playerId, @category, 'waiting', @now, @now); SELECT LAST_INSERT_ID();",
             new { playerId, category = CleanCategory(category), now });
-        var threadId = connection.ExecuteScalar<int>("SELECT LAST_INSERT_ID()");
         if (threadId <= 0)
+        {
+            failure = StartFailure.Failed;
             return 0;
+        }
         AddMessage(threadId, playerId, false, text);
         Wake();
         return threadId;
