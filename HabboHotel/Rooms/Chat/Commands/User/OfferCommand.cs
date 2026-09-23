@@ -66,6 +66,22 @@ internal class OfferCommand : ITargetChatCommand
             }
         }
 
+        return Place(session, room, target, ware.Key, quantity);
+    }
+
+    /// <summary>
+    /// Make the offer and say it out loud, or word the refusal.
+    ///
+    /// Split out from Execute because :heal is NOT an alias of :offer - it is
+    /// its own command that happens to do this for one kind of person, and is
+    /// going to do other things for everybody else. Sharing the routine rather
+    /// than subclassing keeps that door open: :sell IS an alias and subclasses;
+    /// :heal is not and calls.
+    /// </summary>
+    internal static Task Place(GameClient session, Room room, Habbo target, string wareKey, int quantity)
+    {
+        var seller = session.GetHabbo();
+        var ware = OfferState.Catalogue[wareKey];
         var sellerUser = room.GetRoomUserManager()?.GetRoomUserByHabbo(seller.Id);
         var result = OfferState.Start(room, sellerUser, seller, target, ware.Key, quantity, out var offer);
 
@@ -74,7 +90,7 @@ internal class OfferCommand : ITargetChatCommand
             case OfferState.StartResult.Ok:
                 break;
             case OfferState.StartResult.Self:
-                session.SendWhisper("Sell it to somebody else.");
+                session.SendWhisper("Offer it to somebody else.");
                 return Task.CompletedTask;
             case OfferState.StartResult.SameAccount:
                 session.SendWhisper("That is one of your own characters.");
@@ -83,8 +99,8 @@ internal class OfferCommand : ITargetChatCommand
                 // The same three-way split MedicalUtility already words for the
                 // ambulance: a civilian, an employee off the clock, and the rest.
                 session.SendWhisper(MedicalUtility.IsHospitalStaff(seller.Id)
-                    ? "You have to be on duty to sell that. Clock in from the Corporations drawer."
-                    : "Only hospital staff can sell that.");
+                    ? "You have to be on duty for that. Clock in from the Corporations drawer."
+                    : "Only hospital staff can do that.");
                 return Task.CompletedTask;
             case OfferState.StartResult.NoTool:
                 session.SendWhisper($"You need to be holding {ware.RequiredHandItemName} to offer that.");
@@ -103,18 +119,14 @@ internal class OfferCommand : ITargetChatCommand
                 return Task.CompletedTask;
         }
 
-        // Bubble 5 wrapped in asterisks, the shape :give already uses - the
-        // client reads it as an action and moves the opening marker ahead of
-        // the speaker's name, so this renders as "*Ryan offers Twist ...*".
-        var sum = (offer!.Total > 0) ? $" for {TextHandling.GetMoney(offer.Total)}" : string.Empty;
-        var goods = OfferState.Goods(offer);
         // NO WHISPER TO THE SELLER HERE. The bubble above their own head is
         // the receipt, and it is a better one - the whole room can see the
         // offer was made, which is the point of doing it in a room. A private
         // line repeating what they just typed, to the one person who already
         // knows, is a line in their chat log for nothing. The answer, when it
         // comes, is worth a whisper; the asking is not.
-        sellerUser?.OnChat(5, $"*offers {target.Username} {goods}{sum}*", true);
+        var sum = (offer!.Total > 0) ? $" for {TextHandling.GetMoney(offer.Total)}" : string.Empty;
+        sellerUser?.OnChat(5, $"*offers {target.Username} {OfferState.Goods(offer)}{sum}*", true);
         return Task.CompletedTask;
     }
 
