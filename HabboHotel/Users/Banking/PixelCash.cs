@@ -158,6 +158,35 @@ public static class PixelCash
     }
 
     /// <summary>
+    /// Payments made to this character while they were offline, oldest first,
+    /// and marked delivered in the same breath - the caller is about to hand
+    /// them to the client, and a second login must not get them again.
+    ///
+    /// Bounded by the highest id read, so a payment landing between the two
+    /// statements stays undelivered for the next login rather than being
+    /// marked without ever being sent.
+    /// </summary>
+    public static List<Record> TakeUndelivered(int recipientId)
+    {
+        if (recipientId <= 0)
+            return new List<Record>();
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var pending = connection.Query<Record>(
+            "SELECT `id` AS Id, `sender_id` AS SenderId, `recipient_id` AS RecipientId, " +
+            "`amount` AS Amount, `note` AS Note, `created_at` AS CreatedAt " +
+            "FROM `rp_pay_transfers` WHERE `recipient_id` = @recipientId AND `delivered` = 0 " +
+            "ORDER BY `id` ASC",
+            new { recipientId }).ToList();
+        if (pending.Count == 0)
+            return pending;
+        connection.Execute(
+            "UPDATE `rp_pay_transfers` SET `delivered` = 1 " +
+            "WHERE `recipient_id` = @recipientId AND `delivered` = 0 AND `id` <= @maxId",
+            new { recipientId, maxId = pending[^1].Id });
+        return pending;
+    }
+
+    /// <summary>
     /// Send the money, record the payment, and tell both ends.
     ///
     /// Everything the sheet checked is checked again here. The sheet's copy of
@@ -209,15 +238,19 @@ public static class PixelCash
             return false;
 
         var now = Now();
+        // Asked before the insert so the row can say whether it was handed
+        // over. Offline, it waits for their next messenger init instead.
+        var recipient = PlusEnvironment.Game.ClientManager.GetClientByUserId(recipientId);
+        var online = recipient?.GetHabbo() != null;
         int id;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             // One statement: LAST_INSERT_ID() is per-connection, and Dapper
             // opens and closes one around every command.
             id = connection.ExecuteScalar<int>(
-                "INSERT INTO `rp_pay_transfers` (`sender_id`,`recipient_id`,`amount`,`note`,`created_at`) " +
-                "VALUES (@senderId, @recipientId, @amount, @note, @now); SELECT LAST_INSERT_ID();",
-                new { senderId = habbo.Id, recipientId, amount = (int)amount, note = clean, now });
+                "INSERT INTO `rp_pay_transfers` (`sender_id`,`recipient_id`,`amount`,`note`,`created_at`,`delivered`) " +
+                "VALUES (@senderId, @recipientId, @amount, @note, @now, @delivered); SELECT LAST_INSERT_ID();",
+                new { senderId = habbo.Id, recipientId, amount = (int)amount, note = clean, now, delivered = online ? 1 : 0 });
         }
 
         record = new Record
@@ -235,8 +268,7 @@ public static class PixelCash
         session!.Send(new RpBankAccountsComposer(senderAccount));
         session.Send(new RpPayReceiptComposer(record));
 
-        var recipient = PlusEnvironment.Game.ClientManager.GetClientByUserId(recipientId);
-        if (recipient?.GetHabbo() != null)
+        if (online)
         {
             recipient.Send(new RpBankAccountsComposer(BankUtility.EnsureLoaded(recipientId)));
             recipient.Send(new RpPayReceiptComposer(record));
