@@ -46,12 +46,20 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 public static class PoliceState
 {
     /// <summary>
-    /// Stand-in for the original's stun visual. It used effect 53, but 53 in
-    /// this hotel's EffectMap is Easterchicks - the two projects ship
-    /// different effect sets, so the id could not travel with the code. 236 is
-    /// CompletelyConfused, the closest thing here to being tased.
+    /// The stun visual. 53, which this hotel's EffectMap resolves to
+    /// Easterchicks.
+    ///
+    /// That mismatch is on purpose and was chosen with it in front of us. This
+    /// used to be 236 (CompletelyConfused) precisely BECAUSE 53 is not a stun
+    /// here the way it is in the Arcturus set the police code was ported from -
+    /// the two projects ship different effect packs. Ryan asked for 53 anyway
+    /// on 2026-09-23, having been told what it renders as.
+    ///
+    /// So: if a stunned player is covered in chicks, that is this line and it
+    /// is not a bug. Changing the LOOK means pointing id 53 at other art in
+    /// EffectMap.json, not changing the number here.
     /// </summary>
-    public const int StunEffectId = 236;
+    public const int StunEffectId = 53;
 
     /// <summary>
     /// The handcuffs, worn for as long as somebody is cuffed.
