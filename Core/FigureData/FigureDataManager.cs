@@ -85,7 +85,7 @@ public class FigureDataManager : IFigureDataManager
         _logger.LogInformation("Loaded " + _setTypes.Count + " Set Types");
     }
 
-    public string ProcessFigure(string figure, string gender, ICollection<ClothingParts> clothingParts, bool hasHabboClub)
+    public string ProcessFigure(string figure, string gender, ICollection<ClothingParts> clothingParts, bool hasHabboClub, bool allFaces = false)
     {
         figure = figure.ToLower();
         gender = gender.ToUpper();
@@ -201,6 +201,12 @@ public class FigureDataManager : IFigureDataManager
             figureParts = rebuildFigure.TrimEnd('.').Split('.');
             foreach (var part in figureParts.ToList())
             {
+                // pixelrp: staff wear any face they like. Nobody sells faces -
+                // the Clothing Store has no face shelf - so for everyone else
+                // the free ones are the whole selection and ownership still
+                // decides, exactly as before.
+                if (allFaces && part.Split('-')[0] == "hd")
+                    continue;
                 var partId = Convert.ToInt32(part.Split('-')[1]);
                 if (purchasableParts.Count(x => x.PartIds.Contains(partId)) > 0)
                 {
