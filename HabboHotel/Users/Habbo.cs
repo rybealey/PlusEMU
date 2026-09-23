@@ -711,6 +711,26 @@ public class Habbo
         if (Client == null || Client.GetHabbo() == null)
             return;
 
+        // AUTHORISE THE ROOM THE SERVER IS SENDING THEM TO, or the client's own
+        // answer to the RoomReadyComposer below is thrown away as an injected
+        // packet and they never arrive.
+        //
+        // OpenFlatConnectionEvent lets a non-staff client enter only the room
+        // it was forwarded to, the room it is already in, or the one it is
+        // teleporting to. A server-initiated PrepareRoom - an escort summoning
+        // its captive, :summon, anything that moves somebody who did not ask -
+        // matched none of those: it clears CurrentRoom on the way past, and
+        // nothing had set AuthorizedRoomEntryId because SendRoomForward, which
+        // is what normally sets it, was not the path taken. So the player sat
+        // in the room they started in while the server believed it had moved
+        // them. STAFF WERE EXEMPT FROM THE GATE, which is why this only ever
+        // showed up with an ordinary player on the other end.
+        //
+        // Safe here: an injected entry is refused by that gate BEFORE it can
+        // reach this method, so the only callers that get to set this are the
+        // server itself and a client whose entry was already allowed.
+        Client.GetHabbo().AuthorizedRoomEntryId = id;
+
         if (Client.GetHabbo().InRoom)
         {
             var oldRoom = Client.GetHabbo().CurrentRoom;

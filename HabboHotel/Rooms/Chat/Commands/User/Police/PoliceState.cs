@@ -854,6 +854,15 @@ public static class PoliceState
         // chase each other between rooms forever.
         if (captorUser == null)
             return;
+
+        // The pace is a property of the MEDIC, not of the pair, and their
+        // movement state is brand new in this room with the default on it. Set
+        // it now rather than waiting for the patient to catch up: a medic who
+        // walks off at normal speed the moment they arrive, and only speeds up
+        // when their patient lands, reads as the carry having been dropped.
+        if (IsMedicalEscort(captorId))
+            MovementV2Bridge.SetWalkPace(captorUser, MovementSettings.EscortIntervalMs);
+
         Travelling[captorId] = DateTime.UtcNow;
         var suspectHabbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(suspectId)?.GetHabbo();
         if (suspectHabbo == null)
