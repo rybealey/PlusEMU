@@ -833,6 +833,19 @@ public static class PoliceState
         var captorId = IsEscorting(id) ? id : CaptorOf(id);
         if (captorId == 0)
             return;
+
+        // THE AMBULANCE HAS TO BE RE-SENT, not just still set. The effect slot
+        // lives on the Habbo and survives a room change, so the per-tick
+        // re-assert (TickAmbulance) finds 20 already there and says nothing -
+        // while the room they have just walked into was never told, and draws
+        // them bare. Unconditional on purpose: ApplyEffect broadcasts whatever
+        // it is handed, and being handed what is already in the slot is the
+        // whole point here.
+        //
+        // Both ends, because both wear it and either can be the one arriving.
+        if (IsMedicalEscort(captorId))
+            user.ApplyEffect(AmbulanceEffectId);
+
         var suspectId = SuspectOf(captorId);
         if (suspectId == 0)
             return;
