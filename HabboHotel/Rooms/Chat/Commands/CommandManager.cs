@@ -93,6 +93,15 @@ public class CommandManager : ICommandManager
                 if (!session.GetHabbo().Permissions.HasCommand(command.PermissionRequired))
                     return false;
             }
+            // pixelrp police: cuffs stop the things you do with your hands.
+            // Here rather than inside each command, because eleven copies of
+            // the same check is eleven places for the next verb to be
+            // forgotten - and the forgetting would look like a feature.
+            if (User.Police.PoliceState.Blocks(session.GetHabbo().Id, key.ToLower()))
+            {
+                session.SendWhisper("Your hands are cuffed.");
+                return true;
+            }
             session.GetHabbo().ChatCommand = command;
             session.GetHabbo().CurrentRoom.GetWired().TriggerEvent(WiredBoxType.TriggerUserSaysCommand, session.GetHabbo(), this);
 

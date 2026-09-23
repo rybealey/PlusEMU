@@ -42,6 +42,14 @@ public class RpUseItemEvent : IPacketEvent
         var habbo = session.GetHabbo();
         if (habbo == null || slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots)
             return;
+        // pixelrp police: cuffs stop the things you do with your hands, and
+        // rummaging in a backpack is one of them. Above the peek so nothing is
+        // read, let alone spent, for somebody who cannot reach it.
+        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.IsCuffed(habbo.Id))
+        {
+            session.SendWhisper("Your hands are cuffed.");
+            return;
+        }
         // Peek before consuming: a failed precondition must not burn the item.
         var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
         if (string.IsNullOrEmpty(item))
