@@ -1,4 +1,5 @@
 using Dapper;
+using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Core;
 using Plus.HabboHotel.GameClients;
@@ -47,6 +48,14 @@ public static class SupportUtility
 
     /// <summary>A player may have this many conversations going, so the queue cannot be flooded.</summary>
     public const int PlayerOpenCap = 2;
+
+    /// <summary>
+    /// How long a claimed chat may sit untouched by a staff member who is no
+    /// longer in the hotel before it goes back in the queue. Long enough that
+    /// a reconnect keeps your conversation; short enough that a player is not
+    /// left talking to an empty chair.
+    /// </summary>
+    public const int AbandonSeconds = 120;
 
     public const int MaxBodyLength = 1000;
 
@@ -124,12 +133,39 @@ public static class SupportUtility
             Wake();
     }
 
-    public static bool IsAvailable(int userId)
+    /// <summary>
+    /// Staff who are taking chats AND are actually in the hotel.
+    ///
+    /// The toggle is a row in the database and rows do not log out. Counting
+    /// it alone told players "Trina is online now" when the last person to
+    /// switch it on left hours ago, and - worse - handed real chats to people
+    /// who were not there, burning a full OfferSeconds per absent staff member
+    /// before the queue moved on. The toggle stays sticky across sessions on
+    /// purpose; presence is what is checked at the point of use.
+    /// </summary>
+    public static List<int> AvailableStaffIds()
     {
+        var online = OnlineStaffIds();
+        if (online.Count == 0)
+            return new List<int>();
+
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM `rp_support_rotation` WHERE `user_id` = @userId AND `available` = 1",
-            new { userId }) > 0;
+        return connection.Query<int>(
+            "SELECT `user_id` FROM `rp_support_rotation` WHERE `available` = 1 AND `user_id` IN @ids",
+            new { ids = online.ToList() }).ToList();
+    }
+
+    /// <summary>Every staff member in the hotel, whatever their toggle says.</summary>
+    public static HashSet<int> OnlineStaffIds()
+    {
+        var online = new HashSet<int>();
+        foreach (var client in PlusEnvironment.Game.ClientManager.GetClients.ToList())
+        {
+            var habbo = client?.GetHabbo();
+            if (habbo != null && IsStaff(habbo))
+                online.Add(habbo.Id);
+        }
+        return online;
     }
 
     // ---- the player's side --------------------------------------------------
@@ -268,8 +304,17 @@ public static class SupportUtility
             _wake.Reset();
             try
             {
-                ExpireOffers();
-                OfferWaiting();
+                // The rotation moves chats between staff on a clock, with no
+                // packet to answer. Nothing pushed the result, so a chat was
+                // offered to somebody whose queue did not change until they
+                // reopened the app - the round-robin was running blind. Only
+                // when something actually moved, or every staff member gets
+                // the whole queue again every second for nothing.
+                var moved = ExpireOffers();
+                moved |= ReleaseAbandoned();
+                moved |= OfferWaiting();
+                if (moved)
+                    PushToStaff();
             }
             catch (Exception e)
             {
@@ -288,7 +333,7 @@ public static class SupportUtility
     /// show them - no "your chat was reassigned", no name changing in the
     /// header - which is the whole reason the reassignment can be silent.
     /// </summary>
-    private static void ExpireOffers()
+    private static bool ExpireOffers()
     {
         var now = Now();
         using var connection = PlusEnvironment.DatabaseManager.Connection();
@@ -297,7 +342,7 @@ public static class SupportUtility
             "WHERE `status` = 'offered' AND `offered_until` <= @now LIMIT 25",
             new { now }).ToList();
         if (lapsed.Count == 0)
-            return;
+            return false;
         foreach (var thread in lapsed)
         {
             connection.Execute(
@@ -311,6 +356,40 @@ public static class SupportUtility
                 "WHERE `user_id` = @staffId",
                 new { staffId = thread.StaffId, limit = MissesBeforeAway, now });
         }
+        return true;
+    }
+
+    /// <summary>
+    /// Put back a chat whose owner has gone.
+    ///
+    /// An OFFER lapses on a clock, but a CLAIM never did - so a staff member
+    /// who took a chat and then closed the client left the player talking to
+    /// nobody, with no timer to rescue them and no way to ask again (they are
+    /// at their open-chat cap). The grace period is generous on purpose: a
+    /// reconnect, a room load or a browser refresh must not hand somebody
+    /// else's conversation away underneath them.
+    ///
+    /// The player is told nothing, because under one byline there is nothing
+    /// to tell - the next person simply picks up where the last left off.
+    /// </summary>
+    private static bool ReleaseAbandoned()
+    {
+        var online = OnlineStaffIds();
+        var now = Now();
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var stranded = connection.Query<int>(
+            "SELECT `id` FROM `rp_support_threads` " +
+            "WHERE `status` = 'open' AND `staff_id` > 0 AND `updated_at` <= @cutoff" +
+            (online.Count > 0 ? " AND `staff_id` NOT IN @online" : "") + " LIMIT 25",
+            new { cutoff = now - AbandonSeconds, online = online.ToList() }).ToList();
+        if (stranded.Count == 0)
+            return false;
+
+        connection.Execute(
+            "UPDATE `rp_support_threads` SET `status` = 'waiting', `staff_id` = 0, `offered_until` = 0, `updated_at` = @now " +
+            "WHERE `id` IN @ids",
+            new { ids = stranded, now });
+        return true;
     }
 
     /// <summary>
@@ -322,16 +401,23 @@ public static class SupportUtility
     /// is offered every waiting thread at once and the rotation collapses to
     /// whoever is least busy.
     /// </summary>
-    private static void OfferWaiting()
+    private static bool OfferWaiting()
     {
+        // Presence first: nobody in the hotel means nothing to offer, and it
+        // saves the queue read entirely on a quiet night.
+        var eligible = AvailableStaffIds();
+        if (eligible.Count == 0)
+            return false;
+
         var now = Now();
+        var moved = false;
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         var waiting = connection.Query<ThreadRow>(
             "SELECT `id` AS Id, `player_id` AS PlayerId FROM `rp_support_threads` " +
             "WHERE `status` = 'waiting' ORDER BY `created_at` ASC LIMIT 10",
             null).ToList();
         if (waiting.Count == 0)
-            return;
+            return false;
 
         foreach (var thread in waiting)
         {
@@ -340,19 +426,26 @@ public static class SupportUtility
             var next = connection.Query<RotationRow>(
                 "SELECT r.`user_id` AS UserId, r.`available` AS Available, r.`last_offered_at` AS LastOfferedAt, r.`missed` AS Missed " +
                 "FROM `rp_support_rotation` r " +
-                "WHERE r.`available` = 1 " +
+                "WHERE r.`user_id` IN @eligible " +
                 "  AND r.`user_id` <> @playerId " +
                 "  AND (SELECT COUNT(*) FROM `rp_support_threads` t " +
                 "       WHERE t.`staff_id` = r.`user_id` AND t.`status` IN ('open','offered')) < @cap " +
                 "ORDER BY r.`last_offered_at` ASC, r.`user_id` ASC LIMIT 1",
-                new { playerId = thread.PlayerId, cap = OpenChatCap }).FirstOrDefault();
+                new { eligible, playerId = thread.PlayerId, cap = OpenChatCap }).FirstOrDefault();
+            // Nobody for THIS thread is not nobody for the next one: the one
+            // free staff member may simply be the player who opened this one,
+            // or be at their cap on it. Returning here left later threads
+            // sitting in a queue that could have been served.
             if (next == null)
-                return; // nobody eligible; the rest of the queue waits too
+                continue;
 
-            connection.Execute(
+            var taken = connection.Execute(
                 "UPDATE `rp_support_threads` SET `status` = 'offered', `staff_id` = @staffId, " +
                 "`offered_until` = @until, `offers` = `offers` + 1, `updated_at` = @now WHERE `id` = @id AND `status` = 'waiting'",
                 new { id = thread.Id, staffId = next.UserId, until = now + OfferSeconds, now });
+            if (taken == 0)
+                continue;
+            moved = true;
             // The pointer advances on the OFFER. A staff member who is handed a
             // chat goes to the back whether or not they take it, so a long
             // conversation never holds up the people behind it.
@@ -360,6 +453,7 @@ public static class SupportUtility
                 "UPDATE `rp_support_rotation` SET `last_offered_at` = @now, `updated_at` = @now WHERE `user_id` = @staffId",
                 new { staffId = next.UserId, now });
         }
+        return moved;
     }
 
     /// <summary>
@@ -438,14 +532,27 @@ public static class SupportUtility
     }
 
     /// <summary>How many staff are taking chats right now - the player's "Trina is online".</summary>
-    public static int AvailableCount()
-    {
-        using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM `rp_support_rotation` WHERE `available` = 1");
-    }
+    public static int AvailableCount() => AvailableStaffIds().Count;
 
     // ---- pushing the view --------------------------------------------------
+
+    /// <summary>
+    /// Which conversation each viewer currently has open.
+    ///
+    /// THIS IS WHY MESSAGES USED TO VANISH MID-CHAT. A push carried "open
+    /// thread 0, no messages", because the pushing side had no idea what the
+    /// person on the other end was looking at - so the moment somebody
+    /// replied, the recipient's open conversation was refreshed into an empty
+    /// one. Both ends, every message. The view is a whole-state packet, so a
+    /// refresh has to know the thread or it silently closes it.
+    ///
+    /// One int per person who has opened the app; the client tells us on every
+    /// open and every back, and closing the list drops the entry.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, int> OpenThread = new();
+
+    /// <summary>Forget what a viewer had open - they closed the app, or logged out.</summary>
+    public static void Forget(int userId) => OpenThread.TryRemove(userId, out _);
 
     /// <summary>
     /// Send one viewer their own half of the app: the staff queue when they
@@ -461,47 +568,108 @@ public static class SupportUtility
         if (habbo == null)
             return;
 
+        // The viewer just told us where they are; remember it, so anything
+        // that refreshes them later lands them back on the same screen.
+        if (openThreadId > 0)
+            OpenThread[habbo.Id] = openThreadId;
+        else
+            OpenThread.TryRemove(habbo.Id, out _);
+
         if (IsStaff(habbo))
         {
+            var available = AvailableStaffIds();
             var queue = StaffQueue();
-            var messages = openThreadId > 0 ? MessagesFor(openThreadId) : new List<MessageRow>();
-            session!.Send(new RpSupportQueueComposer(
-                IsAvailable(habbo.Id) ? 1 : 0, AvailableCount(), habbo.Id,
-                queue, LastMessages(queue.Select(t => t.Id).ToList()), openThreadId, messages));
+            SendQueue(session!, habbo, queue, LastMessages(queue.Select(t => t.Id).ToList()),
+                available.Contains(habbo.Id), available.Count, openThreadId);
             return;
         }
 
+        SendPlayer(session!, habbo, AvailableCount(), openThreadId);
+    }
+
+    /// <summary>
+    /// Refresh a viewer WITHOUT moving them: whatever they had open stays
+    /// open. Everything that pushes because somebody else acted uses this.
+    /// </summary>
+    private static void PushView(GameClient? session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null)
+            return;
+        var open = OpenThread.TryGetValue(habbo.Id, out var id) ? id : 0;
+        if (IsStaff(habbo))
+        {
+            var available = AvailableStaffIds();
+            var queue = StaffQueue();
+            SendQueue(session!, habbo, queue, LastMessages(queue.Select(t => t.Id).ToList()),
+                available.Contains(habbo.Id), available.Count, open);
+            return;
+        }
+        SendPlayer(session!, habbo, AvailableCount(), open);
+    }
+
+    private static void SendPlayer(GameClient session, Habbo habbo, int availableStaff, int openThreadId)
+    {
         var threads = ThreadsForPlayer(habbo.Id);
         // A player may only open their OWN thread. Checked here rather than at
         // each caller, because this is the one place that turns an id into
         // messages.
         var open = openThreadId > 0 && threads.Any(t => t.Id == openThreadId) ? openThreadId : 0;
-        session!.Send(new RpSupportComposer(
-            NewsUtility.GetByline(), AvailableCount(),
+        session.Send(new RpSupportComposer(
+            NewsUtility.GetByline(), availableStaff,
             threads, LastMessages(threads.Select(t => t.Id).ToList()),
             open, open > 0 ? MessagesFor(open) : new List<MessageRow>()));
     }
 
-    /// <summary>Refresh one player, if they are online.</summary>
+    private static void SendQueue(GameClient session, Habbo habbo, List<ThreadRow> queue,
+        Dictionary<int, MessageRow> previews, bool available, int availableStaff, int openThreadId)
+    {
+        session.Send(new RpSupportQueueComposer(
+            available ? 1 : 0, availableStaff, habbo.Id,
+            queue, previews, openThreadId,
+            openThreadId > 0 ? MessagesFor(openThreadId) : new List<MessageRow>()));
+    }
+
+    /// <summary>Refresh one player, if they are online, on whatever they have open.</summary>
     public static void PushToPlayer(int playerId)
     {
         if (playerId <= 0)
             return;
-        SendView(PlusEnvironment.Game.ClientManager.GetClientByUserId(playerId));
+        PushView(PlusEnvironment.Game.ClientManager.GetClientByUserId(playerId));
     }
 
     /// <summary>
     /// Refresh every staff member online. The queue is shared, so anything
     /// that changes it changes it for all of them - and the rotation is only
     /// legible if everyone is looking at the same list.
+    ///
+    /// The queue itself, the previews and the availability roll-up are the
+    /// same for everybody, so they are read ONCE here rather than once per
+    /// viewer. Only the open conversation differs. With three staff on that
+    /// was nine queries per message sent; it is now three plus one each.
     /// </summary>
     public static void PushToStaff()
     {
+        var staff = new List<GameClient>();
         foreach (var client in PlusEnvironment.Game.ClientManager.GetClients.ToList())
         {
             if (client?.GetHabbo() == null || !IsStaff(client.GetHabbo()))
                 continue;
-            SendView(client);
+            staff.Add(client);
+        }
+        if (staff.Count == 0)
+            return;
+
+        var queue = StaffQueue();
+        var previews = LastMessages(queue.Select(t => t.Id).ToList());
+        var available = AvailableStaffIds();
+        foreach (var client in staff)
+        {
+            var habbo = client.GetHabbo();
+            if (habbo == null)
+                continue;
+            SendQueue(client, habbo, queue, previews, available.Contains(habbo.Id),
+                available.Count, OpenThread.TryGetValue(habbo.Id, out var id) ? id : 0);
         }
     }
 }
