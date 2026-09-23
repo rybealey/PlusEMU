@@ -170,6 +170,6 @@ internal class GiveCommand : ITargetChatCommand
         if (giverUser != null)
             giverUser.OnChat(5, $"*hands {target.Username} {sum}*", true);
         else
-            giver.Client?.SendWhisper($"You hand {target.Username} {TextHandling.GetNumber(amount)} {label}.");
+            giver.Client?.SendWhisper($"You hand {target.Username} {sum}.");
     }
 }
