@@ -22,6 +22,9 @@ public static class MovementCounters
     // WHICH stage stops rather than proving the system is "fine" in aggregate.
     private static long _walkStarts;
     private static long _redirects;
+    // Clicks on the tile a walk was already heading to, skipped by Redirect
+    // before any re-plan, revision bump or packet.
+    private static long _redirectsSameTarget;
     private static long _advances;
     private static long _commits;
     private static long _stopsRouteEnd;
@@ -195,6 +198,7 @@ public static class MovementCounters
 
     public static void WalkStart() => Interlocked.Increment(ref _walkStarts);
     public static void Redirect() => Interlocked.Increment(ref _redirects);
+    public static void RedirectSameTarget() => Interlocked.Increment(ref _redirectsSameTarget);
     public static void Advance() => Interlocked.Increment(ref _advances);
     public static void Commit() => Interlocked.Increment(ref _commits);
     public static void StopRouteEnd() => Interlocked.Increment(ref _stopsRouteEnd);
@@ -220,6 +224,7 @@ public static class MovementCounters
     public static string StageSnapshot() =>
         $"starts={Interlocked.Read(ref _walkStarts)} " +
         $"redirects={Interlocked.Read(ref _redirects)} " +
+        $"redirectSameTarget={Interlocked.Read(ref _redirectsSameTarget)} " +
         $"roomProcessed={Interlocked.Read(ref _roomProcessed)} " +
         $"drained={Interlocked.Read(ref _drainedWalkers)} " +
         $"advances={Interlocked.Read(ref _advances)} " +

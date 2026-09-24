@@ -251,6 +251,27 @@ public static class MovementController
             nowMs - w.LastRepathAtMs < MovementSettings.RepathMinIntervalMs)
             return false;
 
+        // ALREADY HEADING THERE. A click on the tile this walk is already bound
+        // for changes nothing about where the avatar goes, but a redirect would
+        // still re-plan, bump RouteRevision and broadcast a correction to the
+        // whole room - and following somebody by clicking repeats the same tile
+        // many times a second (a capture showed a new revision every ~80ms). In
+        // a crowded room that is most of the movement traffic: packets every
+        // client has to process, A* run while holding MovementLock (which the
+        // one hotel-wide scheduler thread also needs), and extra chances to land
+        // in the RedirectSafetyMarginMs window.
+        //
+        // A PARTIAL route is re-planned anyway - it stops short of the target,
+        // and the way may have opened since. The latest click is also the
+        // latest intent, so any redirect still waiting on the commit path is
+        // dropped: the walk carries on to the tile just clicked.
+        if (target == w.Target && !w.Route.IsPartial && (w.Route.HasNext || w.EdgeTo == target))
+        {
+            w.DeferredRedirectTarget = null;
+            MovementCounters.RedirectSameTarget();
+            return false;
+        }
+
         var map = room.Room.GetGameMap();
         if (map == null)
             return false;
