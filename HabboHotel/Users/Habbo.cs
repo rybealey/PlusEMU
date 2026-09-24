@@ -519,20 +519,27 @@ public class Habbo
         return entry.Item;
     }
 
-    /// <summary>pixelrp: throws away the whole stack in the slot - the
-    /// backpack bin. Returns the item key and how many went, or (null, 0) when
-    /// the slot is empty.</summary>
-    public (string Item, int Count) DiscardRpItem(int slot)
+    /// <summary>pixelrp: the backpack bin - throws away `count` of what sits
+    /// in the slot, the whole stack when `count` covers it. Returns the item
+    /// key and how many went, or (null, 0) when the slot is empty.</summary>
+    public (string Item, int Count) DiscardRpItem(int slot, int count)
     {
         var entry = LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot);
-        if (string.IsNullOrEmpty(entry.Item))
+        if (string.IsNullOrEmpty(entry.Item) || count < 1)
             return (null, 0);
+        var removed = Math.Min(count, entry.Count);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot");
+        if (removed < entry.Count)
+        {
+            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` - @removed WHERE `user_id` = @id AND `slot` = @slot");
+            dbClient.AddParameter("removed", removed);
+        }
+        else
+            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot");
         dbClient.AddParameter("id", Id);
         dbClient.AddParameter("slot", slot);
         dbClient.RunQuery();
-        return (entry.Item, entry.Count);
+        return (entry.Item, removed);
     }
 
     public int FastfoodScore { get; set; }
