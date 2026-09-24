@@ -154,10 +154,8 @@ public static class PoliceState
         if (room == null || user == null || user.IsBot)
             return;
         Stunned[user.UserId] = DateTime.UtcNow.AddSeconds(seconds);
-        // Halt an in-flight walk at the end of its current step instead of
-        // letting it finish the path, then block new clicks for the duration.
-        // The step itself finishes because the client is already drawing it -
-        // see MovementV2Bridge.Halt. ClearMovement is V1's;
+        // Halt an in-flight walk on the spot instead of letting it finish the
+        // path, then block new clicks for the duration. ClearMovement is V1's;
         // the walk itself belongs to V2 and has to be stopped there too.
         // Not for a shadowed suspect: they have no walk of their own, and
         // their "mv" is written by the escort's records each beat - clearing

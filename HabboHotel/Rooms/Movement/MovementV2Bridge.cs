@@ -170,17 +170,11 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
-    /// Stop a unit's walk and close it out on the wire.
+    /// Stop a unit's walk where it stands and close it out on the wire.
     /// RoomUser.ClearMovement only clears V1's own fields, so on its own a
     /// "frozen" avatar would finish its route while flagged unable to walk.
-    ///
-    /// By default the step already in flight FINISHES and the walk stops on its
-    /// destination (MovementController.StopAfterCurrentStep): the client has
-    /// been drawing that step, so stopping on its origin would put the avatar
-    /// back a tile. Pass finishCurrentStep: false only where the ORIGIN tile is
-    /// the point - the medical bed, which halts a patient on the bed.
     /// </summary>
-    public static void Halt(RoomUser? user, bool finishCurrentStep = true)
+    public static void Halt(RoomUser? user)
     {
         if (user == null)
             return;
@@ -194,10 +188,7 @@ public static class MovementV2Bridge
                 return;
             if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
                 return;
-            if (finishCurrentStep)
-                MovementController.StopAfterCurrentStep(movement, state, MovementScheduler.Instance.Clock.NowMs);
-            else
-                MovementController.StopWalk(movement, state);
+            MovementController.StopWalk(movement, state);
         }
         MovementScheduler.Instance.Signal(movement);
     }

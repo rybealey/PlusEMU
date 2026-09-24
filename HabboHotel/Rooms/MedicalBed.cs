@@ -125,12 +125,8 @@ public static class MedicalBed
             // else already has a route, and blocking new clicks would let them
             // stroll off the bed they are now being treated on. ClearMovement
             // is V1's fields; the walk itself belongs to V2.
-            //
-            // ON THE SPOT, not at the end of the step. They are on the bed now
-            // and the step in flight is the one taking them off it - finishing
-            // it would walk them away and end the course on the next tick.
             user.ClearMovement(true);
-            Movement.MovementV2Bridge.Halt(user, finishCurrentStep: false);
+            Movement.MovementV2Bridge.Halt(user);
         }
 
         // Held for the duration of the course, and re-asserted every tick

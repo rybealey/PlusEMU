@@ -26,13 +26,6 @@ public static class MovementCounters
     private static long _commits;
     private static long _stopsRouteEnd;
     private static long _stopsBlocked;
-    // Halts that finished the step in flight before stopping, halts that
-    // could not and stopped on the spot, and - a subset of the first - halts
-    // that landed inside RedirectSafetyMarginMs of the next boundary and so
-    // also kept the one previewed step the client was about to begin.
-    private static long _haltsFinishedStep;
-    private static long _haltsImmediate;
-    private static long _haltsNearBoundary;
     private static long _replans;
     private static long _replansDeferred;
     private static long _roomProcessed;
@@ -202,9 +195,6 @@ public static class MovementCounters
     public static void Commit() => Interlocked.Increment(ref _commits);
     public static void StopRouteEnd() => Interlocked.Increment(ref _stopsRouteEnd);
     public static void StopBlocked() => Interlocked.Increment(ref _stopsBlocked);
-    public static void HaltFinishedStep() => Interlocked.Increment(ref _haltsFinishedStep);
-    public static void HaltImmediate() => Interlocked.Increment(ref _haltsImmediate);
-    public static void HaltNearBoundary() => Interlocked.Increment(ref _haltsNearBoundary);
     public static void Replan() => Interlocked.Increment(ref _replans);
 
     /// <summary>
@@ -228,9 +218,6 @@ public static class MovementCounters
         $"replansDeferred={Interlocked.Read(ref _replansDeferred)} " +
         $"stopEnd={Interlocked.Read(ref _stopsRouteEnd)} " +
         $"stopBlocked={Interlocked.Read(ref _stopsBlocked)} " +
-        $"haltFinishedStep={Interlocked.Read(ref _haltsFinishedStep)} " +
-        $"haltImmediate={Interlocked.Read(ref _haltsImmediate)} " +
-        $"haltNearBoundary={Interlocked.Read(ref _haltsNearBoundary)} " +
         $"redirectMarginUnder250={Interlocked.Read(ref _redirectMarginUnder250)} " +
         $"under100={Interlocked.Read(ref _redirectMarginUnder100)} " +
         $"under50={Interlocked.Read(ref _redirectMarginUnder50)} " +

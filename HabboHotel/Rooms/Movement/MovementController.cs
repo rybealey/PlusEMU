@@ -621,105 +621,6 @@ public static class MovementController
     }
 
     /// <summary>
-    /// Stop a walk at the END of the step it is on, rather than on the tile the
-    /// server last committed.
-    ///
-    /// WHY StopWalk ALONE HITCHES. A step commits only when it ends, so mid-step
-    /// w.Tile is still the step's ORIGIN, and StopWalk ends the walk there - while
-    /// the client has been drawing that same step, confirmed, from its
-    /// cycleStart. The avatar is shown part-way to B and the server says it is
-    /// on A. Correcting that on the client can only move it backwards.
-    ///
-    /// SO THE STEP FINISHES, THROUGH THE ORDINARY ROUTE-END PATH. The route is
-    /// emptied and the walker left Moving on its existing heap entry, so the
-    /// next beat commits the step exactly as it always would (Tile = EdgeTo),
-    /// PlanNextEdge finds no next tile, and StopWalk closes the walk on B. No
-    /// new stopping logic runs anywhere; the only difference is WHEN.
-    ///
-    /// AND THE CLIENT IS TOLD NOW THAT THIS STEP IS THE LAST. It holds up to
-    /// LookaheadMax preview steps past it and would begin the first the moment
-    /// this one ends, overrunning B before the walk-end arrived. So this step is
-    /// republished - identical geometry, FinalEdge, no lookahead - under a new
-    /// RouteRevision: the client drops every edge from this index on, keeps the
-    /// one it is drawing (same shape, so nothing moves), and stops at B exactly
-    /// as it does at a planned route end. PublishOnly, because it describes an
-    /// edge already committed-to rather than a new commit.
-    ///
-    /// Anything this cannot do cleanly - a Pending walk (nothing drawn to
-    /// finish), an escorting captor (its shadow rides in lockstep), or a walker
-    /// the commit path cannot bring level with the timeline - falls back to
-    /// StopWalk on the spot, as before.
-    /// </summary>
-    public static void StopAfterCurrentStep(RoomMovement room, MovementState w, long nowMs)
-    {
-        if (w.Mode != MovementMode.Moving || w.ShadowVirtualId != MovementState.NoShadow)
-        {
-            if (w.Mode == MovementMode.Moving)
-                MovementCounters.HaltImmediate();
-            StopWalk(room, w);
-            return;
-        }
-
-        // Level the walker with the edge the client is drawing, as Redirect
-        // does, so w.Tile -> w.EdgeTo IS that edge.
-        var e = w.ElapsingEdgeIndex(nowMs);
-        SyncCommitsTo(room, w, e, nowMs);
-
-        if (w.Mode != MovementMode.Moving || w.EdgeIndex != e || w.EmittedThroughEdge < e)
-        {
-            MovementCounters.HaltImmediate();
-            StopWalk(room, w);
-            return;
-        }
-
-        // THE LAST MOMENT OF A STEP. Inside RedirectSafetyMarginMs of the next
-        // boundary, the client begins its next preview before anything sent now
-        // can land - the race Redirect's protectNext exists for, handled the
-        // same way: that step is already spoken for, so it is KEPT, and the walk
-        // stops at its end instead. Republishing this step as final here would
-        // prune the preview the client has just started and pull the avatar back.
-        //
-        // The route becomes that one promised tile. The early correction then
-        // publishes it as the final step with no lookahead (nothing follows it
-        // in the route), so the client drops the previews beyond it; the next
-        // beat stages it as normal, and the route-end StopWalk after it closes
-        // the walk on its destination. Target moves with it, so a blocked-tile
-        // replan could never aim back at the original click.
-        if ((w.EdgeStartTick(e + 1) - nowMs) < MovementSettings.RedirectSafetyMarginMs && w.Route.HasNext)
-        {
-            var promised = w.Route.PeekNext();
-            w.Route.Clear();
-            w.Route.PrependPromised(promised);
-            w.Target = promised;
-            w.DeferredRedirectTarget = null;
-            w.RouteRevision++;
-
-            PublishCorrectedEdgeEarly(room, w, room.Room.GetGameMap());
-
-            MovementCounters.HaltFinishedStep();
-            MovementCounters.HaltNearBoundary();
-            return;
-        }
-
-        w.Route.Clear();
-        w.DeferredRedirectTarget = null;
-        w.RouteRevision++;
-
-        room.Staged.Add(new MovementEdgeRecord(
-            w.VirtualId, w.WalkSessionId, w.RouteRevision, e,
-            RpMovementV2Flags.Edge | RpMovementV2Flags.FinalEdge,
-            w.IntervalMs, w.EdgeStartTick(e),
-            w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
-            w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
-            w.EdgeToZ, w.Facing,
-            System.Array.Empty<LookaheadTile>(), 0, publishOnly: true));
-        room.HasStagedWork = true;
-        room.HasImmediateWork = true;
-
-        MovementCounters.HaltFinishedStep();
-    }
-
-    /// <summary>
     /// Watchdog (I-12): a walker in Mode == Moving with no scheduler entry is
     /// unreachable and would be frozen forever. V1 had exactly this failure
     /// (SelfPaced set true before the task was guaranteed to run) with no
@@ -1084,20 +985,17 @@ public static class MovementController
     ///
     /// PUBLICATION TIMING ONLY. Nothing else moves: not TimelineOrigin, not
     /// WalkSessionId, not the RouteRevision rules, not the 500ms interval, not
-    /// EmittedThroughEdge's meaning, not the packet format. The boundary is
-    /// still e + 1 exactly as before, so there is no added latency - a redirect
-    /// still takes effect on the next edge.
+    /// EmittedThroughEdge's meaning, not the lookahead policy, not the packet
+    /// format. The boundary is still e + 1 exactly as before, so there is no
+    /// added latency - a redirect still takes effect on the next edge.
     ///
     /// The record is PublishOnly: room.Staged is ALSO the server-truth commit
     /// path, and committing a future edge early would move the avatar a tile
     /// ahead and run its tile effects early. See MovementEdgeRecord.PublishOnly.
     ///
-    /// It carries lookahead, like every other staged record: up to
-    /// LookaheadMax tiles of the NEW route after the corrected index. The
-    /// client drops every edge from this index on when it sees the higher
-    /// revision, so without them it would hold one edge until the boundary
-    /// record arrived. See the lookahead block below for why it starts at
-    /// Cursor + 1.
+    /// Lookahead is deliberately EMPTY. Only the corrected index is
+    /// republished; e + 2 and later keep coming from the normal pipeline, which
+    /// refills lookahead when it stages this index again at the boundary.
     /// </summary>
     private static void PublishCorrectedEdgeEarly(
         RoomMovement room, MovementState w, Gamemap? map)
