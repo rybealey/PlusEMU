@@ -650,7 +650,13 @@ public static class MovementController
 
         if (!neverEmitted)
         {
-            StageEdge(room, w, immediate: false); // walk-end marker slot
+            // IMMEDIATE, so the stop reaches clients now rather than riding the
+            // next flush (up to FlushIntervalMs later in a busy room): the walking
+            // pose ends as the avatar arrives, and RoomUser.X/Y catches up with
+            // V2 sooner (see WalkEndPendingSession below). Order is unaffected -
+            // the final edge was staged before this, and frames are applied first
+            // in, first out by the single outbound worker.
+            StageEdge(room, w, immediate: true); // walk-end marker slot
 
             // RoomUser.X/Y reaches this tile only when the outbound thread
             // applies the record just staged - up to a flush later. Until then
