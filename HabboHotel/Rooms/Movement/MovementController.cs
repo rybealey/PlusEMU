@@ -985,17 +985,20 @@ public static class MovementController
     ///
     /// PUBLICATION TIMING ONLY. Nothing else moves: not TimelineOrigin, not
     /// WalkSessionId, not the RouteRevision rules, not the 500ms interval, not
-    /// EmittedThroughEdge's meaning, not the lookahead policy, not the packet
-    /// format. The boundary is still e + 1 exactly as before, so there is no
-    /// added latency - a redirect still takes effect on the next edge.
+    /// EmittedThroughEdge's meaning, not the packet format. The boundary is
+    /// still e + 1 exactly as before, so there is no added latency - a redirect
+    /// still takes effect on the next edge.
     ///
     /// The record is PublishOnly: room.Staged is ALSO the server-truth commit
     /// path, and committing a future edge early would move the avatar a tile
     /// ahead and run its tile effects early. See MovementEdgeRecord.PublishOnly.
     ///
-    /// Lookahead is deliberately EMPTY. Only the corrected index is
-    /// republished; e + 2 and later keep coming from the normal pipeline, which
-    /// refills lookahead when it stages this index again at the boundary.
+    /// It carries lookahead, like every other staged record: up to
+    /// LookaheadMax tiles of the NEW route after the corrected index. The
+    /// client drops every edge from this index on when it sees the higher
+    /// revision, so without them it would hold one edge until the boundary
+    /// record arrived. See the lookahead block below for why it starts at
+    /// Cursor + 1.
     /// </summary>
     private static void PublishCorrectedEdgeEarly(
         RoomMovement room, MovementState w, Gamemap? map)
