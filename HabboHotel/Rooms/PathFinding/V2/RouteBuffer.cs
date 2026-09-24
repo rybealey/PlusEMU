@@ -71,8 +71,10 @@ public sealed class RouteBuffer
     /// <summary>
     /// Put one ALREADY-PROMISED tile back at the front of the route.
     ///
-    /// FOR EXACTLY ONE CALLER: a redirect that must not rewrite the edge the
-    /// client is about to start drawing. That redirect plans from the promised
+    /// FOR TWO CALLERS, and the same reason in both. MovementController.
+    /// StopAfterCurrentStep uses it on an emptied route to keep ONLY the step
+    /// the client is about to begin. The first: a redirect that must not
+    /// rewrite the edge the client is about to start drawing. That redirect plans from the promised
     /// edge's DESTINATION rather than from where the walker is, so the route it
     /// gets back begins one tile too far along. This puts the promised tile
     /// back on the front, and the route then reads exactly as it would have if

@@ -672,6 +672,35 @@ public static class MovementController
             return;
         }
 
+        // THE LAST MOMENT OF A STEP. Inside RedirectSafetyMarginMs of the next
+        // boundary, the client begins its next preview before anything sent now
+        // can land - the race Redirect's protectNext exists for, handled the
+        // same way: that step is already spoken for, so it is KEPT, and the walk
+        // stops at its end instead. Republishing this step as final here would
+        // prune the preview the client has just started and pull the avatar back.
+        //
+        // The route becomes that one promised tile. The early correction then
+        // publishes it as the final step with no lookahead (nothing follows it
+        // in the route), so the client drops the previews beyond it; the next
+        // beat stages it as normal, and the route-end StopWalk after it closes
+        // the walk on its destination. Target moves with it, so a blocked-tile
+        // replan could never aim back at the original click.
+        if ((w.EdgeStartTick(e + 1) - nowMs) < MovementSettings.RedirectSafetyMarginMs && w.Route.HasNext)
+        {
+            var promised = w.Route.PeekNext();
+            w.Route.Clear();
+            w.Route.PrependPromised(promised);
+            w.Target = promised;
+            w.DeferredRedirectTarget = null;
+            w.RouteRevision++;
+
+            PublishCorrectedEdgeEarly(room, w, room.Room.GetGameMap());
+
+            MovementCounters.HaltFinishedStep();
+            MovementCounters.HaltNearBoundary();
+            return;
+        }
+
         w.Route.Clear();
         w.DeferredRedirectTarget = null;
         w.RouteRevision++;
@@ -688,12 +717,6 @@ public static class MovementController
         room.HasImmediateWork = true;
 
         MovementCounters.HaltFinishedStep();
-
-        // The residual: this late in the step the client may already have begun
-        // its next preview before the republish lands, and will be pulled back
-        // onto B by a fraction of a tile.
-        if (w.EdgeStartTick(e + 1) - nowMs < MovementSettings.RedirectSafetyMarginMs)
-            MovementCounters.HaltNearBoundary();
     }
 
     /// <summary>

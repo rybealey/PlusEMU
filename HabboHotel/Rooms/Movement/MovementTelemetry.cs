@@ -27,9 +27,9 @@ public static class MovementCounters
     private static long _stopsRouteEnd;
     private static long _stopsBlocked;
     // Halts that finished the step in flight before stopping, halts that
-    // could not and stopped on the spot, and finished halts that landed
-    // inside RedirectSafetyMarginMs of the next boundary - the residual case
-    // where the client may already have begun its next preview.
+    // could not and stopped on the spot, and - a subset of the first - halts
+    // that landed inside RedirectSafetyMarginMs of the next boundary and so
+    // also kept the one previewed step the client was about to begin.
     private static long _haltsFinishedStep;
     private static long _haltsImmediate;
     private static long _haltsNearBoundary;
