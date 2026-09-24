@@ -277,11 +277,17 @@ public class Gamemap
     /// <summary>
     /// Does this item's per-tile mask make THIS square walkable?
     ///
-    /// The mask is stored in the furni's own frame - `a` across its width, `b`
-    /// along its length - so it turns with the item. Mapping a world square
-    /// back into that frame is the inverse of what GetAffectedTiles does when
-    /// it lays the footprint out: at rotation 0/4 the item runs along X by its
-    /// width and Y by its length, and at 2/6 those axes swap.
+    /// The mask is stored in the furni's own frame as it stands at rotation 0 -
+    /// `a` across its width (world X), `b` along its length (world Y) - and it
+    /// turns with the item the way the artwork does: each step of 2 is a
+    /// quarter-turn clockwise seen from above (0 faces -Y, 2 faces +X). The
+    /// footprint itself never moves - GetAffectedTiles always lays it out from
+    /// the anchor towards +X/+Y, swapping the axes at 2/6 - so only which
+    /// square of it is which part of the furni changes.
+    ///
+    /// This used to swap the axes at 2/6 and do nothing at 4, which is a
+    /// mirror rather than a turn at 2/6 and no turn at all at 4: an L-sofa's
+    /// open corner stayed where it was while the sofa turned round it.
     ///
     /// Anything that does not line up - no mask, a mask of the wrong size, a
     /// square outside the footprint - answers false and leaves the furni's
@@ -307,16 +313,30 @@ public class Gamemap
         if (rotation % 2 != 0)
             rotation -= 1;
 
+        // World offset inside the footprint, undone back into the rotation-0
+        // frame. Mirrored in the Function tool's grid (maskIndexAt), which has
+        // to agree square for square.
+        var dx = coord.X - anchorX;
+        var dy = coord.Y - anchorY;
         int a, b;
-        if (rotation == 0 || rotation == 4)
+        switch (rotation)
         {
-            a = coord.X - anchorX;
-            b = coord.Y - anchorY;
-        }
-        else
-        {
-            a = coord.Y - anchorY;
-            b = coord.X - anchorX;
+            case 2:
+                a = dy;
+                b = (length - 1) - dx;
+                break;
+            case 4:
+                a = (width - 1) - dx;
+                b = (length - 1) - dy;
+                break;
+            case 6:
+                a = (width - 1) - dy;
+                b = dx;
+                break;
+            default:
+                a = dx;
+                b = dy;
+                break;
         }
 
         if (a < 0 || a >= width || b < 0 || b >= length)
