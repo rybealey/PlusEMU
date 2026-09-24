@@ -129,7 +129,6 @@ internal class HealCommand : ITargetChatCommand
         // Bubble 4, the one a medkit already speaks in when it is used on
         // yourself - this is the same act with somebody else on the end of it.
         healer.OnChat(4, $"*opens a medkit and patches {target.Username} up*", true);
-        target.Client?.SendWhisper($"{habbo.Username} patched you up. You will be right within the minute.");
         return Task.CompletedTask;
     }
 

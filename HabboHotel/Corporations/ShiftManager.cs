@@ -186,7 +186,6 @@ public static class ShiftManager
         Sessions[userId] = session;
         if (session.IsStaffCorp)
             ApplyStaffDuty(client);
-        client.SendWhisper($"You are now on duty at {session.CorpName}. {PayMessage(RemainingSeconds(session, 0))}");
         ApplyMotto(client, session.WorkingMotto);
         AnnounceShift(client, $"*has started their shift at {session.CorpName}*");
         // Police powers follow the clock: an officer clocking on gains the x
@@ -249,8 +248,7 @@ public static class ShiftManager
             client.SendWhisper("You're not on duty.");
             return;
         }
-        var banked = EndSession(session, client);
-        client.SendWhisper($"Off duty. {FormatMinutes(banked)} banked toward your next pay.");
+        EndSession(session, client);
         RevertMotto(client);
         AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
         PoliceUtility.PushPardonRights(client);
@@ -365,8 +363,6 @@ public static class ShiftManager
             ? "You'll receive your next paycheck in 1 minute."
             : $"You'll receive your next paycheck in {minutes} minutes.";
     }
-
-    private static string FormatMinutes(int seconds) => $"{seconds / 60}m";
 
     // Drains any pay interval(s) the session completed before it ended, then
     // banks the remainder into the DB (delta counters, absolute pay_seconds),
