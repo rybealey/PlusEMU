@@ -981,6 +981,10 @@ public class RoomUserManager
                 {
                     user.IsWalking = false;
                     user.RemoveStatus("mv");
+                    // X/Y now holds the tile the walk ended on (step 1 above,
+                    // tile effects included), so RequestMove may resync from it.
+                    if (edge.IsWalkEnd)
+                        Volatile.Write(ref user.V2WalkEndAppliedSession, edge.WalkSessionId);
                     // A displacement is the one record that repositions a
                     // standing unit, and it has to turn them too: the escort's
                     // suspect is displaced to face the way their captor faces.

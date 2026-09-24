@@ -628,7 +628,14 @@ public static class MovementController
         w.Route.Clear();
 
         if (!neverEmitted)
+        {
             StageEdge(room, w, immediate: false); // walk-end marker slot
+
+            // RoomUser.X/Y reaches this tile only when the outbound thread
+            // applies the record just staged - up to a flush later. Until then
+            // RequestMove must not resync from it. See MovementV2Bridge.RequestMove.
+            w.WalkEndPendingSession = w.WalkSessionId;
+        }
     }
 
     /// <summary>

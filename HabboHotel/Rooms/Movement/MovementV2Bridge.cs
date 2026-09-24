@@ -147,7 +147,15 @@ public static class MovementV2Bridge
             // Keep V2's idea of where the avatar stands in step with anything
             // else that moved it (roller, teleport, room entry). A Pending
             // walker has not moved and its tile is already correct.
-            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
+            //
+            // NOT WHILE THIS UNIT'S WALK-END IS STILL IN FLIGHT. StopWalk puts
+            // V2 on the final tile at once, but RoomUser.X/Y only reaches it when
+            // the outbound thread applies the walk-end, up to a flush later -
+            // until then it still holds the last step's FROM tile. Resyncing
+            // from that started the next walk a tile back, and the client, which
+            // had drawn the avatar onto the final tile, jumped back with it.
+            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending
+                && Volatile.Read(ref user.V2WalkEndAppliedSession) >= state.WalkEndPendingSession)
             {
                 state.Tile = new Point(user.X, user.Y);
                 state.TileZ = user.Z;

@@ -217,6 +217,14 @@ public sealed class MovementState : IDueHeapNode
     /// </summary>
     public int EmittedThroughEdge = -1;
 
+    /// <summary>
+    /// The walk session whose walk-end StopWalk has STAGED. Compared against
+    /// RoomUser.V2WalkEndAppliedSession, which the outbound thread sets when it
+    /// APPLIES that record, so MovementV2Bridge.RequestMove can tell whether
+    /// RoomUser.X/Y has caught up with this state yet. See RequestMove.
+    /// </summary>
+    public long WalkEndPendingSession = -1;
+
     // ---- bookkeeping ------------------------------------------------------
     public long LastRepathAtMs = long.MinValue;
     public Point LastRepathTarget;

@@ -96,6 +96,11 @@ public class RoomUser
     public bool IsSitting = false;
     public bool IsWalking;
 
+    // pixelrp Movement V2: the walk session whose walk-end the outbound thread
+    // has APPLIED to X/Y (RoomUserManager.ApplyMovementFrame). Written there,
+    // read by MovementV2Bridge.RequestMove on another thread - Volatile both ways.
+    public long V2WalkEndAppliedSession = -1;
+
     // pixelrp :walk command - staff-forced patrol along one axis. null =
     // off; true = horizontal, false = vertical. Cleared the moment the
     // player clicks a tile of their own (MoveAvatarEvent).
