@@ -551,7 +551,13 @@ public static class MovementController
             // at e + 1, planned on the next beat when that index is genuinely
             // fresh. Nothing about timing, alignment or the interval changes -
             // only WHICH index a re-plan is allowed to rewrite.
-            var elapsing = w.ElapsingEdgeIndex(nowMs);
+            //
+            // WITH THE SAME SLACK THE POP USED. The scheduler runs this beat up to
+            // TickSlackMs before the index's own start, so at plain nowMs a step
+            // about to begin reads as not begun, and gets replanned or stopped
+            // while the client - on its own clock - is already drawing it from
+            // lookahead. A due test and its do-the-work test must agree.
+            var elapsing = w.ElapsingEdgeIndex(nowMs + MovementSettings.TickSlackMs);
 
             if (w.EdgeIndex <= elapsing)
             {
