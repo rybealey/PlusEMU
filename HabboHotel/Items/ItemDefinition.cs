@@ -74,6 +74,13 @@ public class ItemDefinition
     /// and could only be removed by rebuilding the asset.
     /// </summary>
     public bool HeightMarker { get; set; }
+
+    /// <summary>
+    /// pixelrp: an avatar lying on this furni lies ACROSS it instead of along
+    /// it. Only means anything for the laying types (bed, tent, medical bed) -
+    /// see 162_FurniLayAcross.sql and RoomUserManager's lay case.
+    /// </summary>
+    public bool LayAcross { get; set; }
     public int EffectId { get; set; }
 
     /// TODO @80O: Should be removed, use unique interaction name instead.

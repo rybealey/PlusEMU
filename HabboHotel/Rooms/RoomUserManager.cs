@@ -1468,8 +1468,16 @@ public class RoomUserManager
                             if (!user.Statusses.ContainsKey("lay"))
                                 user.Statusses.Add("lay", $"{TextHandling.GetString(item.Definition.Height)} null");
                             user.Z = item.GetZ;
-                            user.RotHead = item.Rotation;
-                            user.RotBody = item.Rotation;
+                            // pixelrp: the client draws a lying avatar only two
+                            // ways - rotation 0 lies one way, every other rotation
+                            // the other (nitro-renderer's AvatarImage maps lay to
+                            // direction 4 or 2). So "across" is not a turn added
+                            // to the furni's rotation, which could land on the
+                            // same drawing: it is whichever of the two this
+                            // rotation does NOT give.
+                            var layRotation = item.Definition.LayAcross ? (item.Rotation == 0 ? 2 : 0) : item.Rotation;
+                            user.RotHead = layRotation;
+                            user.RotBody = layRotation;
                             user.UpdateNeeded = true;
                             break;
                         }

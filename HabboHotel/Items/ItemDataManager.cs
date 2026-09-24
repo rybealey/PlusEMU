@@ -66,6 +66,7 @@ public class ItemDataManager : IItemDataManager
                                 ? Convert.ToString(row["height_adjustable"]).Split(",").Select(double.Parse).ToList()
                                 : new(0),
                             HeightMarker = Convert.ToString(row["height_marker"]) != "0",
+                            LayAcross = Convert.ToString(row["lay_across"]) == "1",
                             EffectId = Convert.ToInt32(row["effect_id"]),
                             IsRare = row["is_rare"].ToString() == "1",
                             ExtraRot = row["extra_rot"].ToString() == "1",

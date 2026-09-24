@@ -73,5 +73,9 @@ public class RpFurniFunctionComposer : IServerPacket
 
         packet.WriteInteger(_placedCopies);
         packet.WriteInteger(_roomCount);
+
+        // Last, not beside the other flags, so a client from before it existed
+        // reads the record it expects and leaves this byte alone.
+        packet.WriteBoolean(_definition.LayAcross);
     }
 }

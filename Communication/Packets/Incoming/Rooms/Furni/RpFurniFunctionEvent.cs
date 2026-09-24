@@ -76,6 +76,10 @@ internal class RpFurniFunctionEvent : IPacketEvent
         // Anything else is the id of the one placed item to scope the change to.
         // Read unconditionally - the whole record has to come off the wire.
         var scopeItemId = (uint)Math.Max(0, packet.ReadInt());
+        // pixelrp: last on the wire so a client from before it existed still
+        // parses. Such a client never sent it, so the furni keeps what it has
+        // rather than being reset - resolved below, once the definition is.
+        bool? layAcrossSent = packet.HasDataRemaining() ? packet.ReadBool() : null;
 
         var habbo = session.GetHabbo();
         if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
@@ -119,6 +123,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         if (publicName.Length > MaximumNameLength)
             publicName = publicName.Substring(0, MaximumNameLength);
 
+        var layAcross = layAcrossSent ?? definition.LayAcross;
         var height = heightHundredths / 100d;
         var changes = new List<(string Field, string Old, string New)>();
         void Track(string field, string oldValue, string newValue)
@@ -135,6 +140,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         Track("stack_height", Num(definition.Height), Num(height));
         Track("height_adjustable", Join(definition.AdjustableHeights), Join(adjustableHeights));
         Track("height_marker", Bit(definition.HeightMarker), Bit(heightMarker));
+        Track("lay_across", Bit(definition.LayAcross), Bit(layAcross));
         Track("interaction_type", definition.InteractionTypeName ?? "default", interactionName);
         Track("interaction_modes_count", definition.Modes.ToString(), modes.ToString());
         Track("effect_id", definition.EffectId.ToString(), effectId.ToString());
@@ -147,7 +153,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
-                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, " +
+                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, `lay_across` = @layAcross, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
@@ -159,6 +165,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
             dbClient.AddParameter("height", height);
             dbClient.AddParameter("adjustable", adjustableHeights.Count > 0 ? Join(adjustableHeights) : "0");
             dbClient.AddParameter("heightMarker", Bit(heightMarker));
+            dbClient.AddParameter("layAcross", Bit(layAcross));
             dbClient.AddParameter("interaction", interactionName);
             dbClient.AddParameter("modes", modes);
             dbClient.AddParameter("effect", effectId);
@@ -209,6 +216,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         definition.Height = height;
         definition.AdjustableHeights = adjustableHeights;
         definition.HeightMarker = heightMarker;
+        definition.LayAcross = layAcross;
         definition.InteractionType = interactionType;
         definition.InteractionTypeName = interactionName;
         definition.Modes = modes;
