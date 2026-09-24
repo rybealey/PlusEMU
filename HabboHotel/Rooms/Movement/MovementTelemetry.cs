@@ -26,6 +26,10 @@ public static class MovementCounters
     private static long _commits;
     private static long _stopsRouteEnd;
     private static long _stopsBlocked;
+    // [MV2/STOP]: unplanned stops of a real player's walk (anything but the
+    // route end), and how many of those landed part-way through a step.
+    private static long _stopsUnplanned;
+    private static long _stopsMidStep;
     private static long _replans;
     private static long _replansDeferred;
     private static long _roomProcessed;
@@ -195,6 +199,12 @@ public static class MovementCounters
     public static void Commit() => Interlocked.Increment(ref _commits);
     public static void StopRouteEnd() => Interlocked.Increment(ref _stopsRouteEnd);
     public static void StopBlocked() => Interlocked.Increment(ref _stopsBlocked);
+    public static void StopUnplanned(bool midStep)
+    {
+        Interlocked.Increment(ref _stopsUnplanned);
+        if (midStep)
+            Interlocked.Increment(ref _stopsMidStep);
+    }
     public static void Replan() => Interlocked.Increment(ref _replans);
 
     /// <summary>
@@ -218,6 +228,8 @@ public static class MovementCounters
         $"replansDeferred={Interlocked.Read(ref _replansDeferred)} " +
         $"stopEnd={Interlocked.Read(ref _stopsRouteEnd)} " +
         $"stopBlocked={Interlocked.Read(ref _stopsBlocked)} " +
+        $"stopUnplanned={Interlocked.Read(ref _stopsUnplanned)} " +
+        $"stopMidStep={Interlocked.Read(ref _stopsMidStep)} " +
         $"redirectMarginUnder250={Interlocked.Read(ref _redirectMarginUnder250)} " +
         $"under100={Interlocked.Read(ref _redirectMarginUnder100)} " +
         $"under50={Interlocked.Read(ref _redirectMarginUnder50)} " +

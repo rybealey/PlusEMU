@@ -174,7 +174,11 @@ public static class MovementV2Bridge
     /// RoomUser.ClearMovement only clears V1's own fields, so on its own a
     /// "frozen" avatar would finish its route while flagged unable to walk.
     /// </summary>
-    public static void Halt(RoomUser? user)
+    /// <param name="caller">Filled in by the compiler - names the halt in [MV2/STOP].</param>
+    /// <param name="callerFile">Filled in by the compiler.</param>
+    public static void Halt(RoomUser? user,
+        [System.Runtime.CompilerServices.CallerMemberName] string caller = "",
+        [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "")
     {
         if (user == null)
             return;
@@ -188,7 +192,8 @@ public static class MovementV2Bridge
                 return;
             if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
                 return;
-            MovementController.StopWalk(movement, state);
+            MovementController.StopWalk(movement, state,
+                $"halt:{System.IO.Path.GetFileNameWithoutExtension(callerFile.Replace('\\', '/'))}.{caller}");
         }
         MovementScheduler.Instance.Signal(movement);
     }

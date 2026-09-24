@@ -207,7 +207,7 @@ public static class MovementController
 
         if (result == PathResult.None || !w.Route.HasNext)
         {
-            StopWalk(room, w);
+            StopWalk(room, w, "pending-no-route");
             return false;
         }
 
@@ -434,7 +434,7 @@ public static class MovementController
         var map = room.Room.GetGameMap();
         if (map == null)
         {
-            StopWalk(room, w);
+            StopWalk(room, w, "no-map");
             return;
         }
 
@@ -517,7 +517,7 @@ public static class MovementController
         if (!w.Route.HasNext)
         {
             MovementCounters.StopRouteEnd();
-            StopWalk(room, w);
+            StopWalk(room, w, MovementStopTrace.ReasonRouteEnd);
             return;
         }
 
@@ -574,7 +574,7 @@ public static class MovementController
                 if (replanned == PathResult.None || !w.Route.HasNext)
                 {
                     MovementCounters.StopBlocked();
-                    StopWalk(room, w);
+                    StopWalk(room, w, "blocked");
                     return;
                 }
                 w.RouteRevision++;
@@ -600,8 +600,13 @@ public static class MovementController
         room.Walkers.InsertOrUpdate(w, nextDue); // never a bare Push (I-1)
     }
 
-    public static void StopWalk(RoomMovement room, MovementState w)
+    /// <param name="reason">
+    /// DIAGNOSTIC ONLY - who asked, for [MV2/STOP]. See MovementStopTrace.
+    /// </param>
+    public static void StopWalk(RoomMovement room, MovementState w, string reason = "other")
     {
+        MovementStopTrace.Record(w, reason);
+
         if (w.Queued)
             room.Walkers.Remove(w);
 
@@ -900,7 +905,7 @@ public static class MovementController
     public static void StageDisplacement(RoomMovement room, MovementState s, Point tile, byte facing, Gamemap? map, long nowMs)
     {
         if (s.Mode == MovementMode.Moving || s.Mode == MovementMode.Pending)
-            StopWalk(room, s);
+            StopWalk(room, s, "displacement");
         if (s.Queued)
             room.Walkers.Remove(s);
         s.WalkSessionId++; // "++ on every displacement" - the field's own contract
