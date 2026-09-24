@@ -519,6 +519,22 @@ public class Habbo
         return entry.Item;
     }
 
+    /// <summary>pixelrp: throws away the whole stack in the slot - the
+    /// backpack bin. Returns the item key and how many went, or (null, 0) when
+    /// the slot is empty.</summary>
+    public (string Item, int Count) DiscardRpItem(int slot)
+    {
+        var entry = LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot);
+        if (string.IsNullOrEmpty(entry.Item))
+            return (null, 0);
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("slot", slot);
+        dbClient.RunQuery();
+        return (entry.Item, entry.Count);
+    }
+
     public int FastfoodScore { get; set; }
 
     public int PetId { get; set; }

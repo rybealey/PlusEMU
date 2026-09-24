@@ -398,7 +398,8 @@
     "RpPayOpenEvent": 4051,
     "RpPaySendEvent": 4052,
     "RpOfferReplyEvent": 4053,
-    "RpFireMacroEvent": 4054
+    "RpFireMacroEvent": 4054,
+    "RpDiscardItemEvent": 4055
   },
   "OutgoingHeaders": {
     "InitCryptoComposer": 1347,
