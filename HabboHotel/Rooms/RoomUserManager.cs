@@ -156,8 +156,10 @@ public class RoomUserManager
             user.UpdateRpKnockoutState();
             SerializeStatusUpdates();
         }
-        // Out cold means down where you fell: UpdateRpKnockoutState only clears
-        // V1's fields, so the V2 walk is stopped here too. And nobody marches,
+        // Out cold means down where you fell - at the end of the step you were
+        // on, which the client is already drawing (see MovementV2Bridge.Halt):
+        // UpdateRpKnockoutState only clears V1's fields, so the V2 walk is
+        // stopped here too. And nobody marches,
         // or is marched, while out cold - an escort involving them ends.
         // Outside _cycleLock: both take the room's MovementLock.
         if (user.RpKnockedOut)
