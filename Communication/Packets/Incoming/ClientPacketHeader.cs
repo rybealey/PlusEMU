@@ -502,6 +502,8 @@ public static class ClientPacketHeader
     public const uint RpPaySendEvent = 4052;
     // pixelrp :offer / :sell
     public const uint RpOfferReplyEvent = 4053;
+    // pixelrp macros: one key press running several lines (RpFireMacroEvent).
+    public const uint RpFireMacroEvent = 4054;
     public const uint RpRoomZoneSaveEvent = 3923;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958

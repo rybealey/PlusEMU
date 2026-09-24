@@ -6,6 +6,7 @@ using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Moderation;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Commands;
 using Plus.HabboHotel.Rooms.Chat.Filter;
 using Plus.HabboHotel.Rooms.Chat.Logs;
@@ -56,21 +57,38 @@ public class ChatEvent : IPacketEvent
         if (message.Length > 100)
             message = message.Substring(0, 100);
         var colour = packet.ReadInt();
+        await ProcessAsync(session, room, user, message, colour, countFlood: true);
+    }
+
+    /// <summary>
+    /// Everything a line of room chat does once it has been read off the wire:
+    /// the style check, mutes, flood control, the chatlog, and then either
+    /// running it as a command or saying it. Shared with RpFireMacroEvent, which
+    /// runs several lines from one macro key and counts that press against
+    /// flood control once rather than once per line - hence countFlood.
+    /// </summary>
+    /// <returns>
+    /// false when nothing more should be processed after this line - the player
+    /// is flood-muted, muted, or was banned for the message - so a macro's
+    /// remaining lines stop with it. true otherwise.
+    /// </returns>
+    public async Task<bool> ProcessAsync(GameClient session, Room room, RoomUser user, string message, int colour, bool countFlood)
+    {
         if (!_chatStyleManager.TryGetStyle(colour, out var style) ||
             style.RequiredRight.Length > 0 && !session.GetHabbo().Permissions.HasRight(style.RequiredRight))
             colour = 0;
         user.UnIdle();
         if (UnixTimestamp.GetNow() < session.GetHabbo().FloodTime && session.GetHabbo().FloodTime != 0)
-            return;
+            return false;
         if (session.GetHabbo().TimeMuted > 0)
         {
             session.Send(new MutedComposer(session.GetHabbo().TimeMuted));
-            return;
+            return false;
         }
         if (!session.GetHabbo().Permissions.HasRight("room_ignore_mute") && room.CheckMute(session))
         {
             session.SendWhisper("Oops, you're currently muted.");
-            return;
+            return false;
         }
 
         // pixelrp: the persisted bubble must still pass the style's required right
@@ -80,19 +98,19 @@ public class ChatEvent : IPacketEvent
             customBubble = 0;
         user.LastBubble = customBubble == 0 ? colour : customBubble;
 
-        if (!session.GetHabbo().Permissions.HasRight("mod_tool"))
+        if (countFlood && !session.GetHabbo().Permissions.HasRight("mod_tool"))
         {
             if (user.IncrementAndCheckFlood(out var muteTime))
             {
                 session.Send(new FloodControlComposer(muteTime));
-                return;
+                return false;
             }
         }
         
         _chatlogManager.StoreChatlog(new(session.GetHabbo().Id, room.Id, message, UnixTimestamp.GetNow(), session.GetHabbo(), room));
         
         if (message.StartsWith(":", StringComparison.CurrentCulture) && await _commandManager.Parse(session, message))
-            return;
+            return true;
         if (_wordFilterManager.CheckBannedWords(message))
         {
             session.GetHabbo().BannedPhraseCount++;
@@ -101,10 +119,10 @@ public class ChatEvent : IPacketEvent
                 _moderationManager.BanUser("System", ModerationBanType.Username, session.GetHabbo().Username, $"Spamming banned phrases ({message})",
                     UnixTimestamp.GetNow() + 78892200);
                 session.Disconnect();
-                return;
+                return false;
             }
             session.Send(new ChatComposer(user.VirtualId, message, 0, colour));
-            return;
+            return true;
         }
         if (!session.GetHabbo().Permissions.HasRight("word_filter_override"))
             message = _wordFilterManager.CheckMessage(message);
@@ -124,6 +142,6 @@ public class ChatEvent : IPacketEvent
             }
             room.SendPacket(new ActionComposer(user.VirtualId, 67));
         }
-        return;
+        return true;
     }
 }
