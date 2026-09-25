@@ -355,7 +355,24 @@ public static class MovementController
             allowPartial: allowPartial);
 
         if (result == PathResult.None || !w.Route.HasNext)
-            return false; // keep walking the existing route
+        {
+            // An early-out (the tile being arrived at, out of bounds, no model)
+            // returns before the route is touched: keep walking it, as always.
+            if (w.Route.HasNext)
+                return false;
+
+            // THE SEARCH RAN, FOUND NOTHING CLOSER THAN ITS START, AND HAS
+            // ALREADY WIPED THE ROUTE (AStarPathfinder clears it just before
+            // searching). "Keep walking the existing route" was never true on
+            // this path: the next beat found no route and stopped the walk at
+            // the end of this step - after the client had already begun its
+            // next preview step. A small slide back, on a click of a blocked
+            // tile right beside the one being stepped onto.
+            MovementCounters.RedirectSearchEmpty();
+            if (stageCorrection)
+                EndWalkAfterStep(room, w, e, protectNext, promised, map, target, nowMs);
+            return false;
+        }
 
         // The protected edge's destination goes back on the front, so the route
         // reads [e+1 as promised, then the new way to target]. THAT IS WHAT
@@ -1012,6 +1029,81 @@ public static class MovementController
             w.EmittedThroughEdge = fromEdgeIndex - 1;
 
         PublishCorrectedEdgeEarly(room, w, map);
+    }
+
+    /// <summary>
+    /// A redirect's search found nothing closer than its start and emptied the
+    /// route, so the walk now ends at the end of the step being drawn (or of
+    /// the protected next step). Tell the client NOW, before it begins its
+    /// next preview step - otherwise the walk-end arrives after that preview
+    /// has started, and the avatar slides back onto the server's tile.
+    ///
+    /// FOR THIS ONE CASE ONLY. It is the "tell the client this step is the
+    /// last" part of the reverted StopAfterCurrentStep (c1074f80 / a244f263),
+    /// but nothing here stops a walk that would not have stopped anyway: the
+    /// route is already empty, and the route-end StopWalk still closes the
+    /// walk on the same tile at the same beat. Halts (stun, knockout, bed) are
+    /// untouched and still stop on the spot.
+    ///
+    /// NEVER VISIBLE AS MOVEMENT. The step republished is the one the client is
+    /// drawing, identical geometry under a higher RouteRevision: the client
+    /// replaces it with an identical copy and drops the previews after it.
+    /// Anything that cannot be done that cleanly keeps today's behaviour.
+    /// </summary>
+    private static void EndWalkAfterStep(
+        RoomMovement room, MovementState w, int e, bool protectNext, Point promised,
+        Gamemap map, Point clicked, long nowMs)
+    {
+        // A captor's edges ride with a matching shadow record; publishing the
+        // captor's alone would break that lockstep. Today's behaviour.
+        if (w.ShadowVirtualId != MovementState.NoShadow)
+            return;
+
+        // Spam-clicking the same unreachable tile must not re-run the search
+        // and republish every click; the usual 40ms debounce covers it.
+        w.LastRepathAtMs = nowMs;
+        w.LastRepathTarget = clicked;
+        w.DeferredRedirectTarget = null;
+
+        // Inside RedirectSafetyMarginMs of the next boundary the client starts
+        // that next step before anything sent now can land, so it is KEPT, and
+        // the walk ends at its destination instead - Redirect's protectNext
+        // rule. The route becomes that one promised tile; the early publish
+        // sends it as the final step with no lookahead, and the next beat
+        // stages it as normal before the route-end stop.
+        if (protectNext)
+        {
+            w.Route.PrependPromised(promised);
+            w.Target = promised;
+            w.RouteRevision++;
+            PublishCorrectedEdgeEarly(room, w, map);
+            MovementCounters.RedirectEndedAfterNext();
+            return;
+        }
+
+        // Otherwise the step being drawn is the last. Only when the walker is
+        // level with it and it has really been sent, and only if the search
+        // did not run past its end - once the next step has begun on the
+        // client, pruning its preview would pull the avatar back.
+        if (w.EdgeIndex != e || w.EmittedThroughEdge < e
+            || w.ElapsingEdgeIndex(MovementScheduler.Instance.Clock.NowMs) != e)
+            return;
+
+        w.Target = w.EdgeTo;
+        w.RouteRevision++;
+
+        room.Staged.Add(new MovementEdgeRecord(
+            w.VirtualId, w.WalkSessionId, w.RouteRevision, e,
+            RpMovementV2Flags.Edge | RpMovementV2Flags.FinalEdge,
+            w.IntervalMs, w.EdgeStartTick(e),
+            w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
+            w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
+            w.EdgeToZ, w.Facing,
+            System.Array.Empty<LookaheadTile>(), 0, publishOnly: true));
+        room.HasStagedWork = true;
+        room.HasImmediateWork = true;
+
+        MovementCounters.RedirectEndedAtStep();
     }
 
     /// <summary>
