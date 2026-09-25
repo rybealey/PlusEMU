@@ -616,6 +616,18 @@ public static class MovementController
                 if (Redirect(room, w, deferredTarget, deferredCtx, nowMs, stageCorrection: false))
                     MovementCounters.RedirectDeferredRecovered();
             }
+            else
+            {
+                // STILL BEHIND - two or more steps, after a server hiccup. The
+                // click used to be dropped here: the player clicked and nothing
+                // happened. It is kept instead, and retried on the next beat;
+                // a walker this far behind is due again at once (its next
+                // boundary is already past), so that is moments away. Only a
+                // failure of the retry itself (no route, the debounce) drops it,
+                // as before.
+                w.DeferredRedirectTarget = deferredTarget;
+                MovementCounters.RedirectDeferredKept();
+            }
         }
 
         // (c) plan the next edge
@@ -639,8 +651,17 @@ public static class MovementController
     {
         if (!w.Route.HasNext)
         {
+            // A click still held for later (the walker was behind when it
+            // came) would die with the walk: StopWalk clears it. Keep it, and
+            // once this walk has ended on its last tile start a new walk to it
+            // - the click the player made, from where they now stand.
+            var held = w.DeferredRedirectTarget;
+
             MovementCounters.StopRouteEnd();
             StopWalk(room, w, MovementStopTrace.ReasonRouteEnd);
+
+            if (held is { } heldTarget && StartWalk(room, w, heldTarget, ctx, nowMs))
+                MovementCounters.RedirectDeferredStartedAfterEnd();
             return;
         }
 

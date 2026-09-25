@@ -240,6 +240,14 @@ public static class MovementCounters
     public static void RedirectDeferredRecovered() =>
         Interlocked.Increment(ref _redirectDeferredRecovered);
 
+    // A held click kept for another beat because the walker was still behind
+    // (it used to be dropped), and one that outlived its walk and so started
+    // a new walk from the final tile.
+    private static long _redirectDeferredKept;
+    private static long _redirectDeferredStartedAfterEnd;
+    public static void RedirectDeferredKept() => Interlocked.Increment(ref _redirectDeferredKept);
+    public static void RedirectDeferredStartedAfterEnd() => Interlocked.Increment(ref _redirectDeferredStartedAfterEnd);
+
     private static string MinRedirectMargin()
     {
         var value = Interlocked.Read(ref _minRedirectMarginMs);
@@ -296,6 +304,8 @@ public static class MovementCounters
         $"redirectProtectedNextEdge={Interlocked.Read(ref _redirectProtectedNextEdge)} " +
         $"redirectDeferredBehindElapsing={Interlocked.Read(ref _redirectDeferredBehindElapsing)} " +
         $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)} " +
+        $"redirectDeferredKept={Interlocked.Read(ref _redirectDeferredKept)} " +
+        $"redirectDeferredStartedAfterEnd={Interlocked.Read(ref _redirectDeferredStartedAfterEnd)} " +
         $"redirectSearchEmpty={Interlocked.Read(ref _redirectSearchEmpty)} " +
         $"teleportWhileWalking={Interlocked.Read(ref _teleportWhileWalking)} " +
         $"searchSkippedUnreachable={Interlocked.Read(ref _searchSkippedUnreachable)} " +
