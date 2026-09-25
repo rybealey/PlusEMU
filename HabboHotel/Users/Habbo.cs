@@ -301,17 +301,27 @@ public class Habbo
         RpPassiveSeconds = Convert.ToInt32(row["passive_seconds"]);
     }
 
+    // Read-and-write of one player's RP stats is one step under this lock, so
+    // two saves on different threads (the room tick's queued save on
+    // RoomTickWriter, a direct one from :hit or a medkit) cannot interleave -
+    // the one that finishes last always carries the newest values. A leaf
+    // lock: nothing is taken inside it.
+    private readonly object _rpStatsSaveLock = new();
+
     public void SaveRpStats()
     {
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax, `passive_seconds` = @passive WHERE `user_id` = @id");
-        dbClient.AddParameter("hp", RpHealth);
-        dbClient.AddParameter("hpmax", RpHealthMax);
-        dbClient.AddParameter("en", RpEnergy);
-        dbClient.AddParameter("enmax", RpEnergyMax);
-        dbClient.AddParameter("passive", RpPassiveSeconds);
-        dbClient.AddParameter("id", Id);
-        dbClient.RunQuery();
+        lock (_rpStatsSaveLock)
+        {
+            using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+            dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax, `passive_seconds` = @passive WHERE `user_id` = @id");
+            dbClient.AddParameter("hp", RpHealth);
+            dbClient.AddParameter("hpmax", RpHealthMax);
+            dbClient.AddParameter("en", RpEnergy);
+            dbClient.AddParameter("enmax", RpEnergyMax);
+            dbClient.AddParameter("passive", RpPassiveSeconds);
+            dbClient.AddParameter("id", Id);
+            dbClient.RunQuery();
+        }
     }
 
     // pixelrp UI settings: the player's chosen UI chrome color scheme

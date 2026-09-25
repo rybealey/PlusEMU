@@ -616,8 +616,10 @@ public class RoomUserManager
     {
         UserCount = count;
         _room.UsersNow = count;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.RunQuery($"UPDATE `rooms` SET `users_now` = '{count}' WHERE `id` = '{_room.RoomId}' LIMIT 1");
+        // Queued, not written here: the room tick calls this under _cycleLock,
+        // which the movement sender needs for every room. RoomTickWriter reads
+        // the live count when it writes, so a later change always wins.
+        RoomTickWriter.QueueUserCount(_room);
     }
 
     public RoomUser GetRoomUserByVirtualId(int virtualId)
@@ -1175,7 +1177,9 @@ public class RoomUserManager
                             if (habboPas.RpPassiveSeconds == 0)
                             {
                                 user.GetClient().SendWhisper("Your passive status has expired.");
-                                habboPas.SaveRpStats();
+                                // Queued, not written here: this runs under _cycleLock, which
+                                // the movement sender needs for every room (RoomTickWriter).
+                                RoomTickWriter.QueueRpStats(habboPas);
                                 _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0, habboPas.Rank >= 5 ? 1 : 0));
                                 // pixelrp: drop the passive enable if it is the shown effect.
                                 if (habboPas.Effects != null && habboPas.Effects.CurrentEffect == Habbo.PassiveEnableEffectId)
@@ -1184,7 +1188,7 @@ public class RoomUserManager
                             else if (afterMinutes < beforeMinutes)
                             {
                                 user.GetClient().SendWhisper($"Your passive status expires in {afterMinutes} minutes.");
-                                habboPas.SaveRpStats();
+                                RoomTickWriter.QueueRpStats(habboPas);
                             }
                         }
                     }
@@ -1225,7 +1229,7 @@ public class RoomUserManager
                         if (energyDone || healthDone ||
                             habboFed.RpEnergy / 10 != beforeEnergy / 10 ||
                             habboFed.RpHealth / 10 != beforeHealth / 10)
-                            habboFed.SaveRpStats();
+                            RoomTickWriter.QueueRpStats(habboFed);
                         _room.SendPacket(new RpStatsComposer(user.VirtualId, habboFed.RpHealth, habboFed.RpHealthMax,
                             habboFed.RpEnergy, habboFed.RpEnergyMax, (int)Math.Round(habboFed.RpAggression),
                             habboFed.IsRpPassive ? 1 : 0, habboFed.Rank >= 5 ? 1 : 0));
