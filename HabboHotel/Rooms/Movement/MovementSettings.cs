@@ -144,6 +144,17 @@ public static class MovementSettings
 
     /// <summary>Identical-target redirect debounce, so spam-clicking cannot spin A*.</summary>
     public const int RepathMinIntervalMs = 40;
+
+    /// <summary>
+    /// How long a click target found unreachable is not searched again. An
+    /// unreachable target makes A* expand every tile it can reach before it
+    /// gives up (a partial route, or none), all while holding the room's
+    /// MovementLock that the one scheduler thread needs - so spam-clicking a
+    /// counter or a spot behind a closed gate cost a whole-room search per
+    /// click. The cost of the window: a gate that opens inside it is noticed
+    /// on the next click after it.
+    /// </summary>
+    public const int UnreachableRepathMs = 250;
 }
 
 /// <summary>

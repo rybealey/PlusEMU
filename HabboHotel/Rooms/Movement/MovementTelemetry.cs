@@ -169,6 +169,13 @@ public static class MovementCounters
     public static void TeleportWhileWalking() => Interlocked.Increment(ref _teleportWhileWalking);
 
     public static void RedirectSearchEmpty() => Interlocked.Increment(ref _redirectSearchEmpty);
+
+    // Searches NOT run: the same unreachable target inside UnreachableRepathMs,
+    // and a same-target click while the walk waits for the beat.
+    private static long _searchSkippedUnreachable;
+    private static long _searchSkippedPendingSame;
+    public static void SearchSkippedUnreachable() => Interlocked.Increment(ref _searchSkippedUnreachable);
+    public static void SearchSkippedPendingSame() => Interlocked.Increment(ref _searchSkippedPendingSame);
     public static void RedirectEndedAfterQueued() => Interlocked.Increment(ref _redirectEndedAfterQueued);
 
     /// <summary>
@@ -291,6 +298,8 @@ public static class MovementCounters
         $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)} " +
         $"redirectSearchEmpty={Interlocked.Read(ref _redirectSearchEmpty)} " +
         $"teleportWhileWalking={Interlocked.Read(ref _teleportWhileWalking)} " +
+        $"searchSkippedUnreachable={Interlocked.Read(ref _searchSkippedUnreachable)} " +
+        $"searchSkippedPendingSame={Interlocked.Read(ref _searchSkippedPendingSame)} " +
         $"redirectEndedAfterQueued={Interlocked.Read(ref _redirectEndedAfterQueued)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);

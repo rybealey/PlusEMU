@@ -34,9 +34,15 @@ public static class MovementController
         if (map == null)
             return false;
 
+        // Standing next to a counter and clicking it again: the last search
+        // already found there is no closer tile, so nothing would move.
+        if (RecentlyUnreachable(w, target, nowMs))
+            return false;
+
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, w.Tile, target, ctx,
             allowPartial: allowPartial);
+        NoteReach(w, target, result, nowMs);
 
         if (result == PathResult.None || !w.Route.HasNext)
             return false;
@@ -193,6 +199,37 @@ public static class MovementController
     ///
     /// Caller MUST hold MovementLock.
     /// </summary>
+    /// <summary>
+    /// Was <paramref name="target"/> found unreachable (no complete route) by a
+    /// search in the last UnreachableRepathMs? Counts the skip when it was.
+    /// Keyed on the exact tile, so a click anywhere else always searches.
+    /// </summary>
+    private static bool RecentlyUnreachable(MovementState w, Point target, long nowMs)
+    {
+        if (w.UnreachableTarget is not { } unreachable || unreachable != target)
+            return false;
+        if (nowMs - w.UnreachableAtMs >= MovementSettings.UnreachableRepathMs)
+            return false;
+        MovementCounters.SearchSkippedUnreachable();
+        return true;
+    }
+
+    /// <summary>
+    /// Remember a search's verdict on its target: no complete route (partial
+    /// or none) arms RecentlyUnreachable for it; a complete one clears it.
+    /// </summary>
+    private static void NoteReach(MovementState w, Point target, PathResult result, long nowMs)
+    {
+        if (result == PathResult.Complete)
+        {
+            if (w.UnreachableTarget == target)
+                w.UnreachableTarget = null;
+            return;
+        }
+        w.UnreachableTarget = target;
+        w.UnreachableAtMs = nowMs;
+    }
+
     internal static MovementState? PhaseHolder(RoomMovement room, MovementState self)
     {
         foreach (var other in room.States.Values)
@@ -220,9 +257,22 @@ public static class MovementController
         if (map == null)
             return false;
 
+        // The same tile again while the walk waits for the beat: it is planned
+        // from the same Tile to the same target, so a new search can only find
+        // the same route. Nothing to do.
+        if (target == w.Target && w.Route.HasNext)
+        {
+            MovementCounters.SearchSkippedPendingSame();
+            return true;
+        }
+
+        if (RecentlyUnreachable(w, target, nowMs))
+            return true;
+
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, w.Tile, target, ctx,
             allowPartial: true);
+        NoteReach(w, target, result, nowMs);
 
         if (result == PathResult.None || !w.Route.HasNext)
         {
@@ -294,6 +344,18 @@ public static class MovementController
         var map = room.Room.GetGameMap();
         if (map == null)
             return false;
+
+        // The same unreachable target again inside UnreachableRepathMs: the
+        // search would expand every reachable tile to find what the last one
+        // found. The walk carries on as it is (towards the closest tile, or
+        // already ending); only the search is skipped. The latest click is the
+        // latest intent, so a redirect waiting on the commit path is dropped,
+        // as the same-target skip above does.
+        if (RecentlyUnreachable(w, target, nowMs))
+        {
+            w.DeferredRedirectTarget = null;
+            return false;
+        }
 
         // 1. Derive the elapsing edge from the TIMELINE (single helper).
         var e = w.ElapsingEdgeIndex(nowMs);
@@ -376,6 +438,7 @@ public static class MovementController
         var result = AStarPathfinder.FindRoute(
             map, room.Scratch, w.Route, origin, target, ctx,
             allowPartial: allowPartial);
+        NoteReach(w, target, result, nowMs);
 
         if (result == PathResult.None || !w.Route.HasNext)
         {

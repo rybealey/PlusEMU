@@ -250,6 +250,14 @@ public sealed class MovementState : IDueHeapNode
     /// </summary>
     public Point? DeferredRedirectTarget;
 
+    /// <summary>
+    /// The last click target a search found no complete way to (a partial
+    /// route, or none), and when - see MovementController.RecentlyUnreachable.
+    /// Null = none.
+    /// </summary>
+    public Point? UnreachableTarget;
+    public long UnreachableAtMs;
+
     // ---- early correction publish (experiment) ----------------------------
     /// <summary>
     /// Identity of the last edge published early by StageCorrection, so the
