@@ -64,8 +64,16 @@ public static class MovementRegistry
         {
             if (movement.Closed)
                 return null;
-            movement.NextFlushTick = now + MovementSettings.FlushIntervalMs;
-            movement.NextWatchdogTick = now + MovementSettings.WatchdogIntervalMs;
+            // Attach runs on every room entry, not only the first. Setting these
+            // outright let each person coming in push both timers back - a busy
+            // door could keep postponing the 1-second lost-walker check. So they
+            // are only ever brought EARLIER (a new room starts at 0, "unset").
+            var flushAt = now + MovementSettings.FlushIntervalMs;
+            var watchdogAt = now + MovementSettings.WatchdogIntervalMs;
+            if (movement.NextFlushTick == 0 || movement.NextFlushTick > flushAt)
+                movement.NextFlushTick = flushAt;
+            if (movement.NextWatchdogTick == 0 || movement.NextWatchdogTick > watchdogAt)
+                movement.NextWatchdogTick = watchdogAt;
         }
         MovementScheduler.Instance.RegisterRoom(movement);
         return movement;

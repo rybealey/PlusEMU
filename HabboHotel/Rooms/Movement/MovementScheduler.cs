@@ -423,14 +423,21 @@ public sealed class MovementScheduler
             }
 
             // C. SEAL. Staging -> one frame; handed to Q1, never sent here.
-            if (room.HasImmediateWork ||
-                (now + MovementSettings.TickSlackMs >= room.NextFlushTick && room.HasStagedWork))
+            var flushDue = (now + MovementSettings.TickSlackMs >= room.NextFlushTick && room.HasStagedWork);
+            if (room.HasImmediateWork || flushDue)
             {
                 progressed = true;
                 room.FrameSequence++;
                 room.HasStagedWork = false;
                 room.HasImmediateWork = false;
-                room.NextFlushTick = now + MovementSettings.FlushIntervalMs;
+                // ONLY A TIMED SEND RESTARTS THE TIMER. An urgent send (a turn,
+                // a start, a stop) used to restart it too, so a turn in the
+                // 100ms before a batch pushed that batch's ordinary steps up to
+                // 100ms later - lagging the server's own idea of position, and
+                // with it floor effects and wired. Whatever was staged goes out
+                // in this frame either way; the timer just keeps its rhythm.
+                if (flushDue)
+                    room.NextFlushTick = now + MovementSettings.FlushIntervalMs;
 
                 // Hand the frame off by VALUE and clear staging, so the worker
                 // can apply it without holding the movement lock and the
