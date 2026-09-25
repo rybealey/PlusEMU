@@ -129,16 +129,14 @@ public static class MovementCounters
     private static long _redirectDeferredRecovered;
 
     // A redirect whose search ran and found nothing closer, wiping the route;
-    // and how many of those were then told to the client as "this step is the
-    // last" (or "the protected next step is the last") before its next preview.
-    // searchEmpty minus both = cases left as before (escort, late search, retry).
+    // and how many of those kept the step the client had queued and ended the
+    // walk after it. searchEmpty minus endedAfterQueued = walks with no queued
+    // step, which already ended on the current tile.
     private static long _redirectSearchEmpty;
-    private static long _redirectEndedAtStep;
-    private static long _redirectEndedAfterNext;
+    private static long _redirectEndedAfterQueued;
 
     public static void RedirectSearchEmpty() => Interlocked.Increment(ref _redirectSearchEmpty);
-    public static void RedirectEndedAtStep() => Interlocked.Increment(ref _redirectEndedAtStep);
-    public static void RedirectEndedAfterNext() => Interlocked.Increment(ref _redirectEndedAfterNext);
+    public static void RedirectEndedAfterQueued() => Interlocked.Increment(ref _redirectEndedAfterQueued);
 
     /// <summary>
     /// Milliseconds from this redirect to the start of the edge it restages.
@@ -259,8 +257,7 @@ public static class MovementCounters
         $"redirectDeferredBehindElapsing={Interlocked.Read(ref _redirectDeferredBehindElapsing)} " +
         $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)} " +
         $"redirectSearchEmpty={Interlocked.Read(ref _redirectSearchEmpty)} " +
-        $"redirectEndedAtStep={Interlocked.Read(ref _redirectEndedAtStep)} " +
-        $"redirectEndedAfterNext={Interlocked.Read(ref _redirectEndedAfterNext)}";
+        $"redirectEndedAfterQueued={Interlocked.Read(ref _redirectEndedAfterQueued)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);
     public static void DrainDeferred() => Interlocked.Increment(ref _drainDeferred);

@@ -71,9 +71,9 @@ public sealed class RouteBuffer
     /// <summary>
     /// Put one ALREADY-PROMISED tile back at the front of the route.
     ///
-    /// FOR TWO CALLERS, with the same reason. MovementController.EndWalkAfterStep
+    /// FOR TWO CALLERS, with the same reason. MovementController.EndWalkAfterQueuedStep
     /// uses it on a route a failed search emptied, to keep ONLY the step the
-    /// client is about to begin. The first: a redirect that must not rewrite
+    /// client already has queued. The first: a redirect that must not rewrite
     /// the edge the client is about to start drawing. That redirect plans from the promised
     /// edge's DESTINATION rather than from where the walker is, so the route it
     /// gets back begins one tile too far along. This puts the promised tile
