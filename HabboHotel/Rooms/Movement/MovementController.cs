@@ -1009,6 +1009,56 @@ public static class MovementController
     }
 
     /// <summary>
+    /// A walker was teleported (Gamemap.TeleportToTile has already put the
+    /// RoomUser on <paramref name="tile"/>): end the walk WITHOUT a walk-end
+    /// and place the unit fresh on the new tile. Caller holds MovementLock.
+    ///
+    /// NOT StageDisplacement, whose StopWalk stages a walk-end on the OLD
+    /// route: ApplyMovementFrame treats a record whose from-tile is not where
+    /// the user stands as an arrival, so that walk-end would drag the player
+    /// back to where they were and fire that tile's furni. Here nothing of the
+    /// old walk is sent: its staged records are dropped, the unit leaves the
+    /// scheduler, and a NEW session begins with one Displacement record on the
+    /// new tile - the client drops the old timed walk and takes the new
+    /// position at face value. Records of the old session already sealed and
+    /// queued for sending are discarded by ApplyMovementFrame
+    /// (RoomUser.V2DiscardBelowSession, set by the bridge).
+    /// </summary>
+    public static void EndWalkForTeleport(RoomMovement room, MovementState s, Point tile, double z, byte facing, long nowMs)
+    {
+        if (s.Queued)
+            room.Walkers.Remove(s);
+        var virtualId = s.VirtualId;
+        room.Staged.RemoveAll(record => record.VirtualId == virtualId);
+
+        s.DeferredRedirectTarget = null;
+        // The old walk's walk-end, if it was still on its way, is discarded
+        // with the rest of that session - nothing is pending any more, so
+        // RequestMove may resync from the RoomUser at once.
+        s.WalkEndPendingSession = -1;
+        s.WalkSessionId++; // "++ on every displacement" - the field's own contract
+        s.RouteRevision = 0;
+        s.EdgeIndex = 0;
+        s.Mode = MovementMode.Standing;
+        s.Route.Clear();
+        s.Tile = tile;
+        s.EdgeTo = tile;
+        s.TileZ = z;
+        s.EdgeToZ = z;
+        s.Facing = facing;
+        s.EmittedThroughEdge = -1;
+
+        var z100 = MovementEdgeRecord.Z100(z);
+        room.Staged.Add(new MovementEdgeRecord(
+            s.VirtualId, s.WalkSessionId, 0, 0, RpMovementV2Flags.Displacement,
+            s.IntervalMs, nowMs,
+            tile.X, tile.Y, z100, tile.X, tile.Y, z100, z, facing,
+            System.Array.Empty<LookaheadTile>(), 0));
+        room.HasStagedWork = true;
+        room.HasImmediateWork = true;
+    }
+
+    /// <summary>
     /// Close out a shadow that is being released: a walk-end in the session
     /// the client is holding for it, resting on the tile its last edge ended
     /// on. Without this a suspect let go mid-walk keeps the walking posture

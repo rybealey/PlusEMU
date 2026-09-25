@@ -72,6 +72,7 @@ public class Gamemap
     {
         if (user == null)
             return;
+        var from = new Point(user.X, user.Y);
         // Same rule as movement/leave: with global tile-overlap (RoomBlockingEnabled
         // always true) users never write occupancy into the pathfinding map, so skip
         // the restore-at-origin (stale SqState would stamp 0/"blocked") and the
@@ -94,6 +95,11 @@ public class Gamemap
         user.SetStep = false;
         user.IsWalking = false;
         user.UpdateNeeded = true;
+        // pixelrp Movement V2: a walker's walk ends here and they are placed
+        // fresh on the new tile - without this, V2 kept walking the old route
+        // and the next step pulled them straight back. See the bridge for the
+        // same-tile and escort cases, which are left as they were.
+        Movement.MovementV2Bridge.Teleported(_room, user, from);
         // pixelrp police: an escorted pair travels together, and a warp is not
         // a walk - the shadow follows staged edges, so a captor who arrives on
         // a far tile with none in between leaves their captive behind. This is

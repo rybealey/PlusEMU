@@ -195,6 +195,16 @@ public class RoomUser
     /// - see RoomUserManager.OnCycle.
     /// </summary>
     public long LastAggressionBroadcastMs;
+
+    /// <summary>
+    /// pixelrp Movement V2: movement records of an older walk session than this
+    /// are dropped by ApplyMovementFrame, applied to nothing and sent to
+    /// nobody. Set when a walker is teleported (MovementV2Bridge.Teleported),
+    /// so an old-route step already queued for sending cannot move them back
+    /// or fire the old route's furni. Volatile: written under MovementLock,
+    /// read on the outbound thread.
+    /// </summary>
+    public long V2DiscardBelowSession = -1;
     public uint RoomId;
     public int RotBody; //byte
     public int RotHead; //byte

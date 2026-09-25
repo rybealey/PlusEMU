@@ -947,8 +947,24 @@ public class RoomUserManager
             var lockAcquired = Movement.MovementTiming.Now();
             Movement.MovementTiming.SenderLockWait.Record(Movement.MovementTiming.MicrosSince(lockWaitStart));
 
+            // Records to drop: an older walk session than a teleport left the
+            // unit in (RoomUser.V2DiscardBelowSession). Neither applied nor sent
+            // - an old-route step would move the player back and fire the old
+            // route's furni. Allocated only in the rare frame that needs it.
+            bool[]? dropped = null;
+            var index = -1;
+
             foreach (var edge in frame)
             {
+                index++;
+                var owner = GetRoomUserByVirtualId(edge.VirtualId);
+                if (owner != null && edge.WalkSessionId < Volatile.Read(ref owner.V2DiscardBelowSession))
+                {
+                    dropped ??= new bool[frame.Length];
+                    dropped[index] = true;
+                    continue;
+                }
+
                 // A publish-only record is a TRANSMISSION, not a commit. It
                 // describes an edge that has not started yet, so none of the
                 // server-truth work below may run for it: that would move the
@@ -1033,6 +1049,15 @@ public class RoomUserManager
                         }
                     }
 
+                    // A furni on the tile just arrived at can teleport the unit
+                    // (a wired teleport fires from UserWalksOnFurni above), which
+                    // ends this walk and starts a new session on the new tile.
+                    // The rest of this OLD record - walking posture, "mv" to
+                    // its old destination - must not run over that, and it is
+                    // not sent either (checked again in the send loop).
+                    if (edge.WalkSessionId < Volatile.Read(ref user.V2DiscardBelowSession))
+                        continue;
+
                     // 2. Posture/facing for the edge now in flight, or the stop.
                     if (edge.IsWalkEnd || edge.IsDisplacement)
                     {
@@ -1112,8 +1137,16 @@ public class RoomUserManager
             }
 
             // ... then the authoritative timing for each edge.
-            foreach (var edge in frame)
+            for (var i = 0; i < frame.Length; i++)
             {
+                if (dropped != null && dropped[i])
+                    continue;
+                var edge = frame[i];
+                // Again at send time: a teleport during this frame's apply
+                // (above) retires the session after the first check ran.
+                var owner = GetRoomUserByVirtualId(edge.VirtualId);
+                if (owner != null && edge.WalkSessionId < Volatile.Read(ref owner.V2DiscardBelowSession))
+                    continue;
                 var step = new RpMovementV2Composer(edge, serverNowMs);
                 if (batch != null)
                     batch.Add(step);

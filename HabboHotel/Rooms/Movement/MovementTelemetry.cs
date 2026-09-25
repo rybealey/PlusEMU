@@ -163,6 +163,11 @@ public static class MovementCounters
     private static long _redirectSearchEmpty;
     private static long _redirectEndedAfterQueued;
 
+    // A walking (or about-to-walk) player teleported; the walk now ends and
+    // they are placed fresh on the new tile (MovementV2Bridge.Teleported).
+    private static long _teleportWhileWalking;
+    public static void TeleportWhileWalking() => Interlocked.Increment(ref _teleportWhileWalking);
+
     public static void RedirectSearchEmpty() => Interlocked.Increment(ref _redirectSearchEmpty);
     public static void RedirectEndedAfterQueued() => Interlocked.Increment(ref _redirectEndedAfterQueued);
 
@@ -285,6 +290,7 @@ public static class MovementCounters
         $"redirectDeferredBehindElapsing={Interlocked.Read(ref _redirectDeferredBehindElapsing)} " +
         $"redirectDeferredRecovered={Interlocked.Read(ref _redirectDeferredRecovered)} " +
         $"redirectSearchEmpty={Interlocked.Read(ref _redirectSearchEmpty)} " +
+        $"teleportWhileWalking={Interlocked.Read(ref _teleportWhileWalking)} " +
         $"redirectEndedAfterQueued={Interlocked.Read(ref _redirectEndedAfterQueued)}";
 
     public static void OrphanRecovered() => Interlocked.Increment(ref _orphansRecovered);

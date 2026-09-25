@@ -98,7 +98,10 @@ public class GameItemHandler
             {
                 i.LegacyDataString = "1";
                 i.UpdateNeeded = true;
-                _room.GetGameMap().TeleportToItem(user, item);
+                // pixelrp: to the teleporter just picked (i), not the one the
+                // user stepped on (item) - which put them back where they
+                // stood, so Banzai teleporters never moved anybody.
+                _room.GetGameMap().TeleportToItem(user, i);
                 i.LegacyDataString = "1";
                 i.UpdateNeeded = true;
                 i.UpdateState();

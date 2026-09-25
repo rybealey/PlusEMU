@@ -409,6 +409,70 @@ public static class MovementV2Bridge
         }
     }
 
+    /// <summary>
+    /// Gamemap.TeleportToTile has just put <paramref name="user"/> on a new tile
+    /// (:summon, wired teleports, Freeze exits, Banzai teleporters, the hospital
+    /// beds, the teleport arrows). Tell V2, which never used to hear of it: a
+    /// walker kept walking its old route, and the next step's arrival dragged
+    /// the player straight back - the teleport silently failed unless it landed
+    /// on the last tile of the walk.
+    ///
+    /// SAME TILE IS NOT A TELEPORT. While walking, the RoomUser's tile is the
+    /// step's FROM tile (server truth lags the drawn avatar by a step), so a
+    /// "teleport" onto it would pull the avatar back to where the step began.
+    /// That case is left exactly as it was.
+    ///
+    /// Escort pairs are left as they were too: PoliceState.OnWarp moves the pair
+    /// and the shadow rides the captor's records, which this does not model.
+    /// </summary>
+    public static void Teleported(Room? room, RoomUser? user, Point from)
+    {
+        if (room == null || user == null)
+            return;
+        if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+
+        var to = new Point(user.X, user.Y);
+        var walkEnded = false;
+
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return;
+            if (!movement.States.TryGetValue(user.VirtualId, out var state) || state == null)
+                return;
+            if (state.ShadowVirtualId != MovementState.NoShadow || state.ShadowedBy != MovementState.NoShadow)
+                return;
+
+            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending)
+            {
+                // Not walking: nothing to end. Keep V2's anchor on the new tile
+                // so the next walk starts from there.
+                state.Tile = to;
+                state.TileZ = user.Z;
+                state.EdgeTo = to;
+                state.EdgeToZ = user.Z;
+                return;
+            }
+
+            if (to == from)
+                return;
+
+            var now = MovementScheduler.Instance.Clock.NowMs;
+            MovementController.EndWalkForTeleport(movement, state, to, user.Z, (byte)user.RotBody, now);
+            // Everything this unit had in the old session and not yet applied
+            // - a frame already sealed and queued for sending - is dropped by
+            // ApplyMovementFrame, so no old-route step can move them back or
+            // fire the old route's furni.
+            Volatile.Write(ref user.V2DiscardBelowSession, state.WalkSessionId);
+            MovementCounters.TeleportWhileWalking();
+            walkEnded = true;
+        }
+
+        if (walkEnded)
+            MovementScheduler.Instance.Signal(movement);
+    }
+
     public static void Relocate(Room? room, RoomUser? user, int x, int y, double z)
     {
         if (room == null || user == null)
