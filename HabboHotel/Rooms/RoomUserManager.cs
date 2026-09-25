@@ -843,7 +843,15 @@ public class RoomUserManager
     /// that already hold it (ApplyMovementFrame, ApplyRpKnockout, OnCycle) are
     /// unaffected.
     /// </summary>
-    public void SerializeStatusUpdates()
+    public void SerializeStatusUpdates() => SerializeStatusUpdates(null);
+
+    /// <param name="into">
+    /// pixelrp: when given, the UserUpdate is added to this list instead of
+    /// being sent, so ApplyMovementFrame can send it in the same batched
+    /// message as the frame's step packets (Room.SendPacketsBatched). Null
+    /// sends it at once, as every other caller does.
+    /// </param>
+    public void SerializeStatusUpdates(List<Plus.Communication.Packets.IServerPacket>? into)
     {
         lock (_cycleLock)
         {
@@ -895,7 +903,10 @@ public class RoomUserManager
             }
             if (users.Count > 0)
             {
-                _room.SendPacket(new UserUpdateComposer(users));
+                if (into != null)
+                    into.Add(new UserUpdateComposer(users));
+                else
+                    _room.SendPacket(new UserUpdateComposer(users));
 
                 // The V1 follow-up here sent RpMovementCycleComposer (3955) for
                 // freshly stepped walkers. It is GONE: 3955 is retired, the
@@ -1078,12 +1089,22 @@ public class RoomUserManager
                 }
             }
 
+            // BATCHED: the UserUpdate and every 4110 below are composed once
+            // and reach each viewer as ONE message, in exactly this order
+            // (Room.SendPacketsBatched) - instead of one message per packet,
+            // composed again for every viewer. Still inside _cycleLock, so no
+            // other status update can slip in between them. Off
+            // (:movementstats batch off) = the old per-packet sends.
+            var batch = Movement.MovementSwitches.BatchFrameSends
+                ? new List<Plus.Communication.Packets.IServerPacket>(frame.Length + 1)
+                : null;
+
             // UserUpdate ("mv") FIRST ... guarded so that, whatever it throws,
             // the 4110 records below still go out: without them the client has
             // no timing for these steps at all.
             try
             {
-                SerializeStatusUpdates();
+                SerializeStatusUpdates(batch);
             }
             catch (Exception e)
             {
@@ -1093,8 +1114,15 @@ public class RoomUserManager
             // ... then the authoritative timing for each edge.
             foreach (var edge in frame)
             {
-                _room.SendPacket(new RpMovementV2Composer(edge, serverNowMs));
+                var step = new RpMovementV2Composer(edge, serverNowMs);
+                if (batch != null)
+                    batch.Add(step);
+                else
+                    _room.SendPacket(step);
             }
+
+            if (batch != null)
+                _room.SendPacketsBatched(batch);
 
             Movement.MovementTiming.SenderLockHold.Record(Movement.MovementTiming.MicrosSince(lockAcquired));
         }

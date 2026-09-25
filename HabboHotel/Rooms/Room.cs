@@ -676,6 +676,96 @@ public class Room : RoomData
             SendPacket(packet);
     }
 
+    /// <summary>
+    /// pixelrp: send several packets to everyone in the room (same audience as
+    /// <see cref="SendPacket(IServerPacket, bool)"/>: real users, not bots) as
+    /// ONE message each, with every packet composed ONCE per client kind.
+    ///
+    /// For the movement frame, which used to compose its status list and every
+    /// step packet again for each viewer and send each as its own message: at
+    /// 100 walkers that was ~20,000 sends a second on the one sender thread, and
+    /// ~200 messages a second into every browser. Now it is one compose per
+    /// packet and one message per viewer per frame.
+    ///
+    /// SAME BYTES, SAME ORDER. The bytes are exactly what Send would have
+    /// written, back to back; the client's decoder already splits a message by
+    /// each packet's length prefix and handles them in order. Viewers are
+    /// grouped by client type and Revision, because those decide the header
+    /// bytes. Outgoing packets are not encrypted (Rc4Client is only ever set),
+    /// so identical bytes are valid for every client in a group.
+    /// </summary>
+    public void SendPacketsBatched(IReadOnlyList<IServerPacket> packets)
+    {
+        if (packets == null || packets.Count == 0)
+            return;
+        try
+        {
+            var groups = new Dictionary<(Type, Plus.Communication.Revisions.Revision), List<GameClient>>();
+            foreach (var user in _roomUserManager.GetUserList().ToList())
+            {
+                if (user?.GetClient() is not { } client || user.IsBot || client.Revision == null)
+                    continue;
+                var key = (client.GetType(), client.Revision);
+                if (!groups.TryGetValue(key, out var list))
+                    groups[key] = list = new List<GameClient>();
+                list.Add(client);
+            }
+
+            foreach (var clients in groups.Values)
+            {
+                try
+                {
+                    // Composed by the group's first client: its type and Revision
+                    // are the group's, so its bytes are everyone's.
+                    var parts = new List<byte[]>(packets.Count);
+                    var total = 0;
+                    foreach (var packet in packets)
+                    {
+                        if (packet == null)
+                            continue;
+                        var framed = clients[0].Frame(packet);
+                        if (framed == null)
+                            continue;
+                        parts.Add(framed);
+                        total += framed.Length;
+                    }
+                    if (total == 0)
+                        continue;
+
+                    var message = new byte[total];
+                    var offset = 0;
+                    foreach (var part in parts)
+                    {
+                        Buffer.BlockCopy(part, 0, message, offset, part.Length);
+                        offset += part.Length;
+                    }
+
+                    foreach (var client in clients)
+                    {
+                        try
+                        {
+                            client.SendFramed(message);
+                        }
+                        catch (Exception e)
+                        {
+                            // One viewer's socket must not cost the others the frame.
+                            ExceptionLogger.LogException(e);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    // One group's failure must not cost the others the frame.
+                    ExceptionLogger.LogException(e);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+        }
+    }
+
     public void Dispose()
     {
         // pixelrp Movement V2 (A7): detach from the movement scheduler FIRST.

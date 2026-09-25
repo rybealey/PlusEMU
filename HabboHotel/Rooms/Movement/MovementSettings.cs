@@ -145,3 +145,18 @@ public static class MovementSettings
     /// <summary>Identical-target redirect debounce, so spam-clicking cannot spin A*.</summary>
     public const int RepathMinIntervalMs = 40;
 }
+
+/// <summary>
+/// Movement switches that can be flipped at runtime, without a deploy.
+/// </summary>
+public static class MovementSwitches
+{
+    /// <summary>
+    /// Send each movement frame to every viewer as ONE message, every packet
+    /// composed once (Room.SendPacketsBatched), instead of one message per
+    /// packet composed per viewer. Same bytes, same order either way.
+    /// <c>:movementstats batch off</c> reverts to the old per-packet sends at
+    /// once - the rollback if anything ever looks wrong, no deploy needed.
+    /// </summary>
+    public static volatile bool BatchFrameSends = true;
+}

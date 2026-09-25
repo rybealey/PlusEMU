@@ -53,7 +53,7 @@ internal class MovementStatsCommand : IChatCommand
 {
     public string Key => "movementstats";
     public string PermissionRequired => "command_update";
-    public string Parameters => "%reset%";
+    public string Parameters => "%reset or batch on/off%";
     public string Description => "Show live Movement V2 threads, counters, timings and walkers (read-only; reset zeroes the timings).";
 
     public void Execute(GameClient session, Room room, string[] parameters)
@@ -62,6 +62,22 @@ internal class MovementStatsCommand : IChatCommand
         {
             MovementTiming.Reset();
             session.SendWhisper("Movement timings reset. Counting from now.");
+            return;
+        }
+
+        // :movementstats batch [on|off] - the batched frame sends' runtime
+        // switch (MovementSwitches.BatchFrameSends). Off is the instant
+        // rollback to one message per packet, hotel-wide, with no deploy.
+        if (parameters.Length > 0 && parameters[0].Equals("batch", StringComparison.OrdinalIgnoreCase))
+        {
+            if (parameters.Length > 1 && parameters[1].Equals("on", StringComparison.OrdinalIgnoreCase))
+                MovementSwitches.BatchFrameSends = true;
+            else if (parameters.Length > 1 && parameters[1].Equals("off", StringComparison.OrdinalIgnoreCase))
+                MovementSwitches.BatchFrameSends = false;
+
+            session.SendWhisper(MovementSwitches.BatchFrameSends
+                ? "Batched movement sends are ON: one message per viewer per frame."
+                : "Batched movement sends are OFF: one message per packet, as before.");
             return;
         }
 

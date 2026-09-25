@@ -176,5 +176,51 @@ public abstract class GameClient
         stream.Dispose();
     }
 
+    /// <summary>
+    /// pixelrp: the exact bytes <see cref="Send"/> would put on the wire for this
+    /// composer - body, then this client type's length/header - WITHOUT sending
+    /// them. Null when this revision does not map the composer (Send would drop
+    /// it too). Every client with the same type and Revision gets identical
+    /// bytes, which is what lets Room.SendPacketsBatched build a frame once and
+    /// hand the same bytes to everyone in the room.
+    /// </summary>
+    internal byte[]? Frame(IServerPacket composer)
+    {
+        if (!Revision.InternalIdToOutgoingIdMapping.TryGetValue(composer.MessageId, out var outgoingMessageId))
+        {
+            Log.Warn($"No outgoing header mapped for {composer.GetType().Name} (EmuId: {composer.MessageId}) on revision {Revision.Name} - packet dropped.");
+            return null;
+        }
+        var stream = PlusMemoryStream.GetStream();
+        try
+        {
+            stream.Position = 0;
+            var packet = _packetFactory.CreateOutgoingPacket(stream);
+            composer.Compose(packet);
+            var memory = stream.GetBuffer().AsMemory().Slice(0, (int)stream.Length);
+            CreateHeader(memory, outgoingMessageId);
+            // A copy: the stream's buffer is pooled and goes back on Dispose.
+            return memory.ToArray();
+        }
+        finally
+        {
+            stream.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// pixelrp: send bytes already framed by <see cref="Frame"/> - one or several
+    /// packets back to back, which the client's decoder splits by their length
+    /// prefixes, in order, exactly as if they had arrived one message each.
+    /// </summary>
+    internal void SendFramed(byte[] framed)
+    {
+        if (framed == null || framed.Length == 0)
+            return;
+        var args = new SocketAsyncEventArgs();
+        args.SetBuffer(framed);
+        SendCallback(args);
+    }
+
     public abstract void CreateHeader(Memory<byte> memory, uint messageId);
 }
