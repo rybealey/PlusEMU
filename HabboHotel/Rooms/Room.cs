@@ -538,6 +538,12 @@ public class Room : RoomData
                 // Bots always wear the identifier effect so entering players can spot them.
                 session.Send(new AvatarEffectComposer(user.VirtualId, RoomBot.IdentifierEffect));
         }
+        // pixelrp Movement V2: the step every walking unit is on right now,
+        // BEFORE the status list - so the newcomer's client draws walkers on
+        // their real timing from the first frame, instead of guessing with
+        // stock Nitro for ~0.6s and then hopping them all forward.
+        foreach (var catchUp in Movement.MovementV2Bridge.EntryCatchUp(this))
+            session.Send(catchUp);
         session.Send(new UserUpdateComposer(_roomUserManager.GetUserList().ToList()));
         session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));
         // Opacity rides after the objects themselves, so the client has

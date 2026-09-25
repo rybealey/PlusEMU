@@ -473,6 +473,38 @@ public static class MovementV2Bridge
             MovementScheduler.Instance.Signal(movement);
     }
 
+    /// <summary>
+    /// For a player entering the room: one step packet per unit that is walking
+    /// right now - the step it is on, exactly as the room was sent it. Without
+    /// this the newcomer had no timing for steps already in progress, so for up
+    /// to ~0.6s their client drew walkers with stock Nitro and then hopped them
+    /// all forward at once when the next step arrived. Room.SendObjects sends
+    /// these BEFORE the status list, so V2 owns each walker from the first
+    /// frame and stock Nitro never places one first.
+    /// </summary>
+    public static List<Plus.Communication.Packets.IServerPacket> EntryCatchUp(Room? room)
+    {
+        var packets = new List<Plus.Communication.Packets.IServerPacket>();
+        if (room == null)
+            return packets;
+        if (!MovementRegistry.TryGet(room.RoomId, out var movement) || movement == null || movement.Closed)
+            return packets;
+
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed)
+                return packets;
+            var now = MovementScheduler.Instance.Clock.NowMs;
+            foreach (var state in movement.States.Values)
+            {
+                if (MovementController.SnapshotCurrentEdge(movement, state) is { } record)
+                    packets.Add(new Plus.Communication.Packets.Outgoing.Rooms.Engine.RpMovementV2Composer(record, now));
+            }
+        }
+
+        return packets;
+    }
+
     public static void Relocate(Room? room, RoomUser? user, int x, int y, double z)
     {
         if (room == null || user == null)

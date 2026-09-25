@@ -894,6 +894,51 @@ public static class MovementController
     // allowed to do (MovementSchedulerGuard, invariant I-5).
 
     /// <summary>The (dx, dy) of one step in a facing - the inverse of Rotation.Calculate.</summary>
+    /// <summary>
+    /// The record StageEdge sent for the step this walker is on now, rebuilt
+    /// without staging anything - for a player entering the room, who was not
+    /// there to receive it (MovementV2Bridge.EntryCatchUp). Null unless the unit
+    /// is Moving and that step has really been sent to the room. Same session,
+    /// revision, index, geometry, timing and lookahead, so the newcomer's client
+    /// draws the walker exactly where everyone else sees them. startDelay is 0
+    /// on purpose: this is not the walk's join. Caller holds MovementLock.
+    /// </summary>
+    internal static MovementEdgeRecord? SnapshotCurrentEdge(RoomMovement room, MovementState w)
+    {
+        if (w.Mode != MovementMode.Moving || w.EmittedThroughEdge < w.EdgeIndex)
+            return null;
+
+        var flags = RpMovementV2Flags.Edge;
+        if (!w.Route.HasNext)
+            flags |= RpMovementV2Flags.FinalEdge;
+
+        var lookahead = System.Array.Empty<LookaheadTile>();
+        var lookCount = 0;
+        var map = room.Room.GetGameMap();
+        if (w.Route.HasNext && map != null)
+        {
+            var max = System.Math.Min(MovementSettings.LookaheadMax, w.Route.Length - w.Route.Cursor);
+            if (max > 0)
+            {
+                lookahead = new LookaheadTile[max];
+                for (var i = 0; i < max; i++)
+                {
+                    var tile = w.Route[w.Route.Cursor + i];
+                    lookahead[i] = new LookaheadTile(
+                        tile.X, tile.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(tile.X, tile.Y)));
+                }
+                lookCount = max;
+            }
+        }
+
+        return new MovementEdgeRecord(
+            w.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
+            w.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
+            w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
+            w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
+            w.EdgeToZ, w.Facing, lookahead, lookCount, 0);
+    }
+
     internal static Point FacingDelta(byte facing) => facing switch
     {
         0 => new Point(0, -1),
