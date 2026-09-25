@@ -790,7 +790,9 @@ public static class PoliceState
 
     /// <summary>
     /// Somebody has just been knocked out. Nobody marches, or is marched,
-    /// while out cold: an escort involving them ends. The cuffs stay on.
+    /// while out cold: an escort involving them ends. And the cuffs come off -
+    /// a suspect beaten to zero is a casualty now, not an arrest, and wakes up
+    /// free. (Until 2026-09-25 the cuffs stayed on.)
     ///
     /// EXCEPT a medical transport whose patient is the one who went down -
     /// being out cold is the entire premise of that escort, not a reason to
@@ -799,8 +801,16 @@ public static class PoliceState
     /// </summary>
     public static void OnKnockout(Room room, RoomUser user)
     {
-        if (room == null || user == null || (EscortByCaptor.IsEmpty && EscortBySuspect.IsEmpty))
+        if (room == null || user == null)
             return;
+        if (!EscortByCaptor.IsEmpty || !EscortBySuspect.IsEmpty)
+            EndEscortsOnKnockout(room, user);
+        if (!Cuffed.IsEmpty)
+            Uncuff(user.UserId);
+    }
+
+    private static void EndEscortsOnKnockout(Room room, RoomUser user)
+    {
         if (IsEscorting(user.UserId))
             EndEscort(room, user.UserId, null);
         var captorId = CaptorOf(user.UserId);

@@ -17,9 +17,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// holding them, and leaving it running would pin a free player to a captor.
 ///
 /// A medical transport survives an uncuff, because the cuffs were never what
-/// justified it. A player can be both cuffed and unconscious - a suspect who
-/// lost a fight - and taking the cuffs off one who is being carried to hospital
-/// should not drop them on the pavement.
+/// justified it. In practice the two no longer meet - a knockout takes the
+/// cuffs off (PoliceState.OnKnockout), and an unconscious player cannot be
+/// stunned, so cannot be cuffed - but if they ever do, taking the cuffs off
+/// someone being carried to hospital should not drop them on the pavement.
 /// </summary>
 internal class UncuffCommand : ITargetChatCommand
 {
