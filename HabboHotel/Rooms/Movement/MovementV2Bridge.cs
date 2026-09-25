@@ -385,6 +385,30 @@ public static class MovementV2Bridge
     /// timeline would put its already-published edges somewhere they never
     /// were.
     /// </summary>
+    /// <summary>
+    /// Whether V2 has this unit walking OR waiting to walk (Pending: the click
+    /// was accepted and the route planned, and the first step waits for the
+    /// room's beat). RoomUser.IsWalking cannot say the second: it only turns on
+    /// once the first step has been sent.
+    ///
+    /// For code outside movement that must not move a unit mid-walk. The
+    /// roller is the reason: rolling a Pending walker moved RoomUser while the
+    /// walk still started from the old tile, so the avatar snapped back one
+    /// tile the moment it set off.
+    /// </summary>
+    public static bool IsWalkingOrWaiting(RoomUser? user)
+    {
+        if (user == null)
+            return false;
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return false;
+        lock (movement.MovementLock)
+        {
+            return movement.States.TryGetValue(user.VirtualId, out var state) && state != null
+                && (state.Mode == MovementMode.Moving || state.Mode == MovementMode.Pending);
+        }
+    }
+
     public static void Relocate(Room? room, RoomUser? user, int x, int y, double z)
     {
         if (room == null || user == null)

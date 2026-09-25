@@ -329,7 +329,11 @@ public class RoomItemHandling
                     }
                 }
                 var rollerUser = _room.GetGameMap().GetRoomUsers(roller.Coordinate).FirstOrDefault();
-                if (rollerUser != null && !rollerUser.IsWalking && nextRollerClear &&
+                // Not a unit V2 is walking or about to walk: IsWalking is only
+                // set once a walk's first step is sent, and rolling somebody
+                // in the 0-499ms before it made that walk start from the old
+                // tile - a snap back one tile as they set off.
+                if (rollerUser != null && !rollerUser.IsWalking && !Movement.MovementV2Bridge.IsWalkingOrWaiting(rollerUser) && nextRollerClear &&
                     _room.GetGameMap().IsValidStep(new(roller.GetX, roller.GetY), new(nextSquare.X, nextSquare.Y), true, false, true) &&
                     _room.GetGameMap().CanRollItemHere(nextSquare.X, nextSquare.Y) && _room.GetGameMap().GetFloorStatus(nextSquare) != 0)
                 {
@@ -364,11 +368,20 @@ public class RoomItemHandling
     {
         var mMessage = new SlideObjectBundleComposer(pUser.X, pUser.Y, pUser.Z, pNextCoord.X, pNextCoord.Y, nextZ, pRollerId, pUser.VirtualId, 0);
         _room.GetGameMap().UpdateUserMovement(new(pUser.X, pUser.Y), new(pNextCoord.X, pNextCoord.Y), pUser);
-        _room.GetGameMap().GameMap[pUser.X, pUser.Y] = 1;
+        // Same rule as movement, leave and TeleportToTile: with tile overlap on
+        // (RoomBlockingEnabled is always true) users never write occupancy into
+        // the walk map. Unguarded, a roll opened the tile it left whatever
+        // furniture stood there, and wrote "blocked" (0) onto the landing tile
+        // - which nobody could then walk to, and which this roller's own
+        // "is the next tile free?" test (GetFloorStatus) refused, so a roller
+        // line jammed after its first rider until the maps were rebuilt.
+        if (!_room.RoomBlockingEnabled)
+            _room.GetGameMap().GameMap[pUser.X, pUser.Y] = 1;
         pUser.X = pNextCoord.X;
         pUser.Y = pNextCoord.Y;
         pUser.Z = nextZ;
-        _room.GetGameMap().GameMap[pUser.X, pUser.Y] = 0;
+        if (!_room.RoomBlockingEnabled)
+            _room.GetGameMap().GameMap[pUser.X, pUser.Y] = 0;
         if (pUser != null && pUser.GetClient() != null && pUser.GetClient().GetHabbo() != null)
         {
             var items = _room.GetGameMap().GetRoomItemForSquare(pNextCoord.X, pNextCoord.Y);
