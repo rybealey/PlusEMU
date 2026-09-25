@@ -75,6 +75,34 @@ public static class MovementCounters
         Plus.Core.ExceptionLogger.LogCriticalException(e);
     }
 
+    // Something that threw while a movement frame was being applied - almost
+    // always a furni interaction (UserWalksOn/OffFurni) or a seat's pose. Each
+    // is now caught on its own, so the rest of the frame is still applied and
+    // sent; before, one throw lost every step in the frame. Counted always,
+    // logged only the first FrameFaultLogCap times per boot: a furni that
+    // throws on every step must not flood the log from the movement thread.
+    private const int FrameFaultLogCap = 50;
+    private static long _frameEffectFaults;
+    private static string _lastFrameEffectFault = "none";
+
+    public static long FrameEffectFaults => Interlocked.Read(ref _frameEffectFaults);
+    public static string LastFrameEffectFault => Volatile.Read(ref _lastFrameEffectFault);
+
+    public static void FrameEffectFault(Exception e)
+    {
+        var count = Interlocked.Increment(ref _frameEffectFaults);
+        try
+        {
+            Volatile.Write(ref _lastFrameEffectFault, $"{e.GetType().Name}: {e.Message}");
+            if (count <= FrameFaultLogCap)
+                Plus.Core.ExceptionLogger.LogException(e);
+        }
+        catch
+        {
+            // Recording a fault must never become one.
+        }
+    }
+
     // The busy-spin detector. A room popped as due must advance one of the three
     // terms ComputeNextDue takes a minimum of; if it advances none and still
     // wants an expired tick, it will be popped again at once and the single
@@ -285,6 +313,8 @@ public static class MovementCounters
         $"roomFaults={Interlocked.Read(ref _roomFaults)} " +
         $"schedulerFaults={Interlocked.Read(ref _schedulerFaults)} " +
         $"spinGuards={Interlocked.Read(ref _spinGuards)} " +
+        $"frameEffectFaults={Interlocked.Read(ref _frameEffectFaults)} " +
+        $"lastFrameEffectFault=\"{Volatile.Read(ref _lastFrameEffectFault)}\" " +
         $"lastSpinRoom={Interlocked.Read(ref _lastSpinRoomId)} " +
         $"pathfind={Interlocked.Read(ref _pathfindCalls)} " +
         $"partial={Interlocked.Read(ref _pathfindPartial)} " +

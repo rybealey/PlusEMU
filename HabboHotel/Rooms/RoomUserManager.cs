@@ -948,95 +948,147 @@ public class RoomUserManager
                 if (edge.PublishOnly)
                     continue;
 
-                var user = GetRoomUserByVirtualId(edge.VirtualId);
-                if (user == null || !IsValid(user))
-                    continue;
-
-                // 1. Server truth: the avatar has ARRIVED on this edge's from-tile
-                //    (the previous edge's terminal).
-                if (user.X != edge.FromX || user.Y != edge.FromY)
+                // BACKSTOP: whatever one record throws, the rest of the frame is
+                // still applied and every record is still sent. The finer guards
+                // below mean this should only ever catch something unforeseen.
+                try
                 {
-                    var previous = new Point(user.X, user.Y);
-                    var arrived = new Point(edge.FromX, edge.FromY);
-                    _room.GetGameMap().UpdateUserMovement(previous, arrived, user);
-                    foreach (var item in _room.GetGameMap().GetCoordinatedItems(previous).ToList())
-                        item.UserWalksOffFurni(user);
+                    var user = GetRoomUserByVirtualId(edge.VirtualId);
+                    if (user == null || !IsValid(user))
+                        continue;
 
-                    user.X = edge.FromX;
-                    user.Y = edge.FromY;
-                    user.Z = edge.FromZ100 / 100.0;
-                    // A LYING unit lies 0.35 below floor height
-                    // (UpdateRpKnockoutState) and UpdateUserStatus leaves a
-                    // lying unit alone, so the offset has to travel with them.
-                    // Only an escort close-out or displacement ever moves one.
-                    //
-                    // Keyed on the POSE, not on the health. The offset belongs
-                    // to the lay, and the two stopped being the same thing when
-                    // medical transport began lifting a knocked-out patient off
-                    // the floor to carry them: testing RpKnockedOut there would
-                    // sink a standing patient below the floor on every arrival.
-                    if (user.IsLying)
-                        user.Z -= 0.35;
+                    // 1. Server truth: the avatar has ARRIVED on this edge's from-tile
+                    //    (the previous edge's terminal).
+                    if (user.X != edge.FromX || user.Y != edge.FromY)
+                    {
+                        var previous = new Point(user.X, user.Y);
+                        var arrived = new Point(edge.FromX, edge.FromY);
+                        _room.GetGameMap().UpdateUserMovement(previous, arrived, user);
+                        // EACH FURNI EFFECT IN ITS OWN GUARD. One faulty interaction
+                        // used to throw out of this loop and lose the whole frame -
+                        // every step, turn and stop for the room, and the walk-end
+                        // that would have stood a player still. Now only that one
+                        // effect is skipped: the other furni on the tile still run,
+                        // and the move itself below always completes.
+                        foreach (var item in _room.GetGameMap().GetCoordinatedItems(previous).ToList())
+                        {
+                            try
+                            {
+                                item.UserWalksOffFurni(user);
+                            }
+                            catch (Exception e)
+                            {
+                                Movement.MovementCounters.FrameEffectFault(e);
+                            }
+                        }
 
-                    foreach (var item in _room.GetGameMap().GetCoordinatedItems(arrived).ToList())
-                        item.UserWalksOnFurni(user);
+                        user.X = edge.FromX;
+                        user.Y = edge.FromY;
+                        user.Z = edge.FromZ100 / 100.0;
+                        // A LYING unit lies 0.35 below floor height
+                        // (UpdateRpKnockoutState) and UpdateUserStatus leaves a
+                        // lying unit alone, so the offset has to travel with them.
+                        // Only an escort close-out or displacement ever moves one.
+                        //
+                        // Keyed on the POSE, not on the health. The offset belongs
+                        // to the lay, and the two stopped being the same thing when
+                        // medical transport began lifting a knocked-out patient off
+                        // the floor to carry them: testing RpKnockedOut there would
+                        // sink a standing patient below the floor on every arrival.
+                        if (user.IsLying)
+                            user.Z -= 0.35;
 
-                    UpdateUserStatus(user, true);
-                }
+                        foreach (var item in _room.GetGameMap().GetCoordinatedItems(arrived).ToList())
+                        {
+                            try
+                            {
+                                item.UserWalksOnFurni(user);
+                            }
+                            catch (Exception e)
+                            {
+                                Movement.MovementCounters.FrameEffectFault(e);
+                            }
+                        }
 
-                // 2. Posture/facing for the edge now in flight, or the stop.
-                if (edge.IsWalkEnd || edge.IsDisplacement)
-                {
-                    user.IsWalking = false;
-                    user.RemoveStatus("mv");
-                    // X/Y now holds the tile the walk ended on (step 1 above,
-                    // tile effects included), so RequestMove may resync from it.
-                    if (edge.IsWalkEnd)
-                        Volatile.Write(ref user.V2WalkEndAppliedSession, edge.WalkSessionId);
-                    // A displacement is the one record that repositions a
-                    // standing unit, and it has to turn them too: the escort's
-                    // suspect is displaced to face the way their captor faces.
-                    if (edge.IsDisplacement)
+                        // Seat/bed pose and height from the furni. Guarded the same
+                        // way, so a bad item cannot stop the posture below.
+                        try
+                        {
+                            UpdateUserStatus(user, true);
+                        }
+                        catch (Exception e)
+                        {
+                            Movement.MovementCounters.FrameEffectFault(e);
+                        }
+                    }
+
+                    // 2. Posture/facing for the edge now in flight, or the stop.
+                    if (edge.IsWalkEnd || edge.IsDisplacement)
+                    {
+                        user.IsWalking = false;
+                        user.RemoveStatus("mv");
+                        // X/Y now holds the tile the walk ended on (step 1 above,
+                        // tile effects included), so RequestMove may resync from it.
+                        if (edge.IsWalkEnd)
+                            Volatile.Write(ref user.V2WalkEndAppliedSession, edge.WalkSessionId);
+                        // A displacement is the one record that repositions a
+                        // standing unit, and it has to turn them too: the escort's
+                        // suspect is displaced to face the way their captor faces.
+                        if (edge.IsDisplacement)
+                        {
+                            user.RotBody = edge.Facing;
+                            user.RotHead = edge.Facing;
+                        }
+                    }
+                    else
                     {
                         user.RotBody = edge.Facing;
                         user.RotHead = edge.Facing;
+                        user.IsWalking = true;
+                        // A UNIT CARRYING "mv" IS NOT SEATED.
+                        //
+                        // A seat furni's "sit" is added by UpdateUserStatus and
+                        // cleared by it too - but only on an ARRIVAL, which is the
+                        // gate at the top of this loop. The first edge of a walk
+                        // leaves from the tile the unit is already standing on, so
+                        // there is no arrival for it, and "sit" used to go out in
+                        // the very same UserUpdate as this "mv". That is one tile
+                        // of sliding along in the sit pose before the second edge
+                        // finally strips it.
+                        //
+                        // Cleared here because this is the single writer, and it
+                        // runs before SerializeStatusUpdates puts the frame on the
+                        // wire. A knockout lay is left alone: RpHealth owns it and
+                        // UpdateRpKnockoutState is the only thing allowed to lift
+                        // it (a displacement, which is how a knocked-out unit gets
+                        // moved, takes the other branch anyway).
+                        if (!user.RpKnockedOut)
+                        {
+                            user.RemoveStatus("sit");
+                            user.RemoveStatus("lay");
+                        }
+                        user.SetStatus("mv",
+                            $"{edge.ToX},{edge.ToY},{TextHandling.GetString(edge.ToZ)}");
                     }
+                    user.UpdateNeeded = true;
                 }
-                else
+                catch (Exception e)
                 {
-                    user.RotBody = edge.Facing;
-                    user.RotHead = edge.Facing;
-                    user.IsWalking = true;
-                    // A UNIT CARRYING "mv" IS NOT SEATED.
-                    //
-                    // A seat furni's "sit" is added by UpdateUserStatus and
-                    // cleared by it too - but only on an ARRIVAL, which is the
-                    // gate at the top of this loop. The first edge of a walk
-                    // leaves from the tile the unit is already standing on, so
-                    // there is no arrival for it, and "sit" used to go out in
-                    // the very same UserUpdate as this "mv". That is one tile
-                    // of sliding along in the sit pose before the second edge
-                    // finally strips it.
-                    //
-                    // Cleared here because this is the single writer, and it
-                    // runs before SerializeStatusUpdates puts the frame on the
-                    // wire. A knockout lay is left alone: RpHealth owns it and
-                    // UpdateRpKnockoutState is the only thing allowed to lift
-                    // it (a displacement, which is how a knocked-out unit gets
-                    // moved, takes the other branch anyway).
-                    if (!user.RpKnockedOut)
-                    {
-                        user.RemoveStatus("sit");
-                        user.RemoveStatus("lay");
-                    }
-                    user.SetStatus("mv",
-                        $"{edge.ToX},{edge.ToY},{TextHandling.GetString(edge.ToZ)}");
+                    Movement.MovementCounters.FrameEffectFault(e);
                 }
-                user.UpdateNeeded = true;
             }
 
-            // UserUpdate ("mv") FIRST ...
-            SerializeStatusUpdates();
+            // UserUpdate ("mv") FIRST ... guarded so that, whatever it throws,
+            // the 4110 records below still go out: without them the client has
+            // no timing for these steps at all.
+            try
+            {
+                SerializeStatusUpdates();
+            }
+            catch (Exception e)
+            {
+                Movement.MovementCounters.FrameEffectFault(e);
+            }
 
             // ... then the authoritative timing for each edge.
             foreach (var edge in frame)
