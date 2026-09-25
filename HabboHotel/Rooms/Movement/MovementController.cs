@@ -124,18 +124,37 @@ public static class MovementController
     {
         w.LastStartDelayMs = 0;
 
-        // Bots and pets neither establish, hold nor follow a phase. A patrol bot
-        // is almost always moving, so letting one hold the phase would charge
-        // every player click the alignment wait, permanently.
         w.JoinStackedAtRequest = false;
 
+        var holder = PhaseHolder(room, w);
+
+        // BOTS AND PETS FOLLOW THE PLAYERS' BEAT, BUT NEVER SET OR HOLD IT.
+        //
+        // Following: while a player is walking, a bot or pet waits for the same
+        // 500ms boundary, so everything in the room steps together - and a
+        // ridden horse, which counts as a pet, sets off on the same beat as its
+        // rider instead of up to a tile ahead of them.
+        //
+        // Never holding: PhaseHolder only ever counts real users, and a bot
+        // never writes PhaseAnchor. A patrol bot is almost always moving, so a
+        // bot that held the beat would charge every player click the wait,
+        // permanently. With no player walking, a bot starts at once, as before.
+        //
+        // LastStartDelayMs stays 0 for them on purpose: it rides the 4110 as the
+        // join wait, and the client's JOIN diagnostics are about players.
         if (!w.IsRealUser)
         {
-            w.LastPhaseDecision = PhaseDecision.None;
-            return nowMs;
-        }
+            if (holder == null)
+            {
+                w.LastPhaseDecision = PhaseDecision.None;
+                return nowMs;
+            }
 
-        var holder = PhaseHolder(room, w);
+            var botInterval = MovementSettings.IntervalMs;
+            var botDelta = ((room.PhaseAnchor - nowMs) % botInterval + botInterval) % botInterval;
+            w.LastPhaseDecision = PhaseDecision.Aligned;
+            return nowMs + botDelta;
+        }
 
         if (holder == null)
         {
