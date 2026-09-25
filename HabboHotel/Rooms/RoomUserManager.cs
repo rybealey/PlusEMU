@@ -1338,8 +1338,22 @@ public class RoomUserManager
                     Offers.OfferState.Tick();
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
+                        // The decay itself still runs every tick; only the
+                        // broadcast is limited, to once a second per player.
+                        // Each one goes to the whole room while this tick holds
+                        // _cycleLock - the lock the movement sender needs for
+                        // every room - so a crowded fight was sending twice a
+                        // second per aggressive player for a bar that moves one
+                        // notch. Reaching 0 is always sent at once, so the bar
+                        // never sticks on a last sliver. Hits and other changes
+                        // send their own update and are not throttled here.
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
-                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.IsRpPassive ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
+                        var aggNow = Environment.TickCount64;
+                        if (habboAgg.RpAggression <= 0 || (aggNow - user.LastAggressionBroadcastMs) >= 1000)
+                        {
+                            user.LastAggressionBroadcastMs = aggNow;
+                            _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.IsRpPassive ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
+                        }
                     }
                     if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
                     {

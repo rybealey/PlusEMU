@@ -188,6 +188,13 @@ public class RoomUser
     public int PrevTime;
     public bool RidingHorse = false;
     public int RollerDelay = 0;
+
+    /// <summary>
+    /// pixelrp: when this unit's decaying aggression bar was last broadcast
+    /// (Environment.TickCount64). The room tick sends it at most once a second
+    /// - see RoomUserManager.OnCycle.
+    /// </summary>
+    public long LastAggressionBroadcastMs;
     public uint RoomId;
     public int RotBody; //byte
     public int RotHead; //byte
