@@ -19,7 +19,16 @@ internal class MoveAvatarEvent : IPacketEvent
         user.ForcedWalkRandom = false;
         var moveX = packet.ReadInt();
         var moveY = packet.ReadInt();
-        if (moveX == user.X && moveY == user.Y)
+        // A click on the tile you stand on does nothing - but only when you ARE
+        // standing. While walking, RoomUser.X/Y is the current step's FROM tile
+        // (server truth runs a step behind the drawn avatar), i.e. the tile you
+        // are leaving, so this dropped every "turn back" click: the player
+        // clicked where they had just been and nothing happened. For a walker
+        // it now goes through as an ordinary redirect - a U-turn at the next
+        // step, like any change of direction. (While waiting for the beat, a
+        // click on your own tile cancels the walk before it starts.)
+        if (moveX == user.X && moveY == user.Y
+            && !Plus.HabboHotel.Rooms.Movement.MovementV2Bridge.IsWalkingOrWaiting(user))
             return Task.CompletedTask;
         if (user.RidingHorse)
         {
