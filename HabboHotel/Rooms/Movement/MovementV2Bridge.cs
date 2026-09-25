@@ -132,44 +132,59 @@ public static class MovementV2Bridge
         // in hand; rebuilt there from the virtual id. Two call sites, one rule.
         var ctx = MovementWalkerContext.For(user);
 
+        // Measurement only: the wait for this lock, and how long the click then
+        // holds it (the route search runs inside), are what a click costs the
+        // scheduler, which cannot beat this room meanwhile.
+        var waitStart = MovementTiming.Now();
+
         lock (movement.MovementLock)
         {
-            if (movement.Closed)
-                return;
-            if (!movement.States.TryGetValue(user.VirtualId, out var state))
-                return;
-            // pixelrp police escort: a shadowed suspect goes where their captor
-            // goes and nowhere else. CanWalk only gates the client's own click
-            // (MoveAvatarEvent); this closes every server-side path too.
-            if (state.ShadowedBy != MovementState.NoShadow)
-                return;
+            var acquired = MovementTiming.Now();
+            MovementTiming.ClickLockWait.Record(MovementTiming.MicrosSince(waitStart));
 
-            // Keep V2's idea of where the avatar stands in step with anything
-            // else that moved it (roller, teleport, room entry). A Pending
-            // walker has not moved and its tile is already correct.
-            //
-            // NOT WHILE THIS UNIT'S WALK-END IS STILL IN FLIGHT. StopWalk puts
-            // V2 on the final tile at once, but RoomUser.X/Y only reaches it when
-            // the outbound thread applies the walk-end, up to a flush later -
-            // until then it still holds the last step's FROM tile. Resyncing
-            // from that started the next walk a tile back, and the client, which
-            // had drawn the avatar onto the final tile, jumped back with it.
-            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending
-                && Volatile.Read(ref user.V2WalkEndAppliedSession) >= state.WalkEndPendingSession)
+            try
             {
-                state.Tile = new Point(user.X, user.Y);
-                state.TileZ = user.Z;
-            }
+                if (movement.Closed)
+                    return;
+                if (!movement.States.TryGetValue(user.VirtualId, out var state))
+                    return;
+                // pixelrp police escort: a shadowed suspect goes where their captor
+                // goes and nowhere else. CanWalk only gates the client's own click
+                // (MoveAvatarEvent); this closes every server-side path too.
+                if (state.ShadowedBy != MovementState.NoShadow)
+                    return;
 
-            if (state.Mode == MovementMode.Moving)
-                MovementController.Redirect(movement, state, target, ctx, now);
-            else if (state.Mode == MovementMode.Pending)
-                // Still waiting on the phase boundary: swap the route, keep the
-                // timeline. Restarting here would re-run alignment and could
-                // push the boundary out again on every click.
-                MovementController.RepathPending(movement, state, target, ctx, now);
-            else
-                MovementController.StartWalk(movement, state, target, ctx, now);
+                // Keep V2's idea of where the avatar stands in step with anything
+                // else that moved it (roller, teleport, room entry). A Pending
+                // walker has not moved and its tile is already correct.
+                //
+                // NOT WHILE THIS UNIT'S WALK-END IS STILL IN FLIGHT. StopWalk puts
+                // V2 on the final tile at once, but RoomUser.X/Y only reaches it when
+                // the outbound thread applies the walk-end, up to a flush later -
+                // until then it still holds the last step's FROM tile. Resyncing
+                // from that started the next walk a tile back, and the client, which
+                // had drawn the avatar onto the final tile, jumped back with it.
+                if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending
+                    && Volatile.Read(ref user.V2WalkEndAppliedSession) >= state.WalkEndPendingSession)
+                {
+                    state.Tile = new Point(user.X, user.Y);
+                    state.TileZ = user.Z;
+                }
+
+                if (state.Mode == MovementMode.Moving)
+                    MovementController.Redirect(movement, state, target, ctx, now);
+                else if (state.Mode == MovementMode.Pending)
+                    // Still waiting on the phase boundary: swap the route, keep the
+                    // timeline. Restarting here would re-run alignment and could
+                    // push the boundary out again on every click.
+                    MovementController.RepathPending(movement, state, target, ctx, now);
+                else
+                    MovementController.StartWalk(movement, state, target, ctx, now);
+            }
+            finally
+            {
+                MovementTiming.ClickLockHold.Record(MovementTiming.MicrosSince(acquired));
+            }
         }
 
         // Latency path: wake the scheduler immediately rather than waiting for

@@ -126,6 +126,9 @@ public static class AStarPathfinder
         route.Clear();
         scratch.NewGeneration();
 
+        // Measurement only (:movementstats): search time and tiles expanded.
+        var searchStarted = MovementTiming.Now();
+
         var startCell = scratch.Index(start.X, start.Y);
         var goalCell = scratch.Index(goal.X, goal.Y);
 
@@ -201,6 +204,9 @@ public static class AStarPathfinder
                 }
             }
         }
+
+        MovementTiming.SearchTime.Record(MovementTiming.MicrosSince(searchStarted));
+        MovementTiming.SearchTiles.Record(expansions);
 
         if (!found)
         {

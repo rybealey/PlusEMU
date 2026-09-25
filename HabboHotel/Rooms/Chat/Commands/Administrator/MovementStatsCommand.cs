@@ -29,19 +29,47 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.Administrator;
 ///     dueIn far negative       the scheduler has stopped draining this walker.
 ///  7. everything healthy and
 ///     frames still climbing    the server is fine; the fault is client-side.
+///
+///   :movementstats reset    zeroes the [MV2/TIMING] histograms only, so a
+///                           test reads as "since I started". The other
+///                           counters stay cumulative since boot.
+///
+/// HOW TO READ [MV2/TIMING] (all sub-500ms; n = samples, then buckets):
+///   stepLate         how late each step really began, lock wait included.
+///                    Anything past <=10ms is a beat the client may draw
+///                    from a stale preview.
+///   schedLockWait    the scheduler waiting for a room (usually a click
+///                    holding it: see clickLockHold).
+///   clickLockWait/Hold   a click's wait for the room, then how long it
+///                    holds it - route search included.
+///   searchTime/Tiles one route search: time and tiles looked at.
+///   frameToSend      beat start to the sender picking the frame up; this is
+///                    how old the packet's server time is when it is built.
+///   senderLockWait/Hold  the one sender thread's wait for a room's lock,
+///                    then applying + sending. A long wait stalls EVERY room.
+///   roomTickLockHold the 500ms room tick holding that same lock.
 /// </summary>
 internal class MovementStatsCommand : IChatCommand
 {
     public string Key => "movementstats";
     public string PermissionRequired => "command_update";
-    public string Parameters => "";
-    public string Description => "Show live Movement V2 threads, counters and walkers (read-only).";
+    public string Parameters => "%reset%";
+    public string Description => "Show live Movement V2 threads, counters, timings and walkers (read-only; reset zeroes the timings).";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
+        if (parameters.Length > 0 && parameters[0].Equals("reset", StringComparison.OrdinalIgnoreCase))
+        {
+            MovementTiming.Reset();
+            session.SendWhisper("Movement timings reset. Counting from now.");
+            return;
+        }
+
         session.SendWhisper(MovementRegistry.Health());
         session.SendWhisper(MovementRegistry.LastFault());
         session.SendWhisper(MovementRegistry.Snapshot());
+        foreach (var line in MovementTiming.Describe())
+            session.SendWhisper(line);
 
         if (room == null)
             return;

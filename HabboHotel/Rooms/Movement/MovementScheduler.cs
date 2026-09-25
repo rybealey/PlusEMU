@@ -370,6 +370,12 @@ public sealed class MovementScheduler
 
         lock (room.MovementLock)
         {
+            // Measurement only: `now` was read before this lock was taken, so
+            // lateness judged against it never includes the wait for the lock.
+            // lockedNow does, and feeds nothing but the histograms.
+            MovementTiming.SchedulerLockWait.Record(MovementTiming.MicrosSince(started));
+            var lockedNow = Clock.NowMs;
+
             if (room.Closed)
                 return false;
 
@@ -403,6 +409,7 @@ public sealed class MovementScheduler
                 drained++;
                 progressed = true;
                 MovementCounters.DrainedWalker();
+                MovementTiming.StepLateness.Record((lockedNow - walker.DueTick) * 1000);
 
                 MovementController.AdvanceWalker(room, walker, walker.DueTick, now);
             }

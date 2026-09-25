@@ -165,6 +165,7 @@ public static class MovementWorkQueues
             var room = item.Room;
             if (room.Closed)
                 continue;
+            MovementTiming.FrameToSend.Record((SystemMovementClock.Instance.NowMs - item.ServerNowMs) * 1000);
             try
             {
                 // Apply the frame to RoomUser and broadcast. This runs under

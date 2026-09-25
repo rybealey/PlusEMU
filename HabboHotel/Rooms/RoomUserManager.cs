@@ -926,8 +926,14 @@ public class RoomUserManager
     {
         if (frame == null || frame.Length == 0)
             return;
+        // Measurement only (:movementstats): the outbound thread's wait for this
+        // lock, and how long applying and sending the frame then holds it.
+        var lockWaitStart = Movement.MovementTiming.Now();
         lock (_cycleLock)
         {
+            var lockAcquired = Movement.MovementTiming.Now();
+            Movement.MovementTiming.SenderLockWait.Record(Movement.MovementTiming.MicrosSince(lockWaitStart));
+
             foreach (var edge in frame)
             {
                 // A publish-only record is a TRANSMISSION, not a commit. It
@@ -1035,6 +1041,8 @@ public class RoomUserManager
             {
                 _room.SendPacket(new RpMovementV2Composer(edge, serverNowMs));
             }
+
+            Movement.MovementTiming.SenderLockHold.Record(Movement.MovementTiming.MicrosSince(lockAcquired));
         }
     }
 
@@ -1071,6 +1079,9 @@ public class RoomUserManager
         {
             lock (_cycleLock)
             {
+                // Measurement only (:movementstats): how long the tick holds
+                // this lock. Recorded at the end of the block below.
+                var tickLockAcquired = Movement.MovementTiming.Now();
                 var toRemove = new List<RoomUser>();
                 foreach (var user in GetUserList().ToList())
                 {
@@ -1349,6 +1360,8 @@ public class RoomUserManager
                 }
                 if (UserCount != userCounter)
                     UpdateUserCount(userCounter);
+
+                Movement.MovementTiming.RoomTickLockHold.Record(Movement.MovementTiming.MicrosSince(tickLockAcquired));
             }
         }
         catch (Exception e)
