@@ -177,7 +177,6 @@ public static class ItemFunctionOverrides
         PublicName = source.PublicName,
         Type = source.Type,
         ProductType = source.ProductType,
-        Category = source.Category,
         Width = source.Width,
         Length = source.Length,
         Height = source.Height,

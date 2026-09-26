@@ -19,7 +19,26 @@ public class ItemDefinition
     /// </summary>
     public string ProductType { get; set; }
 
-    public FurniCategory Category { get; set; } = FurniCategory.Default;
+    /// <summary>
+    /// The inventory category the client acts on. pixelrp: DERIVED, never
+    /// stored. It was a settable property that nothing ever set (the items
+    /// refactor left it at Default), so every floor, wallpaper and landscape
+    /// reached the backpack as an ordinary wall item - and the client only
+    /// applies an item to the room, rather than hanging it on the wall, when
+    /// its category says Floor, WallPaper or Landscape. Following the
+    /// interaction type means a staff edit of that type carries it along.
+    ///
+    /// Only the three decoration categories are mapped. The others (post-it,
+    /// poster, trophy, guild furni...) each change how the client treats the
+    /// item, so each is its own decision.
+    /// </summary>
+    public FurniCategory Category => InteractionType switch
+    {
+        InteractionType.Wallpaper => FurniCategory.WallPaper,
+        InteractionType.Floor => FurniCategory.Floor,
+        InteractionType.Landscape => FurniCategory.Landscape,
+        _ => FurniCategory.Default
+    };
     public int Width { get; set; }
     public int Length { get; set; }
     public double Height { get; set; }
