@@ -3,11 +3,20 @@
 -- Candy Land is the default dump's page (930157 on beta, page_link
 -- 'candycolture'), which 119 kept as a functional page and re-parented straight
 -- under Furni. Candyland is 119's furniline page in Themes, which went to the
--- Builders tab in 174. They sell the same set: 31 of Candy Land's 32 furni are
--- on Candyland already, under proper names ('Blue Gum Drop Seat' rather than
--- 'cland_c15_jellyseat2'). The one that is not - cland15_unipoo - moves across,
--- named from its furniture row; the rest of Candy Land's rows and the page
--- itself are deleted.
+-- Builders tab in 174. They sell the same set, and all 32 of Candy Land's furni
+-- are on Candyland already, under proper names ('Blue Gum Drop Seat' rather
+-- than 'cland_c15_jellyseat2').
+--
+-- COMPARED BY SPRITE, NOT BY ID. 31 of them are the same furniture row. The
+-- 32nd is Unicorn Praline under two rows: 7957 'cland15_unicornpoo' from the
+-- base dump, on Candy Land, and 1000000674 'cland15_unipoo', the official
+-- classname 31 added beside it because the names differ - both sprite 7957,
+-- the same furni. Candyland has the second, so matching ids would have moved
+-- the first across and sold it twice.
+--
+-- So anything whose sprite Candyland does not already sell moves across (none,
+-- as it stands), named from its furniture row; the rest of Candy Land's rows
+-- and the page itself are deleted.
 --
 -- Only ever the Candy Land page directly under Furni, found by caption, so
 -- nothing else can be caught. Idempotent: once it is gone there is nothing to
@@ -20,13 +29,18 @@ SET @themes := (SELECT `id` FROM `catalog_pages`
 SET @candyland := (SELECT `id` FROM `catalog_pages` WHERE `parent_id` = @themes AND `caption` = 'Candyland' LIMIT 1);
 SET @candy := (SELECT `id` FROM `catalog_pages` WHERE `parent_id` = @furni AND `caption` = 'Candy Land' LIMIT 1);
 
--- 1. Anything on Candy Land that Candyland does not sell yet moves across.
+-- 1. Anything on Candy Land whose sprite Candyland does not sell yet moves
+--    across. A row with no furniture behind it has no sprite to compare and
+--    stays, to be deleted with the page.
 UPDATE `catalog_items` ci
-  LEFT JOIN `furniture` f ON f.`id` = ci.`item_id`
+  JOIN `furniture` f ON f.`id` = ci.`item_id`
    SET ci.`page_id` = @candyland,
        ci.`catalog_name` = COALESCE(NULLIF(f.`public_name`, ''), ci.`catalog_name`)
  WHERE ci.`page_id` = @candy AND @candyland IS NOT NULL
-   AND ci.`item_id` NOT IN (SELECT `item_id` FROM (SELECT `item_id` FROM `catalog_items` WHERE `page_id` = @candyland) x);
+   AND f.`sprite_id` NOT IN (
+       SELECT `sprite_id` FROM (
+           SELECT cf.`sprite_id` FROM `catalog_items` c JOIN `furniture` cf ON cf.`id` = c.`item_id`
+            WHERE c.`page_id` = @candyland) x);
 
 -- 2. What is left on Candy Land is on Candyland already. Only once Candyland
 --    has been found, so the page is never deleted with nowhere for it to go.
