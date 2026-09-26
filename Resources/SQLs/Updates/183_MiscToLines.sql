@@ -25,6 +25,16 @@
 -- legacy wall games with no bundle - stays on Misc. A furni the target page
 -- already sells is deleted instead of moved in twice.
 --
+-- EACH IS RENAMED as it moves, to the name its line sells it under: the
+-- furniture's own name where that is fine, a tidied one where it is not
+-- ('Norja-pehmojakkara' is Norja Stool), and for a test copy of a real furni
+-- the real one's name (pirate_barrel2_test is the Orange Barrel). Both the
+-- catalog row and the furniture row's public_name take it.
+--
+-- A TEST COPY WHOSE REAL FURNI IS ALREADY ON THE TARGET PAGE GOES instead of
+-- moving in beside it - the same furni twice, under one name. Where the page
+-- does not have it, the copy moves in and stands in for it.
+--
 -- Idempotent: only rows still on Misc move.
 
 SET @furni := (SELECT `id` FROM `catalog_pages` WHERE `parent_id` = -1 AND `page_link` = 'furni' LIMIT 1);
@@ -159,6 +169,114 @@ UPDATE `_ml_path` x
         WHEN x.`p2` IS NOT NULL THEN b.`id`
         ELSE a.`id` END;
 
+DROP TABLE IF EXISTS `_ml_name`;
+CREATE TABLE `_ml_name` (`type` VARCHAR(2) NOT NULL, `sprite_id` INT NOT NULL, `name` VARCHAR(100) NOT NULL,
+    PRIMARY KEY (`type`, `sprite_id`)) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+INSERT INTO `_ml_name` (`type`,`sprite_id`,`name`) VALUES
+('s',122,'Pizza Box'),
+('s',123,'Empty Cans'),
+('s',132,'Floor Tile'),
+('s',144,'Portable TV'),
+('s',145,'Large TV'),
+('s',173,'Digital TV'),
+('s',420,'Norja Stool'),
+('s',1649,'Aqua Habbo Roller'),
+('s',1650,'Blue Habbo Roller'),
+('s',1651,'Gold Habbo Roller'),
+('s',1652,'Green Habbo Roller'),
+('s',1653,'Teal Habbo Roller'),
+('s',1654,'Black Habbo Roller'),
+('s',1655,'Purple Habbo Roller'),
+('s',1656,'Red Habbo Roller'),
+('s',1657,'Pink Habbo Roller'),
+('s',1658,'Silver Habbo Roller'),
+('s',1659,'Big Ticket Bundle'),
+('s',2105,'Sound Machine'),
+('s',2122,'Parasol'),
+('s',2693,'Door Teleport'),
+('s',3184,'Clothes Rack'),
+('s',3186,'Notice Board'),
+('s',3804,'Boom Box'),
+('s',3806,'Roller Rink Chair'),
+('s',3812,'Roller Rink Railing'),
+('s',3886,'Flatscreen TV'),
+('s',3888,'Desktop Computer'),
+('s',3893,'Laptop'),
+('s',3894,'Nostalgic Computer'),
+('s',4249,'Group Banner'),
+('s',5337,'Background Colour'),
+('s',5368,'WIRED Condition: Furni DOESN\'T Match'),
+('s',5369,'WIRED Negative Condition: Has NO Furni On'),
+('s',5376,'WIRED Negative Condition: Furnis have NO avatars'),
+('s',5378,'Majority Vote Machine'),
+('s',5379,'WIRED Negative Condition: NOT Group Member'),
+('s',5381,'WIRED Negative Condition: Furni states DOESN\'T match'),
+('s',5385,'WIRED Negative Condition: NOT Team Member'),
+('s',5386,'Ice Cream Stand'),
+('s',5387,'Cotton Candy Stand'),
+('s',5388,'WIRED Negative Condition: NOT Wearing Badge'),
+('s',5390,'WIRED Negative Condition: NOT Wearing Effect'),
+('s',5392,'WIRED Negative Condition: Triggerer is NOT on furni'),
+('s',5394,'Highscore - Alltime'),
+('s',5395,'Highscore - Daily'),
+('s',5396,'Highscore - Weekly'),
+('s',5397,'Highscore - Monthly'),
+('s',5401,'Highscore Wins - Alltime'),
+('s',5402,'Highscore Wins - Daily'),
+('s',5403,'Highscore Wins - Weekly'),
+('s',5404,'Highscore Wins - Monthly'),
+('s',5416,'Vote Machine'),
+('s',5430,'WIRED Condition: User DOESN\'T count in Room'),
+('s',5431,'Sound Block'),
+('s',5433,'Hot Dog Vendor'),
+('s',5435,'Breakbeat Sound Block'),
+('s',11954,'Trading Table'),
+('s',18092,'Fish Barrel'),
+('s',18093,'Orange Barrel'),
+('s',18094,'Cafeteria Burger'),
+('s',18095,'Cafeteria Nuggets'),
+('s',18096,'Cafeteria Meatballs'),
+('s',100001,'Action Point'),
+('s',100002,'Turf Arrow'),
+('s',100003,'Teleport Arrow (White)'),
+('s',100004,'Teleport Arrow'),
+('s',100005,'Taxi Sign'),
+('i',1,'Sticky Pad'),
+('i',2,'Heart Sticky Pad'),
+('i',4027,'Mood Light'),
+('i',4237,'Large Mood Switch'),
+('i',4238,'Small Mood Switch'),
+('i',4239,'Small Mood Controller'),
+('i',4240,'Large Mood Controller'),
+('i',4601,'Neo-Habbo Cityscape'),
+('i',4710,'Duck Poster');
+
+DROP TABLE IF EXISTS `_ml_real`;
+CREATE TABLE `_ml_real` (`type` VARCHAR(2) NOT NULL, `sprite_id` INT NOT NULL, `real_sprite` INT NOT NULL,
+    PRIMARY KEY (`type`, `sprite_id`)) ENGINE=InnoDB;
+INSERT INTO `_ml_real` (`type`,`sprite_id`,`real_sprite`) VALUES
+('s',5368,5449),
+('s',5369,5440),
+('s',5376,5441),
+('s',5379,5448),
+('s',5381,5452),
+('s',5385,5439),
+('s',5387,5153),
+('s',5388,5446),
+('s',5390,5444),
+('s',5392,5438),
+('s',5394,5044),
+('s',5395,5045),
+('s',5396,5046),
+('s',5397,5047),
+('s',5430,5443),
+('s',5433,5156),
+('s',18092,5238),
+('s',18093,5233),
+('s',18094,4161),
+('s',18095,4156),
+('s',18096,4160);
+
 DROP TABLE IF EXISTS `_ml_move`;
 CREATE TABLE `_ml_move` (`id` INT NOT NULL PRIMARY KEY, `sprite_type` VARCHAR(2) NOT NULL,
     `sprite_id` INT NOT NULL, `target` INT NOT NULL) ENGINE=InnoDB;
@@ -183,14 +301,29 @@ INSERT IGNORE INTO `_ml_have` (`page_id`, `type`, `sprite_id`)
 DELETE ci FROM `catalog_items` ci
   JOIN `_ml_move` mv ON mv.`id` = ci.`id`
   JOIN `_ml_have` h ON h.`page_id` = mv.`target` AND h.`type` = mv.`sprite_type` AND h.`sprite_id` = mv.`sprite_id`;
+-- a test copy whose real furni the target already sells
+DELETE ci FROM `catalog_items` ci
+  JOIN `_ml_move` mv ON mv.`id` = ci.`id`
+  JOIN `_ml_real` r ON r.`type` = mv.`sprite_type` AND r.`sprite_id` = mv.`sprite_id`
+  JOIN `_ml_have` h ON h.`page_id` = mv.`target` AND h.`type` = mv.`sprite_type` AND h.`sprite_id` = r.`real_sprite`;
 DELETE ci FROM `catalog_items` ci
   JOIN `_ml_move` mv ON mv.`id` = ci.`id`
   JOIN `_ml_move` older ON older.`target` = mv.`target` AND older.`sprite_type` = mv.`sprite_type`
    AND older.`sprite_id` = mv.`sprite_id` AND older.`id` < mv.`id`;
 
-UPDATE `catalog_items` ci JOIN `_ml_move` mv ON mv.`id` = ci.`id` SET ci.`page_id` = mv.`target`;
+UPDATE `catalog_items` ci
+  JOIN `_ml_move` mv ON mv.`id` = ci.`id`
+  JOIN `_ml_name` n ON n.`type` = mv.`sprite_type` AND n.`sprite_id` = mv.`sprite_id`
+   SET ci.`page_id` = mv.`target`, ci.`catalog_name` = n.`name`;
+UPDATE `furniture` f
+  JOIN `catalog_items` ci ON CAST(f.`id` AS CHAR) = ci.`item_id`
+  JOIN `_ml_move` mv ON mv.`id` = ci.`id`
+  JOIN `_ml_name` n ON n.`type` = mv.`sprite_type` AND n.`sprite_id` = mv.`sprite_id`
+   SET f.`public_name` = LEFT(n.`name`, 56);
 
 DROP TABLE `_ml_have`;
+DROP TABLE `_ml_real`;
+DROP TABLE `_ml_name`;
 DROP TABLE `_ml_move`;
 DROP TABLE `_ml_map`;
 DROP TABLE `_ml_path`;
