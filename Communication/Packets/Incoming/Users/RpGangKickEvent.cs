@@ -6,7 +6,7 @@ namespace Plus.Communication.Packets.Incoming.Users;
 
 /// <summary>
 /// pixelrp: remove a member (Manage tab). Requires the kick permission; the
-/// leader can't be kicked and administrators only by the leader.
+/// owner can't be kicked, and administrators only by the owner.
 /// </summary>
 internal class RpGangKickEvent : IPacketEvent
 {
@@ -37,12 +37,12 @@ internal class RpGangKickEvent : IPacketEvent
         }
         if (userId == actor.Snapshot.Gang.OwnerId)
         {
-            session.SendWhisper("You can't kick the leader.");
+            session.SendWhisper("You can't kick the gang's owner.");
             return Task.CompletedTask;
         }
-        if (!actor.IsLeader && (GangManager.PermissionsOf(actor.Snapshot, userId) & GangManager.PermAdmin) != 0)
+        if (!actor.IsOwner && (GangManager.PermissionsOf(actor.Snapshot, userId) & GangManager.PermAdmin) != 0)
         {
-            session.SendWhisper("Only the leader can kick an administrator.");
+            session.SendWhisper("Only the owner can kick an administrator.");
             return Task.CompletedTask;
         }
 

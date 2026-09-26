@@ -5,8 +5,8 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// <summary>
 /// pixelrp: the viewer's own gang in full for the Gang window - identity,
 /// level, THEIR permission bits (GangManager.Perm*), the custom roles in
-/// display order, every member (roleId 0 = plain Member) and, when they may
-/// act on them, the pending invites. Sent on request and pushed to every
+/// display order, every member (each in a real role) and, when they may act
+/// on them, the pending invites; last, the invite lifetime and the rename price. Sent on request and pushed to every
 /// online member after any gang mutation.
 /// </summary>
 public class RpGangDetailComposer : IServerPacket
@@ -32,11 +32,12 @@ public class RpGangDetailComposer : IServerPacket
     private readonly List<Member> _members;
     private readonly List<Invite> _invites;
     private readonly int _inviteHours;
+    private readonly int _renameCost;
 
     public uint MessageId => ServerPacketHeader.RpGangDetailComposer;
 
     public RpGangDetailComposer(int gangId, string name, string colourA, string colourB, int ownerId, string ownerName, int level, int xp, int xpCap, int createdAt,
-        int permissions, List<Role> roles, List<Member> members, List<Invite> invites, int inviteHours)
+        int permissions, List<Role> roles, List<Member> members, List<Invite> invites, int inviteHours, int renameCost)
     {
         _gangId = gangId;
         _name = name;
@@ -53,6 +54,7 @@ public class RpGangDetailComposer : IServerPacket
         _members = members;
         _invites = invites;
         _inviteHours = inviteHours;
+        _renameCost = renameCost;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -96,5 +98,6 @@ public class RpGangDetailComposer : IServerPacket
             packet.WriteInteger(invite.ExpiresAt);
         }
         packet.WriteInteger(_inviteHours);
+        packet.WriteInteger(_renameCost);
     }
 }

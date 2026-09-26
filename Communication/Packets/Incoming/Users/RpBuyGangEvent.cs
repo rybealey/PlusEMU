@@ -86,7 +86,8 @@ internal class RpBuyGangEvent : IPacketEvent
         {
             connection.Execute("UPDATE `groups` SET `is_gang` = '1' WHERE `id` = @id", new { id = group.Id });
         }
-        // roster sidecar: the founder's join date (roles come later from the Manage tab)
+        // roster sidecar: the founder's join date, in the gang's first role -
+        // WriteMemberRow creates it as "Member", which the owner can rename
         GangManager.WriteMemberRow(group.Id, habbo.Id);
 
         // charge only after everything succeeded

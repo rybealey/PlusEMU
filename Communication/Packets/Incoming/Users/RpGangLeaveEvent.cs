@@ -5,8 +5,9 @@ using Plus.HabboHotel.Groups;
 namespace Plus.Communication.Packets.Incoming.Users;
 
 /// <summary>
-/// pixelrp: leave the gang. For the leader this DISBANDS it (the client
-/// confirms with that wording): members are freed and told, invites void.
+/// pixelrp: leave the gang. For the owner this DISBANDS it - only the owner
+/// can disband, and the client confirms with that wording: members are freed
+/// and told, invites void.
 /// </summary>
 internal class RpGangLeaveEvent : IPacketEvent
 {
@@ -24,13 +25,13 @@ internal class RpGangLeaveEvent : IPacketEvent
             return Task.CompletedTask;
 
         var name = actor.Snapshot.Gang.Name;
-        if (actor.IsLeader)
+        if (actor.IsOwner)
         {
             var others = actor.Snapshot.Members.Where(member => member.UserId != actor.UserId).Select(member => member.UserId).ToList();
             GangManager.Disband(_groupManager, actor.GangId);
             session.SendWhisper($"{name} has been disbanded.");
             foreach (var userId in others)
-                GangManager.Alert(userId, $"{name} was disbanded by its leader.");
+                GangManager.Alert(userId, $"{name} was disbanded by its owner.");
             return Task.CompletedTask;
         }
 

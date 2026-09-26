@@ -6,9 +6,11 @@ using Plus.HabboHotel.Rooms.Chat.Filter;
 namespace Plus.Communication.Packets.Incoming.Users;
 
 /// <summary>
-/// pixelrp: create (roleId 0) or edit a custom role - name plus permission
-/// flags (GangManager.RoleFlagMask). Requires Administrator; only the leader
-/// may grant or edit Administrator.
+/// pixelrp: create (roleId 0) or edit a role - name plus permission flags
+/// (GangManager.RoleFlagMask). Requires Administrator, which the owner always
+/// holds; the owner and administrators may both grant Administrator. Every
+/// role is an ordinary one now, so no name is reserved - only a duplicate
+/// within the same gang is refused. A new role joins the bottom of the ladder.
 /// </summary>
 internal class RpGangSaveRoleEvent : IPacketEvent
 {
@@ -33,20 +35,10 @@ internal class RpGangSaveRoleEvent : IPacketEvent
             session.SendWhisper($"Role names are 1 to {GangManager.MaxRoleNameLength} characters.");
             return Task.CompletedTask;
         }
-        if (name.Equals("Leader", StringComparison.OrdinalIgnoreCase) || name.Equals("Member", StringComparison.OrdinalIgnoreCase))
-        {
-            session.SendWhisper("That role name is reserved.");
-            return Task.CompletedTask;
-        }
         var roles = actor.Snapshot.Roles;
         if (roles.Any(role => role.Id != roleId && role.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
         {
             session.SendWhisper($"Your gang already has a role named '{name}'.");
-            return Task.CompletedTask;
-        }
-        if ((flags & GangManager.PermAdmin) != 0 && !actor.IsLeader)
-        {
-            session.SendWhisper("Only the leader can grant Administrator.");
             return Task.CompletedTask;
         }
 
@@ -71,14 +63,8 @@ internal class RpGangSaveRoleEvent : IPacketEvent
             }
             else
             {
-                var existing = roles.FirstOrDefault(role => role.Id == roleId);
-                if (existing == null)
+                if (roles.All(role => role.Id != roleId))
                     return Task.CompletedTask;
-                if (!actor.IsLeader && (GangManager.RoleFlags(existing) & GangManager.PermAdmin) != 0)
-                {
-                    session.SendWhisper("Only the leader can edit an administrator role.");
-                    return Task.CompletedTask;
-                }
                 connection.Execute(
                     "UPDATE `rp_gang_roles` SET `name` = @name, `can_invite` = @canInvite, `can_kick` = @canKick, `can_bank` = @canBank, `is_admin` = @isAdmin " +
                     "WHERE `id` = @roleId AND `gang_id` = @gangId",

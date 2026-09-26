@@ -22,10 +22,19 @@ public static class GangManager
     public const int PermKick = 2;
     public const int PermBank = 4;
     public const int PermAdmin = 8;
-    public const int PermLeader = 16;
-    public const int PermAll = PermInvite | PermKick | PermBank | PermAdmin | PermLeader;
-    // the flags a role row may carry (leader is never a role)
+    // The gang OWNER (groups.owner_id): whoever founded it, or was handed it.
+    // Only they can disband or transfer the gang, and they can't be kicked.
+    // Ownership is not a role - the owner sits in whichever role they're
+    // ranked into, like anyone else. Wire bit 16 (the client's GANG_PERM_LEADER).
+    public const int PermOwner = 16;
+    public const int PermAll = PermInvite | PermKick | PermBank | PermAdmin | PermOwner;
+    // the flags a role row may carry (ownership is never a role)
     public const int RoleFlagMask = PermInvite | PermKick | PermBank | PermAdmin;
+
+    // The one role a new gang starts with, holding its founder. It is an
+    // ordinary role - the owner can rename it, reorder it or delete it while
+    // another role remains.
+    public const string DefaultRoleName = "Member";
 
     public const int MaxRoleNameLength = 29;
     public const int MaxRoles = 12;
@@ -93,7 +102,7 @@ public static class GangManager
     public record Actor(int UserId, Snapshot Snapshot, int Permissions)
     {
         public int GangId => Snapshot.Gang.Id;
-        public bool IsLeader => (Permissions & PermLeader) != 0;
+        public bool IsOwner => (Permissions & PermOwner) != 0;
     }
 
     public static int Now() => (int)UnixTimestamp.GetNow();
@@ -104,6 +113,12 @@ public static class GangManager
     public static int InviteHours()
     {
         return int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("gang.invite.hours"), out var hours) && hours > 0 ? hours : 24;
+    }
+
+    /// <summary>Credits to rename a gang; server_settings gang.rename.cost, default 100.</summary>
+    public static int RenameCost()
+    {
+        return int.TryParse(PlusEnvironment.SettingsManager.TryGetValue("gang.rename.cost"), out var cost) && cost > 0 ? cost : 100;
     }
 
     /// <summary>XP needed to clear a level. Nothing awards gang XP yet; the bar is wired for when turfs do.</summary>
@@ -219,7 +234,7 @@ public static class GangManager
             ? snapshot.Invites.Select(invite => new RpGangDetailComposer.Invite(invite.UserId, invite.Username, invite.Figure ?? "", invite.InviterName, invite.ExpiresAt)).ToList()
             : new List<RpGangDetailComposer.Invite>();
         return new RpGangDetailComposer(gang.Id, gang.Name, ToHex(gang.Colour1), ToHex(gang.Colour2), gang.OwnerId, ownerName ?? "",
-            gang.GangLevel, gang.GangXp, XpCap(gang.GangLevel), gang.Created, permissions, roles, members, invites, InviteHours());
+            gang.GangLevel, gang.GangXp, XpCap(gang.GangLevel), gang.Created, permissions, roles, members, invites, InviteHours(), RenameCost());
     }
 
     public static RpGangInvitesComposer ComposeIncomingInvites(int userId)
@@ -311,14 +326,33 @@ public static class GangManager
         return new Actor(habbo.Id, snapshot, permissions);
     }
 
-    /// <summary>Sidecar row for a member (founder or accepted invite); membership itself is written by the caller/group.</summary>
-    public static void WriteMemberRow(int gangId, int userId)
+    /// <summary>
+    /// The role a joining member lands in: the BOTTOM of the ladder (highest
+    /// sort_order, newest id on a tie). A gang with no roles at all - a brand
+    /// new one - gets its default "Member" role here first, so every member
+    /// always sits in a real role.
+    /// </summary>
+    public static int JoinRoleId(int gangId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
+        var bottom = connection.QueryFirstOrDefault<int?>(
+            "SELECT `id` FROM `rp_gang_roles` WHERE `gang_id` = @gangId ORDER BY `sort_order` DESC, `id` DESC LIMIT 1", new { gangId });
+        if (bottom.HasValue)
+            return bottom.Value;
+        return connection.QuerySingle<int>(
+            "INSERT INTO `rp_gang_roles` (`gang_id`, `name`, `sort_order`, `can_invite`, `can_kick`, `can_bank`, `is_admin`) " +
+            "VALUES (@gangId, @name, 0, '0', '0', '0', '0'); SELECT LAST_INSERT_ID();", new { gangId, name = DefaultRoleName });
+    }
+
+    /// <summary>Sidecar row for a member (founder or accepted invite), in the bottom role; membership itself is written by the caller/group.</summary>
+    public static void WriteMemberRow(int gangId, int userId)
+    {
+        var roleId = JoinRoleId(gangId);
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
         connection.Execute(
-            "INSERT INTO `rp_gang_members` (`gang_id`, `user_id`, `role_id`, `joined_at`) VALUES (@gangId, @userId, NULL, @now) " +
-            "ON DUPLICATE KEY UPDATE `gang_id` = VALUES(`gang_id`), `role_id` = NULL, `joined_at` = VALUES(`joined_at`)",
-            new { gangId, userId, now = Now() });
+            "INSERT INTO `rp_gang_members` (`gang_id`, `user_id`, `role_id`, `joined_at`) VALUES (@gangId, @userId, @roleId, @now) " +
+            "ON DUPLICATE KEY UPDATE `gang_id` = VALUES(`gang_id`), `role_id` = VALUES(`role_id`), `joined_at` = VALUES(`joined_at`)",
+            new { gangId, userId, roleId, now = Now() });
     }
 
     public static void AddMember(IGroupManager groupManager, int gangId, int userId)
@@ -358,7 +392,18 @@ public static class GangManager
         GangUtility.BroadcastGangMembership(userId);
     }
 
-    /// <summary>The leader tears the gang down: every member is freed, invites void, the group row goes.</summary>
+    /// <summary>
+    /// Every online member's gang card and profile badge re-read the gang
+    /// (name, colours, owner flag) - after a rename, a recolour or a transfer,
+    /// none of which change anyone's membership.
+    /// </summary>
+    public static void BroadcastMembershipOfAll(int gangId)
+    {
+        foreach (var userId in GetMembers(gangId).Select(row => row.UserId))
+            GangUtility.BroadcastGangMembership(userId);
+    }
+
+    /// <summary>The owner tears the gang down: every member is freed, invites void, the group row goes.</summary>
     public static void Disband(IGroupManager groupManager, int gangId)
     {
         var memberIds = GetMembers(gangId).Select(row => row.UserId).ToList();
