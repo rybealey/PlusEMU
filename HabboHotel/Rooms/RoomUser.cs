@@ -61,6 +61,9 @@ public class RoomUser
     // handitem 244 in their hand. Deliberately NOT a timed carry - see
     // SetPhoneInHand.
     public bool PhoneInHand;
+    // pixelrp: the handitem of the equipped weapon (RpWeapons), 0 for none.
+    // It is the hand's RESTING item: see CarryItem and SetWeaponHandItem.
+    public int WeaponHandItemId;
     // pixelrp: >0 while an enable is paused for the "67" gesture; the room
     // cycle counts it down and reapplies the effect at zero.
     public int EffectReapplyTimer;
@@ -892,8 +895,27 @@ public class RoomUser
         Z = pZ;
     }
 
+    /// <summary>
+    /// What the hand holds when nothing is borrowing it: the phone while it is
+    /// open, else the equipped weapon, else nothing. Neither runs a timer.
+    /// </summary>
+    public int RestingHandItemId => (PhoneInHand ? PhoneHandItemId : WeaponHandItemId);
+
     public void CarryItem(int item)
     {
+        // pixelrp: putting something down returns the hand to what it rests
+        // on. Every "clear the hand" in the hotel - a drink running out, a
+        // handitem given away, a tool spent on a sale, a dance - goes through
+        // here, so an equipped weapon or an open phone comes back after all of
+        // them without each one knowing it exists. (A dance hides a carry on
+        // its own: the Dance action prevents CarryItem in the renderer.)
+        if (item == 0 && RestingHandItemId > 0)
+        {
+            CarryItemId = RestingHandItemId;
+            CarryTimer = 0;
+            GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, CarryItemId));
+            return;
+        }
         CarryItemId = item;
         if (item > 0)
             CarryTimer = 240;
@@ -930,6 +952,32 @@ public class RoomUser
             GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, PhoneHandItemId));
         }
         else
+            CarryItem(0);           // back to the weapon, if one is equipped
+    }
+
+    /// <summary>
+    /// pixelrp: the equipped weapon changed (RpWeapons.ApplyToHand).
+    ///
+    /// Drawing a weapon takes the hand from anything timed - equipping is a
+    /// deliberate act, a coffee is not. Putting it away empties the hand only
+    /// if the weapon is what it holds. With the phone open the hand stays the
+    /// phone's; the new weapon is simply what closing it gives back.
+    /// </summary>
+    public void SetWeaponHandItem(int handItemId)
+    {
+        if (WeaponHandItemId == handItemId)
+            return;
+        var previous = WeaponHandItemId;
+        WeaponHandItemId = handItemId;
+        if (PhoneInHand)
+            return;
+        if (handItemId > 0)
+        {
+            CarryItemId = handItemId;
+            CarryTimer = 0;
+            GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, handItemId));
+        }
+        else if (previous > 0 && CarryItemId == previous)
             CarryItem(0);
     }
 

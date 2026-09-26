@@ -21,12 +21,17 @@ internal class RpDiscardItemEvent : IPacketEvent
         var habbo = session.GetHabbo();
         if (habbo == null)
             return Task.CompletedTask;
-        if (slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots)
+        var weaponSlot = Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
+        if ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot)
             return Task.CompletedTask;
         var (item, _) = habbo.DiscardRpItem(slot, count);
         if (item == null)
             return Task.CompletedTask;
-        session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
+        var after = habbo.LoadRpInventory();
+        // Binning the equipped weapon empties the hand with it.
+        if (slot == weaponSlot)
+            Plus.HabboHotel.Users.RpWeapons.ApplyToHand(habbo, after);
+        session.Send(new RpInventoryComposer(after));
         return Task.CompletedTask;
     }
 }

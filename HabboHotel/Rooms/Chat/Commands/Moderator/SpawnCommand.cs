@@ -18,7 +18,11 @@ internal class SpawnCommand : ITargetChatCommand
         { "medkit", ("medkit", "Medkit") },
         { "vip31", ("vip_token_31", "VIP Token (31 days)") },
         { "vip14", ("vip_token_14", "VIP Token (14 days)") },
-        { "spit", ("spit_token", "Spit Token") }
+        { "spit", ("spit_token", "Spit Token") },
+        { "knife", ("knife", "Knife") },
+        { "bat", ("baseball_bat", "Baseball Bat") },
+        { "axe", ("axe", "Axe") },
+        { "stun", ("stun_gun", "Stun Gun") }
     };
 
     public string Key => "spawn";

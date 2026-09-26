@@ -467,7 +467,11 @@ public class Habbo
     public int AddRpItem(string item)
     {
         var inventory = LoadRpInventory();
-        var existing = inventory.FirstOrDefault(entry => entry.Item == item && entry.Count < RpStackCap);
+        // pixelrp: weapons never stack - each is its own item, one to a slot -
+        // and only the carry slots are stacked onto, never the Weapon frame.
+        var existing = RpWeapons.IsWeapon(item)
+            ? default
+            : inventory.FirstOrDefault(entry => entry.Item == item && entry.Count < RpStackCap && entry.Slot >= 1 && entry.Slot <= RpCarrySlots);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         if (existing.Item == item && existing.Slot > 0 && existing.Slot <= RpUnlockedSlots)
         {
