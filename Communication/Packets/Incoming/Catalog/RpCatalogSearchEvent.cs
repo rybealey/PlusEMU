@@ -49,6 +49,11 @@ internal class RpCatalogSearchEvent : IPacketEvent
     {
         var habbo = session.GetHabbo();
         var raw = packet.ReadString() ?? string.Empty;
+        // pixelrp: the tab the box sits in, appended last on the wire. A search
+        // runs inside the tab it was typed in - Furni's box finds Furni's
+        // stock, not Builders' or Staff's - and the 150-hit cap is spent on
+        // that tab alone. Absent (an older client) means the whole catalog.
+        var tabId = packet.HasDataRemaining() ? packet.ReadInt() : -1;
 
         if (habbo == null)
             return Task.CompletedTask;
@@ -64,10 +69,14 @@ internal class RpCatalogSearchEvent : IPacketEvent
         }
 
         var hits = new List<CatalogSearchHit>();
+        var inTab = new Dictionary<int, bool>();
 
         foreach (var page in _catalogManager.Pages)
         {
             if (!CatalogLookup.IsOpenable(page, habbo.Rank, habbo.VipRank))
+                continue;
+
+            if (tabId > 0 && !IsUnder(page, tabId, inTab))
                 continue;
 
             foreach (var item in page.Items.Values)
@@ -108,6 +117,39 @@ internal class RpCatalogSearchEvent : IPacketEvent
 
         session.Send(new RpCatalogSearchComposer(raw, hits));
         return Task.CompletedTask;
+    }
+
+    /// <summary>Whether a page sits anywhere under the tab: its parent chain
+    /// reaches the tab before the root. Remembered per search, since a tab's
+    /// pages share most of their chain. A chain that breaks (a parent row that
+    /// is gone) or loops is not under the tab.</summary>
+    private bool IsUnder(CatalogPage page, int tabId, Dictionary<int, bool> known)
+    {
+        var walked = new List<int>();
+        var current = page;
+        var result = false;
+
+        for (var depth = 0; depth < 16 && current != null; depth++)
+        {
+            if (current.Id == tabId)
+            {
+                result = true;
+                break;
+            }
+            if (known.TryGetValue(current.Id, out var cached))
+            {
+                result = cached;
+                break;
+            }
+            walked.Add(current.Id);
+            if (current.ParentId == -1 || !_catalogManager.TryGetPage(current.ParentId, out var parent))
+                break;
+            current = parent;
+        }
+
+        foreach (var id in walked)
+            known[id] = result;
+        return result;
     }
 
     private static bool Matches(string haystack, string query) =>
