@@ -104,7 +104,9 @@ internal class FriendFurniConfirmLockEvent : IPacketEvent
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `items` SET `extra_data` = @extraData WHERE `id` = @ID LIMIT 1");
-            dbClient.AddParameter("extraData", item.ExtraData);
+            // pixelrp: serialised - a FurniObjectData cannot be bound, and the
+            // lock's names and date were never saved.
+            dbClient.AddParameter("extraData", item.ExtraData?.Serialize() ?? string.Empty);
             dbClient.AddParameter("ID", item.Id);
             dbClient.RunQuery();
         }

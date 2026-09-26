@@ -116,17 +116,13 @@ public class PurchaseFromCatalogEvent : IPacketEvent
             case InteractionType.Floor:
             case InteractionType.Wallpaper:
             case InteractionType.Landscape:
-                double number = 0;
-                try
-                {
-                    number = string.IsNullOrEmpty(extraData) ? 0 : double.Parse(extraData, PlusEnvironment.CultureInfo);
-                }
-                catch (Exception e)
-                {
-                    ExceptionLogger.LogException(e);
-                }
-                extraData = number.ToString(CultureInfo.CurrentCulture).Replace(',', '.');
-                break; // maintain extra data // todo: validate
+                // pixelrp: the pattern id is kept exactly as the page sent it.
+                // It used to go through a double, which turned landscape
+                // "1.10" into "1.1" - a different landscape. Anything that is
+                // not digits, optionally a dot and more digits, is refused.
+                if (!IsPatternId(extraData))
+                    extraData = "0";
+                break;
             case InteractionType.Postit:
                 extraData = "FFFF33";
                 break;
@@ -364,5 +360,17 @@ public class PurchaseFromCatalogEvent : IPacketEvent
             await _badgeManager.GiveBadge(session.GetHabbo(), badge.Code);
         session.Send(new PurchaseOkComposer(item, item.Definition));
         session.Send(new FurniListUpdateComposer());
+    }
+
+    /// <summary>A floor, wallpaper or landscape id as room.nitro names it:
+    /// "102", "3106", "1.10". Digits, then optionally one dot and digits.</summary>
+    private static bool IsPatternId(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > 12)
+            return false;
+        var dot = value.IndexOf('.');
+        var whole = dot < 0 ? value : value[..dot];
+        var fraction = dot < 0 ? "1" : value[(dot + 1)..];
+        return whole.Length > 0 && fraction.Length > 0 && whole.All(char.IsAsciiDigit) && fraction.All(char.IsAsciiDigit);
     }
 }

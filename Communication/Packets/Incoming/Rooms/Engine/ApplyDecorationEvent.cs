@@ -69,7 +69,10 @@ internal class ApplyDecorationEvent : RoomPacketEvent
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery($"UPDATE `rooms` SET `{decorationKey}` = @extradata WHERE `id` = '{room.RoomId}' LIMIT 1");
-            dbClient.AddParameter("extradata", item.ExtraData);
+            // pixelrp: the pattern id itself. item.ExtraData is a FurniObjectData
+            // since the items refactor, which the driver cannot bind - the query
+            // threw, and the room was never told of its new floor or walls.
+            dbClient.AddParameter("extradata", data);
             dbClient.RunQuery();
             dbClient.RunQuery($"DELETE FROM `items` WHERE `id` = '{item.Id}' LIMIT 1");
         }

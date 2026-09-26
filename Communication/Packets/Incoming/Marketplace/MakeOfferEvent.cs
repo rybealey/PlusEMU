@@ -54,7 +54,9 @@ internal class MakeOfferEvent : IPacketEvent
             dbClient.SetQuery(
                 $"INSERT INTO `catalog_marketplace_offers` (`furni_id`,`item_id`,`user_id`,`asking_price`,`total_price`,`public_name`,`sprite_id`,`item_type`,`timestamp`,`extra_data`,`limited_number`,`limited_stack`) VALUES ('{itemId}','{item.Definition.Id}','{session.GetHabbo().Id}','{sellingPrice}','{totalPrice}',@public_name,'{item.Definition.SpriteId}','{itemType}','{UnixTimestamp.GetNow()}',@extra_data, '{item.UniqueNumber}', '{item.UniqueSeries}')");
             dbClient.AddParameter("public_name", item.Definition.PublicName);
-            dbClient.AddParameter("extra_data", item.ExtraData);
+            // pixelrp: serialised - a FurniObjectData cannot be bound, so the
+            // offer insert threw.
+            dbClient.AddParameter("extra_data", item.ExtraData?.Serialize() ?? string.Empty);
             dbClient.RunQuery();
             dbClient.RunQuery($"DELETE FROM `items` WHERE `id` = '{itemId}' AND `user_id` = '{session.GetHabbo().Id}' LIMIT 1");
         }
