@@ -35,7 +35,7 @@ public class RoomJukeboxManager
     public static string ParseVideoId(string input) => JukeboxStation.ParseVideoId(input);
 
     public string TryAdd(GameClient session, string url) => _station.TryAdd(session, url);
-    public void Enqueue(JukeboxTrack track) => _station.Enqueue(track);
+    public bool Enqueue(JukeboxTrack track) => _station.Enqueue(track);
     public bool TryRemove(GameClient session, int index) => _station.TryRemove(session, index);
     public bool TrySkip(GameClient session) => _station.TrySkip(session);
     public bool TryMove(GameClient session, int from, int to) => _station.TryMove(session, from, to);

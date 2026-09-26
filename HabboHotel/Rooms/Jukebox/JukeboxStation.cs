@@ -97,13 +97,16 @@ public class JukeboxStation
         return null;
     }
 
-    public void Enqueue(JukeboxTrack track)
+    // False when the queue filled up between TryAdd's pre-flight and this
+    // (the metadata fetch in between is awaited), so the caller only
+    // announces a song that really joined the queue.
+    public bool Enqueue(JukeboxTrack track)
     {
         bool startNext;
         lock (_lock)
         {
             if (_queue.Count >= MaxQueue)
-                return;
+                return false;
             _queue.Add(track);
             startNext = _current == null;
         }
@@ -111,6 +114,7 @@ public class JukeboxStation
             StartNext();
         else
             BroadcastState();
+        return true;
     }
 
     private void StartNext()
