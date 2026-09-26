@@ -21,36 +21,24 @@ public class CommandManager : ICommandManager
     private readonly string _prefix = ":";
 
     /// <summary>
-    /// What a knocked-out player (0 health) cannot do: anything done to or
-    /// with another player. Out cold is out of it.
+    /// The player commands a knocked-out player (0 health) CAN still use. Every
+    /// other command under Commands.User is refused (see KnockedOut); staff
+    /// commands, under Moderator and Administrator, are never refused.
+    ///
+    /// An allow list rather than a block list, so a new command is refused
+    /// while out cold until somebody decides otherwise. What is here only
+    /// looks something up, sets a preference, or talks - :ga and :ca are gang
+    /// and corporation chat, and talking stays open.
     /// </summary>
-    private static readonly HashSet<string> KnockedOutCannot = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> KnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Fighting.
-        "hit", "slap", "spit",
-        // Policing.
-        "stun", "cuff", "escort", "charge",
-        // Laying hands on somebody.
-        "push", "pull", "spush",
-        "hug", "kiss", "bite", "propose",
-        // Tending to, going after, or copying somebody.
-        "heal", "follow", "mimic",
-        // Letting somebody off.
-        "uncuff", "pardon",
-        // Handing things over.
-        "give", "offer"
+        "about", "stats",
+        "dnd", "disablegifts", "disablemimic", "flagme",
+        "ga", "ca"
     };
 
-    /// <summary>
-    /// Out cold in the room they are in. RpKnockedOut is the room user's own
-    /// flag, kept by UpdateRpKnockoutState from RpHealth, so it needs no stats
-    /// load here.
-    /// </summary>
-    private static bool IsKnockedOut(GameClient session)
-    {
-        var habbo = session.GetHabbo();
-        return habbo?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?.RpKnockedOut == true;
-    }
+    private static bool IsPlayerCommand(ICommandBase command) =>
+        (command.GetType().Namespace ?? string.Empty).Contains(".Commands.User", StringComparison.Ordinal);
 
     /// <summary>
     /// The default initializer for the CommandManager
@@ -134,14 +122,10 @@ public class CommandManager : ICommandManager
                 session.SendWhisper("Your hands are cuffed.");
                 return true;
             }
-            // pixelrp: out cold means out of the fight, and out of everything
-            // else you need to be on your feet for. Same reasoning as the cuffs:
-            // one list here, not a copy in every command.
-            if (KnockedOutCannot.Contains(key) && IsKnockedOut(session))
-            {
-                session.SendWhisper("You cannot perform this action.");
+            // pixelrp: out cold means doing nothing. Same reasoning as the cuffs:
+            // one check here, not a copy in every command.
+            if (IsPlayerCommand(command) && !KnockedOutCan.Contains(key) && KnockedOut.Refuse(session))
                 return true;
-            }
             session.GetHabbo().ChatCommand = command;
             session.GetHabbo().CurrentRoom.GetWired().TriggerEvent(WiredBoxType.TriggerUserSaysCommand, session.GetHabbo(), this);
 

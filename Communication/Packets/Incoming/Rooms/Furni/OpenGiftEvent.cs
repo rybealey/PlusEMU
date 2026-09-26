@@ -37,6 +37,8 @@ internal class OpenGiftEvent : IPacketEvent
             return Task.CompletedTask;
         if (present.UserId != session.GetHabbo().Id)
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         DataRow data;
         using (var dbClient = _database.GetQueryReactor())
         {

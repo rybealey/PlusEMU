@@ -19,6 +19,8 @@ internal class DanceEvent : RoomPacketEvent
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         user.UnIdle();
         var danceId = packet.ReadInt();
         if (danceId < 0 || danceId > 4)

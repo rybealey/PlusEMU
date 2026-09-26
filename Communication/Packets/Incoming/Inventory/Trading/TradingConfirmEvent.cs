@@ -15,6 +15,8 @@ internal class TradingConfirmEvent : IPacketEvent
         var roomUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (roomUser == null)
             return Task.CompletedTask;
+        if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         if (!room.GetTrading().TryGetTrade(roomUser.TradeId, out var trade))
         {
             session.Send(new TradingClosedComposer(session.GetHabbo().Id));

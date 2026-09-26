@@ -18,6 +18,8 @@ internal class GiveHandItemEvent : RoomPacketEvent
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(packet.ReadInt());
         if (targetUser == null)
             return Task.CompletedTask;

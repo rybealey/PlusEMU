@@ -26,6 +26,8 @@ internal class UseFurnitureEvent : RoomPacketEvent
         var item = room.GetRoomItemHandler().GetItem(itemId);
         if (item == null)
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         var hasRights = room.CheckRights(session, false, true);
         if (item.Definition.InteractionType == InteractionType.Banzaitele)
             return Task.CompletedTask;

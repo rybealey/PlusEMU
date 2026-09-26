@@ -20,6 +20,8 @@ internal class UseWallItemEvent : RoomPacketEvent
         var item = room.GetRoomItemHandler().GetItem(itemId);
         if (item == null)
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         var hasRights = room.CheckRights(session, false, true);
         var request = packet.ReadInt();
         item.Interactor.OnTrigger(session, item, request, hasRights);

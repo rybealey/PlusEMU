@@ -17,6 +17,10 @@ internal class RpOfferReplyEvent : IPacketEvent
         if (session.GetHabbo() == null || offerId <= 0)
             return Task.CompletedTask;
 
+        // pixelrp: out cold, nobody accepts anything - but saying no still works
+        if (accepted && Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
+            return Task.CompletedTask;
+
         if (accepted)
             OfferState.Accept(offerId, session);
         else

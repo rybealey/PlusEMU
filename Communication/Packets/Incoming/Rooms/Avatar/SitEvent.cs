@@ -12,6 +12,8 @@ internal class SitEvent : IPacketEvent
         var user = session.GetHabbo().CurrentRoom.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         if (user.Statusses.ContainsKey("lie") || user.IsLying || user.RidingHorse || user.IsWalking) return Task.CompletedTask;
         if (!user.Statusses.ContainsKey("sit"))
         {

@@ -50,6 +50,8 @@ internal class RpJukeboxAddEvent : IPacketEvent
         var url = packet.ReadString();
         if (session.GetHabbo() == null)
             return;
+        if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
+            return;
         var room = session.GetHabbo().CurrentRoom;
         var jukebox = room?.GetJukeboxManager();
         if (jukebox == null || !jukebox.HasJukebox())

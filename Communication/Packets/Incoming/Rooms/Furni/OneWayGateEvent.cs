@@ -1,5 +1,6 @@
 ﻿using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
 
@@ -12,6 +13,8 @@ internal class OneWayGateEvent : IPacketEvent
             return Task.CompletedTask;
         var item = room.GetRoomItemHandler().GetItem(packet.ReadUInt());
         if (item == null)
+            return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
             return Task.CompletedTask;
         var hasRights = room.CheckRights(session);
         if (item.Definition.InteractionType == InteractionType.OneWayGate)

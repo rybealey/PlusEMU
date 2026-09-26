@@ -53,6 +53,9 @@ public class RpUseItemEvent : IPacketEvent
             session.SendWhisper("Your hands are cuffed.");
             return;
         }
+        // Out cold, nothing comes out of the backpack either.
+        if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
+            return;
         // Peek before consuming: a failed precondition must not burn the item.
         var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
         if (string.IsNullOrEmpty(item))

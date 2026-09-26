@@ -13,6 +13,10 @@ internal class LookToEvent : RoomPacketEvent
             return Task.CompletedTask;
         if (user.IsAsleep)
             return Task.CompletedTask;
+        // pixelrp: out cold, the body does not turn to look. Quietly: clicking
+        // around the room sends this, and a whisper per click would be noise.
+        if (KnockedOut.Is(session))
+            return Task.CompletedTask;
         user.UnIdle();
         var x = packet.ReadInt();
         var y = packet.ReadInt();

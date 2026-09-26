@@ -28,6 +28,8 @@ internal class InitTradeEvent : IPacketEvent
         var roomUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (roomUser == null)
             return Task.CompletedTask;
+        if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         var targetUser = room.GetRoomUserManager().GetRoomUserByVirtualId(userId);
         if (targetUser == null)
             return Task.CompletedTask;

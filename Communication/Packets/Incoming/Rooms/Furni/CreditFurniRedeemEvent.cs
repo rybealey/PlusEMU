@@ -23,6 +23,8 @@ internal class CreditFurniRedeemEvent : RoomPacketEvent
     {
         if (!room.CheckRights(session, true))
             return Task.CompletedTask;
+        if (KnockedOut.Refuse(session))
+            return Task.CompletedTask;
         if (_settingsManager.TryGetValue("room.item.exchangeables.enabled") != "1")
         {
             session.SendNotification("The hotel managers have temporarilly disabled exchanging!");
