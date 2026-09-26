@@ -72,12 +72,18 @@ internal class SpitCommand : ITargetChatCommand
     private const string SplatItemName = "xmas13_paintsplat2";
 
     /// <summary>
-    /// Ids for the ghost splats, counting DOWN from the top of the range.
-    /// Real furni ids come from an auto-increment climbing from 1, so nothing
-    /// the hotel owns will ever reach here and the client cannot confuse a
-    /// splat with a real item it already knows about.
+    /// Ids for the ghost splats, counting DOWN from int.MaxValue. Real furni
+    /// ids come from an auto-increment climbing from 1, so nothing the hotel
+    /// owns will ever reach here and the client cannot confuse a splat with a
+    /// real item it already knows about.
+    ///
+    /// NOT uint.MaxValue: the add packet writes the id as a raw 32-bit int the
+    /// client reads SIGNED, while the remove packet writes it as a string the
+    /// client parseInt()s. Above int.MaxValue the two disagree - 4294967294
+    /// arrives as -2 on add and 4294967294 on remove - so the client never
+    /// finds the splat to take it away. Below it they read the same.
     /// </summary>
-    private static uint _ghostId = uint.MaxValue;
+    private static uint _ghostId = int.MaxValue;
 
     private readonly ConcurrentDictionary<int, DateTime> _lastSpit = new();
 
