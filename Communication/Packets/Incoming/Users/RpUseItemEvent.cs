@@ -43,7 +43,8 @@ public class RpUseItemEvent : IPacketEvent
     {
         var slot = packet.ReadInt();
         var habbo = session.GetHabbo();
-        if (habbo == null || slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots)
+        var weaponSlot = RpWeapons.WeaponSlot;
+        if (habbo == null || ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot))
             return;
         // pixelrp police: cuffs stop the things you do with your hands, and
         // rummaging in a backpack is one of them. Above the peek so nothing is
@@ -60,6 +61,29 @@ public class RpUseItemEvent : IPacketEvent
         var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
         if (string.IsNullOrEmpty(item))
             return;
+        // pixelrp weapons: using one EQUIPS it - a move into the Weapon frame,
+        // swapping out whatever was equipped - and using the equipped one puts
+        // it back in the first free slot. Nothing is consumed either way.
+        if (slot == weaponSlot || RpWeapons.IsWeapon(item))
+        {
+            if (slot == weaponSlot)
+            {
+                var used = habbo.LoadRpInventory().Select(entry => entry.Slot).ToHashSet();
+                var free = Enumerable.Range(1, habbo.RpUnlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
+                if (free == 0)
+                {
+                    session.SendWhisper("Your backpack is full - there is nowhere to put it away.");
+                    return;
+                }
+                habbo.MoveRpItem(weaponSlot, free);
+            }
+            else
+                habbo.MoveRpItem(slot, weaponSlot);
+            var after = habbo.LoadRpInventory();
+            RpWeapons.ApplyToHand(habbo, after);
+            session.Send(new RpInventoryComposer(after));
+            return;
+        }
         // pixelrp Clothing Store: a limited-edition token ("clothing:<id>:<edition>")
         // unlocks its set like a bought piece. Owning it already leaves the token
         // alone (it can still be traded on); a set the shelf no longer knows is

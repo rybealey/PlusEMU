@@ -341,13 +341,19 @@ public class RoomUserManager
         // this player gets their own phone back after a room change, and they
         // are told about anybody already holding one - which they would
         // otherwise not see until that person closed and reopened it.
+        //
+        // The equipped weapon the same way: set before the phone, so an open
+        // phone still wins the hand and the weapon waits for it to close.
+        user.SetWeaponHandItem(RpWeapons.HandItemFor(RpWeapons.EquippedItem(session.GetHabbo().LoadRpInventory())));
         if (session.GetHabbo().PhoneOpen)
             user.SetPhoneInHand(true);
         foreach (var other in _users.Values.ToList())
         {
-            if (other == null || other == user || !other.PhoneInHand)
+            // Anybody holding a resting item - phone or weapon - which the
+            // newcomer would otherwise not see until it changed.
+            if (other == null || other == user || other.CarryItemId <= 0 || other.CarryTimer > 0 || other.RestingHandItemId != other.CarryItemId)
                 continue;
-            session.Send(new CarryObjectComposer(other.VirtualId, RoomUser.PhoneHandItemId));
+            session.Send(new CarryObjectComposer(other.VirtualId, other.CarryItemId));
         }
         // pixelrp Movement V2: enrol this user with the movement scheduler.
         // Bots and pets stay on V1, so this only enrols human users.
@@ -1396,9 +1402,11 @@ public class RoomUserManager
                         if (!user.IsBot && user.GetClient() != null)
                             Corporations.ShiftManager.InterruptForIdle(user.GetClient());
                     }
-                    // pixelrp: the phone is held for as long as it is open, so
-                    // it is the one carry with no countdown.
-                    if (user.CarryItemId > 0 && !user.PhoneInHand)
+                    // pixelrp: only a TIMED carry counts down. The phone and an
+                    // equipped weapon are resting items (CarryTimer 0) held for
+                    // as long as they are open / equipped; a timed one running
+                    // out hands the hand back to them (RoomUser.CarryItem).
+                    if (user.CarryItemId > 0 && user.CarryTimer > 0)
                     {
                         user.CarryTimer--;
                         if (user.CarryTimer <= 0)
