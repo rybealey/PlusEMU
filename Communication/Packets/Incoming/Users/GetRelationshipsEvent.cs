@@ -1,24 +1,21 @@
 using Plus.Communication.Packets.Outgoing.Users;
-using Plus.HabboHotel.Friends;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.Relationships;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
+/// <summary>
+/// The infostand's relationship rows, answered from partnerships rather than the
+/// friends list: a partner is the single Love row, and nothing else is listed.
+/// See PartnershipUtility for why they are no longer read off
+/// messenger_friendships.
+/// </summary>
 internal class GetRelationshipsEvent : IPacketEvent
 {
-    private readonly MessengerDataLoader _messengerDataLoader;
-    private readonly GameClientManager _gameClientManager;
-
-    public GetRelationshipsEvent(MessengerDataLoader messengerDataLoader, GameClientManager gameClientManager)
-    {
-        _messengerDataLoader = messengerDataLoader;
-        _gameClientManager = gameClientManager;
-    }
-
-    public async Task Parse(GameClient session, IIncomingPacket packet)
+    public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var userId = packet.ReadInt();
-        var relationships = await session.GetHabbo().Messenger.GetRelationshipsForUserAsync(userId, _gameClientManager, _messengerDataLoader);
-        session.Send(new GetRelationshipsComposer(userId, relationships));
+        session.Send(new GetRelationshipsComposer(userId, PartnershipUtility.RelationshipsFor(userId)));
+        return Task.CompletedTask;
     }
 }

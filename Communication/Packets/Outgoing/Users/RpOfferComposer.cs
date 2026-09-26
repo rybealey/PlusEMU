@@ -41,7 +41,7 @@ public class RpOfferComposer : IServerPacket
         packet.WriteInteger(1);
         packet.WriteInteger(_offer.Id);
         packet.WriteString(_offer.SellerName);
-        packet.WriteString(_offer.Ware.Key);
+        packet.WriteString(_offer.Key);
         packet.WriteString(_offer.Label);
         packet.WriteInteger(_offer.Quantity);
         packet.WriteInteger(_offer.Total);
@@ -51,5 +51,8 @@ public class RpOfferComposer : IServerPacket
         packet.WriteInteger(OfferState.LifetimeSeconds);
         packet.WriteInteger(_queued);
         packet.WriteString(_blocked);
+        // Last, so everything before it reads exactly as it did: what the card
+        // is asking - a sale, or :propose borrowing the card for a proposal.
+        packet.WriteString(_offer.IsProposal ? "proposal" : "sale");
     }
 }
