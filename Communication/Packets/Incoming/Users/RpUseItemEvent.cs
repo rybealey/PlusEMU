@@ -20,6 +20,9 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// </summary>
 public class RpUseItemEvent : IPacketEvent
 {
+    private const string SpitTokenItem = "spit_token";
+    private const string SpitCommandPermission = "command_spit";
+
     private readonly IDiamondsStoreManager _storeManager;
     private readonly IPermissionManager _permissionManager;
     private readonly ISubscriptionManager _subscriptionManager;
@@ -160,6 +163,25 @@ public class RpUseItemEvent : IPacketEvent
                     medkitUser.OnChat(4, "*opens a medkit and starts patching themselves up*", true);
                 else
                     session.SendWhisper("You open the medkit. Stay out of trouble and you will be patched up within the minute.");
+                break;
+            }
+            // pixelrp: Spit Token - unlocks :spit for good. Won at events or
+            // spawned by staff; the command is staff-only by rank otherwise.
+            // Somebody who can already spit - staff, or a second token - keeps
+            // it rather than burning it for nothing.
+            case SpitTokenItem:
+            {
+                if (habbo.Permissions.HasCommand(SpitCommandPermission))
+                {
+                    session.SendWhisper("You already know how to :spit - hang on to the token.");
+                    return;
+                }
+                habbo.ConsumeRpItem(slot);
+                _permissionManager.UnlockCommand(habbo.Id, SpitCommandPermission);
+                habbo.Permissions = new(_permissionManager.GetPermissionsForPlayer(habbo), _permissionManager.GetCommandsForPlayer(habbo));
+                var spitRoomUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+                spitRoomUser?.OnChat(5, "*redeems a Spit Token*", true);
+                session.SendWhisper("Spit Token redeemed - you can now use :spit <username>.");
                 break;
             }
             case "vip_token_31":

@@ -134,6 +134,36 @@ public sealed class PermissionManager : IPermissionManager
 
     public List<string> GetCommandsForPlayer(Habbo player)
     {
-        return _commands.Where(x => player.Rank >= x.Value.GroupId && player.VipRank >= x.Value.SubscriptionId).Select(x => x.Key).ToList();
+        var commands = _commands.Where(x => player.Rank >= x.Value.GroupId && player.VipRank >= x.Value.SubscriptionId).Select(x => x.Key).ToList();
+        // pixelrp: commands a player has unlocked for themselves (a redeemed
+        // token), on top of whatever their rank gives them. Only names still in
+        // permissions_commands count, so dropping a command there retires every
+        // unlock of it too.
+        foreach (var unlocked in GetUnlockedCommands(player.Id))
+            if (_commands.ContainsKey(unlocked) && !commands.Contains(unlocked))
+                commands.Add(unlocked);
+        return commands;
+    }
+
+    public void UnlockCommand(int userId, string command)
+    {
+        using var dbClient = _database.GetQueryReactor();
+        dbClient.SetQuery("INSERT IGNORE INTO `user_command_unlocks` (`user_id`, `command`, `unlocked_at`) VALUES (@id, @command, UNIX_TIMESTAMP())");
+        dbClient.AddParameter("id", userId);
+        dbClient.AddParameter("command", command);
+        dbClient.RunQuery();
+    }
+
+    private List<string> GetUnlockedCommands(int userId)
+    {
+        var unlocked = new List<string>();
+        using var dbClient = _database.GetQueryReactor();
+        dbClient.SetQuery("SELECT `command` FROM `user_command_unlocks` WHERE `user_id` = @id");
+        dbClient.AddParameter("id", userId);
+        var table = dbClient.GetTable();
+        if (table != null)
+            foreach (DataRow row in table.Rows)
+                unlocked.Add(Convert.ToString(row["command"]));
+        return unlocked;
     }
 }
