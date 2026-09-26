@@ -6,8 +6,7 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 /// <summary>
 /// pixelrp: :sa &lt;message&gt; - whisper a message to every online staff
 /// member, wherever they are in the hotel, as "[sender]: message". Built on
-/// :ga (GangAlertCommand): the same line, the same private-bubble trick, a
-/// different audience.
+/// :ga (GangAlertCommand): the same line, a different audience.
 ///
 /// It used to be a modal popup (BroadcastMessageAlertComposer) sent to rank 2
 /// and up. A popup stops play for everybody it reaches and leaves no trace
@@ -21,13 +20,14 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 internal class StaffAlertCommand : IChatCommand
 {
     /// <summary>
-    /// Staff alerts get their own CRIMSON bubble, on a private id. 201 has no
-    /// row in room_chat_styles, so nobody can select it or speak in it with
-    /// :bubble; server-sent whispers do not consult that table. That is what
-    /// lets the client sort a line into the Staff tab on the bubble alone.
-    /// (Gang alerts are 200, corporation alerts 11.)
+    /// Bubble 5. Unlike gang alert's private 200, 5 is a style every player
+    /// can pick (migration 167 opened them all), so the client cannot sort a
+    /// line into the Staff tab on the bubble alone. It does what :ca's bubble
+    /// 11 needs instead: bubble 5, a whisper, one naming the recipient as the
+    /// speaker, and the "[sender]:" prefix - together, only this sends that.
+    /// See client api/rp-chat/StaffAlert.ts.
     /// </summary>
-    private const int AlertBubble = 201;
+    private const int AlertBubble = 5;
 
     /// <summary>The lowest rank an alert is sent to. Matches the permission.</summary>
     private const int MinimumRank = 5;
