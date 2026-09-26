@@ -21,6 +21,35 @@ public class CommandManager : ICommandManager
     private readonly string _prefix = ":";
 
     /// <summary>
+    /// What a knocked-out player (0 health) cannot do. Handing things over -
+    /// :give, :offer - and :uncuff, :pardon, :mimic stay open: none of them
+    /// needs you standing.
+    /// </summary>
+    private static readonly HashSet<string> KnockedOutCannot = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Fighting.
+        "hit", "slap", "spit",
+        // Policing.
+        "stun", "cuff", "escort", "charge",
+        // Laying hands on somebody.
+        "push", "pull", "spush",
+        "hug", "kiss", "bite", "propose",
+        // Tending to, or going after, somebody.
+        "heal", "follow"
+    };
+
+    /// <summary>
+    /// Out cold in the room they are in. RpKnockedOut is the room user's own
+    /// flag, kept by UpdateRpKnockoutState from RpHealth, so it needs no stats
+    /// load here.
+    /// </summary>
+    private static bool IsKnockedOut(GameClient session)
+    {
+        var habbo = session.GetHabbo();
+        return habbo?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?.RpKnockedOut == true;
+    }
+
+    /// <summary>
     /// The default initializer for the CommandManager
     /// </summary>
     public CommandManager(IEnumerable<ICommandBase> commands, IGameClientManager gameClientManager, IDatabase database)
@@ -100,6 +129,14 @@ public class CommandManager : ICommandManager
             if (User.Police.PoliceState.Blocks(session.GetHabbo().Id, key.ToLower()))
             {
                 session.SendWhisper("Your hands are cuffed.");
+                return true;
+            }
+            // pixelrp: out cold means out of the fight, and out of everything
+            // else you need to be on your feet for. Same reasoning as the cuffs:
+            // one list here, not a copy in every command.
+            if (KnockedOutCannot.Contains(key) && IsKnockedOut(session))
+            {
+                session.SendWhisper("You cannot perform this action.");
                 return true;
             }
             session.GetHabbo().ChatCommand = command;
