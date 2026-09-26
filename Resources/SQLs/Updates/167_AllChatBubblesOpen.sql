@@ -1,0 +1,12 @@
+-- pixelrp: every chat bubble is open to every player, for now.
+--
+-- 118 gave the rows it added no required_right but left the original seed's
+-- mod_tool gate on 1, 2, 23, 30, 31, 33, 34, 35, 36 and 37. Settings >
+-- Personalization > Chat Bubble now offers all 126 styles to everyone (the
+-- client's ui-config drops its minRank / HC gates at the same time), so the
+-- server gate goes too - otherwise those ten would be offered and then
+-- silently refused by SetChatStylePreferenceEvent and ChatEvent.
+--
+-- To lock one again, set its required_right back to a permission the rank
+-- holds (the staff ones were 'mod_tool') and restore its gate in ui-config.
+UPDATE `room_chat_styles` SET `required_right` = '' WHERE `required_right` <> '';
