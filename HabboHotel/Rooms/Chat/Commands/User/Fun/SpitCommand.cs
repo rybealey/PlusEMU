@@ -17,11 +17,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fun;
 /// whisper - missing is part of the joke, and a command that answers a bad
 /// aim with a silent error is not funny, it is broken-feeling.
 ///
-/// Reach is deliberately longer than a fist: <see cref="Range"/> tiles in any
-/// direction, measured as a square (Chebyshev), so the diagonals are in. That
-/// is the shape of the area marked on the design shot - a 5x5 block centred on
-/// the spitter - rather than :hit and :slap's four adjacent tiles. Spitting
-/// carries.
+/// Reach is :stun's firing line, exactly: two tiles straight along a row or
+/// column, one tile on a true diagonal, and nothing off those lines - a
+/// knight's-move target is out of reach however close it looks. Spitting
+/// carries like a shot does, not like a fist.
 ///
 /// The splat is a GHOST. It is built in memory and sent straight to the room,
 /// never written to `items`, and taken away again a few seconds later. Nobody
@@ -63,12 +62,8 @@ internal class SpitCommand : ITargetChatCommand
     /// <summary>What a spit that lands sets the spitter's aggression to.</summary>
     private const int AggressionOnSpit = 100;
 
-    /// <summary>
-    /// How far a spit carries, in tiles, as a SQUARE - the larger of the two
-    /// axis distances, so the corners of the block are in range too. 2 gives
-    /// the 5x5 area centred on the spitter that the design marked out.
-    /// </summary>
-    private const int Range = 2;
+    /// <summary>How far a spit carries along a row or column. :stun's reach.</summary>
+    private const int StraightReach = 2;
 
     /// <summary>How long the splat stays on the floor.</summary>
     private static readonly TimeSpan SplatLifetime = TimeSpan.FromSeconds(4);
@@ -167,11 +162,7 @@ internal class SpitCommand : ITargetChatCommand
             }
         }
 
-        // Chebyshev, not Manhattan: the larger of the two axis distances, which
-        // makes the range a square block rather than a diamond and puts the
-        // corner tiles in reach.
-        var reach = Math.Max(Math.Abs(targetUser.X - thisUser.X), Math.Abs(targetUser.Y - thisUser.Y));
-        var landed = (reach <= Range);
+        var landed = InReach(thisUser, targetUser);
 
         // The cooldown is spent either way. A miss is a turn taken, not a
         // free retry - otherwise the right move is to spam it from across the
@@ -262,6 +253,25 @@ internal class SpitCommand : ITargetChatCommand
                 // background thread down for.
             }
         });
+    }
+
+    /// <summary>
+    /// The same firing line as StunCommand.InReach: straight along a row or
+    /// column for two tiles, one tile on a true diagonal, nothing off those
+    /// lines. Kept in step with it by hand - if :stun's reach changes, this
+    /// should change with it.
+    /// </summary>
+    private static bool InReach(RoomUser spitter, RoomUser target)
+    {
+        var dx = Math.Abs(target.X - spitter.X);
+        var dy = Math.Abs(target.Y - spitter.Y);
+        if (dx == 0 && dy == 0)
+            return true;
+        if (dx == 0 || dy == 0)
+            return Math.Max(dx, dy) <= StraightReach;
+        if (dx == dy)
+            return dx == 1;
+        return false;
     }
 
     private static void SendStats(Room room, RoomUser user, Habbo habbo) =>
