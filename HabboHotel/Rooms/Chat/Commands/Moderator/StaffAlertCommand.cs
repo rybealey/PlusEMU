@@ -1,17 +1,45 @@
-﻿using Plus.Communication.Packets.Outgoing.Moderation;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 
+/// <summary>
+/// pixelrp: :sa &lt;message&gt; - whisper a message to every online staff
+/// member, wherever they are in the hotel, as "[sender]: message". Built on
+/// :ga (GangAlertCommand): the same line, the same private-bubble trick, a
+/// different audience.
+///
+/// It used to be a modal popup (BroadcastMessageAlertComposer) sent to rank 2
+/// and up. A popup stops play for everybody it reaches and leaves no trace
+/// once dismissed; a bubble reads like a conversation and lands in its own
+/// Staff tab in Chat History.
+///
+/// Both ends are rank 5: the permission row (migration 172) gates who can SEND,
+/// and <see cref="MinimumRank"/> gates who RECEIVES, so an alert never reaches
+/// somebody who could not have answered it.
+/// </summary>
 internal class StaffAlertCommand : IChatCommand
 {
+    /// <summary>
+    /// Staff alerts get their own CRIMSON bubble, on a private id. 201 has no
+    /// row in room_chat_styles, so nobody can select it or speak in it with
+    /// :bubble; server-sent whispers do not consult that table. That is what
+    /// lets the client sort a line into the Staff tab on the bubble alone.
+    /// (Gang alerts are 200, corporation alerts 11.)
+    /// </summary>
+    private const int AlertBubble = 201;
+
+    /// <summary>The lowest rank an alert is sent to. Matches the permission.</summary>
+    private const int MinimumRank = 5;
+
     private readonly IGameClientManager _gameClientManager;
+
     public string Key => "sa";
     public string PermissionRequired => "command_staff_alert";
 
     public string Parameters => "%message%";
 
-    public string Description => "Sends a message typed by you to the current online staff members.";
+    public string Description => "Send an alert to every online staff member.";
 
     public StaffAlertCommand(IGameClientManager gameClientManager)
     {
@@ -23,9 +51,18 @@ internal class StaffAlertCommand : IChatCommand
         var message = CommandManager.MergeParams(parameters);
         if (string.IsNullOrWhiteSpace(message))
         {
-            session.SendWhisper("Please enter a message to send.");
+            session.SendWhisper("Usage: :sa <message>");
             return;
         }
-        _gameClientManager.StaffAlert(new BroadcastMessageAlertComposer($"Staff Alert:\r\r{message}\r\n- {session.GetHabbo().Username}"));
+
+        var line = $"[{session.GetHabbo().Username}]: {message}";
+        // the alert went out - the sender's chat box keeps the prefix for the next one
+        session.Send(new RpRetainChatPrefixComposer(":sa"));
+        // The sender is staff too, so they get the same line back as their receipt.
+        foreach (var client in _gameClientManager.GetClients.ToList())
+        {
+            if (client?.GetHabbo() != null && client.GetHabbo().Rank >= MinimumRank)
+                client.SendWhisper(line, AlertBubble);
+        }
     }
 }
