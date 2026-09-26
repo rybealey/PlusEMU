@@ -6,6 +6,7 @@ using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
+using Plus.HabboHotel.Users.Relationships;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Offers;
@@ -71,6 +72,14 @@ public static class OfferState
     public const int PainkillerHandItem = 1013;
     public const int SyringeHandItem = 1014;
 
+    /// <summary>
+    /// What a proposer holds while their proposal stands - raised the moment
+    /// they ask, lowered the moment it is answered, lapses or is withdrawn.
+    /// Carried and never raised to the mouth: the client lists it with the
+    /// phone in AvatarLogic's CARRY_ONLY_HAND_IDS.
+    /// </summary>
+    public const int ProposalHandItem = 299;
+
     public static readonly Dictionary<string, Ware> Catalogue = new(StringComparer.OrdinalIgnoreCase)
     {
         ["medkit"] = new Ware
@@ -90,21 +99,34 @@ public static class OfferState
     /// <summary>A heal puts back this much of the bar at once; the rest fills in.</summary>
     public const int HealPercent = 70;
 
+    /// <summary>
+    /// What a card is asking. A SALE is goods for money under every rule above;
+    /// a PROPOSAL is :propose, which borrows the card and the queue and nothing
+    /// else - no catalogue, no staff gate, no tool, no money, no backpack.
+    /// </summary>
+    public enum OfferKind { Sale, Proposal }
+
     public sealed class Offer
     {
         public int Id;
+        public OfferKind Kind = OfferKind.Sale;
         public int SellerId;
         public string SellerName = string.Empty;
         public int BuyerId;
         public string BuyerName = string.Empty;
-        public Ware Ware = null!;
+        /// <summary>Null for a proposal, which sells nothing.</summary>
+        public Ware? Ware;
         public int Quantity;
         public int Price;
         public uint RoomId;
         public DateTime ExpiresAt;
 
+        public bool IsProposal => Kind == OfferKind.Proposal;
         public int Total => Price * Quantity;
-        public string Label => (Quantity == 1) ? Ware.One : Ware.Many;
+        public string Key => IsProposal ? "proposal" : Ware!.Key;
+        public string Label => IsProposal ? "proposal" : (Quantity == 1) ? Ware!.One : Ware!.Many;
+        /// <summary>The noun the seller's whispers use: "your offer", "your proposal".</summary>
+        public string Noun => IsProposal ? "proposal" : "offer";
     }
 
     private static int _nextId;
@@ -138,7 +160,12 @@ public static class OfferState
     {
         if (buyer == null)
             return "They are not here any more.";
-        if (offer.Ware.GoesInBackpack && !CanTake(buyer, offer.Ware.Key, offer.Quantity))
+        // A proposal costs nothing and puts nothing in a backpack. Whether
+        // either of them has married somebody else since is asked at the tap,
+        // where the answer can still change what happens.
+        if (offer.IsProposal)
+            return null;
+        if (offer.Ware!.GoesInBackpack && !CanTake(buyer, offer.Ware.Key, offer.Quantity))
             return "Your backpack is full";
         if (offer.Total > 0 && !CanAfford(buyer, offer.Total))
             return $"You are not carrying {TextHandling.GetMoney(offer.Total)}";
@@ -184,7 +211,11 @@ public static class OfferState
 
     // ---- making one ----------------------------------------------------------
 
-    public enum StartResult { Ok, UnknownItem, NotStaff, NoTool, BadQuantity, BuyerBusy, SellerBusy, Self, SameAccount }
+    public enum StartResult
+    {
+        Ok, UnknownItem, NotStaff, NoTool, BadQuantity, BuyerBusy, SellerBusy, Self, SameAccount,
+        TooFar, SellerPartnered, BuyerPartnered
+    }
 
     /// <summary>
     /// Put an offer on the buyer's screen. Every refusal is the SELLER's
@@ -239,6 +270,56 @@ public static class OfferState
         return StartResult.Ok;
     }
 
+    /// <summary>
+    /// :propose - put a proposal on the other player's card. Same queue, same
+    /// thirty seconds and the same one-open-at-a-time rule as a sale, because a
+    /// proposal IS an offer; what it does not share is every rule about goods.
+    ///
+    /// Reach is the eight tiles around the proposer (Chebyshev 1, diagonals in),
+    /// the same as :hug and :push - you propose to someone standing with you.
+    /// The partnership checks come after the cheap ones because they are the two
+    /// database reads here.
+    /// </summary>
+    public static StartResult StartProposal(Room room, RoomUser sellerUser, Habbo seller, Habbo buyer, out Offer? offer)
+    {
+        offer = null;
+        if (room == null || sellerUser == null || seller == null || buyer == null)
+            return StartResult.UnknownItem;
+        if (seller.Id == buyer.Id)
+            return StartResult.Self;
+        if (AccountUtility.SameAccount(seller.Id, buyer.Id))
+            return StartResult.SameAccount;
+        var buyerUser = room.GetRoomUserManager()?.GetRoomUserByHabbo(buyer.Id);
+        if (buyerUser == null || !Gamemap.TilesTouching(sellerUser.X, sellerUser.Y, buyerUser.X, buyerUser.Y))
+            return StartResult.TooFar;
+        if (SellerHasOpen(seller.Id))
+            return StartResult.SellerBusy;
+        Showing(buyer.Id, out var queued);
+        if (queued >= MaxQueued)
+            return StartResult.BuyerBusy;
+        if (PartnershipUtility.PartnerOf(seller.Id) != 0)
+            return StartResult.SellerPartnered;
+        if (PartnershipUtility.PartnerOf(buyer.Id) != 0)
+            return StartResult.BuyerPartnered;
+
+        offer = new Offer
+        {
+            Id = Interlocked.Increment(ref _nextId),
+            Kind = OfferKind.Proposal,
+            SellerId = seller.Id,
+            SellerName = seller.Username,
+            BuyerId = buyer.Id,
+            BuyerName = buyer.Username,
+            Quantity = 1,
+            RoomId = room.RoomId,
+            ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
+        };
+        Live[offer.Id] = offer;
+        sellerUser.CarryItem(ProposalHandItem);
+        Push(buyer.Id);
+        return StartResult.Ok;
+    }
+
     // ---- answering -----------------------------------------------------------
 
     public static void Decline(int offerId, Habbo buyer)
@@ -246,10 +327,13 @@ public static class OfferState
         if (buyer == null || !Live.TryGetValue(offerId, out var offer) || offer.BuyerId != buyer.Id)
             return;
         Live.TryRemove(offerId, out _);
+        LowerHand(offer);
         Push(buyer.Id);
-        Announce(buyer.CurrentRoom, buyer.Id, $"turns down {offer.SellerName}'s offer");
+        // Bubble 5 for a refused proposal as for a refused sale: a no is the
+        // card's ordinary answer, and only a yes earns the relationship bubble.
+        Announce(buyer.CurrentRoom, buyer.Id, $"turns down {offer.SellerName}'s {offer.Noun}");
         PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?
-            .SendWhisper($"{buyer.Username} turned down your offer.");
+            .SendWhisper($"{buyer.Username} turned down your {offer.Noun}.");
     }
 
     /// <summary>The seller taking it back, from :offer cancel or from leaving.</summary>
@@ -258,6 +342,7 @@ public static class OfferState
         foreach (var offer in Live.Values.Where(entry => entry.SellerId == sellerId).ToList())
         {
             Live.TryRemove(offer.Id, out _);
+            LowerHand(offer);
             Push(offer.BuyerId);
         }
     }
@@ -268,6 +353,7 @@ public static class OfferState
         foreach (var offer in Live.Values.Where(entry => entry.SellerId == userId || entry.BuyerId == userId).ToList())
         {
             Live.TryRemove(offer.Id, out _);
+            LowerHand(offer);
             if (offer.BuyerId != userId)
                 Push(offer.BuyerId);
         }
@@ -287,13 +373,16 @@ public static class OfferState
         if (seller == null || room == null || room.RoomId != offer.RoomId || seller.CurrentRoom?.RoomId != offer.RoomId)
         {
             Live.TryRemove(offerId, out _);
+            LowerHand(offer);
             Push(buyer.Id);
             buyerSession!.SendWhisper($"{offer.SellerName} is no longer here.");
             return false;
         }
+        if (offer.IsProposal)
+            return AcceptProposal(offer, room, buyerSession!, buyer, sellerSession!, seller);
         var sellerUser = room.GetRoomUserManager()?.GetRoomUserByHabbo(seller.Id);
         if (!MedicalUtility.IsOnDutyHospitalStaff(seller.Id) ||
-            (offer.Ware.RequiredHandItem != 0 && sellerUser?.CarryItemId != offer.Ware.RequiredHandItem))
+            (offer.Ware!.RequiredHandItem != 0 && sellerUser?.CarryItemId != offer.Ware.RequiredHandItem))
         {
             Live.TryRemove(offerId, out _);
             Push(buyer.Id);
@@ -338,11 +427,74 @@ public static class OfferState
     }
 
     /// <summary>
+    /// A yes to :propose. Both are in the room (the caller checked); what the
+    /// thirty seconds could have changed is whether either of them said yes to
+    /// somebody else in the meantime, so that is asked again - and then asked a
+    /// third time by the database, which is the check that cannot lose a race.
+    ///
+    /// Adjacency is NOT asked again. They were standing together when it was
+    /// asked, they are in the same room now, and refusing a yes because one of
+    /// them took a step would be the rule getting in the way of the scene.
+    /// </summary>
+    private static bool AcceptProposal(Offer offer, Room room, GameClient buyerSession, Habbo buyer,
+        GameClient sellerSession, Habbo seller)
+    {
+        Live.TryRemove(offer.Id, out _);
+        LowerHand(offer);
+        Push(buyer.Id);
+
+        if (PartnershipUtility.PartnerOf(buyer.Id) != 0)
+        {
+            buyerSession.SendWhisper("You are already in a partnership.");
+            return false;
+        }
+        if (PartnershipUtility.PartnerOf(seller.Id) != 0 || !PartnershipUtility.TryPartner(seller.Id, buyer.Id))
+        {
+            buyerSession.SendWhisper($"{offer.SellerName} is already in a partnership.");
+            sellerSession.SendWhisper($"{buyer.Username} could not accept - you are already in a partnership.");
+            return false;
+        }
+
+        // The partner who asked no longer has anybody to ask, so any card they
+        // are still waiting on from someone else goes.
+        CancelProposalsTo(seller.Id);
+        CancelProposalsTo(buyer.Id);
+
+        Announce(room, buyer.Id, $"accepts {offer.SellerName}'s proposal", RelationshipBubble);
+        sellerSession.SendWhisper($"{buyer.Username} accepted your proposal.");
+        PartnershipUtility.PushRelationships(room, seller.Id);
+        PartnershipUtility.PushRelationships(room, buyer.Id);
+        return true;
+    }
+
+    /// <summary>
+    /// Proposals waiting for somebody who has just partnered. Their answer can
+    /// only be no now, so the card is taken off their screen rather than left
+    /// to be tapped into a refusal.
+    /// </summary>
+    private static void CancelProposalsTo(int buyerId)
+    {
+        var dropped = false;
+        foreach (var offer in Live.Values.Where(entry => entry.IsProposal && entry.BuyerId == buyerId).ToList())
+        {
+            if (!Live.TryRemove(offer.Id, out _))
+                continue;
+            LowerHand(offer);
+            dropped = true;
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?
+                .SendWhisper($"Your proposal to {offer.BuyerName} was withdrawn - they are now in a partnership.");
+        }
+        if (dropped)
+            Push(buyerId);
+    }
+
+    /// <summary>
     /// The goods as a person would say them: counted when they are things,
     /// named when they are an act. "3 Medkits", "a heal".
     /// </summary>
     public static string Goods(Offer offer) =>
-        offer.Ware.TakesQuantity
+        offer.IsProposal ? "a proposal" :
+        offer.Ware!.TakesQuantity
             ? $"{TextHandling.GetNumber(offer.Quantity)} {offer.Label}"
             : $"a {offer.Ware.One.ToLowerInvariant()}";
 
@@ -354,12 +506,21 @@ public static class OfferState
     /// half a scene. Same shape :give already uses: the client moves the
     /// opening marker ahead of the speaker's name, so this renders as
     /// "*Twist takes 3 Medkits from Ryan*".
+    ///
+    /// An accepted proposal is the one answer in another bubble: 16, the
+    /// relationship bubble :hug and :kiss use, matching the :propose that asked.
     /// </summary>
-    private static void Announce(Room? room, int habboId, string text)
+    private static void Announce(Room? room, int habboId, string text, int bubble = OfferBubble)
     {
         var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habboId);
-        user?.OnChat(5, $"*{text}*", true);
+        user?.OnChat(bubble, $"*{text}*", true);
     }
+
+    /// <summary>The yellow bubble every offer, sale and answer is spoken in.</summary>
+    public const int OfferBubble = 5;
+
+    /// <summary>Bubble 16, the relationship bubble - :hug, :kiss, :propose and a yes to it.</summary>
+    public const int RelationshipBubble = 16;
 
     // ---- the money -----------------------------------------------------------
 
@@ -400,7 +561,7 @@ public static class OfferState
 
     private static void Deliver(Room room, Offer offer, GameClient buyerSession, Habbo buyer)
     {
-        if (offer.Ware.Key == "heal")
+        if (offer.Ware!.Key == "heal")
         {
             HealUp(room, buyerSession, buyer);
             return;
@@ -439,6 +600,25 @@ public static class OfferState
         session.SendWhisper("You feel much better.");
     }
 
+    /// <summary>
+    /// The proposer lowers their hand: every way a proposal ends comes through
+    /// here, right after it leaves Live. Only if they are STILL holding it - a
+    /// proposer who has since picked up a drink keeps the drink, because the
+    /// answer to a proposal is no reason to knock something out of their hand.
+    /// Read from where the proposer is now, not the room the card was made in:
+    /// a proposal made in one room and withdrawn by leaving it has no hand to
+    /// lower, and that is fine.
+    /// </summary>
+    private static void LowerHand(Offer offer)
+    {
+        if (!offer.IsProposal)
+            return;
+        var seller = PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?.GetHabbo();
+        var user = seller?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(offer.SellerId);
+        if (user != null && user.CarryItemId == ProposalHandItem)
+            user.CarryItem(0);
+    }
+
     // ---- the clock -----------------------------------------------------------
 
     /// <summary>
@@ -454,9 +634,10 @@ public static class OfferState
         {
             if (!Live.TryRemove(offer.Id, out _))
                 continue;
+            LowerHand(offer);
             Push(offer.BuyerId);
             PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?
-                .SendWhisper($"Your offer to {offer.BuyerName} expired.");
+                .SendWhisper($"Your {offer.Noun} to {offer.BuyerName} expired.");
         }
     }
 
