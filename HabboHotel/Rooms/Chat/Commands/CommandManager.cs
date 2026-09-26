@@ -21,9 +21,8 @@ public class CommandManager : ICommandManager
     private readonly string _prefix = ":";
 
     /// <summary>
-    /// What a knocked-out player (0 health) cannot do. Handing things over -
-    /// :give, :offer - and :uncuff, :pardon, :mimic stay open: none of them
-    /// needs you standing.
+    /// What a knocked-out player (0 health) cannot do: anything done to or
+    /// with another player. Out cold is out of it.
     /// </summary>
     private static readonly HashSet<string> KnockedOutCannot = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -34,8 +33,12 @@ public class CommandManager : ICommandManager
         // Laying hands on somebody.
         "push", "pull", "spush",
         "hug", "kiss", "bite", "propose",
-        // Tending to, or going after, somebody.
-        "heal", "follow"
+        // Tending to, going after, or copying somebody.
+        "heal", "follow", "mimic",
+        // Letting somebody off.
+        "uncuff", "pardon",
+        // Handing things over.
+        "give", "offer"
     };
 
     /// <summary>
