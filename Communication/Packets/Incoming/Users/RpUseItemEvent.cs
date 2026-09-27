@@ -211,6 +211,11 @@ public class RpUseItemEvent : IPacketEvent
                 session.SendWhisper("Spit Token redeemed - you can now use :spit <username>.");
                 break;
             }
+            // pixelrp police: handcuffs are carried, never used up - :cuff
+            // checks for them. Clicking them just says how.
+            case Plus.HabboHotel.Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem:
+                session.SendWhisper("Handcuffs are used with :cuff <username>, on a stunned suspect.");
+                return;
             case "vip_token_31":
             case "vip_token_14":
             {

@@ -52,12 +52,25 @@ internal class CuffCommand : ITargetChatCommand
 
     private const int FightBubble = 4;
 
+    /// <summary>
+    /// pixelrp: the backpack item an officer must be carrying to cuff anyone.
+    /// Carried, not spent - a pair of cuffs is not used up by the arrest.
+    /// </summary>
+    internal const string HandcuffsItem = "handcuffs";
+
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         var habbo = session.GetHabbo();
         // Police powers are a job: on the force AND clocked in.
         if (!PoliceUtility.RequireOnDuty(session, "cuff someone"))
             return Task.CompletedTask;
+
+        // No cuffs, no cuffing: the backpack has to hold a pair (any slot).
+        if (!habbo.LoadRpInventory().Any(entry => entry.Item == HandcuffsItem))
+        {
+            session.SendWhisper("You need handcuffs in your backpack to cuff someone.");
+            return Task.CompletedTask;
+        }
 
         // pixelrp: never on one of your own characters - see ChargeCommand.
         if (AccountUtility.SameAccount(habbo.Id, target.Id))
