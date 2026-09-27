@@ -27,18 +27,23 @@ public class RpStaffDutyComposer : IServerPacket
 {
     private readonly bool _onDuty;
     private readonly bool _canFurniFunction;
+    // pixelrp: holds Room.BrandingRight - with onDuty, the client shows the
+    // room-ad editor in rooms this player does not own (Room.CanEditBranding).
+    private readonly bool _canEditBranding;
 
     public uint MessageId => ServerPacketHeader.RpStaffDutyComposer;
 
-    public RpStaffDutyComposer(bool onDuty, bool canFurniFunction)
+    public RpStaffDutyComposer(bool onDuty, bool canFurniFunction, bool canEditBranding)
     {
         _onDuty = onDuty;
         _canFurniFunction = canFurniFunction;
+        _canEditBranding = canEditBranding;
     }
 
     public void Compose(IOutgoingPacket packet)
     {
         packet.WriteBoolean(_onDuty);
         packet.WriteBoolean(_canFurniFunction);
+        packet.WriteBoolean(_canEditBranding);
     }
 }

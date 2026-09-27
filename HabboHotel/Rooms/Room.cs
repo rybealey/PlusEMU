@@ -301,6 +301,27 @@ public class Room : RoomData
         session.GetHabbo().Permissions.HasRight(right) &&
         Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id);
 
+    /// <summary>The permission that lets a player set a room ad's image and offsets.</summary>
+    public const string BrandingRight = "room_item_save_branding_items";
+
+    /// <summary>
+    /// pixelrp: may this player edit the room ads (ads_* branding furni) here?
+    ///
+    /// Two ways in, both needing <see cref="BrandingRight"/>: owner rights in
+    /// this room, as stock Plus had it, or being clocked in at City Government
+    /// - which lets every rank that holds the permission edit ads in any room
+    /// WITHOUT the rest of `room_any_owner` (moving, picking up, ejecting other
+    /// people's furni). The same licence rule as HoldsGlobalRight: armed for
+    /// the shift, disarmed for the rest of the day.
+    /// </summary>
+    public bool CanEditBranding(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null || !habbo.Permissions.HasRight(BrandingRight))
+            return false;
+        return CheckRights(session, true) || Corporations.ShiftManager.IsStaffOnDuty(habbo.Id);
+    }
+
     public bool CheckRights(GameClient session, bool requireOwnership, bool checkForGroups = false)
     {
         try
