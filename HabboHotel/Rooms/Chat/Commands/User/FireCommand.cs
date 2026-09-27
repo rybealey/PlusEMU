@@ -43,6 +43,7 @@ internal class FireCommand : IChatCommand
             return;
         }
         int targetRankOrder;
+        var wasPolice = false;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             targetRankOrder = connection.QuerySingleOrDefault<int>(
@@ -63,9 +64,14 @@ internal class FireCommand : IChatCommand
             // end any live shift first (banks and pays what was earned),
             // then the row - and every shift counter in it - is deleted
             ShiftManager.InterruptForDisconnect(target.Id);
+            // Asked before the row goes: afterwards nobody is an officer.
+            wasPolice = PoliceUtility.IsOfficer(target.Id);
             connection.Execute("DELETE FROM `rp_corporation_employees` WHERE `user_id` = @userId LIMIT 1", new { userId = target.Id });
         }
         CorporationUtility.BroadcastEmployment(target.Id);
+        // The force's handcuffs and stun gun stay with the force.
+        if (wasPolice)
+            PoliceUtility.RemovePoliceGear(target.Id, target.Client);
 
         var actorRoomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(session.GetHabbo().Id);
         actorRoomUser?.OnChat(23, $"*has fired {target.Username} from {context.CorpName}*", true);

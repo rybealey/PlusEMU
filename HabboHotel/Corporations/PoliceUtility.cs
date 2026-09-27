@@ -84,21 +84,26 @@ public static class PoliceUtility
     /// Take the force's equipment back from someone leaving it: every pair
     /// of handcuffs and every stun gun in their backpack, the Weapon slot
     /// included. The locker hands these out and only to officers, so they
-    /// go when the job does. Their hand and backpack are refreshed after.
+    /// go when the job does - on :quitjob, :fire and :superfire alike.
+    ///
+    /// By user id, because a fired officer may be offline: the rows go either
+    /// way, and an online one has their hand and backpack refreshed after.
     /// </summary>
-    public static void RemovePoliceGear(GameClient session)
+    public static void RemovePoliceGear(int userId, GameClient session)
     {
-        var habbo = session?.GetHabbo();
-        if (habbo == null)
+        if (userId <= 0)
             return;
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
             dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `item` IN (@cuffs, @stun)");
-            dbClient.AddParameter("id", habbo.Id);
+            dbClient.AddParameter("id", userId);
             dbClient.AddParameter("cuffs", Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem);
             dbClient.AddParameter("stun", Users.RpWeapons.StunGunItem);
             dbClient.RunQuery();
         }
+        var habbo = session?.GetHabbo();
+        if (habbo == null || habbo.Id != userId)
+            return;
         var inventory = habbo.LoadRpInventory();
         Users.RpWeapons.ApplyToHand(habbo, inventory);
         session.Send(new Communication.Packets.Outgoing.Users.RpInventoryComposer(inventory));

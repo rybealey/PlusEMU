@@ -41,7 +41,7 @@ internal class QuitJobCommand : IChatCommand
         CorporationUtility.BroadcastEmployment(userId);
         // The force's handcuffs and stun gun stay with the force.
         if (wasPolice)
-            PoliceUtility.RemovePoliceGear(session);
+            PoliceUtility.RemovePoliceGear(userId, session);
 
         var roomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(userId);
         roomUser?.OnChat(4, $"*has resigned from their role at {employment.CorpName}*", true);

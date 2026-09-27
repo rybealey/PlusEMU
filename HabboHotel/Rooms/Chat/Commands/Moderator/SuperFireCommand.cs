@@ -40,6 +40,8 @@ internal class SuperFireCommand : IChatCommand
         }
         // end any live shift first - banks progress and clears on_duty
         ShiftManager.InterruptForDisconnect(target.Id);
+        // Asked before the row goes: afterwards nobody is an officer.
+        var wasPolice = PoliceUtility.IsOfficer(target.Id);
 
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
@@ -49,6 +51,9 @@ internal class SuperFireCommand : IChatCommand
         // Real-time clear: hotel-wide broadcast (corp windows, profiles,
         // infostands everywhere). Shift data died with the row.
         CorporationUtility.BroadcastEmployment(target.Id);
+        // The force's handcuffs and stun gun stay with the force.
+        if (wasPolice)
+            PoliceUtility.RemovePoliceGear(target.Id, target.Client);
 
         var staffRoomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(session.GetHabbo().Id);
         staffRoomUser?.OnChat(23, $"*has fired {target.Username} from {employment.CorpName}*", true);
