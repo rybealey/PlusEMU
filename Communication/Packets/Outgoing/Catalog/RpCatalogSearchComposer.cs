@@ -47,7 +47,7 @@ public class RpCatalogSearchComposer : IServerPacket
         {
             packet.WriteInteger(hit.PageId);
             packet.WriteInteger(hit.ItemId);
-            packet.WriteInteger(hit.FurnitureId);
+            packet.WriteInteger(hit.SpriteId);
             packet.WriteString(hit.ClassName);
             packet.WriteString(hit.Name);
             packet.WriteBoolean(hit.IsWallItem);
@@ -59,11 +59,19 @@ public class RpCatalogSearchComposer : IServerPacket
 }
 
 /// <summary>One item the search matched, with everything the client needs to
-/// draw it and everything the purchase needs to accept it.</summary>
+/// draw it and everything the purchase needs to accept it.
+///
+/// SpriteId, not the furniture row's id: the client finds the piece in
+/// FurnitureData, which is keyed by sprite, as CatalogPageComposer's items are.
+/// The two match for every custom pack (id = sprite by convention) but not for
+/// Habbo's own furni: the default dump numbers its rows from 1 (shelves_norja
+/// is row 1, sprite 13) and 31 imported the library with auto-increment ids.
+/// Sending the row id dropped every Habbo piece from the results - Themes,
+/// Seasonal, Lines, Builders Club - or drew another piece in its place.</summary>
 public sealed record CatalogSearchHit(
     int PageId,
     int ItemId,
-    int FurnitureId,
+    int SpriteId,
     string ClassName,
     string Name,
     bool IsWallItem,

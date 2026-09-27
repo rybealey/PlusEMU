@@ -99,7 +99,7 @@ internal class RpCatalogSearchEvent : IPacketEvent
                 hits.Add(new CatalogSearchHit(
                     page.Id,
                     item.Id,
-                    (int)item.Definition.Id,
+                    item.Definition.SpriteId,
                     className,
                     name,
                     item.Definition.ProductType == "i",
