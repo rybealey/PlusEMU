@@ -279,9 +279,10 @@ public static class PoliceState
     /// harmless: the Police Replenish locker hands an officer with none a new
     /// one.
     ///
-    /// Only an officer who is online gets them; an offline one, or one whose
-    /// backpack is full, loses the pair the same way. Returns whether they
-    /// were given back.
+    /// Only an officer who is online gets them; an offline one, one whose
+    /// backpack is full, or one who already has a pair (one to an officer -
+    /// Habbo.RpOnePerPlayer) loses it the same way. Returns whether they were
+    /// given back.
     /// </summary>
     public static bool ReturnCuffs(int officerId)
     {
@@ -289,7 +290,10 @@ public static class PoliceState
         var officer = client?.GetHabbo();
         if (officer == null)
             return false;
-        if (officer.AddRpItem(CuffCommand.HandcuffsItem) == -1)
+        var slot = officer.AddRpItem(CuffCommand.HandcuffsItem);
+        if (slot == Habbo.RpAlreadyHeld)
+            return false;               // they already carry a pair; this one is lost
+        if (slot == -1)
         {
             client.SendWhisper("Your handcuffs came back, but your backpack is full - they were left behind.");
             return false;

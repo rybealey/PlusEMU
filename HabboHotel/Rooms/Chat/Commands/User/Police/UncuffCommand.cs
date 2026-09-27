@@ -10,7 +10,7 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// The original had this alongside :cuff and it is not optional here either:
 /// without it a cuff only ends when someone leaves the room, which would make
 /// the pair untestable and would leave a player unable to fight with no way
-/// back. Anyone may use it for now, like the rest of the chain.
+/// back. Police only, and on duty - the same gate as :cuff.
 ///
 /// Uncuffing also ends any CUSTODY escort the player is in. That escort exists
 /// to move someone who is restrained; once the cuffs are off there is nothing
@@ -40,6 +40,10 @@ internal class UncuffCommand : ITargetChatCommand
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
         var habbo = session.GetHabbo();
+        // Police powers are a job: on the force AND clocked in.
+        if (!Plus.HabboHotel.Corporations.PoliceUtility.RequireOnDuty(session, "uncuff someone"))
+            return Task.CompletedTask;
+
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {

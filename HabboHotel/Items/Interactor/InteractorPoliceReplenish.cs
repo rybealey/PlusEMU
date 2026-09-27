@@ -79,9 +79,10 @@ public class InteractorPoliceReplenish : IFurniInteractor
         var given = new List<string>();
         foreach (var (key, name) in missing)
         {
-            if (habbo.AddRpItem(key) == -1)
+            var slot = habbo.AddRpItem(key);
+            if (slot == -1)
                 session.SendWhisper($"Your backpack is full - there was no room for the {name}.");
-            else
+            else if (slot > 0)
                 given.Add(name);
         }
 

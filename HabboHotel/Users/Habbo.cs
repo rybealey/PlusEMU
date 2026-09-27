@@ -464,9 +464,26 @@ public class Habbo
     // slot (or fails as backpack-full like any other add).
     public const int RpStackCap = 10;
 
+    /// <summary>
+    /// pixelrp: AddRpItem's answer when the item is one a player may only hold
+    /// ONE of and they already have it (as opposed to -1, a full backpack).
+    /// </summary>
+    public const int RpAlreadyHeld = -2;
+
+    /// <summary>
+    /// Items nobody may hold more than one of. Handcuffs: an officer carries
+    /// one pair - the locker hands out a new pair when theirs is on a suspect
+    /// or lost, and a pair coming back off a suspect to someone who already
+    /// has one is simply lost. Enforced here because every way into a
+    /// backpack goes through AddRpItem.
+    /// </summary>
+    private static readonly HashSet<string> RpOnePerPlayer = new() { Plus.HabboHotel.Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem };
+
     public int AddRpItem(string item)
     {
         var inventory = LoadRpInventory();
+        if (RpOnePerPlayer.Contains(item) && inventory.Any(entry => entry.Item == item))
+            return RpAlreadyHeld;
         // pixelrp: weapons never stack - each is its own item, one to a slot -
         // and only the carry slots are stacked onto, never the Weapon frame.
         var existing = RpWeapons.IsWeapon(item)

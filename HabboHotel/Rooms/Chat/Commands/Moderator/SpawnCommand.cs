@@ -44,6 +44,11 @@ internal class SpawnCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
         var slot = target.AddRpItem(item.ItemKey);
+        if (slot == Habbo.RpAlreadyHeld)
+        {
+            session.SendWhisper($"{target.Username} already has {item.Name} - only one is allowed.");
+            return Task.CompletedTask;
+        }
         if (slot == -1)
         {
             session.SendWhisper($"{target.Username}'s backpack is full.");
