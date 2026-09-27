@@ -35,9 +35,10 @@ internal class RpCatalogSearchEvent : IPacketEvent
 
     /// <summary>Enough to be worth scrolling, few enough that the packet stays
     /// small and the grid stays usable. A query that hits the cap is a query
-    /// that wants narrowing. Raised from 150 once Builders held thousands of
-    /// custom furni, where a common word filled the cap before Themes.</summary>
-    private const int MaxHits = 300;
+    /// that wants narrowing. Raised from 150 (to 300, then 500) once Builders
+    /// held thousands of custom furni, where a common word filled the cap
+    /// before Themes.</summary>
+    private const int MaxHits = 500;
 
     private readonly ICatalogManager _catalogManager;
 
