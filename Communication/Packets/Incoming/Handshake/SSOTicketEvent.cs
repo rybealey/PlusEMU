@@ -12,6 +12,7 @@ using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.HabboHotel.Rooms.Jukebox;
 using Plus.HabboHotel.Users.Birthdays;
+using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Communication.Packets.Outgoing.Sound;
@@ -23,6 +24,7 @@ using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.Cache;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Moderation;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Rewards;
@@ -47,6 +49,7 @@ public class SsoTicketEvent : IPacketEvent
     private readonly ILanguageManager _languageManager;
     private readonly ISettingsManager _settingsManager;
     private readonly IRewardManager _rewardManager;
+    private readonly IItemDataManager _itemDataManager;
     private readonly ILogger _logger;
 
     public SsoTicketEvent(IAuthenticator authenticate,
@@ -60,6 +63,7 @@ public class SsoTicketEvent : IPacketEvent
         ILanguageManager languageManager,
         ISettingsManager settingsManager,
         IRewardManager rewardManager,
+        IItemDataManager itemDataManager,
         ILogger<SsoTicketEvent> logger)
     {
         _authenticate = authenticate;
@@ -73,6 +77,7 @@ public class SsoTicketEvent : IPacketEvent
         _languageManager = languageManager;
         _settingsManager = settingsManager;
         _rewardManager = rewardManager;
+        _itemDataManager = itemDataManager;
         _logger = logger;
     }
 
@@ -130,6 +135,24 @@ public class SsoTicketEvent : IPacketEvent
             session.GetHabbo().EnsureRpUiSettingsLoaded();
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor, session.GetHabbo().RpUiUsernameColor, session.GetHabbo().RpUiUsernameIcon, session.GetHabbo().RpUiUsernameIconColor));
             session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
+            // pixelrp: every furni renamed or re-functioned since the gamedata
+            // on disk was built. The client reads names out of that file, so a
+            // rename from the shop or the Function tool reached only whoever was
+            // online, and after that only rooms where the furni is placed
+            // (Room re-sends on entry) - a backpack, or the infostand of a piece
+            // placed elsewhere, showed the old name again after every login.
+            // The client holds any that land before its FurnitureData loads.
+            // Never allowed to cost the login.
+            try
+            {
+                foreach (var definitionId in _itemDataManager.EditedDefinitions.ToArray())
+                    if (_itemDataManager.Items.TryGetValue(definitionId, out var definition) && definition != null)
+                        session.Send(new RpFurniFunctionComposer(definition));
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning("Could not send edited furni to {user}: {message}", session.GetHabbo().Username, e.Message);
+            }
             // pixelrp: quiet, because at login there is no room and a station
             // belongs to one. Room entry sends that room's real state. This is
             // still worth sending: without it the app would open on whatever the
