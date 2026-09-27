@@ -112,8 +112,12 @@ public static class PoliceState
     /// <summary>Stunned player id -> when the freeze lifts.</summary>
     private static readonly ConcurrentDictionary<int, DateTime> Stunned = new();
 
-    /// <summary>Cuffed player ids. The value is unused - this is a set.</summary>
-    private static readonly ConcurrentDictionary<int, bool> Cuffed = new();
+    /// <summary>
+    /// Cuffed player id -> the officer whose handcuffs are on them. The pair
+    /// left that officer's backpack when it went on (CuffCommand) and goes back
+    /// to them on :uncuff - see <see cref="ReturnCuffs"/>.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, int> Cuffed = new();
 
     /// <summary>Captor -> suspect, and the reverse, for an active escort.</summary>
     private static readonly ConcurrentDictionary<int, int> EscortByCaptor = new();
@@ -260,8 +264,39 @@ public static class PoliceState
     public static bool Blocks(int habboId, string commandKey) =>
         IsCuffed(habboId) && CuffedCannot.Contains(commandKey);
 
-    /// <summary>Cuff a player. False when they already were.</summary>
-    public static bool Cuff(int habboId) => Cuffed.TryAdd(habboId, true);
+    /// <summary>Cuff a player with <paramref name="officerId"/>'s handcuffs. False when they already were.</summary>
+    public static bool Cuff(int habboId, int officerId) => Cuffed.TryAdd(habboId, officerId);
+
+    /// <summary>The officer whose handcuffs are on this player, or 0.</summary>
+    public static int CufferOf(int habboId) => Cuffed.TryGetValue(habboId, out var officerId) ? officerId : 0;
+
+    /// <summary>
+    /// pixelrp: give an officer back the pair of handcuffs they put on someone.
+    ///
+    /// Called on :uncuff, and meant for the arrest when it exists - the two
+    /// moments the cuffs come back. Every other way a cuff ends (a knockout,
+    /// the suspect leaving the room, a restart) loses the pair, which is
+    /// harmless: the Police Replenish locker hands an officer with none a new
+    /// one.
+    ///
+    /// Only an officer who is online gets them; an offline one, or one whose
+    /// backpack is full, loses the pair the same way. Returns whether they
+    /// were given back.
+    /// </summary>
+    public static bool ReturnCuffs(int officerId)
+    {
+        var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(officerId);
+        var officer = client?.GetHabbo();
+        if (officer == null)
+            return false;
+        if (officer.AddRpItem(CuffCommand.HandcuffsItem) == -1)
+        {
+            client.SendWhisper("Your handcuffs came back, but your backpack is full - they were left behind.");
+            return false;
+        }
+        client.Send(new Plus.Communication.Packets.Outgoing.Users.RpInventoryComposer(officer.LoadRpInventory()));
+        return true;
+    }
 
     /// <summary>Uncuff a player. False when they were not cuffed.</summary>
     public static bool Uncuff(int habboId)

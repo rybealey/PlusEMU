@@ -54,7 +54,8 @@ internal class CuffCommand : ITargetChatCommand
 
     /// <summary>
     /// pixelrp: the backpack item an officer must be carrying to cuff anyone.
-    /// Carried, not spent - a pair of cuffs is not used up by the arrest.
+    /// A pair goes ON the suspect: it leaves the officer's backpack when the
+    /// cuff lands and comes back on :uncuff (PoliceState.ReturnCuffs).
     /// </summary>
     internal const string HandcuffsItem = "handcuffs";
 
@@ -114,10 +115,19 @@ internal class CuffCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (!PoliceState.Cuff(target.Id))
+        if (!PoliceState.Cuff(target.Id, habbo.Id))
         {
             session.SendWhisper($"{target.Username} is already cuffed.");
             return Task.CompletedTask;
+        }
+
+        // The pair is on the suspect now, not in the backpack. Spent only once
+        // the cuff has actually landed, so every refusal above keeps it.
+        var cuffsSlot = habbo.LoadRpInventory().FirstOrDefault(entry => entry.Item == HandcuffsItem).Slot;
+        if (cuffsSlot > 0)
+        {
+            habbo.ConsumeRpItem(cuffsSlot);
+            session.Send(new Plus.Communication.Packets.Outgoing.Users.RpInventoryComposer(habbo.LoadRpInventory()));
         }
 
         // The freeze got the cuffs on; the cuffs hold them now. Ending it here

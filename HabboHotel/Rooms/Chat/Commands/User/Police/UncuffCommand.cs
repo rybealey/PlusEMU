@@ -51,11 +51,18 @@ internal class UncuffCommand : ITargetChatCommand
         if (thisUser == null)
             return Task.CompletedTask;
 
+        // Read before the uncuff forgets it: whose handcuffs these are.
+        var cufferId = PoliceState.CufferOf(target.Id);
         if (!PoliceState.Uncuff(target.Id))
         {
             session.SendWhisper($"{target.Username} is not cuffed.");
             return Task.CompletedTask;
         }
+
+        // The pair goes back to the officer who put it on - whoever takes it
+        // off. Told when it was not them, so the cuffs do not just reappear.
+        if (cufferId != 0 && PoliceState.ReturnCuffs(cufferId) && cufferId != habbo.Id)
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(cufferId)?.SendWhisper($"{habbo.Username} took your handcuffs off {target.Username} - they are back in your backpack.");
 
         // The cuffs were what justified a custody escort. They justified
         // nothing about an ambulance.
