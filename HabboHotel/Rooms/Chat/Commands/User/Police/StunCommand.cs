@@ -12,8 +12,9 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 ///
 /// Ported from the old Arcturus plugin. Its clocked-in-officer gate is back:
 /// only an on-duty employee of a corporation flagged `is_police` can fire
-/// (PoliceUtility). The stungun-charge gate it also had is still not here -
-/// there is no weapon inventory to draw from yet.
+/// (PoliceUtility). Its stun gun gate is back too, in the form the backpack
+/// gives it: the officer must have a Stun Gun EQUIPPED in the Weapon slot
+/// (RpWeapons) - carrying one is not drawing it. There are still no charges.
 ///
 /// Reach is DIRECTIONAL, which is what makes this different from every other
 /// combat command in the hotel. Along a straight grid line - same row or same
@@ -64,6 +65,17 @@ internal class StunCommand : ITargetChatCommand
         // Police powers are a job: on the force AND clocked in.
         if (!PoliceUtility.RequireOnDuty(session, "fire a stun gun"))
             return Task.CompletedTask;
+
+        // And holding one: equipped, not just carried. The refusal says which,
+        // because "equip it" and "go and get one" are different errands.
+        var inventory = habbo.LoadRpInventory();
+        if (RpWeapons.EquippedItem(inventory) != RpWeapons.StunGunItem)
+        {
+            session.SendWhisper(inventory.Any(entry => entry.Item == RpWeapons.StunGunItem)
+                ? "Equip your stun gun first - click it in your backpack."
+                : "You need a stun gun equipped. Restock at a police locker.");
+            return Task.CompletedTask;
+        }
 
         // pixelrp: never on one of your own characters - see ChargeCommand.
         if (AccountUtility.SameAccount(habbo.Id, target.Id))
