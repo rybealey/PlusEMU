@@ -35,8 +35,9 @@ internal class RpCatalogSearchEvent : IPacketEvent
 
     /// <summary>Enough to be worth scrolling, few enough that the packet stays
     /// small and the grid stays usable. A query that hits the cap is a query
-    /// that wants narrowing.</summary>
-    private const int MaxHits = 150;
+    /// that wants narrowing. Raised from 150 once Builders held thousands of
+    /// custom furni, where a common word filled the cap before Themes.</summary>
+    private const int MaxHits = 300;
 
     private readonly ICatalogManager _catalogManager;
 
@@ -51,7 +52,7 @@ internal class RpCatalogSearchEvent : IPacketEvent
         var raw = packet.ReadString() ?? string.Empty;
         // pixelrp: the tab the box sits in, appended last on the wire. A search
         // runs inside the tab it was typed in - Furni's box finds Furni's
-        // stock, not Builders' or Staff's - and the 150-hit cap is spent on
+        // stock, not Builders' or Staff's - and the hit cap is spent on
         // that tab alone. Absent (an older client) means the whole catalog.
         var tabId = packet.HasDataRemaining() ? packet.ReadInt() : -1;
 
