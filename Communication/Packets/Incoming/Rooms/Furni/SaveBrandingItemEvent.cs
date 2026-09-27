@@ -12,7 +12,8 @@ internal class SaveBrandingItemEvent : IPacketEvent
         var room = session.GetHabbo().CurrentRoom;
         if (room == null)
             return Task.CompletedTask;
-        if (!room.CheckRights(session, true) || !session.GetHabbo().Permissions.HasRight("room_item_save_branding_items"))
+        // pixelrp: owner rights, or on duty - see Room.CanEditBranding.
+        if (!room.CanEditBranding(session))
             return Task.CompletedTask;
         var itemId = packet.ReadUInt();
         var item = room.GetRoomItemHandler().GetItem(itemId);

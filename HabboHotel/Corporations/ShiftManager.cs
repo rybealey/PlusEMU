@@ -96,7 +96,8 @@ public static class ShiftManager
         // in anywhere, not on arrival.
         client.Send(new Communication.Packets.Outgoing.Users.Banking.RpStaffDutyComposer(
             IsStaffOnDuty(habbo.Id),
-            habbo.Permissions.HasCommand("rp_furni_function")));
+            habbo.Permissions.HasCommand("rp_furni_function"),
+            habbo.Permissions.HasRight(Rooms.Room.BrandingRight)));
 
         habbo.CurrentRoom?.GetRoomUserManager()?.PushRoomRights(client);
     }
