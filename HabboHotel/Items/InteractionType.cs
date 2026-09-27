@@ -105,6 +105,16 @@ public enum InteractionType
     /// </summary>
     MedicalBed,
 
+    /// <summary>
+    /// pixelrp: the police equipment locker.
+    ///
+    /// An on-duty officer double-clicks it to be topped up with what the job
+    /// needs in hand: handcuffs (which :cuff checks for) and a stun gun. Only
+    /// what is missing is given, so it cannot be farmed; anyone not a
+    /// clocked-in officer is told why it will not open for them.
+    /// </summary>
+    PoliceReplenish,
+
     WfFloorSwitch1,
     WfFloorSwitch2,
 

@@ -24,6 +24,9 @@ public static class RpWeapons
     /// </summary>
     public const int WeaponSlot = 101;
 
+    /// <summary>The stun gun's item key - police equipment the locker restocks.</summary>
+    public const string StunGunItem = "stun_gun";
+
     /// <summary>backpack item key -> (display name, handitem shown while equipped)</summary>
     private static readonly Dictionary<string, (string Name, int HandItem)> Weapons = new()
     {
@@ -31,7 +34,7 @@ public static class RpWeapons
         { "knife", ("Knife", 401) },
         { "axe", ("Axe", 402) },
         // 403 is the only gun in hh_human_item; it is drawn black, the icon yellow.
-        { "stun_gun", ("Stun Gun", 403) }
+        { StunGunItem, ("Stun Gun", 403) }
     };
 
     public static bool IsWeapon(string item) => !string.IsNullOrEmpty(item) && Weapons.ContainsKey(item);

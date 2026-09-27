@@ -298,6 +298,8 @@ public class Item
                     return new InteractorDressingBooth();
                 case InteractionType.Atm:
                     return new InteractorAtm();
+                case InteractionType.PoliceReplenish:
+                    return new InteractorPoliceReplenish();
                 case InteractionType.None:
                 default:
                     return new InteractorGenericSwitch();
