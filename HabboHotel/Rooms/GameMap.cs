@@ -67,6 +67,14 @@ public class Gamemap
     /// Clearing GoalX/GoalY and SetStep/IsWalking matters as much as the move
     /// itself: a user warped mid-walk would otherwise keep the old goal and
     /// stroll straight back.
+    ///
+    /// The goal is cleared to NOWHERE (-1), not to the tile landed on. The goal
+    /// is how an arrow, a freeze tile and the one-way gate ask "did they mean to
+    /// stop here?", and a warp is not a walk anybody chose to end there. Set to
+    /// the landing tile, an arrow that dropped you on its twin made the twin
+    /// your destination - so the next status pass for the room (anyone placing,
+    /// moving or picking up furni, or a wired teleport) fired the twin and sent
+    /// you straight back, and the first arrow could send you on again.
     /// </summary>
     public void TeleportToTile(RoomUser user, int x, int y, double z, int rotation)
     {
@@ -90,8 +98,8 @@ public class Gamemap
         }
         user.RotBody = rotation;
         user.RotHead = rotation;
-        user.GoalX = user.X;
-        user.GoalY = user.Y;
+        user.GoalX = -1;
+        user.GoalY = -1;
         user.SetStep = false;
         user.IsWalking = false;
         user.UpdateNeeded = true;

@@ -1745,6 +1745,13 @@ public class RoomUserManager
                                 var room = user.GetClient().GetHabbo().CurrentRoom;
                                 if (room == null)
                                     return;
+                                // Only for a player still in THIS room. An arrow that has
+                                // just sent them to another one has moved their
+                                // CurrentRoom there already, and a second arrow on the
+                                // same tile would read that room as its own and warp this
+                                // room's leftover avatar around the new room's map.
+                                if (room != _room)
+                                    break;
                                 if (!ItemTeleporterFinder.IsTeleLinked(item.Id, room))
                                     user.UnlockWalking();
                                 else
