@@ -50,7 +50,7 @@ public static class PoliceUtility
     /// <summary>
     /// The one refusal wording every police command shares, so a civilian and
     /// an off-duty officer are told apart - "you are not police" to someone
-    /// who never was, and "clock in" to someone who only has to.
+    /// who never was, and "be on duty" to someone who only has to clock in.
     /// </summary>
     /// <summary>
     /// Tell one client whether it may drop charges from the Wanted list, which
@@ -67,7 +67,7 @@ public static class PoliceUtility
         session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(IsOnDutyOfficer(habbo.Id)));
     }
 
-    public static bool RequireOnDuty(GameClient session, string verb, bool clockInHint = true)
+    public static bool RequireOnDuty(GameClient session, string verb)
     {
         var habbo = session.GetHabbo();
         if (habbo == null)
@@ -75,7 +75,7 @@ public static class PoliceUtility
         if (IsOnDutyOfficer(habbo.Id))
             return true;
         session.SendWhisper(IsOfficer(habbo.Id)
-            ? (clockInHint ? $"You have to be on duty to {verb}. Clock in from the Corporations drawer." : $"You have to be on duty to {verb}.")
+            ? $"You have to be on duty to {verb}."
             : $"Only police officers can {verb}.");
         return false;
     }

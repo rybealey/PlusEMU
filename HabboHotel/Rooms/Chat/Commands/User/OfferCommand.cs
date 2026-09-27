@@ -99,7 +99,7 @@ internal class OfferCommand : ITargetChatCommand
                 // The same three-way split MedicalUtility already words for the
                 // ambulance: a civilian, an employee off the clock, and the rest.
                 session.SendWhisper(MedicalUtility.IsHospitalStaff(seller.Id)
-                    ? "You have to be on duty for that. Clock in from the Corporations drawer."
+                    ? "You have to be on duty for that."
                     : "Only hospital staff can do that.");
                 return Task.CompletedTask;
             case OfferState.StartResult.NoTool:

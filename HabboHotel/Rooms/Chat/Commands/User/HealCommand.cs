@@ -70,7 +70,7 @@ internal class HealCommand : ITargetChatCommand
         if (!Entitled(habbo, target))
         {
             session.SendWhisper(MedicalUtility.IsHospitalStaff(habbo.Id)
-                ? "You have to be on duty to treat somebody. Clock in from the Corporations drawer."
+                ? "You have to be on duty to treat somebody."
                 : "You can only patch up your own gang, or somebody you have in custody.");
             return Task.CompletedTask;
         }

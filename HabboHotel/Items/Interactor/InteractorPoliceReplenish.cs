@@ -59,7 +59,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             return;
         }
 
-        if (!PoliceUtility.RequireOnDuty(session, "restock police equipment", clockInHint: false))
+        if (!PoliceUtility.RequireOnDuty(session, "restock police equipment"))
             return;
 
         var inventory = habbo.LoadRpInventory();

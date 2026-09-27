@@ -116,7 +116,7 @@ public static class MedicalUtility
         if (IsOnDutyParamedic(habbo.Id))
             return true;
         if (IsParamedic(habbo.Id))
-            session.SendWhisper($"You have to be on duty to {verb}. Clock in from the Corporations drawer.");
+            session.SendWhisper($"You have to be on duty to {verb}.");
         else if (IsHospitalStaff(habbo.Id))
             session.SendWhisper($"You are not qualified to {verb} - that takes a Paramedic.");
         else
