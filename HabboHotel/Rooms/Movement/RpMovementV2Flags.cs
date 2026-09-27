@@ -64,23 +64,4 @@ public static class RpMovementV2Flags
     /// </summary>
     public const int ForcedRedirect = 0x0100;
 
-    /// <summary>
-    /// pixelrp escorts: face this edge the way bits 12-14 say, not by its own
-    /// step. Set on every edge of an escorted shadow (StageShadow), whose facing
-    /// is the CAPTOR's - on a bend the shadow slides diagonally to the tile
-    /// beside its captor, and facing that slide put it a beat behind the
-    /// captor's turn until the status packet corrected it.
-    ///
-    /// A flag plus three bits of the same int, for the reason ForcedRedirect
-    /// gives: no packet length changes, an older client ignores it, and a newer
-    /// client reading an unset bit faces the step as before.
-    /// </summary>
-    public const int FacingOverride = 0x0200;
-
-    /// <summary>Where the 0-7 facing sits when <see cref="FacingOverride"/> is set.</summary>
-    public const int FacingShift = 12;
-
-    public static int WithFacing(int flags, byte facing) =>
-        flags | FacingOverride | ((facing & 0x7) << FacingShift);
-
 }
