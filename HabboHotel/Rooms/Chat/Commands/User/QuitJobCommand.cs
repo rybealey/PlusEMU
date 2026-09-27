@@ -32,11 +32,16 @@ internal class QuitJobCommand : IChatCommand
         // ends a live shift first (banks + pays what was earned, reverts the
         // working motto), then the row and its shift data are deleted
         ShiftManager.InterruptForDisconnect(userId);
+        // Asked before the row goes: afterwards nobody is an officer.
+        var wasPolice = PoliceUtility.IsOfficer(userId);
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             connection.Execute("DELETE FROM `rp_corporation_employees` WHERE `user_id` = @userId LIMIT 1", new { userId });
         }
         CorporationUtility.BroadcastEmployment(userId);
+        // The force's handcuffs and stun gun stay with the force.
+        if (wasPolice)
+            PoliceUtility.RemovePoliceGear(session);
 
         var roomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(userId);
         roomUser?.OnChat(4, $"*has resigned from their role at {employment.CorpName}*", true);

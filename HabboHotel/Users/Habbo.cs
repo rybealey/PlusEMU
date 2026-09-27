@@ -518,6 +518,24 @@ public class Habbo
         return slot;
     }
 
+    /// <summary>
+    /// pixelrp: put a new weapon straight into the Weapon slot, which must be
+    /// empty. Returns false when it is not. Needs no free carry slot, so a
+    /// full backpack can still be handed one to hold.
+    /// </summary>
+    public bool AddRpItemEquipped(string item)
+    {
+        if (!RpWeapons.IsWeapon(item) || !string.IsNullOrEmpty(RpWeapons.EquippedItem(LoadRpInventory())))
+            return false;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("slot", RpWeapons.WeaponSlot);
+        dbClient.AddParameter("item", item);
+        dbClient.RunQuery();
+        return true;
+    }
+
     /// <summary>Moves the backpack item in `from` into `to`, swapping when the
     /// target slot is occupied. Rows keep their counts; the three-step dance
     /// through temp slot 0 (never a real slot - they're 1-based) satisfies the

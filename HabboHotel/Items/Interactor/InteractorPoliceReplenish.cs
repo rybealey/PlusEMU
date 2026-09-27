@@ -18,9 +18,10 @@ namespace Plus.HabboHotel.Items.Interactor;
 /// out nothing - which is also why there is no cooldown. It only ever fills a
 /// gap, so there is nothing to farm.
 ///
-/// The stun gun counts wherever it is: in the backpack or equipped in the
-/// Weapon slot. A new one goes in the backpack, not into the hand - equipping
-/// stays the officer's own act.
+/// The stun gun counts wherever it is, and the locker also EQUIPS it: a new
+/// one goes straight into the Weapon slot, and one already in the backpack
+/// is moved there. Whatever weapon was equipped before swaps back into the
+/// backpack. So "fully equipped" means cuffs held and the stun gun in hand.
 ///
 /// Walk-up and facing are the ATM's (InteractorAtm): used from across the
 /// room, the officer walks over first.
@@ -58,17 +59,17 @@ public class InteractorPoliceReplenish : IFurniInteractor
             return;
         }
 
-        if (!PoliceUtility.RequireOnDuty(session, "restock police equipment"))
+        if (!PoliceUtility.RequireOnDuty(session, "restock police equipment", clockInHint: false))
             return;
 
         var inventory = habbo.LoadRpInventory();
-        var missing = new List<(string Item, string Name)>();
-        if (!inventory.Any(entry => entry.Item == CuffCommand.HandcuffsItem))
-            missing.Add((CuffCommand.HandcuffsItem, "handcuffs"));
-        if (!inventory.Any(entry => entry.Item == RpWeapons.StunGunItem))
-            missing.Add((RpWeapons.StunGunItem, "stun gun"));
+        var needsCuffs = !inventory.Any(entry => entry.Item == CuffCommand.HandcuffsItem);
+        // The Weapon slot first: one already equipped is the one that counts.
+        var stunSlot = inventory.Any(entry => entry.Slot == RpWeapons.WeaponSlot && entry.Item == RpWeapons.StunGunItem)
+            ? RpWeapons.WeaponSlot
+            : inventory.FirstOrDefault(entry => entry.Item == RpWeapons.StunGunItem).Slot;
 
-        if (missing.Count == 0)
+        if (!needsCuffs && stunSlot == RpWeapons.WeaponSlot)
         {
             session.SendWhisper("You're already fully equipped.");
             return;
@@ -77,19 +78,54 @@ public class InteractorPoliceReplenish : IFurniInteractor
         // Each one on its own: a full backpack that has room for one of the two
         // still gets that one, and is told plainly which did not fit.
         var given = new List<string>();
-        foreach (var (key, name) in missing)
+        var equipped = false;
+        if (needsCuffs)
         {
-            var slot = habbo.AddRpItem(key);
+            var slot = habbo.AddRpItem(CuffCommand.HandcuffsItem);
             if (slot == -1)
-                session.SendWhisper($"Your backpack is full - there was no room for the {name}.");
+                session.SendWhisper("Your backpack is full - there was no room for the handcuffs.");
             else if (slot > 0)
-                given.Add(name);
+                given.Add("handcuffs");
         }
 
-        if (given.Count == 0)
+        if (stunSlot == 0)
+        {
+            // None held. Straight into an empty Weapon slot; with another
+            // weapon equipped, into the backpack first and swapped in below.
+            if (habbo.AddRpItemEquipped(RpWeapons.StunGunItem))
+            {
+                given.Add("stun gun");
+                equipped = true;
+            }
+            else
+            {
+                stunSlot = habbo.AddRpItem(RpWeapons.StunGunItem);
+                if (stunSlot == -1)
+                    session.SendWhisper("Your backpack is full - there was no room for the stun gun.");
+                else if (stunSlot > 0)
+                    given.Add("stun gun");
+            }
+        }
+
+        // One in a carry slot, held already or just handed out: move it into
+        // the Weapon slot. A swap, so an equipped knife or bat lands in the
+        // slot the stun gun left and nothing needs a free space.
+        if (stunSlot > 0 && stunSlot != RpWeapons.WeaponSlot)
+        {
+            habbo.MoveRpItem(stunSlot, RpWeapons.WeaponSlot);
+            equipped = true;
+        }
+
+        if (given.Count == 0 && !equipped)
             return;
 
-        room.SendPacket(new ChatComposer(user.VirtualId, $"*restocks their {string.Join(" and ", given)}*", 0, ActionBubble));
-        session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
+        var after = habbo.LoadRpInventory();
+        if (equipped)
+            RpWeapons.ApplyToHand(habbo, after);
+        var action = given.Count > 0
+            ? $"*restocks their {string.Join(" and ", given)}*"
+            : "*equips their stun gun*";
+        room.SendPacket(new ChatComposer(user.VirtualId, action, 0, ActionBubble));
+        session.Send(new RpInventoryComposer(after));
     }
 }

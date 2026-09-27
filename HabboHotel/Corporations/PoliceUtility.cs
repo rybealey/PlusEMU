@@ -67,7 +67,7 @@ public static class PoliceUtility
         session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(IsOnDutyOfficer(habbo.Id)));
     }
 
-    public static bool RequireOnDuty(GameClient session, string verb)
+    public static bool RequireOnDuty(GameClient session, string verb, bool clockInHint = true)
     {
         var habbo = session.GetHabbo();
         if (habbo == null)
@@ -75,8 +75,32 @@ public static class PoliceUtility
         if (IsOnDutyOfficer(habbo.Id))
             return true;
         session.SendWhisper(IsOfficer(habbo.Id)
-            ? $"You have to be on duty to {verb}. Clock in from the Corporations drawer."
+            ? (clockInHint ? $"You have to be on duty to {verb}. Clock in from the Corporations drawer." : $"You have to be on duty to {verb}.")
             : $"Only police officers can {verb}.");
         return false;
+    }
+
+    /// <summary>
+    /// Take the force's equipment back from someone leaving it: every pair
+    /// of handcuffs and every stun gun in their backpack, the Weapon slot
+    /// included. The locker hands these out and only to officers, so they
+    /// go when the job does. Their hand and backpack are refreshed after.
+    /// </summary>
+    public static void RemovePoliceGear(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null)
+            return;
+        using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
+        {
+            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `item` IN (@cuffs, @stun)");
+            dbClient.AddParameter("id", habbo.Id);
+            dbClient.AddParameter("cuffs", Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem);
+            dbClient.AddParameter("stun", Users.RpWeapons.StunGunItem);
+            dbClient.RunQuery();
+        }
+        var inventory = habbo.LoadRpInventory();
+        Users.RpWeapons.ApplyToHand(habbo, inventory);
+        session.Send(new Communication.Packets.Outgoing.Users.RpInventoryComposer(inventory));
     }
 }
