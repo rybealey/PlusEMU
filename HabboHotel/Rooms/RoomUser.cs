@@ -1010,6 +1010,22 @@ public class RoomUser
         else
             RotHead = rotation;
         UpdateNeeded = true;
+
+        // pixelrp escorts: a captive faces exactly as their captor does, on a
+        // turn on the spot as well as a walk (a walk is faced by the movement
+        // engine - RpMovementV2Flags.FacingOverride). Body and head both, so a
+        // captor's head-only glance turns the captive's head the same way.
+        var captiveId = Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.SuspectOf(UserId);
+        if (captiveId != 0)
+        {
+            var captive = GetRoom()?.GetRoomUserManager()?.GetRoomUserByHabbo(captiveId);
+            if (captive != null && !captive.IsWalking)
+            {
+                captive.RotBody = RotBody;
+                captive.RotHead = RotHead;
+                captive.UpdateNeeded = true;
+            }
+        }
     }
 
 

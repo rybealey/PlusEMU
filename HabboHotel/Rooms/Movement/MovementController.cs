@@ -1093,8 +1093,10 @@ public static class MovementController
             }
         }
 
+        // Faced as the captor faces (s.Facing, set above), and marked so the
+        // client does too the instant the edge starts - see FacingOverride.
         room.Staged.Add(new MovementEdgeRecord(
-            s.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
+            s.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, RpMovementV2Flags.WithFacing(flags, s.Facing),
             w.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
             from.X, from.Y, MovementEdgeRecord.Z100(fromZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
