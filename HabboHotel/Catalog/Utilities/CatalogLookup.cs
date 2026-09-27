@@ -32,6 +32,19 @@ public static class CatalogLookup
     public static Dictionary<int, CatalogPage> Index(ICollection<CatalogPage> catalog) =>
         catalog.ToDictionary(page => page.Id);
 
+    /// <summary>pixelrp: page_link of a page that shows another page's whole
+    /// branch in its own place, so one category can sit in two tabs without a
+    /// second copy of its pages and furni to drift apart. page_strings_1 holds
+    /// the id of the page it shows (220 made Builders' Lines this way).</summary>
+    public const string MirrorLink = "mirror";
+
+    public static bool IsMirror(CatalogPage page) => page?.Link == MirrorLink;
+
+    /// <summary>The page a mirror shows, or -1 for a page that is not a mirror
+    /// or names nothing.</summary>
+    public static int MirrorSourceId(CatalogPage page) =>
+        IsMirror(page) && int.TryParse((page.PageStrings1 ?? string.Empty).Split('|')[0].Trim(), out var id) ? id : -1;
+
     /// <summary>Can this player be sent to this page? The leaf must be
     /// openable, and every ancestor the walk can reach must pass CanSee.
     ///

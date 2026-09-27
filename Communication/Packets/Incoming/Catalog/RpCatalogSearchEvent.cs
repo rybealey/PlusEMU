@@ -74,12 +74,28 @@ internal class RpCatalogSearchEvent : IPacketEvent
         var hits = new List<CatalogSearchHit>();
         var inTab = new Dictionary<int, bool>();
 
+        // The tab, and every branch a mirror in the tab shows (Builders' Lines
+        // is Furni's): the tab lists those pages, so its search finds them too.
+        var roots = new HashSet<int>();
+        if (tabId > 0)
+        {
+            roots.Add(tabId);
+            var tabOnly = new HashSet<int> { tabId };
+            var inTabOnly = new Dictionary<int, bool>();
+            foreach (var mirror in _catalogManager.Pages)
+            {
+                var sourceId = CatalogLookup.MirrorSourceId(mirror);
+                if (sourceId > 0 && IsUnder(mirror, tabOnly, inTabOnly))
+                    roots.Add(sourceId);
+            }
+        }
+
         foreach (var page in _catalogManager.Pages)
         {
             if (!CatalogLookup.IsOpenable(page, habbo.Rank, habbo.VipRank))
                 continue;
 
-            if (tabId > 0 && !IsUnder(page, tabId, inTab))
+            if (tabId > 0 && !IsUnder(page, roots, inTab))
                 continue;
 
             foreach (var item in page.Items.Values)
@@ -122,11 +138,12 @@ internal class RpCatalogSearchEvent : IPacketEvent
         return Task.CompletedTask;
     }
 
-    /// <summary>Whether a page sits anywhere under the tab: its parent chain
-    /// reaches the tab before the root. Remembered per search, since a tab's
-    /// pages share most of their chain. A chain that breaks (a parent row that
-    /// is gone) or loops is not under the tab.</summary>
-    private bool IsUnder(CatalogPage page, int tabId, Dictionary<int, bool> known)
+    /// <summary>Whether a page sits anywhere under one of the roots: its parent
+    /// chain reaches one before the root. Remembered per search, since a tab's
+    /// pages share most of their chain - so one `known` goes with one set of
+    /// roots. A chain that breaks (a parent row that is gone) or loops is not
+    /// under them.</summary>
+    private bool IsUnder(CatalogPage page, HashSet<int> roots, Dictionary<int, bool> known)
     {
         var walked = new List<int>();
         var current = page;
@@ -134,7 +151,7 @@ internal class RpCatalogSearchEvent : IPacketEvent
 
         for (var depth = 0; depth < 16 && current != null; depth++)
         {
-            if (current.Id == tabId)
+            if (roots.Contains(current.Id))
             {
                 result = true;
                 break;
