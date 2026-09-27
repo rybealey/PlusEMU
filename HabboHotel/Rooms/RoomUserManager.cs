@@ -256,7 +256,18 @@ public class RoomUserManager
                     item.LegacyDataString = "2";
                     item.UpdateState(false, true);
                     user.SetPos(item.GetX, item.GetY, item.GetZ);
-                    user.SetRot(item.Rotation, false);
+                    // An arrow sends you on facing the way you were walking
+                    // when you stepped on it, not the way the arrow points.
+                    // Set directly: SetRot only turns the head for a small
+                    // turn, and a new avatar starts at rotation 0.
+                    var facing = session.GetHabbo().TeleportFacing;
+                    if (item.Definition.InteractionType == InteractionType.Arrow && facing >= 0)
+                    {
+                        user.RotBody = facing;
+                        user.RotHead = facing;
+                    }
+                    else
+                        user.SetRot(item.Rotation, false);
                     item.InteractingUser2 = session.GetHabbo().Id;
                     item.LegacyDataString = "0";
                     item.UpdateState(false, true);
@@ -1767,7 +1778,9 @@ public class RoomUserManager
                                                 user.GetClient().SendWhisper("Hey, that arrow is poorly!");
                                             return;
                                         }
-                                        room.GetGameMap().TeleportToItem(user, targetItem);
+                                        // Out of the twin facing the way they were
+                                        // walking when they stepped on this one.
+                                        room.GetGameMap().TeleportToTile(user, targetItem.GetX, targetItem.GetY, targetItem.GetZ, user.RotBody);
                                     }
                                     else if (teleRoomId != room.RoomId)
                                     {
@@ -1776,6 +1789,7 @@ public class RoomUserManager
                                             user.GetClient().GetHabbo().IsTeleporting = true;
                                             user.GetClient().GetHabbo().TeleportingRoomId = teleRoomId;
                                             user.GetClient().GetHabbo().TeleporterId = linkedTele;
+                                            user.GetClient().GetHabbo().TeleportFacing = user.RotBody;
                                             user.GetClient().GetHabbo().PrepareRoom(teleRoomId, "");
                                         }
                                     }
