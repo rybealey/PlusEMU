@@ -35,10 +35,11 @@ internal class RpCatalogSearchEvent : IPacketEvent
 
     /// <summary>Enough to be worth scrolling, few enough that the packet stays
     /// small and the grid stays usable. A query that hits the cap is a query
-    /// that wants narrowing. Raised from 150 (to 300, then 500) once Builders
-    /// held thousands of custom furni, where a common word filled the cap
-    /// before Themes.</summary>
-    private const int MaxHits = 500;
+    /// that wants narrowing. Raised from 150 (to 300, 500, then 1500) once
+    /// Builders held thousands of custom furni, where a common word filled the
+    /// cap before Themes. The client's grid draws every hit - it is not
+    /// virtualised - so this is also how many icons a broad search loads.</summary>
+    private const int MaxHits = 1500;
 
     private readonly ICatalogManager _catalogManager;
 
