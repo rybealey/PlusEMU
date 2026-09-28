@@ -1411,7 +1411,12 @@ public class RoomUserManager
                             _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.IsRpPassive ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
                         }
                     }
-                    if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600)
+                    // pixelrp: City Government on duty never falls asleep - staff
+                    // are on duty even sitting still at a desk, so idling neither
+                    // draws the Zzz nor ends their shift. The count carries on, so
+                    // once they clock off they drop off at the next check.
+                    if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600
+                        && !Corporations.ShiftManager.IsStaffOnDuty(user.UserId))
                     {
                         user.IsAsleep = true;
                         _room.SendPacket(new SleepComposer(user, true));

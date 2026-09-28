@@ -24,6 +24,11 @@ public class ActionEvent : RoomPacketEvent
         // player asking, so it is dropped quietly rather than answered.
         if (action == 5 ? KnockedOut.Is(session) : KnockedOut.Refuse(session))
             return Task.CompletedTask;
+        // pixelrp: City Government on duty never falls asleep, so the idle
+        // action is dropped for them the same way - quietly, and without
+        // counting as activity (see the idle check in the room cycle).
+        if (action == 5 && Plus.HabboHotel.Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id))
+            return Task.CompletedTask;
         if (user.DanceId > 0)
             user.DanceId = 0;
         if (session.GetHabbo().Effects.CurrentEffect > 0)
