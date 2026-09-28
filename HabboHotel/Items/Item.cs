@@ -764,7 +764,12 @@ public class Item
                             if (Definition.VendingIds.Count > 0)
                             {
                                 var randomDrink = Definition.VendingIds[Random.Shared.Next(0, Definition.VendingIds.Count)];
-                                user.CarryItem(randomDrink);
+                                // pixelrp: an equipped stun gun keeps the hand
+                                // (RoomUser.StunGunDrawn), so say why no drink came.
+                                if (user.StunGunDrawn)
+                                    user.GetClient()?.SendWhisper("Put your stun gun away first.");
+                                else
+                                    user.CarryItem(randomDrink);
                             }
                             InteractingUser = 0;
                             LegacyDataString = "0";

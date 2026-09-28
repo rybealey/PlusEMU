@@ -14,6 +14,11 @@ namespace Plus.HabboHotel.Users;
 /// else is put down. The phone outranks it - opening the phone takes the hand,
 /// closing it gives the weapon back - and a drink or anything else timed
 /// borrows the hand and returns it when it runs out.
+///
+/// EXCEPT THE STUN GUN, which is tied to its backpack slot both ways
+/// (RoomUser.StunGunDrawn): equipped, it is always in the hand - over the phone,
+/// and nothing else is taken into that hand - and its handitem reaches a hand
+/// no other way, not by :carry, a bot, wired, furni or being handed over.
 /// </summary>
 public static class RpWeapons
 {
@@ -27,14 +32,19 @@ public static class RpWeapons
     /// <summary>The stun gun's item key - police equipment the locker restocks.</summary>
     public const string StunGunItem = "stun_gun";
 
+    /// <summary>
+    /// The stun gun's handitem. 403 is the only gun in hh_human_item; it is
+    /// drawn black, the icon yellow.
+    /// </summary>
+    public const int StunGunHandItem = 403;
+
     /// <summary>backpack item key -> (display name, handitem shown while equipped)</summary>
     private static readonly Dictionary<string, (string Name, int HandItem)> Weapons = new()
     {
         { "baseball_bat", ("Baseball Bat", 400) },
         { "knife", ("Knife", 401) },
         { "axe", ("Axe", 402) },
-        // 403 is the only gun in hh_human_item; it is drawn black, the icon yellow.
-        { StunGunItem, ("Stun Gun", 403) }
+        { StunGunItem, ("Stun Gun", StunGunHandItem) }
     };
 
     public static bool IsWeapon(string item) => !string.IsNullOrEmpty(item) && Weapons.ContainsKey(item);

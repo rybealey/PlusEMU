@@ -27,6 +27,16 @@ internal class GiveHandItemEvent : RoomPacketEvent
         {
             if (user.CarryItemId > 0 && user.CarryTimer > 0)
             {
+                // pixelrp: a hand holding a stun gun takes nothing, and a stun
+                // gun is never handed over (RoomUser.StunGunDrawn). Checked
+                // BEFORE anything moves, so the giver keeps what they hold.
+                if (!targetUser.CanCarry(user.CarryItemId))
+                {
+                    session.SendWhisper(user.CarryItemId == Plus.HabboHotel.Users.RpWeapons.StunGunHandItem
+                        ? "A stun gun cannot be handed over."
+                        : $"{targetUser.GetUsername()} cannot take that while holding a stun gun.");
+                    return Task.CompletedTask;
+                }
                 if (user.CarryItemId == 8)
                     _questManager.ProgressUserQuest(session, QuestType.GiveCoffee);
                 targetUser.CarryItem(user.CarryItemId);

@@ -896,10 +896,28 @@ public class RoomUser
     }
 
     /// <summary>
-    /// What the hand holds when nothing is borrowing it: the phone while it is
-    /// open, else the equipped weapon, else nothing. Neither runs a timer.
+    /// pixelrp: a stun gun is equipped, so it is in the hand - always. The stun
+    /// gun is tied to its backpack slot both ways: nothing is carried over it,
+    /// not a drink, not what someone hands over, not even the open phone; and
+    /// its handitem reaches no hand except by equipping it (SetWeaponHandItem).
+    /// Every other weapon still yields to the phone and to timed carries.
     /// </summary>
-    public int RestingHandItemId => (PhoneInHand ? PhoneHandItemId : WeaponHandItemId);
+    public bool StunGunDrawn => WeaponHandItemId == Plus.HabboHotel.Users.RpWeapons.StunGunHandItem;
+
+    /// <summary>
+    /// Whether CarryItem would take this item into the hand. Putting the hand
+    /// down (0) always can; see StunGunDrawn for what cannot.
+    /// </summary>
+    public bool CanCarry(int item) =>
+        item <= 0 || (item != Plus.HabboHotel.Users.RpWeapons.StunGunHandItem && !StunGunDrawn);
+
+    /// <summary>
+    /// What the hand holds when nothing is borrowing it: an equipped stun gun,
+    /// which even the open phone does not displace; else the phone while it is
+    /// open; else the equipped weapon; else nothing. None of them runs a timer.
+    /// </summary>
+    public int RestingHandItemId =>
+        (StunGunDrawn ? WeaponHandItemId : (PhoneInHand ? PhoneHandItemId : WeaponHandItemId));
 
     public void CarryItem(int item)
     {
@@ -916,6 +934,13 @@ public class RoomUser
             GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, CarryItemId));
             return;
         }
+        // pixelrp: nothing goes into a hand holding a stun gun, and the stun
+        // gun's handitem goes into no hand this way - see StunGunDrawn. Every
+        // caller here only hands something OUT (a machine, a bot, wired,
+        // :carry, an offer's prop), so a refusal loses nothing; the one that
+        // moves an item between hands, GiveHandItemEvent, asks CanCarry first.
+        if (!CanCarry(item))
+            return;
         CarryItemId = item;
         if (item > 0)
             CarryTimer = 240;
@@ -947,6 +972,10 @@ public class RoomUser
         PhoneInHand = inHand;
         if (inHand)
         {
+            // An equipped stun gun stays in the hand: the phone is open on
+            // screen, but the gun is what the avatar holds (StunGunDrawn).
+            if (StunGunDrawn)
+                return;
             CarryItemId = PhoneHandItemId;
             CarryTimer = 0;
             GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, PhoneHandItemId));
@@ -962,6 +991,10 @@ public class RoomUser
     /// deliberate act, a coffee is not. Putting it away empties the hand only
     /// if the weapon is what it holds. With the phone open the hand stays the
     /// phone's; the new weapon is simply what closing it gives back.
+    ///
+    /// The stun gun is the exception: it is drawn over the open phone, and
+    /// putting it away with the phone open hands the hand back to the phone
+    /// (StunGunDrawn).
     /// </summary>
     public void SetWeaponHandItem(int handItemId)
     {
@@ -969,16 +1002,17 @@ public class RoomUser
             return;
         var previous = WeaponHandItemId;
         WeaponHandItemId = handItemId;
-        if (PhoneInHand)
+        var stunGun = Plus.HabboHotel.Users.RpWeapons.StunGunHandItem;
+        if (PhoneInHand && !StunGunDrawn && previous != stunGun)
             return;
-        if (handItemId > 0)
+        if (handItemId > 0 && (!PhoneInHand || StunGunDrawn))
         {
             CarryItemId = handItemId;
             CarryTimer = 0;
             GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, handItemId));
         }
         else if (previous > 0 && CarryItemId == previous)
-            CarryItem(0);
+            CarryItem(0);           // the phone, if it is open, else an empty hand
     }
 
 
