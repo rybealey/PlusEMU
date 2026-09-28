@@ -116,7 +116,8 @@ public static class TurfManager
     }
 
     /// <summary>
-    /// A player asks to claim this turf - :claim, or the panel's Claim button.
+    /// A player asks to claim this turf - the turf panel's Claim button
+    /// (RpTurfClaimEvent), the only way in now that :claim is gone.
     /// Everything about WHO may start a claim is checked here; everything about
     /// how it runs, in Tick. Refusals are whispered.
     /// </summary>
