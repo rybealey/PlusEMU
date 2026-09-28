@@ -300,6 +300,8 @@ public class Item
                     return new InteractorAtm();
                 case InteractionType.PoliceReplenish:
                     return new InteractorPoliceReplenish();
+                case InteractionType.Jukebox:
+                    return new InteractorJukebox();
                 case InteractionType.None:
                 default:
                     return new InteractorGenericSwitch();

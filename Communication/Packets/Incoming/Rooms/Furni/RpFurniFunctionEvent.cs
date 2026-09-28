@@ -207,6 +207,9 @@ internal class RpFurniFunctionEvent : IPacketEvent
             }
         }
 
+        // pixelrp: does this change make the furni a jukebox, or stop it being one?
+        var jukeboxChanged = (definition.InteractionType == InteractionType.Jukebox) != (interactionType == InteractionType.Jukebox);
+
         // In place, not a reload - see the class note.
         definition.PublicName = publicName;
         definition.Walkable = walkable;
@@ -223,6 +226,16 @@ internal class RpFurniFunctionEvent : IPacketEvent
         definition.EffectId = effectId;
         definition.BehaviourData = behaviourData;
         definition.VendingIds = vendingIds;
+
+        // A room learns it has a jukebox only when one is PLACED or picked up
+        // (RoomJukeboxManager.OnJukeboxPlaced/Removed). Giving furni already
+        // standing somewhere the behaviour is neither, so every loaded room
+        // holding one is told now - otherwise its player stays hidden until the
+        // room reloads.
+        if (jukeboxChanged)
+            foreach (var loaded in PlusEnvironment.Game.RoomManager.GetRooms().ToList())
+                if (loaded.GetRoomItemHandler().GetFloor.Any(x => x.Definition?.Id == definition.Id))
+                    loaded.GetJukeboxManager().BroadcastState();
 
         // The catalog is served from memory, so the pages hold their own copy
         // of the name and would go on showing the old one until a reload.
@@ -298,6 +311,8 @@ internal class RpFurniFunctionEvent : IPacketEvent
             return;
         }
 
+        var wasJukebox = Plus.HabboHotel.Rooms.Jukebox.RoomJukeboxManager.IsJukebox(item);
+
         ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldInteractionType, interactionName, habbo.Id);
         ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldModes, modes.ToString(), habbo.Id);
         ItemFunctionOverrides.Set(itemId, ItemFunctionOverrides.FieldEffectId, effectId.ToString(), habbo.Id);
@@ -326,6 +341,10 @@ internal class RpFurniFunctionEvent : IPacketEvent
             item.Definition = shared;
         item.HasOwnDefinition = false;
         ItemFunctionOverrides.Apply(item, ItemFunctionOverrides.ForItems(new[] { itemId }).GetValueOrDefault(itemId));
+
+        // The same presence problem as the definition-wide path, for one item.
+        if (wasJukebox != Plus.HabboHotel.Rooms.Jukebox.RoomJukeboxManager.IsJukebox(item))
+            room.GetJukeboxManager().BroadcastState();
 
         // Walkability is baked into the map at generation time. Nothing here
         // changes it today, but a behaviour can imply a seat, and regenerating

@@ -219,6 +219,8 @@ public static class ServerPacketHeader
     public const uint RpRoomZoneComposer = 3924;
     // pixelrp turfs: is this room a turf, and who holds it.
     public const uint RpRoomTurfComposer = 4151;
+    // pixelrp: open the jukebox for the player who used a jukebox-behaviour furni.
+    public const uint RpJukeboxOpenComposer = 4152;
     public const uint RpFurniAlphaComposer = 3926;
     // The 39xx block is full; this continues past the highest id in use.
     public const uint RpFurniFunctionComposer = 4111;
