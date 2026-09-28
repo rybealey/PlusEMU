@@ -82,6 +82,10 @@ public class InteractorPoliceReplenish : IFurniInteractor
         // still gets that one, and is told plainly which did not fit.
         var given = new List<string>();
         var equipped = false;
+        // The flashbang is restocked QUIETLY - never named in the restock chat -
+        // but it still counts as something handed out, so the backpack update
+        // below goes out for it.
+        var flashbangGiven = false;
         if (needsCuffs)
         {
             var slot = habbo.AddRpItem(CuffCommand.HandcuffsItem);
@@ -97,7 +101,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             if (slot == -1)
                 session.SendWhisper("Your backpack is full - there was no room for the flashbang.");
             else if (slot > 0)
-                given.Add("flashbang");
+                flashbangGiven = true;
         }
 
         if (stunSlot == 0)
@@ -128,20 +132,23 @@ public class InteractorPoliceReplenish : IFurniInteractor
             equipped = true;
         }
 
-        if (given.Count == 0 && !equipped)
+        if (given.Count == 0 && !equipped && !flashbangGiven)
             return;
 
         var after = habbo.LoadRpInventory();
         if (equipped)
             RpWeapons.ApplyToHand(habbo, after);
-        // "handcuffs", "handcuffs and flashbang", "handcuffs, stun gun and flashbang"
-        var list = given.Count <= 1
-            ? string.Join("", given)
-            : string.Join(", ", given.Take(given.Count - 1)) + " and " + given[^1];
-        var action = given.Count > 0
-            ? $"*restocks their {list}*"
-            : "*equips their stun gun*";
-        room.SendPacket(new ChatComposer(user.VirtualId, action, 0, ActionBubble));
+        // Only a restock of the cuffs or the stun gun is announced. Equipping the
+        // stun gun says nothing - the gun appearing in the officer's hand is the
+        // whole of it - and neither does the flashbang (flashbangGiven).
+        if (given.Count > 0)
+        {
+            // "handcuffs", "stun gun", "handcuffs and stun gun"
+            var list = given.Count <= 1
+                ? string.Join("", given)
+                : string.Join(", ", given.Take(given.Count - 1)) + " and " + given[^1];
+            room.SendPacket(new ChatComposer(user.VirtualId, $"*restocks their {list}*", 0, ActionBubble));
+        }
         session.Send(new RpInventoryComposer(after));
     }
 }
