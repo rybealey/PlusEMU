@@ -60,7 +60,7 @@ public class RpMovementV2Composer : IServerPacket
         packet.WriteInteger((int)(_edge.WalkSessionId & 0x7fffffff)); // 3
         packet.WriteInteger(_edge.RouteRevision);    // 4
         packet.WriteInteger(_edge.EdgeIndex);        // 5
-        packet.WriteInteger(0);                      // 6 timingGroupId (unused)
+        packet.WriteInteger(_edge.ShadowOfVirtualId); // 6 timingGroupId: the police-escort captor (EscortShadow), else 0
         packet.WriteInteger(_edge.IntervalMs);       // 7
         packet.WriteInteger((int)(_edge.CycleStartMs - now)); // 8 signed delta
         packet.WriteInteger((int)(now >> 32));       // 9

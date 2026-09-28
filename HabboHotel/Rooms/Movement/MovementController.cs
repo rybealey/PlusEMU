@@ -1093,12 +1093,22 @@ public static class MovementController
             }
         }
 
+        // A suspect walked in FRONT (police custody) names its captor on every
+        // real edge, so the client can face it the way the captor faces from
+        // the edge's first frame instead of by its own sliding step - see
+        // RpMovementV2Flags.EscortShadow. Walk ends are left alone (the client
+        // faces nothing on them), and a medical escort, which trails, is not
+        // marked at all.
+        var escortMark = moving && !w.ShadowBehind;
+
         room.Staged.Add(new MovementEdgeRecord(
-            s.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
+            s.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex,
+            escortMark ? (flags | RpMovementV2Flags.EscortShadow) : flags,
             w.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
             from.X, from.Y, MovementEdgeRecord.Z100(fromZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
-            toZ, s.Facing, lookahead, lookCount, w.LastStartDelayMs));
+            toZ, s.Facing, lookahead, lookCount, w.LastStartDelayMs,
+            shadowOfVirtualId: escortMark ? w.VirtualId : 0));
     }
 
     /// <summary>

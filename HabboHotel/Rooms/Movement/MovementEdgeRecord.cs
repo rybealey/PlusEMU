@@ -86,6 +86,14 @@ public readonly struct MovementEdgeRecord
     /// </summary>
     public readonly bool PublishOnly;
 
+    /// <summary>
+    /// pixelrp police escort: the captor's VirtualId on an escorted suspect's
+    /// edge (<see cref="RpMovementV2Flags.EscortShadow"/> set), else 0. Goes
+    /// out as field 6 of packet 4110 - the flag, not this value, says whether
+    /// it means anything, since VirtualId 0 is a real unit.
+    /// </summary>
+    public readonly int ShadowOfVirtualId;
+
     public bool IsWalkEnd => (Flags & RpMovementV2Flags.WalkEnd) != 0;
     public bool IsDisplacement => (Flags & RpMovementV2Flags.Displacement) != 0;
 
@@ -95,7 +103,7 @@ public readonly struct MovementEdgeRecord
         int fromX, int fromY, int fromZ100,
         int toX, int toY, int toZ100, double toZ, byte facing,
         LookaheadTile[] lookahead, int lookaheadCount, int startDelayMs = 0,
-        bool publishOnly = false)
+        bool publishOnly = false, int shadowOfVirtualId = 0)
     {
         VirtualId = virtualId;
         WalkSessionId = walkSessionId;
@@ -116,6 +124,7 @@ public readonly struct MovementEdgeRecord
         LookaheadCount = lookaheadCount;
         StartDelayMs = startDelayMs;
         PublishOnly = publishOnly;
+        ShadowOfVirtualId = shadowOfVirtualId;
     }
 
     public static int Z100(double z) => (int)Math.Round(z * 100);

@@ -64,4 +64,26 @@ public static class RpMovementV2Flags
     /// </summary>
     public const int ForcedRedirect = 0x0100;
 
+    /// <summary>
+    /// pixelrp police escort: this edge belongs to a suspect escorted IN FRONT
+    /// of their captor (StageShadow), and field 6 - the otherwise unused
+    /// timingGroupId - carries the captor's VirtualId
+    /// (<see cref="MovementEdgeRecord.ShadowOfVirtualId"/>).
+    ///
+    /// The client faces a walking step by the step itself, and so does the
+    /// server - except for this suspect, faced the way the CAPTOR faces. On a
+    /// turn the suspect's step is a slide round the captor, so the client drew
+    /// it facing the slide until the status turned it to the captor's way: a
+    /// visible snap. Knowing the captor, the client faces each suspect step by
+    /// the captor's step with the same index - which is where this server's
+    /// facing comes from - so the status only confirms it.
+    ///
+    /// A flag bit plus a field already on the wire, for the reason
+    /// <see cref="JoinStackedAtRequest"/> gives: no packet length changes, and
+    /// a client without it ignores both. A bit rather than "field 6 is
+    /// non-zero" because VirtualId 0 is a real unit. Medical escorts, where the
+    /// patient trails, are deliberately NOT marked and face as they always did.
+    /// </summary>
+    public const int EscortShadow = 0x0200;
+
 }
