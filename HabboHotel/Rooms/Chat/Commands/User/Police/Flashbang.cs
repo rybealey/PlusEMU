@@ -85,7 +85,7 @@ public static class Flashbang
             return;
 
         // Everyone in the block, then the ones a stun gun could not touch left out.
-        var caught = new List<(RoomUser User, string Name)>();
+        var caught = new List<RoomUser>();
         foreach (var user in room.GetRoomUserManager().GetRoomUsers().ToList())
         {
             var target = user?.GetClient()?.GetHabbo();
@@ -101,27 +101,18 @@ public static class Flashbang
             // Last, because it is the one check that asks the database.
             if (PoliceUtility.IsOnDutyOfficer(target.Id))
                 continue;
-            caught.Add((user, target.Username));
+            caught.Add(user);
         }
 
         habbo.ConsumeRpItem(slot);
         habbo.RpAggression = AggressionOnThrow;
-        foreach (var (user, _) in caught)
+        foreach (var user in caught)
             PoliceState.Stun(room, user, StunSeconds);
 
-        room.SendPacket(new ChatComposer(thrower.VirtualId, caught.Count > 0
-            ? $"*throws a flashbang, stunning {Names(caught.Select(c => c.Name).ToList())}*"
-            : "*throws a flashbang, but nobody is close enough to catch it*", 0, FightBubble));
+        // One bubble whoever it catches: the freeze on each of them says the rest.
+        room.SendPacket(new ChatComposer(thrower.VirtualId, "*throws a flashbang*", 0, FightBubble));
 
         PoliceState.SendStats(room, thrower, habbo);
         session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
     }
-
-    /// <summary>"A", "A and B", "A, B and C".</summary>
-    private static string Names(List<string> names) => names.Count switch
-    {
-        1 => names[0],
-        2 => $"{names[0]} and {names[1]}",
-        _ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}"
-    };
 }
