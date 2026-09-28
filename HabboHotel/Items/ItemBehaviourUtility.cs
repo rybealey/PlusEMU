@@ -198,21 +198,6 @@ internal static class ItemBehaviourUtility
             case InteractionType.GuildItem:
             case InteractionType.GuildGate:
             case InteractionType.GuildForum:
-                // pixelrp turfs: group furni standing in a turf shows the gang
-                // that holds it, or the neutral pair - whatever its own group.
-                // Display only; see TurfManager.
-                if (Gangs.TurfManager.TryPaint(item, out var turfGroup, out var turfBadge, out var turfColourA, out var turfColourB))
-                {
-                    packet.WriteInteger(0);
-                    packet.WriteInteger(2);
-                    packet.WriteInteger(5);
-                    packet.WriteString(item.LegacyDataString);
-                    packet.WriteString(turfGroup);
-                    packet.WriteString(turfBadge);
-                    packet.WriteString(turfColourA);
-                    packet.WriteString(turfColourB);
-                    break;
-                }
                 Group group = null;
                 if (!PlusEnvironment.Game.GroupManager.TryGetGroup(item.GroupId, out group))
                 {
@@ -228,11 +213,8 @@ internal static class ItemBehaviourUtility
                     packet.WriteString(item.LegacyDataString);
                     packet.WriteString(group.Id.ToString());
                     packet.WriteString(group.Badge);
-                    // pixelrp: a gang's colours are raw RGB, not the badge
-                    // colour ids GetColourCode looks up - which returned "" for
-                    // every gang, so gang furni drew with no colour at all.
-                    packet.WriteString(group.IsGang ? Gangs.TurfManager.Hex(group.Colour1) : PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour1, true));
-                    packet.WriteString(group.IsGang ? Gangs.TurfManager.Hex(group.Colour2) : PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour2, false));
+                    packet.WriteString(PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour1, true));
+                    packet.WriteString(PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour2, false));
                 }
                 break;
             case InteractionType.Background:
@@ -400,6 +382,54 @@ internal static class ItemBehaviourUtility
                 message.WriteString(item.LegacyDataString.Split(' ')[0]);
                 break;
         }
+    }
+
+    /// <summary>
+    /// pixelrp: the data a placed GROUP furni is sent with - or null for
+    /// anything else, which is sent with its own ExtraData as always.
+    ///
+    /// Group furni is hydrated like any other (HydrateExtraData): a
+    /// LegacyDataFormat holding extra_data, which for these is the group id.
+    /// That went on the wire as a bare string, but the client's
+    /// FurnitureGuildCustomizedLogic only reads a StringDataType - [state,
+    /// group id, badge, colour 1, colour 2], colours as hex with no '#' - so
+    /// group furni drew in its default colours whatever group it belonged to.
+    /// (GenerateExtradata above builds that array, and nothing calls it.)
+    ///
+    /// Built at SEND time rather than stored, because the answer changes
+    /// without the item changing: a turf's owner (TurfManager.TryPaint, which
+    /// wins inside a turf), or the group recolouring itself. Gangs keep raw RGB
+    /// in colour1/2, so they are hexed directly; a real Habbo group's badge
+    /// colour ids go through GetColourCode, as stock Plus did.
+    /// </summary>
+    public static StringArrayDataFormat GroupFurniData(Item item)
+    {
+        var type = item?.Definition?.InteractionType;
+        if (type != InteractionType.GuildItem && type != InteractionType.GuildGate && type != InteractionType.GuildForum)
+            return null;
+
+        if (!Gangs.TurfManager.TryPaint(item, out var groupId, out var badge, out var colourA, out var colourB))
+        {
+            if (item.GroupId <= 0 || !PlusEnvironment.Game.GroupManager.TryGetGroup(item.GroupId, out var group))
+                return null;
+            groupId = group.Id.ToString();
+            badge = group.Badge ?? "";
+            colourA = group.IsGang ? Gangs.TurfManager.Hex(group.Colour1) : PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour1, true);
+            colourB = group.IsGang ? Gangs.TurfManager.Hex(group.Colour2) : PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour2, false);
+        }
+
+        // Index 0 is the multi-state logic's STATE. extra_data for group furni
+        // is the group id (PurchaseFromCatalogEvent stores it there), which is
+        // not a state - a gate would try to draw frame 12. Only a value that is
+        // a real state for this furni is passed; anything else is state 0.
+        var legacy = item.LegacyDataString;
+        var state = int.TryParse(legacy, out var parsed) && parsed >= 0 && parsed < System.Math.Max(1, item.Definition.Modes)
+            ? legacy
+            : "0";
+
+        var data = new StringArrayDataFormat();
+        data.Data.AddRange(new[] { state, groupId, badge, colourA, colourB });
+        return data;
     }
 
     public static IOutgoingPacket Serialize(IOutgoingPacket packet, IFurniObjectData stuffData, uint uniqueNumber, uint uniqueSeries)

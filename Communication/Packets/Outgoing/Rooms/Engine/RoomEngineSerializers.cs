@@ -1,5 +1,6 @@
 ﻿using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 
@@ -15,7 +16,9 @@ public static class RoomEngineSerializers
         packet.WriteString(FormattableString.Invariant($"{item.GetZ}"));
         packet.WriteString(FormattableString.Invariant($"{item.Definition.Height}"));
         packet.WriteUInt(0);
-        ItemBehaviourUtility.Serialize(packet, item.ExtraData, item.UniqueNumber, item.UniqueSeries);
+        // pixelrp: group furni is sent with its group's (or its turf owner's)
+        // badge and colours, built now - see ItemBehaviourUtility.GroupFurniData.
+        ItemBehaviourUtility.Serialize(packet, (IFurniObjectData)ItemBehaviourUtility.GroupFurniData(item) ?? item.ExtraData, item.UniqueNumber, item.UniqueSeries);
         packet.WriteInteger(-1); // to-do: check
         packet.WriteInteger(item.Definition.Modes > 1 ? 1 : 0);
         packet.WriteInteger(item.UserId);
