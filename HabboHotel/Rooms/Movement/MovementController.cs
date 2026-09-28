@@ -1285,7 +1285,8 @@ public static class MovementController
 
         // Skipped from the deferred retry, where the boundary staging about to
         // run already carries this one-tile route (see Redirect's
-        // stageCorrection). Escorts are skipped inside: their shadow rides the
+        // stageCorrection). A police escort publishes its suspect's record
+        // with it; a medical escort is skipped inside, its shadow riding the
         // boundary record in lockstep.
         if (publishNow)
             PublishCorrectedEdgeEarly(room, w, map);
@@ -1353,11 +1354,29 @@ public static class MovementController
         var index = w.EdgeIndex + 1;
 
         // A captor's edges ride with a matching shadow record (StageShadow).
-        // Publishing the captor's alone would break that lockstep.
+        // Publishing the captor's alone would break that lockstep, so an escort
+        // is published early only together with its suspect's record for the
+        // same index (EscortShadowPublishRecord, below). That is a suspect
+        // walked in FRONT - police custody. A medical escort (the patient
+        // trails) is skipped exactly as before.
+        //
+        // WHY POLICE ESCORTS NEED IT: without the early record the correction
+        // reaches the client only after it has begun the OLD route's next step
+        // from lookahead, so on every mid-walk click that changes direction the
+        // cop and the suspect were drawn a few frames facing - and starting
+        // along - the old way before the correction turned them.
+        MovementState? shadow = null;
         if (w.ShadowVirtualId != MovementState.NoShadow)
         {
-            MovementCounters.CorrectionEPlus1Escort();
-            return;
+            if (w.ShadowBehind
+                || !room.States.TryGetValue(w.ShadowVirtualId, out var s)
+                || s.ShadowedBy != w.VirtualId)
+            {
+                MovementCounters.CorrectionEPlus1Escort();
+                return;
+            }
+
+            shadow = s;
         }
 
         // FRESH clock, and this is the whole point of the check. Re-deriving
@@ -1447,17 +1466,95 @@ public static class MovementController
             lookCount = max;
         }
 
+        var facing = (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y);
+
+        // The suspect's half, worked out BEFORE anything is staged: when its
+        // step would be a rest on its own tile, neither record goes out early.
+        MovementEdgeRecord? shadowRecord = null;
+        if (shadow != null)
+        {
+            shadowRecord = EscortShadowPublishRecord(
+                map, w, shadow, index, flags, to, facing, lookahead, lookCount, forcedMarginMs);
+
+            if (shadowRecord == null)
+            {
+                MovementCounters.CorrectionEPlus1Escort();
+                return;
+            }
+        }
+
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, index, flags,
             w.IntervalMs, w.EdgeStartTick(index),
             from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
-            toZ, (byte)Rotation.Calculate(from.X, from.Y, to.X, to.Y),
+            toZ, facing,
             lookahead, lookCount, forcedMarginMs, publishOnly: true));
+
+        // Captor first, suspect second, in the same frame - the order StageEdge
+        // and StageShadow use, and the order the client relies on to face the
+        // suspect by the captor's edge (PixelRPMovementV2.escortFacing).
+        if (shadowRecord is { } suspect)
+            room.Staged.Add(suspect);
 
         w.LastEarlyPublish = identity;
 
         MovementCounters.CorrectionEPlus1ImmediateStaged();
+    }
+
+    /// <summary>
+    /// A police escort's suspect, for an early correction: the record
+    /// StageShadow will stage for the same index at the boundary, built now
+    /// WITHOUT touching the suspect's state. It leaves the suspect's EdgeTo -
+    /// the terminal of its last staged edge, which is the captor's last staged
+    /// edge too - for the tile in front of the captor's corrected destination,
+    /// with the lookahead StageShadow would attach, run off the same route tiles
+    /// the captor's early record advertises.
+    ///
+    /// PublishOnly, like the captor's, so nothing commits early; the boundary
+    /// beat still stages the committing record with this same geometry. Marked
+    /// EscortShadow, like every edge of a suspect walked in front, so the client
+    /// faces it by the captor's corrected edge.
+    ///
+    /// Null when the suspect's step would be a rest on its own tile: StageShadow
+    /// turns that into a walk end at the boundary, and a walk end must not go
+    /// out early - the client would forget the suspect a step too soon.
+    /// </summary>
+    private static MovementEdgeRecord? EscortShadowPublishRecord(
+        Gamemap map, MovementState w, MovementState s, int index, int flags,
+        Point to, byte facing, LookaheadTile[] captorLookahead, int captorLookCount, int forcedMarginMs)
+    {
+        var from = s.EdgeTo;
+        var shadowTo = ShadowTile(map, to, facing, behind: false);
+        if (from == shadowTo)
+            return null;
+
+        var lookahead = System.Array.Empty<LookaheadTile>();
+        if (captorLookCount > 0)
+        {
+            lookahead = new LookaheadTile[captorLookCount];
+            var prev = to;
+            for (var i = 0; i < captorLookCount; i++)
+            {
+                var tile = new Point(captorLookahead[i].X, captorLookahead[i].Y);
+                var f = (byte)Rotation.Calculate(prev.X, prev.Y, tile.X, tile.Y);
+                var ahead = ShadowTile(map, tile, f, behind: false);
+                lookahead[i] = new LookaheadTile(ahead.X, ahead.Y, MovementEdgeRecord.Z100(map.SqAbsoluteHeight(ahead.X, ahead.Y)));
+                prev = tile;
+            }
+        }
+
+        var fromZ = map.SqAbsoluteHeight(from.X, from.Y);
+        var toZ = map.SqAbsoluteHeight(shadowTo.X, shadowTo.Y);
+
+        return new MovementEdgeRecord(
+            s.VirtualId, w.WalkSessionId, w.RouteRevision, index,
+            flags | RpMovementV2Flags.EscortShadow,
+            w.IntervalMs, w.EdgeStartTick(index),
+            from.X, from.Y, MovementEdgeRecord.Z100(fromZ),
+            shadowTo.X, shadowTo.Y, MovementEdgeRecord.Z100(toZ),
+            toZ, facing, lookahead, lookahead.Length, forcedMarginMs,
+            publishOnly: true, shadowOfVirtualId: w.VirtualId);
     }
 
 }
