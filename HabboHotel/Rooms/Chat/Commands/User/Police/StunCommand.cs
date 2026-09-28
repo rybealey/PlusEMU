@@ -14,7 +14,9 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// only an on-duty employee of a corporation flagged `is_police` can fire
 /// (PoliceUtility). Its stun gun gate is back too, in the form the backpack
 /// gives it: the officer must have a Stun Gun EQUIPPED in the Weapon slot
-/// (RpWeapons) - carrying one is not drawing it. There are still no charges.
+/// (RpWeapons) - carrying one is not drawing it. It holds seven shots
+/// (PoliceState.StunGunShots): the last one puts it away, and a police locker
+/// reloads it and equips it again.
 ///
 /// Reach is DIRECTIONAL, which is what makes this different from every other
 /// combat command in the hotel. Along a straight grid line - same row or same
@@ -66,9 +68,18 @@ internal class StunCommand : ITargetChatCommand
         if (!PoliceUtility.RequireOnDuty(session, "fire a stun gun"))
             return Task.CompletedTask;
 
+        // Seven shots, then back to a police locker (PoliceState.StunGunShots).
+        // Asked FIRST, before whether the gun is equipped: running out puts it
+        // away, so an officer out of stuns would otherwise be told to equip it.
+        var inventory = habbo.LoadRpInventory();
+        if (inventory.Any(entry => entry.Item == RpWeapons.StunGunItem) && PoliceState.StunGunShotsLeft(habbo.Id) <= 0)
+        {
+            session.SendWhisper("You're out of stuns.");
+            return Task.CompletedTask;
+        }
+
         // And holding one: equipped, not just carried. The refusal says which,
         // because "equip it" and "go and get one" are different errands.
-        var inventory = habbo.LoadRpInventory();
         if (RpWeapons.EquippedItem(inventory) != RpWeapons.StunGunItem)
         {
             session.SendWhisper(inventory.Any(entry => entry.Item == RpWeapons.StunGunItem)
@@ -141,14 +152,6 @@ internal class StunCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        // Seven shots, then back to a police locker (PoliceState.StunGunShots).
-        // Before the cooldown, so an empty gun says it is empty.
-        if (PoliceState.StunGunShotsLeft(habbo.Id) <= 0)
-        {
-            session.SendWhisper("Your stun gun is empty. Restock at a police locker.");
-            return Task.CompletedTask;
-        }
-
         if (_lastShot.TryGetValue(habbo.Id, out var last))
         {
             var elapsed = (DateTime.UtcNow - last).TotalSeconds;
@@ -175,7 +178,20 @@ internal class StunCommand : ITargetChatCommand
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*uses their stun gun on {target.Username}, but misses*", 0, FightBubble));
 
         if (shotsLeft == 0)
-            session.SendWhisper("That was your last shot. Restock at a police locker.");
+        {
+            // Out of charges, the gun is put away - the hand empties with it -
+            // until a police locker reloads it, which equips it again. With a
+            // full backpack there is nowhere to put it, so it stays out, empty.
+            // Either way they are told, with the same words the next pull of
+            // the trigger gets.
+            if (RpWeapons.TryPutAway(habbo))
+            {
+                var after = habbo.LoadRpInventory();
+                RpWeapons.ApplyToHand(habbo, after);
+                session.Send(new Plus.Communication.Packets.Outgoing.Users.RpInventoryComposer(after));
+            }
+            session.SendWhisper("You're out of stuns.");
+        }
         // The green bar on the stun gun in the backpack.
         session.Send(new Plus.Communication.Packets.Outgoing.Users.RpStunGunChargeComposer(shotsLeft, PoliceState.StunGunShots));
 

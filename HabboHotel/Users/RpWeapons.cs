@@ -57,6 +57,25 @@ public static class RpWeapons
         inventory.FirstOrDefault(entry => entry.Slot == WeaponSlot).Item;
 
     /// <summary>
+    /// Put the equipped weapon back in the first free carry slot, as clicking it
+    /// in the backpack does (RpUseItemEvent). False when nothing is equipped or
+    /// the backpack is full. The caller re-syncs the hand (ApplyToHand) and
+    /// sends the backpack.
+    /// </summary>
+    public static bool TryPutAway(Habbo habbo)
+    {
+        var inventory = habbo.LoadRpInventory();
+        if (string.IsNullOrEmpty(EquippedItem(inventory)))
+            return false;
+        var used = inventory.Select(entry => entry.Slot).ToHashSet();
+        var free = Enumerable.Range(1, habbo.RpUnlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
+        if (free == 0)
+            return false;
+        habbo.MoveRpItem(WeaponSlot, free);
+        return true;
+    }
+
+    /// <summary>
     /// Bring the avatar's hand in line with what is equipped. Called after
     /// anything that can change the Weapon slot, and on room entry. A player
     /// not in a room has no hand to change; room entry catches them up.
