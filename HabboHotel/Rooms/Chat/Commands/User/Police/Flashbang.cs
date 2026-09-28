@@ -15,7 +15,9 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// of the eight around it - the full 3x3 block, diagonals in - exactly as a
 /// stun gun hit does: the same freeze, the same length, and the same people
 /// out of reach of it (passive, already out cold, already in custody, the
-/// officer's own characters). The officer is never caught in their own bang.
+/// officer's own characters). The officer is never caught in their own bang,
+/// and nor is any other ON-DUTY officer - a squad clearing a room together
+/// does not stun itself. Off duty, an officer is anyone else.
 ///
 /// It is SPENT on the throw, whether it catches anyone or not - a flashbang
 /// thrown into an empty corner is still gone. The Police Replenish locker
@@ -95,6 +97,9 @@ public static class Flashbang
                 continue;
             target.EnsureRpStatsLoaded();
             if (target.IsRpPassive || target.RpHealth <= 0 || PoliceState.IsBeingEscorted(target.Id))
+                continue;
+            // Last, because it is the one check that asks the database.
+            if (PoliceUtility.IsOnDutyOfficer(target.Id))
                 continue;
             caught.Add((user, target.Username));
         }
