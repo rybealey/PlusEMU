@@ -342,6 +342,15 @@ public class RoomUserManager
             session.GetHabbo().Effects.ApplyEffect(Habbo.StaffDutyEffectId);
         else if (session.GetHabbo().RpPassiveSeconds > 0 && session.GetHabbo().Effects != null)
             session.GetHabbo().Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
+        // pixelrp: whatever else they are wearing - the escort's cuffs, an enable -
+        // lives on the Habbo, so it follows them here, but nobody already in the
+        // room was ever told: SendObjects only tells the ENTERING player what
+        // everyone wears. So the room saw them arrive bare - an escorted suspect
+        // walked in uncuffed - and PoliceState.TickCuffs, finding the cuff effect
+        // still current, never sent it again. (The two branches above broadcast
+        // through ApplyEffect already.)
+        else if (session.GetHabbo().Effects is { CurrentEffect: > 0 } worn)
+            _room.SendPacket(new AvatarEffectComposer(user.VirtualId, worn.CurrentEffect));
         // pixelrp: the one-shot RP-stats sends above (this user to the room, and
         // SendObjects everyone to this user) can land before the React HUD has
         // mounted its RpStatsEvent listener, so passive/aggression tags (and
@@ -349,25 +358,20 @@ public class RoomUserManager
         // this client's full room-stats view for the next few cycles, by which
         // point the HUD is listening. See RpStatsResyncTicks in the room cycle.
         user.RpStatsResyncTicks = 6;
-        // pixelrp: the phone in hand. Two halves, because a handitem is a
-        // broadcast and not part of the user object everyone is sent on entry:
-        // this player gets their own phone back after a room change, and they
-        // are told about anybody already holding one - which they would
-        // otherwise not see until that person closed and reopened it.
+        // pixelrp: the phone in hand, and the equipped weapon. A handitem is a
+        // broadcast, not part of the user object everyone is sent on entry, so
+        // it is set here - which tells the players already in the room - and
+        // Room.SendObjects, right after, gives the entering player their own and
+        // everyone else's resting hand items once their client has the avatars
+        // to put them on. (A loop here used to send the others' too, but ahead
+        // of SendObjects, where the client had no avatars yet and dropped them.)
         //
-        // The equipped weapon the same way: set before the phone, so an open
-        // phone still wins the hand and the weapon waits for it to close.
+        // The weapon is set before the phone, so an open phone still wins the
+        // hand and the weapon waits for it to close - except a stun gun, which
+        // is drawn over the phone (RoomUser.StunGunDrawn).
         user.SetWeaponHandItem(RpWeapons.HandItemFor(RpWeapons.EquippedItem(session.GetHabbo().LoadRpInventory())));
         if (session.GetHabbo().PhoneOpen)
             user.SetPhoneInHand(true);
-        foreach (var other in _users.Values.ToList())
-        {
-            // Anybody holding a resting item - phone or weapon - which the
-            // newcomer would otherwise not see until it changed.
-            if (other == null || other == user || other.CarryItemId <= 0 || other.CarryTimer > 0 || other.RestingHandItemId != other.CarryItemId)
-                continue;
-            session.Send(new CarryObjectComposer(other.VirtualId, other.CarryItemId));
-        }
         // pixelrp Movement V2: enrol this user with the movement scheduler.
         // Bots and pets stay on V1, so this only enrols human users.
         Movement.MovementV2Bridge.OnUserEnter(_room, user);

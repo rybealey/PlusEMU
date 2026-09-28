@@ -561,7 +561,15 @@ public class Room : RoomData
                 session.Send(new DanceComposer(user, user.DanceId));
             if (user.IsAsleep)
                 session.Send(new SleepComposer(user, true));
-            if (user.CarryItemId > 0 && user.CarryTimer > 0)
+            // pixelrp: a RESTING hand item too - an equipped weapon, an open
+            // phone - not just a timed carry. Right after this unit's
+            // UsersComposer is the only place the entering client is sure to
+            // have the avatar to put it on; sent any earlier (AddAvatarToRoom
+            // used to) it arrived before the avatar existed and was dropped, so
+            // a player changing rooms lost their own stun gun from view and saw
+            // nobody else's. RestingHandItemId is 0 for bots and pets, so a stale
+            // CarryItemId with no timer still goes unsent.
+            if (user.CarryItemId > 0 && (user.CarryTimer > 0 || user.CarryItemId == user.RestingHandItemId))
                 session.Send(new CarryObjectComposer(user.VirtualId, user.CarryItemId));
             if (!user.IsBot && !user.IsPet && user.CurrentEffect > 0)
                 session.Send(new AvatarEffectComposer(user.VirtualId, user.CurrentEffect));
