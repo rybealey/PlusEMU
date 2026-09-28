@@ -145,6 +145,29 @@ public static class PoliceState
     /// </summary>
     private static readonly object EscortSync = new();
 
+    // ---- stun gun shots -------------------------------------------------------
+
+    /// <summary>Shots a stun gun holds before it has to be restocked at a police locker.</summary>
+    public const int StunGunShots = 7;
+
+    /// <summary>
+    /// Shots each officer has fired since their stun gun was last restocked,
+    /// hit or miss. Per player, and in memory like the stun gun's cooldown: a
+    /// relog keeps the count, and an emulator restart refills every gun. A
+    /// player who has never fired has no entry, which reads as a full gun.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, int> StunShotsFired = new();
+
+    public static int StunGunShotsLeft(int habboId) =>
+        Math.Max(0, StunGunShots - StunShotsFired.GetValueOrDefault(habboId));
+
+    /// <summary>One shot fired. Returns the shots left after it.</summary>
+    public static int FireStunGun(int habboId) =>
+        Math.Max(0, StunGunShots - StunShotsFired.AddOrUpdate(habboId, 1, (_, fired) => fired + 1));
+
+    /// <summary>A full gun again - the police locker, or a new gun from it.</summary>
+    public static void RestockStunGun(int habboId) => StunShotsFired.TryRemove(habboId, out _);
+
     // ---- stun --------------------------------------------------------------
 
     public static bool IsStunned(int habboId) => Stunned.ContainsKey(habboId);

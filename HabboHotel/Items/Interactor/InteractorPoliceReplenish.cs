@@ -21,7 +21,9 @@ namespace Plus.HabboHotel.Items.Interactor;
 /// The stun gun counts wherever it is, and the locker also EQUIPS it: a new
 /// one goes straight into the Weapon slot, and one already in the backpack
 /// is moved there. Whatever weapon was equipped before swaps back into the
-/// backpack. So "fully equipped" means cuffs held and the stun gun in hand.
+/// backpack. A stun gun holds seven shots (PoliceState.StunGunShots), and one
+/// that has fired any is reloaded here. So "fully equipped" means cuffs held,
+/// a flashbang held, and a loaded stun gun in hand.
 ///
 /// Walk-up and facing are the ATM's (InteractorAtm): used from across the
 /// room, the officer walks over first.
@@ -71,8 +73,11 @@ public class InteractorPoliceReplenish : IFurniInteractor
         var stunSlot = inventory.Any(entry => entry.Slot == RpWeapons.WeaponSlot && entry.Item == RpWeapons.StunGunItem)
             ? RpWeapons.WeaponSlot
             : inventory.FirstOrDefault(entry => entry.Item == RpWeapons.StunGunItem).Slot;
+        // A stun gun holds seven shots (PoliceState.StunGunShots); one that has
+        // fired any is reloaded here, and a new one comes full.
+        var needsReload = (stunSlot != 0) && (PoliceState.StunGunShotsLeft(habbo.Id) < PoliceState.StunGunShots);
 
-        if (!needsCuffs && !needsFlashbang && stunSlot == RpWeapons.WeaponSlot)
+        if (!needsCuffs && !needsFlashbang && stunSlot == RpWeapons.WeaponSlot && !needsReload)
         {
             session.SendWhisper("You're already fully equipped.");
             return;
@@ -112,6 +117,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             {
                 given.Add("stun gun");
                 equipped = true;
+                PoliceState.RestockStunGun(habbo.Id);
             }
             else
             {
@@ -119,8 +125,17 @@ public class InteractorPoliceReplenish : IFurniInteractor
                 if (stunSlot == -1)
                     session.SendWhisper("Your backpack is full - there was no room for the stun gun.");
                 else if (stunSlot > 0)
+                {
                     given.Add("stun gun");
+                    PoliceState.RestockStunGun(habbo.Id);
+                }
             }
+        }
+        else if (needsReload)
+        {
+            // The gun they hold, refilled - named in the restock chat like a new one.
+            PoliceState.RestockStunGun(habbo.Id);
+            given.Add("stun gun");
         }
 
         // One in a carry slot, held already or just handed out: move it into
@@ -150,5 +165,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             room.SendPacket(new ChatComposer(user.VirtualId, $"*restocks their {list}*", 0, ActionBubble));
         }
         session.Send(new RpInventoryComposer(after));
+        // The stun gun's bar in the backpack, full again after a reload or a new gun.
+        session.Send(new RpStunGunChargeComposer(PoliceState.StunGunShotsLeft(habbo.Id), PoliceState.StunGunShots));
     }
 }

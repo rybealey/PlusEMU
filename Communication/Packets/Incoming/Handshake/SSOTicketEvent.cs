@@ -135,6 +135,10 @@ public class SsoTicketEvent : IPacketEvent
             session.GetHabbo().EnsureRpUiSettingsLoaded();
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor, session.GetHabbo().RpUiUsernameColor, session.GetHabbo().RpUiUsernameIcon, session.GetHabbo().RpUiUsernameIconColor));
             session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
+            // pixelrp: the stun gun's shots left, for the bar on it in the backpack.
+            session.Send(new RpStunGunChargeComposer(
+                Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.StunGunShotsLeft(session.GetHabbo().Id),
+                Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.StunGunShots));
             // pixelrp: every furni renamed or re-functioned since the gamedata
             // on disk was built. The client reads names out of that file, so a
             // rename from the shop or the Function tool reached only whoever was

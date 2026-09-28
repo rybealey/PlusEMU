@@ -141,6 +141,14 @@ internal class StunCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
+        // Seven shots, then back to a police locker (PoliceState.StunGunShots).
+        // Before the cooldown, so an empty gun says it is empty.
+        if (PoliceState.StunGunShotsLeft(habbo.Id) <= 0)
+        {
+            session.SendWhisper("Your stun gun is empty. Restock at a police locker.");
+            return Task.CompletedTask;
+        }
+
         if (_lastShot.TryGetValue(habbo.Id, out var last))
         {
             var elapsed = (DateTime.UtcNow - last).TotalSeconds;
@@ -152,8 +160,10 @@ internal class StunCommand : ITargetChatCommand
             }
         }
 
-        // The trigger is pulled from here on, hit or miss.
+        // The trigger is pulled from here on, hit or miss - and a miss spends a
+        // shot as surely as a hit does.
         _lastShot[habbo.Id] = DateTime.UtcNow;
+        var shotsLeft = PoliceState.FireStunGun(habbo.Id);
         habbo.RpAggression = AggressionOnShot;
 
         if (InReach(thisUser, targetUser))
@@ -163,6 +173,11 @@ internal class StunCommand : ITargetChatCommand
         }
         else
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*uses their stun gun on {target.Username}, but misses*", 0, FightBubble));
+
+        if (shotsLeft == 0)
+            session.SendWhisper("That was your last shot. Restock at a police locker.");
+        // The green bar on the stun gun in the backpack.
+        session.Send(new Plus.Communication.Packets.Outgoing.Users.RpStunGunChargeComposer(shotsLeft, PoliceState.StunGunShots));
 
         PoliceState.SendStats(room, thisUser, habbo);
         return Task.CompletedTask;
