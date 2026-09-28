@@ -513,6 +513,17 @@ public class RoomItemHandling
         // it either, so the test is the tile, not the angle.
         var inPlace = !newItem && !onRoller && newX == item.GetX && newY == item.GetY;
 
+        // pixelrp: A STACK TILE OVERRULES THE STACK.
+        //
+        // It is a builder's tool rather than a piece of furniture, and Habbo's
+        // own stack magic tiles work this way: one goes down anywhere on the
+        // map - over furni that does not allow stacking, and under somebody
+        // standing there, who can still walk off it - and whatever is then put
+        // on it goes to the height it was set to (the Z loop below), whatever
+        // lies underneath. Here the checks below refused both, so a stack tile
+        // could not reach over a chair, which is most of what one is for.
+        var isStackTile = item.Definition.InteractionType == InteractionType.Stacktool;
+
         // pixelrp: a rug does not care that you are standing there.
         //
         // The three user checks below used to make one exception - a seat -
@@ -541,7 +552,7 @@ public class RoomItemHandling
             needsReAdd = _room.GetGameMap().RemoveFromMap(item);
         var affectedTiles = Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width, newX, newY, newRot);
         if (!_room.GetGameMap().ValidTile(newX, newY) ||
-            (!inPlace && _room.GetGameMap().SquareHasUsers(newX, newY) && !Occupiable(newX, newY)))
+            (!inPlace && !isStackTile && _room.GetGameMap().SquareHasUsers(newX, newY) && !Occupiable(newX, newY)))
         {
             if (needsReAdd)
                 _room.GetGameMap().AddToMap(item);
@@ -563,8 +574,9 @@ public class RoomItemHandling
             // long piece over a player - they end up standing in the sofa until
             // they move, which is untidy and entirely recoverable, where a turn
             // that silently refuses is neither obvious nor fixable from inside
-            // the room. A piece that never left its tile concedes the same way.
-            if (inPlace)
+            // the room. A piece that never left its tile concedes the same way,
+            // and so does a stack tile.
+            if (inPlace || isStackTile)
                 continue;
 
             if (_room.GetGameMap().SquareHasUsers(tile.X, tile.Y) && !Occupiable(tile.X, tile.Y))
@@ -608,7 +620,7 @@ public class RoomItemHandling
                 // And that we have no users. Per tile now rather than per
                 // piece: the same question as above, asked again by the
                 // auto-stacking path, so it has to concede the same squares.
-                if (!item.IsRoller)
+                if (!item.IsRoller && !isStackTile)
                 {
                     foreach (var tile in affectedTiles.Values)
                     {
@@ -635,7 +647,12 @@ public class RoomItemHandling
             }
             itemsComplete.AddRange(itemsOnTile);
             itemsComplete.AddRange(itemsAffected);
-            if (!onRoller)
+            // A stack tile under any part of the piece sets its height outright
+            // (the Z loop below), so what that tile covers has no say in whether
+            // the piece may go there - and a stack tile itself goes over anything.
+            var onStackTile = itemsComplete.Any(other => other != null && other.Id != item.Id &&
+                                                         other.Definition?.InteractionType == InteractionType.Stacktool);
+            if (!onRoller && !isStackTile && !onStackTile)
             {
                 // Check for items in the stack that do not allow stacking on top of them
                 foreach (var I in itemsComplete.ToList())
