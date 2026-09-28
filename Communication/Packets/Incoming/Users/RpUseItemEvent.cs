@@ -211,6 +211,11 @@ public class RpUseItemEvent : IPacketEvent
                 session.SendWhisper("Spit Token redeemed - you can now use :spit <username>.");
                 break;
             }
+            // pixelrp police: a flashbang is thrown from the backpack, the same
+            // throw as :fb. Throw spends it and resends the backpack itself.
+            case Plus.HabboHotel.Rooms.Chat.Commands.User.Police.Flashbang.Item:
+                Plus.HabboHotel.Rooms.Chat.Commands.User.Police.Flashbang.Throw(session, habbo.CurrentRoom);
+                return;
             // pixelrp police: handcuffs are carried, never used up - :cuff
             // checks for them. Clicking them just says how.
             case Plus.HabboHotel.Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem:

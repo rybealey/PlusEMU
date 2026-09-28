@@ -23,7 +23,8 @@ internal class SpawnCommand : ITargetChatCommand
         { "bat", ("baseball_bat", "Baseball Bat") },
         { "axe", ("axe", "Axe") },
         { "stun", ("stun_gun", "Stun Gun") },
-        { "cuffs", ("handcuffs", "Handcuffs") }
+        { "cuffs", ("handcuffs", "Handcuffs") },
+        { "flashbang", ("flashbang", "Flashbang") }
     };
 
     public string Key => "spawn";

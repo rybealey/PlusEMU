@@ -64,12 +64,15 @@ public class InteractorPoliceReplenish : IFurniInteractor
 
         var inventory = habbo.LoadRpInventory();
         var needsCuffs = !inventory.Any(entry => entry.Item == CuffCommand.HandcuffsItem);
+        // A flashbang is spent on the throw, so this is the one the locker is
+        // asked for most (Flashbang).
+        var needsFlashbang = !inventory.Any(entry => entry.Item == Flashbang.Item);
         // The Weapon slot first: one already equipped is the one that counts.
         var stunSlot = inventory.Any(entry => entry.Slot == RpWeapons.WeaponSlot && entry.Item == RpWeapons.StunGunItem)
             ? RpWeapons.WeaponSlot
             : inventory.FirstOrDefault(entry => entry.Item == RpWeapons.StunGunItem).Slot;
 
-        if (!needsCuffs && stunSlot == RpWeapons.WeaponSlot)
+        if (!needsCuffs && !needsFlashbang && stunSlot == RpWeapons.WeaponSlot)
         {
             session.SendWhisper("You're already fully equipped.");
             return;
@@ -86,6 +89,15 @@ public class InteractorPoliceReplenish : IFurniInteractor
                 session.SendWhisper("Your backpack is full - there was no room for the handcuffs.");
             else if (slot > 0)
                 given.Add("handcuffs");
+        }
+
+        if (needsFlashbang)
+        {
+            var slot = habbo.AddRpItem(Flashbang.Item);
+            if (slot == -1)
+                session.SendWhisper("Your backpack is full - there was no room for the flashbang.");
+            else if (slot > 0)
+                given.Add("flashbang");
         }
 
         if (stunSlot == 0)
@@ -122,8 +134,12 @@ public class InteractorPoliceReplenish : IFurniInteractor
         var after = habbo.LoadRpInventory();
         if (equipped)
             RpWeapons.ApplyToHand(habbo, after);
+        // "handcuffs", "handcuffs and flashbang", "handcuffs, stun gun and flashbang"
+        var list = given.Count <= 1
+            ? string.Join("", given)
+            : string.Join(", ", given.Take(given.Count - 1)) + " and " + given[^1];
         var action = given.Count > 0
-            ? $"*restocks their {string.Join(" and ", given)}*"
+            ? $"*restocks their {list}*"
             : "*equips their stun gun*";
         room.SendPacket(new ChatComposer(user.VirtualId, action, 0, ActionBubble));
         session.Send(new RpInventoryComposer(after));
