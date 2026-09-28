@@ -336,6 +336,8 @@ public class RoomUserManager
         // pixelrp: passive players wear the passive enable on entry so there is
         // no pop on room change; the per-tick helper is the safety net.
         // pixelrp: City Government on duty wears the staff enable instead.
+        // pixelrp turfs: the turf panel for this room - hidden when it is not a turf.
+        session.Send(Communication.Packets.Outgoing.Rooms.Settings.RpRoomTurfComposer.For(_room, session.GetHabbo().Id));
         if (ShiftManager.IsStaffOnDuty(session.GetHabbo().Id) && session.GetHabbo().Effects != null)
             session.GetHabbo().Effects.ApplyEffect(Habbo.StaffDutyEffectId);
         else if (session.GetHabbo().RpPassiveSeconds > 0 && session.GetHabbo().Effects != null)

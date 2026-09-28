@@ -356,6 +356,7 @@
     "RpJukeboxMoveEvent": 4045,
     "RpRoomZoneSaveEvent": 3923,
     "RpRoomZoneTypeSaveEvent": 4150,
+    "RpTurfClaimEvent": 4153,
     "RpSetRoomCorpEvent": 3958,
     "RpSetHqRankEvent": 3962,
     "RpSetEmergencyEvent": 3960,

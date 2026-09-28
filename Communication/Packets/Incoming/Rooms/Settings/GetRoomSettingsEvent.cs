@@ -26,7 +26,7 @@ internal class GetRoomSettingsEvent : IPacketEvent
         // pixelrp: the Roleplay tab's zone type rides alongside the stock
         // settings data (the stock packet's wire shape can't be extended).
         session.Send(new RpRoomZoneComposer(room.Id, room.IsSafeZone));
-        session.Send(RpRoomTurfComposer.For(room));
+        session.Send(RpRoomTurfComposer.For(room, session.GetHabbo().Id));
         // pixelrp: the Roleplay tab's HQ corp config (ranks + emergency
         // access flags) rides alongside the zone type for the same reason.
         session.Send(CorporationUtility.BuildRoomCorp(room));

@@ -51,13 +51,16 @@ internal class RpRoomZoneTypeSaveEvent : IPacketEvent
             dbClient.RunQuery();
         }
 
+        // Release and Recolour both push the turf panel to everyone in the room;
+        // any other change still has to tell them the zone moved.
         if (wasTurf && !room.IsTurf)
             TurfManager.Release(room.Id);
         else if (!wasTurf && room.IsTurf)
             TurfManager.Recolour(room);
+        else
+            TurfManager.Broadcast(room);
 
         session.Send(new RpRoomZoneComposer(room.Id, room.IsSafeZone));
-        session.Send(RpRoomTurfComposer.For(room));
         return Task.CompletedTask;
     }
 }
