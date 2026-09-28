@@ -72,6 +72,11 @@ public static class GangUtility
     /// </summary>
     public static void BroadcastGangMembership(int userId)
     {
-        PlusEnvironment.Game.ClientManager.SendPacket(ComposeFor(userId, GetGang(userId)));
+        var gang = GetGang(userId);
+        PlusEnvironment.Game.ClientManager.SendPacket(ComposeFor(userId, gang));
+        // pixelrp turfs: the one place every gang change passes through, so a
+        // player who founds, joins or leaves a gang while standing in a turf
+        // sees the panel's button change without re-entering the room.
+        TurfManager.OnMembershipChanged(userId, gang?.GangId ?? 0);
     }
 }

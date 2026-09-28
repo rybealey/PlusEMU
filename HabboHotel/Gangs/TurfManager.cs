@@ -369,6 +369,40 @@ public static class TurfManager
                 Broadcast(room);
     }
 
+    /// <summary>
+    /// A player's gang changed (GangUtility.BroadcastGangMembership - founded,
+    /// joined, left, kicked, disbanded). Three things can be stale:
+    ///
+    /// - their turf panel, which words its button from their gang: resent if
+    ///   they are standing in a turf, so "Join a gang to claim" becomes a Claim
+    ///   button (or back) in real time;
+    /// - every running claim's cached gang for them (Capture.GangOf), dropped so
+    ///   the next tick looks them up again - joining a rival gang mid-claim now
+    ///   contests it, leaving one stops contesting;
+    /// - a claim they are MAKING, which is their gang's: it fails if they are no
+    ///   longer in that gang, since nobody would be holding the room for it.
+    /// </summary>
+    public static void OnMembershipChanged(int userId, int gangId)
+    {
+        foreach (var (roomId, capture) in Captures.ToList())
+        {
+            capture.GangOf.TryRemove(userId, out _);
+            if (capture.ClaimerId != userId || gangId == capture.GangId)
+                continue;
+            if (!PlusEnvironment.Game.RoomManager.TryGetRoom(roomId, out var claimRoom))
+            {
+                Captures.TryRemove(roomId, out _);
+                continue;
+            }
+            Fail(claimRoom, capture, claimRoom.GetRoomUserManager().GetRoomUserByHabbo(userId), $"{capture.ClaimerName} left {capture.GangName}");
+        }
+
+        var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+        var room = client?.GetHabbo()?.CurrentRoom;
+        if (room != null && room.IsTurf)
+            client.Send(new RpRoomTurfComposer(Describe(room, userId)));
+    }
+
     /// <summary>The room is being unloaded: a claim cannot outlive the room it is in.</summary>
     public static void Forget(uint roomId) => Captures.TryRemove(roomId, out _);
 
