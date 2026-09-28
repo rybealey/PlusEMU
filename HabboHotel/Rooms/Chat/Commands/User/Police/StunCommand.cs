@@ -45,8 +45,8 @@ internal class StunCommand : ITargetChatCommand
     /// <summary>How far a shot carries along a row or column.</summary>
     private const int StraightReach = 2;
 
-    /// <summary>Seconds the target stays frozen.</summary>
-    private const int StunSeconds = 3;
+    /// <summary>Seconds the target stays frozen. Flashbang.StunSeconds matches it.</summary>
+    private const int StunSeconds = 4;
 
     /// <summary>
     /// Seconds between shots. The stun gun keeps its OWN timer, longer than

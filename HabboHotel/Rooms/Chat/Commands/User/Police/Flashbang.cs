@@ -13,11 +13,14 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// Thrown from the backpack (click it) or with :fb, both through
 /// <see cref="Throw"/>. It stuns every player on the officer's tile or on one
 /// of the eight around it - the full 3x3 block, diagonals in - exactly as a
-/// stun gun hit does: the same freeze, the same length, and the same people
-/// out of reach of it (passive, already out cold, already in custody, the
-/// officer's own characters). The officer is never caught in their own bang,
-/// and nor is any other ON-DUTY officer - a squad clearing a room together
-/// does not stun itself. Off duty, an officer is anyone else.
+/// stun gun hit does: the same freeze and the same length. Out of its reach:
+/// the passive, anyone already out cold and the officer's own characters. A
+/// prisoner in custody IS caught - unlike a stun gun shot, a bang does not pick
+/// its targets - and shows the stun's birds over their cuffs for the freeze
+/// (PoliceState.TickCuffs yields while stunned; the escort carries on). The
+/// officer is never caught in their own bang, and nor is any other ON-DUTY
+/// officer - a squad clearing a room together does not stun itself. Off duty,
+/// an officer is anyone else.
 ///
 /// It is SPENT on the throw, whether it catches anyone or not - a flashbang
 /// thrown into an empty corner is still gone. The Police Replenish locker
@@ -36,7 +39,7 @@ public static class Flashbang
     private const int Reach = 1;
 
     /// <summary>The freeze, matched to :stun's (StunCommand.StunSeconds).</summary>
-    private const int StunSeconds = 3;
+    private const int StunSeconds = 4;
 
     /// <summary>What throwing one sets the officer's aggression to - :stun's figure.</summary>
     private const int AggressionOnThrow = 100;
@@ -96,7 +99,8 @@ public static class Flashbang
             if (AccountUtility.SameAccount(habbo.Id, target.Id))
                 continue;
             target.EnsureRpStatsLoaded();
-            if (target.IsRpPassive || target.RpHealth <= 0 || PoliceState.IsBeingEscorted(target.Id))
+            // A prisoner in custody is caught too (see the summary above).
+            if (target.IsRpPassive || target.RpHealth <= 0)
                 continue;
             // Last, because it is the one check that asks the database.
             if (PoliceUtility.IsOnDutyOfficer(target.Id))

@@ -325,12 +325,18 @@ public static class PoliceState
     /// and not refreshed, for the reason TickAmbulance gives: what is handed
     /// back at the end is what they were wearing when they were arrested, not
     /// whatever happened to hold the slot for one tick in the middle.
+    ///
+    /// EXCEPT WHILE STUNNED: the stun's birds hold the slot for its few seconds
+    /// (a flashbang catches prisoners in cuffs), and the cuffs take it back on
+    /// the tick the stun ends - TickStun runs just before this in the room
+    /// cycle. It also keeps the birds out of the snapshot for someone stunned
+    /// and then cuffed, so an uncuff does not hand the birds back.
     /// </summary>
     public static void TickCuffs(RoomUser user)
     {
         if (user == null || user.IsBot || Cuffed.IsEmpty)
             return;
-        if (!IsCuffed(user.UserId))
+        if (!IsCuffed(user.UserId) || IsStunned(user.UserId))
             return;
         var effects = user.GetClient()?.GetHabbo()?.Effects;
         if (effects == null || effects.CurrentEffect == CuffEffectId)
