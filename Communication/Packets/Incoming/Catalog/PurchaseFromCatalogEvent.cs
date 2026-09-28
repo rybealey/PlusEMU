@@ -15,6 +15,8 @@ using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Gangs;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users.Effects;
 using Dapper;
@@ -31,6 +33,7 @@ public class PurchaseFromCatalogEvent : IPacketEvent
     private readonly IItemDataManager _itemManager;
     private readonly IBadgeManager _badgeManager;
     private readonly IItemFactory _itemFactory;
+    private readonly IGroupManager _groupManager;
 
     public PurchaseFromCatalogEvent(ICatalogManager catalogManager,
         IDatabase database,
@@ -38,7 +41,8 @@ public class PurchaseFromCatalogEvent : IPacketEvent
         IAchievementManager achievementManager,
         IItemDataManager itemManager,
         IBadgeManager badgeManager,
-        IItemFactory itemFactory)
+        IItemFactory itemFactory,
+        IGroupManager groupManager)
     {
         _catalogManager = catalogManager;
         _database = database;
@@ -47,6 +51,7 @@ public class PurchaseFromCatalogEvent : IPacketEvent
         _itemManager = itemManager;
         _badgeManager = badgeManager;
         _itemFactory = itemFactory;
+        _groupManager = groupManager;
     }
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
@@ -82,6 +87,8 @@ public class PurchaseFromCatalogEvent : IPacketEvent
         var totalDiamondCost = amount > 1 ? item.CostDiamonds * amount - (int)Math.Floor((double)amount / 6) * item.CostDiamonds : item.CostDiamonds;
         if (session.GetHabbo().Credits < totalCreditsCost || session.GetHabbo().Duckets < totalPixelCost || session.GetHabbo().Diamonds < totalDiamondCost)
             return;
+        // pixelrp: the group a group furni is bought for - see the Guild case.
+        var groupId = 0;
         var limitedEditionSells = 0u;
         var limitedEditionStack = 0u;
         switch (item.Definition.InteractionType)
@@ -89,8 +96,29 @@ public class PurchaseFromCatalogEvent : IPacketEvent
             case InteractionType.None:
                 extraData = "";
                 break;
+            // pixelrp: group furni. extraData is the group the buyer picked, and it
+            // used to go through Convert.ToInt32 unchecked further down - so a
+            // page with no group picker (anything but guild_custom_furni, such as
+            // Turfs), which sends an empty string, threw, and ANY exception in a
+            // packet handler disconnects the player (PacketManager). The forum
+            // was missing here entirely and threw on every page.
+            //
+            // Now: no group, or a bad one, is group 0 - a neutral furni, which is
+            // what turf furni is. A real group must be one the buyer belongs to;
+            // stock Plus never checked, so any group's colours could be bought.
+            // Refused before anything is charged.
             case InteractionType.GuildItem:
             case InteractionType.GuildGate:
+            case InteractionType.GuildForum:
+                if (!int.TryParse(extraData, out groupId) || groupId < 0)
+                    groupId = 0;
+                if (groupId > 0 && !BelongsTo(session.GetHabbo().Id, groupId))
+                {
+                    session.SendNotification("You can only buy group furni for a group you belong to.");
+                    session.Send(new PurchaseErrorComposer(1));
+                    return;
+                }
+                extraData = groupId.ToString();
                 break;
             case InteractionType.Pet:
                 try
@@ -216,12 +244,12 @@ public class PurchaseFromCatalogEvent : IPacketEvent
                     case InteractionType.GuildForum:
                         if (amountPurchase > 1)
                         {
-                            var items = _itemFactory.CreateMultipleItems(item.Definition, session.GetHabbo(), extraData, amountPurchase, Convert.ToInt32(extraData));
+                            var items = _itemFactory.CreateMultipleItems(item.Definition, session.GetHabbo(), extraData, amountPurchase, groupId);
                             if (items != null) generatedGenericItems.AddRange(items);
                         }
                         else
                         {
-                            newItem = _itemFactory.CreateSingleItemNullable(item.Definition, session.GetHabbo(), extraData, extraData, Convert.ToInt32(extraData));
+                            newItem = _itemFactory.CreateSingleItemNullable(item.Definition, session.GetHabbo(), extraData, extraData, groupId);
                             if (newItem != null) generatedGenericItems.Add(newItem);
                         }
                         break;
@@ -372,5 +400,20 @@ public class PurchaseFromCatalogEvent : IPacketEvent
         var whole = dot < 0 ? value : value[..dot];
         var fraction = dot < 0 ? "1" : value[(dot + 1)..];
         return whole.Length > 0 && fraction.Length > 0 && whole.All(char.IsAsciiDigit) && fraction.All(char.IsAsciiDigit);
+    }
+
+    /// <summary>
+    /// pixelrp: is this player in the group? A gang's membership is read fresh
+    /// (GangUtility.GetGang), because gang joins and leaves write
+    /// group_memberships directly and never touch the cached Group's member
+    /// list; an ordinary group uses that list as stock Plus does.
+    /// </summary>
+    private bool BelongsTo(int userId, int groupId)
+    {
+        if (!_groupManager.TryGetGroup(groupId, out var group))
+            return false;
+        if (group.IsGang)
+            return GangUtility.GetGang(userId)?.GangId == groupId;
+        return group.IsMember(userId);
     }
 }

@@ -217,6 +217,8 @@ public static class ServerPacketHeader
     // queued - is a change to the same state, so there is one state packet.
     public const uint RpJamStateComposer = 4030;
     public const uint RpRoomZoneComposer = 3924;
+    // pixelrp turfs: is this room a turf, and who holds it.
+    public const uint RpRoomTurfComposer = 4151;
     public const uint RpFurniAlphaComposer = 3926;
     // The 39xx block is full; this continues past the highest id in use.
     public const uint RpFurniFunctionComposer = 4111;

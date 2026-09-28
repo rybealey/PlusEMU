@@ -37,6 +37,13 @@ public class Group
     public string Name { get; set; }
     public int AdminOnlyDeco { get; set; }
     public string Badge { get; set; }
+
+    /// <summary>
+    /// pixelrp: this group is a gang (`groups.is_gang`). A gang's Colour1/2 are
+    /// raw RGB from the Gang window's palette, not the badge colour ids a Habbo
+    /// group stores - so anything turning them into hex must ask this first.
+    /// </summary>
+    public bool IsGang { get; set; }
     public int CreateTime { get; set; }
     public int CreatorId { get; set; }
     public string Description { get; set; }

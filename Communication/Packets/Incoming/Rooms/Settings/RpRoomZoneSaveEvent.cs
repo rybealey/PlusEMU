@@ -26,6 +26,20 @@ internal class RpRoomZoneSaveEvent : IPacketEvent
         if (!room.CheckRights(session, true))
             return Task.CompletedTask;
         room.IsSafeZone = isSafeZone;
+        // pixelrp turfs: a turf is an unsafe room, so a room made SAFE through
+        // this older packet stops being one (RpRoomZoneTypeSaveEvent is the
+        // packet that knows about turfs).
+        if (isSafeZone && room.IsTurf)
+        {
+            room.IsTurf = false;
+            using (var dbClient = _database.GetQueryReactor())
+            {
+                dbClient.SetQuery("UPDATE `rooms` SET `is_turf` = '0' WHERE `id` = @roomId LIMIT 1");
+                dbClient.AddParameter("roomId", room.Id);
+                dbClient.RunQuery();
+            }
+            HabboHotel.Gangs.TurfManager.Release(room.Id);
+        }
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `rooms` SET `is_safe_zone` = @safe WHERE `id` = @roomId LIMIT 1");

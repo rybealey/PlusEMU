@@ -510,6 +510,8 @@ public static class ClientPacketHeader
     // pixelrp backpack: drag an item onto the bin to throw the whole stack away.
     public const uint RpDiscardItemEvent = 4055;
     public const uint RpRoomZoneSaveEvent = 3923;
+    // pixelrp turfs: the zone type as 0 unsafe / 1 safe / 2 turf.
+    public const uint RpRoomZoneTypeSaveEvent = 4150;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958
     // 3959 is BURNED: it collides with the stock client's PHOTO_COMPETITION

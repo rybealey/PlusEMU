@@ -418,6 +418,9 @@ public static class GangManager
             connection.Execute("DELETE FROM `groups` WHERE `id` = @gangId AND `is_gang` = '1'", new { gangId });
         }
         groupManager.DeleteGroup(gangId);
+        // pixelrp turfs: a gang that no longer exists holds nothing - every turf
+        // it had goes back to unclaimed, and grey.
+        TurfManager.ReleaseAllOf(gangId);
         foreach (var userId in memberIds)
             GangUtility.BroadcastGangMembership(userId);
         foreach (var userId in inviteeIds)

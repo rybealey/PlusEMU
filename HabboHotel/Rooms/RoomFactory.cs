@@ -16,6 +16,11 @@ public static class RoomFactory
     // default), so Convert.ToString yields "True"/"False" and a == "1"
     // comparison silently reads every row as false — hide-walls "reappearing
     // after room load" was this. Handle both column shapes.
+    // pixelrp: `is_turf` (221_TurfZones). Read defensively so an emulator run
+    // against a database that has not had the migration yet still loads rooms.
+    private static bool ReadTurf(System.Data.DataRow row) =>
+        row.Table.Columns.Contains("is_turf") && ToBool(row["is_turf"]);
+
     private static bool ToBool(object value) =>
         value is bool b ? b : Convert.ToString(value) == "1";
 
@@ -67,6 +72,7 @@ public static class RoomFactory
             ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model)
         {
             IsSafeZone = ToBool(row["is_safe_zone"]),
+            IsTurf = ReadTurf(row),
             CorporationId = Convert.ToInt32(row["corporation_id"]),
             AllowMedical = ToBool(row["allow_medical"]),
             AllowPolice = ToBool(row["allow_police"]),
@@ -172,6 +178,7 @@ public static class RoomFactory
                     ToBool(row["respect_notifications_enabled"]),
                     ToBool(row["pet_morphs_allowed"]), ToInt(row["group_id"]), ToInt(row["sale_price"]), ToBool(row["lay_enabled"]), model);
                 data.IsSafeZone = ToBool(row["is_safe_zone"]);
+                data.IsTurf = ReadTurf(row);
                 data.CorporationId = Convert.ToInt32(row["corporation_id"]);
                 data.AllowMedical = ToBool(row["allow_medical"]);
                 data.AllowPolice = ToBool(row["allow_police"]);

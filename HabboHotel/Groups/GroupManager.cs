@@ -99,6 +99,8 @@ public class GroupManager : IGroupManager
                     Convert.ToInt32(row["owner_id"]),
                     Convert.ToInt32(row["created"]), Convert.ToInt32(row["state"]), Convert.ToInt32(row["colour1"]), Convert.ToInt32(row["colour2"]), Convert.ToInt32(row["admindeco"]),
                     Convert.ToInt32(row["forum_enabled"]) == 1);
+                // pixelrp: see Group.IsGang.
+                group.IsGang = row.Table.Columns.Contains("is_gang") && Convert.ToString(row["is_gang"]) == "1";
                 _groups.TryAdd(group.Id, group);
                 return true;
             }

@@ -470,6 +470,16 @@ public class Room : RoomData
             {
                 ExceptionLogger.LogException(e);
             }
+            // pixelrp turfs: a claim in progress here (TurfManager). One probe
+            // on an empty dictionary for every room without one.
+            try
+            {
+                Gangs.TurfManager.Tick(this);
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+            }
             var total = sw.ElapsedMilliseconds;
             if (total > 250)
                 Log.Warn($"[stall] Room {Id} ProcessRoom took {total}ms (items={tItems}ms users={tUsers - tItems}ms serialize={tSerialize - tUsers}ms gameitems={tGameItems - tSerialize}ms wired={total - tGameItems}ms)");
@@ -804,6 +814,8 @@ public class Room : RoomData
         // work, all before any resource here is torn down.
         // No-op for rooms V2 never attached to, so this is safe with the flag off.
         Movement.MovementRegistry.Detach(RoomId);
+        // pixelrp turfs: a claim cannot outlive the room it is running in.
+        Gangs.TurfManager.Forget(RoomId);
 
         SendPacket(new CloseConnectionComposer());
         if (!MDisposed)

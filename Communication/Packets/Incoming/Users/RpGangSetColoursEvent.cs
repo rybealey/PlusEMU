@@ -38,6 +38,9 @@ internal class RpGangSetColoursEvent : IPacketEvent
             group.Colour2 = colourB;
         }
 
+        // pixelrp turfs: the gang's turfs repaint in front of everyone in them.
+        TurfManager.RecolourTurfsOf(actor.GangId);
+
         session.SendWhisper("Your gang's colours were saved.");
         GangManager.BroadcastDetail(actor.GangId);
         GangManager.BroadcastMembershipOfAll(actor.GangId);

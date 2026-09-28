@@ -111,6 +111,7 @@ public class RoomData
         ReverseRollers = data.ReverseRollers;
         LayEnabled = data.LayEnabled;
         IsSafeZone = data.IsSafeZone;
+        IsTurf = data.IsTurf;
         CorporationId = data.CorporationId;
         AllowMedical = data.AllowMedical;
         AllowPolice = data.AllowPolice;
@@ -169,6 +170,10 @@ public class RoomData
     // everyone inside. Not a ctor arg (the positional ctor is unwieldy);
     // RoomFactory assigns it after construction from `is_safe_zone`.
     public bool IsSafeZone { get; set; }
+
+    // pixelrp: a TURF - an unsafe room a gang can claim (TurfManager). Always
+    // stored with IsSafeZone false, so it plays as an unsafe zone throughout.
+    public bool IsTurf { get; set; }
 
     // pixelrp: the corporation this room is the headquarters of (0 = none).
     // RoomFactory assigns it after construction from `corporation_id`.

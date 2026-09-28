@@ -24,6 +24,7 @@ internal class RoomSettingsCommand : IChatCommand
             return;
         session.Send(new RoomSettingsDataComposer(room));
         session.Send(new RpRoomZoneComposer(room.Id, room.IsSafeZone));
+        session.Send(RpRoomTurfComposer.For(room));
         session.Send(CorporationUtility.BuildRoomCorp(room));
     }
 }

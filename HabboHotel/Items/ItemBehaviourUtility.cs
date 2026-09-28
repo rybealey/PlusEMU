@@ -198,6 +198,21 @@ internal static class ItemBehaviourUtility
             case InteractionType.GuildItem:
             case InteractionType.GuildGate:
             case InteractionType.GuildForum:
+                // pixelrp turfs: group furni standing in a turf shows the gang
+                // that holds it, or the neutral pair - whatever its own group.
+                // Display only; see TurfManager.
+                if (Gangs.TurfManager.TryPaint(item, out var turfGroup, out var turfBadge, out var turfColourA, out var turfColourB))
+                {
+                    packet.WriteInteger(0);
+                    packet.WriteInteger(2);
+                    packet.WriteInteger(5);
+                    packet.WriteString(item.LegacyDataString);
+                    packet.WriteString(turfGroup);
+                    packet.WriteString(turfBadge);
+                    packet.WriteString(turfColourA);
+                    packet.WriteString(turfColourB);
+                    break;
+                }
                 Group group = null;
                 if (!PlusEnvironment.Game.GroupManager.TryGetGroup(item.GroupId, out group))
                 {
@@ -213,8 +228,11 @@ internal static class ItemBehaviourUtility
                     packet.WriteString(item.LegacyDataString);
                     packet.WriteString(group.Id.ToString());
                     packet.WriteString(group.Badge);
-                    packet.WriteString(PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour1, true));
-                    packet.WriteString(PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour2, false));
+                    // pixelrp: a gang's colours are raw RGB, not the badge
+                    // colour ids GetColourCode looks up - which returned "" for
+                    // every gang, so gang furni drew with no colour at all.
+                    packet.WriteString(group.IsGang ? Gangs.TurfManager.Hex(group.Colour1) : PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour1, true));
+                    packet.WriteString(group.IsGang ? Gangs.TurfManager.Hex(group.Colour2) : PlusEnvironment.Game.GroupManager.GetColourCode(group.Colour2, false));
                 }
                 break;
             case InteractionType.Background:
