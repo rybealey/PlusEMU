@@ -4,7 +4,7 @@ namespace Plus.HabboHotel.Rooms;
 
 internal static class RoomAppender
 {
-    public static void WriteRoom(IOutgoingPacket packet, RoomData data, RoomPromotion promotion)
+    public static void WriteRoom(IOutgoingPacket packet, RoomData data)
     {
         packet.WriteUInteger(data.Id);
         packet.WriteString(data.Name);
@@ -23,8 +23,8 @@ internal static class RoomAppender
         var roomType = 0;
         if (data.Group != null)
             roomType += 2;
-        if (data.Promotion != null)
-            roomType += 4;
+        // (4 was "has a promotion" - promoted rooms are gone, so it is never set
+        // and the promotion fields below it are never written)
         if (data.Type == "private")
             roomType += 8;
         if (data.AllowPets)
@@ -37,12 +37,6 @@ internal static class RoomAppender
             packet.WriteInteger(data.Group?.Id ?? 0);
             packet.WriteString(data.Group == null ? "" : data.Group.Name);
             packet.WriteString(data.Group == null ? "" : data.Group.Badge);
-        }
-        if (data.Promotion != null)
-        {
-            packet.WriteString(promotion != null ? promotion.Name : "");
-            packet.WriteString(promotion != null ? promotion.Description : "");
-            packet.WriteInteger(promotion?.MinutesLeft ?? 0);
         }
     }
 }

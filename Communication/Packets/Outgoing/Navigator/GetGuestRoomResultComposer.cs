@@ -36,29 +36,15 @@ public class GetGuestRoomResultComposer : IServerPacket
         packet.WriteInteger(_data.Category);
         packet.WriteInteger(_data.Tags.Count);
         foreach (var tag in _data.Tags) packet.WriteString(tag);
-        if (_data.Group != null && _data.Promotion != null)
-        {
-            packet.WriteInteger(62);
-            packet.WriteInteger(_data.Group?.Id ?? 0);
-            packet.WriteString(_data.Group == null ? "" : _data.Group.Name);
-            packet.WriteString(_data.Group == null ? "" : _data.Group.Badge);
-            packet.WriteString(_data.Promotion != null ? _data.Promotion.Name : "");
-            packet.WriteString(_data.Promotion != null ? _data.Promotion.Description : "");
-            packet.WriteInteger(_data.Promotion?.MinutesLeft ?? 0);
-        }
-        else if (_data.Group != null && _data.Promotion == null)
+        // pixelrp: promoted rooms are gone, so only the group flag remains:
+        // 58 with a group (its id, name and badge follow), 56 without. 62 and
+        // 60 were the same two with a promotion's fields added.
+        if (_data.Group != null)
         {
             packet.WriteInteger(58);
-            packet.WriteInteger(_data.Group?.Id ?? 0);
-            packet.WriteString(_data.Group == null ? "" : _data.Group.Name);
-            packet.WriteString(_data.Group == null ? "" : _data.Group.Badge);
-        }
-        else if (_data.Group == null && _data.Promotion != null)
-        {
-            packet.WriteInteger(60);
-            packet.WriteString(_data.Promotion != null ? _data.Promotion.Name : "");
-            packet.WriteString(_data.Promotion != null ? _data.Promotion.Description : "");
-            packet.WriteInteger(_data.Promotion?.MinutesLeft ?? 0);
+            packet.WriteInteger(_data.Group.Id);
+            packet.WriteString(_data.Group.Name);
+            packet.WriteString(_data.Group.Badge);
         }
         else
             packet.WriteInteger(56);

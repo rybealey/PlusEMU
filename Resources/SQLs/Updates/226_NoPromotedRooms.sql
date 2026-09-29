@@ -3,9 +3,9 @@
 -- Stock Habbo let an owner buy a room "event" - a title and description shown
 -- to everyone in the room and listed on the Navigator's Events tab
 -- (roomads_view). PixelRP drops the feature: the tab is no longer sent
--- (NavigatorManager), buying and editing a promotion do nothing
--- (PurchaseRoomAdEvent, EditRoomPromotionEvent), and the client no longer
--- shows the room banner or the shop page.
+-- (NavigatorManager), the server no longer has any promotion code (the
+-- purchase, edit and listing handlers and the room's promotion data are
+-- removed), and the client no longer shows the room banner or the shop page.
 --
 -- This one-time step ends every running promotion, switches off the shop page
 -- that sold them and the Navigator list behind the old tab. Rows are disabled,

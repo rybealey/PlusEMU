@@ -61,7 +61,6 @@ public class RoomData
         LayEnabled = layEnabled;
         if (groupId > 0)
             PlusEnvironment.Game.GroupManager.TryGetGroup(groupId, out _group);
-        LoadPromotions();
         Model = model;
     }
 
@@ -188,36 +187,9 @@ public class RoomData
 
     public RoomModel Model { get; set; }
 
-    public RoomPromotion Promotion { get; set; }
-
     public Group Group
     {
         get => _group;
         set => _group = value;
-    }
-
-    public bool HasActivePromotion => Promotion != null;
-
-    public void LoadPromotions()
-    {
-        DataRow getPromotion = null;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery($"SELECT * FROM `room_promotions` WHERE `room_id` = {Id} LIMIT 1;");
-        getPromotion = dbClient.GetRow();
-        if (getPromotion != null)
-        {
-            if (Convert.ToDouble(getPromotion["timestamp_expire"]) > UnixTimestamp.GetNow())
-            {
-                Promotion = new(Convert.ToString(getPromotion["title"]), Convert.ToString(getPromotion["description"]), Convert.ToDouble(getPromotion["timestamp_start"]),
-                    Convert.ToDouble(getPromotion["timestamp_expire"]), Convert.ToInt32(getPromotion["category_id"]));
-            }
-        }
-    }
-
-    public void EndPromotion()
-    {
-        if (!HasActivePromotion)
-            return;
-        Promotion = null;
     }
 }

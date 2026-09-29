@@ -35,8 +35,6 @@ internal class ModerateRoomEvent : IPacketEvent
             room.Access = RoomAccess.Doorbell;
         if (room.Tags.Count > 0)
             room.ClearTags();
-        if (room.HasActivePromotion)
-            room.EndPromotion();
         using (var dbClient = _database.GetQueryReactor())
         {
             if (setName && setLock)

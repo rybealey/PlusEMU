@@ -91,7 +91,6 @@ public class Room : RoomData
         _tradingComponent = new(this);
         GetRoomItemHandler().LoadFurniture();
         GetGameMap().GenerateMaps();
-        LoadPromotions();
         LoadRights();
         LoadFilter();
         InitBots();
@@ -419,8 +418,7 @@ public class Room : RoomData
                 IdleTime++;
             else if (IdleTime > 0)
                 IdleTime = 0;
-            if (HasActivePromotion && Promotion.HasExpired) EndPromotion();
-            if (IdleTime >= 60 && !HasActivePromotion)
+            if (IdleTime >= 60)
             {
                 PlusEnvironment.Game.RoomManager.UnloadRoom(Id);
                 return;
