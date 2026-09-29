@@ -7,8 +7,8 @@ namespace Plus.Communication.Packets.Incoming.Rooms.Settings;
 
 /// <summary>
 /// pixelrp: toggles which outside emergency service (0 medical, 1 police,
-/// 2 staff) may work in this room. Editable by the room owner or staff
-/// (CheckRights), unlike the staff-only HQ settings.
+/// 2 staff) may work in this room. Editable by staff only
+/// (Room.CanManageSettings), like the HQ settings.
 /// </summary>
 internal class RpSetEmergencyEvent : IPacketEvent
 {
@@ -26,7 +26,7 @@ internal class RpSetEmergencyEvent : IPacketEvent
         var enabled = packet.ReadInt() == 1;
         if (!_roomManager.TryLoadRoom(roomId, out var room))
             return Task.CompletedTask;
-        if (!room.CheckRights(session, true))
+        if (!room.CanManageSettings(session))
             return Task.CompletedTask;
 
         string column;

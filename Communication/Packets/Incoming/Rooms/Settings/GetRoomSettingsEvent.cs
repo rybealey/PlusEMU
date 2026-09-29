@@ -20,7 +20,7 @@ internal class GetRoomSettingsEvent : IPacketEvent
         var roomId = packet.ReadUInt();
         if (!_roomManager.TryLoadRoom(roomId, out var room))
             return Task.CompletedTask;
-        if (!room.CheckRights(session, true))
+        if (!room.CanManageSettings(session))
             return Task.CompletedTask;
         session.Send(new RoomSettingsDataComposer(room));
         // pixelrp: the Roleplay tab's zone type rides alongside the stock

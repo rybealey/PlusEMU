@@ -25,7 +25,7 @@ internal class RpSetRoomCorpEvent : IPacketEvent
         var corpId = packet.ReadInt();
         if (!_roomManager.TryLoadRoom(roomId, out var room))
             return Task.CompletedTask;
-        if (!room.CheckRights(session, true))
+        if (!room.CanManageSettings(session))
             return Task.CompletedTask;
         if (session.GetHabbo().Rank < 5)
             return Task.CompletedTask;

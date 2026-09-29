@@ -7,7 +7,7 @@ namespace Plus.Communication.Packets.Incoming.Rooms.Settings;
 
 /// <summary>
 /// pixelrp: sets the room's zone TYPE - 0 unsafe, 1 safe, 2 turf (Room
-/// settings > Roleplay > Zoning). Owner only and persisted at once, exactly as
+/// settings > Roleplay > Zoning). Staff only (Room.CanManageSettings) and persisted at once, exactly as
 /// RpRoomZoneSaveEvent, which it supersedes for any client that sends it; that
 /// one stays for clients that only know safe and unsafe.
 ///
@@ -36,7 +36,7 @@ internal class RpRoomZoneTypeSaveEvent : IPacketEvent
         var room = session.GetHabbo()?.CurrentRoom;
         if (room == null)
             return Task.CompletedTask;
-        if (!room.CheckRights(session, true))
+        if (!room.CanManageSettings(session))
             return Task.CompletedTask;
 
         var wasTurf = room.IsTurf;

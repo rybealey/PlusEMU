@@ -42,7 +42,7 @@ internal class SaveRoomSettingsEvent : IPacketEvent
         // settings of any room in the hotel - name, password, access, who may kick/ban -
         // without owning it or even being inside it. GetRoomSettingsEvent gates the
         // read-only version the same way.
-        if (!room.CheckRights(session, true))
+        if (!room.CanManageSettings(session))
         {
             _logger.LogWarning("Blocked room settings save for room {roomId} from {username} (id {userId}, rank {rank}) — not the owner.",
                 roomId, session.GetHabbo().Username, session.GetHabbo().Id, session.GetHabbo().Rank);

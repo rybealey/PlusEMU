@@ -24,7 +24,8 @@ internal class AssignRightsEvent : RoomPacketEvent
     public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
     {
         var userId = packet.ReadInt();
-        if (!room.CheckRights(session, true))
+        // pixelrp: staff only - owners no longer hand out rights
+        if (!room.CanManageSettings(session))
             return Task.CompletedTask;
         if (room.UsersWithRights.Contains(userId))
         {

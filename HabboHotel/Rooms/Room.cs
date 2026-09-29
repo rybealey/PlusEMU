@@ -322,6 +322,21 @@ public class Room : RoomData
         return CheckRights(session, true) || Corporations.ShiftManager.IsStaffOnDuty(habbo.Id);
     }
 
+    /// <summary>The lowest rank that may manage room settings (CanManageSettings).</summary>
+    public const int SettingsStaffRank = 5;
+
+    /// <summary>
+    /// pixelrp: may this player read or change the room's settings - the
+    /// Room tool's name, door, trading, chat, pets, walls, zone type and
+    /// emergency access - delete the room, or say who has rights in it?
+    /// Staff only: rank 5 and up (the project's staff floor, as for
+    /// :roomsettings and the HQ settings), on duty or off. A rank, not the
+    /// `room_any_owner` permission, because that one is not granted to every
+    /// staff rank. Owning the room is not enough; room settings are a staff job.
+    /// </summary>
+    public bool CanManageSettings(GameClient session) =>
+        session?.GetHabbo() != null && session.GetHabbo().Rank >= SettingsStaffRank;
+
     public bool CheckRights(GameClient session, bool requireOwnership, bool checkForGroups = false)
     {
         try

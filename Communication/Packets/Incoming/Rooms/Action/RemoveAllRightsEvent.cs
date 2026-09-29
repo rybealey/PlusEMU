@@ -21,7 +21,8 @@ internal class RemoveAllRightsEvent : RoomPacketEvent
     public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
     {
         var instance = room;
-        if (!instance.CheckRights(session, true))
+        // pixelrp: staff only - owners no longer clear rights
+        if (!instance.CanManageSettings(session))
             return Task.CompletedTask;
         foreach (var userId in new List<int>(instance.UsersWithRights))
         {
