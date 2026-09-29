@@ -181,6 +181,18 @@ public sealed class MovementState : IDueHeapNode
     public bool ShadowUnseated;
 
     /// <summary>
+    /// A suspect just let go (MovementV2Bridge.Unpair) part-way through a step
+    /// the escort had them on, walking it out as an ordinary walker with no
+    /// route left - so they finish the step and stop on its tile, instead of
+    /// a walk-end at once that the client drew as a snap onto it
+    /// (MovementController.TryFinishShadowStep). A click meanwhile is held
+    /// for the step's end, not redirected: the client holds this step under
+    /// the captor's identity, which a redirect of the suspect's own would not
+    /// match. Cleared when the step is committed, and by any stop or new walk.
+    /// </summary>
+    public bool FinishingShadowStep;
+
+    /// <summary>
     /// VirtualId of the walker this unit is the shadow of, or
     /// <see cref="NoShadow"/>. While set, this
     /// unit's own walk requests are refused at RequestMove - nothing may give a

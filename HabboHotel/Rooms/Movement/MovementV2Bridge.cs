@@ -171,7 +171,14 @@ public static class MovementV2Bridge
                     state.TileZ = user.Z;
                 }
 
-                if (state.Mode == MovementMode.Moving)
+                if (state.Mode == MovementMode.Moving && state.FinishingShadowStep)
+                    // Just let go, still walking out the step the escort had
+                    // them on (MovementController.TryFinishShadowStep): held,
+                    // and walked from that step's tile when it ends - the
+                    // client holds this step under the captor's identity,
+                    // which a redirect of their own would not match.
+                    state.DeferredRedirectTarget = target;
+                else if (state.Mode == MovementMode.Moving)
                     MovementController.Redirect(movement, state, target, ctx, now);
                 else if (state.Mode == MovementMode.Pending)
                     // Still waiting on the phase boundary: swap the route, keep the
@@ -332,6 +339,12 @@ public static class MovementV2Bridge
     /// with a walk-end on the tile it was last heading to, so a suspect let go
     /// mid-walk stops there instead of keeping a walking posture forever.
     /// Safe with either user null or already gone.
+    ///
+    /// A POLICE suspect let go part-way through a step (an :uncuff or an
+    /// :unescort while walking) finishes that step and stops on its tile,
+    /// instead - MovementController.TryFinishShadowStep. Not a medical patient,
+    /// and not anyone lying down (a knockout ends an escort after laying them
+    /// out): both are closed out at once, as before.
     /// </summary>
     public static void Unpair(Room? room, RoomUser? captor, RoomUser? suspect)
     {
@@ -357,6 +370,12 @@ public static class MovementV2Bridge
             if (s == null && c != null && c.ShadowVirtualId != MovementState.NoShadow)
                 movement.States.TryGetValue(c.ShadowVirtualId, out s);
 
+            // Read before the link is cleared: may this shadow walk out its step?
+            var finishStep = c != null && s != null
+                && c.ShadowVirtualId == s.VirtualId && s.ShadowedBy == c.VirtualId
+                && !c.ShadowBehind
+                && (suspect ?? room.GetRoomUserManager()?.GetRoomUserByVirtualId(s.VirtualId))?.IsLying != true;
+
             if (c != null)
             {
                 c.ShadowVirtualId = MovementState.NoShadow;
@@ -366,7 +385,8 @@ public static class MovementV2Bridge
             if (s != null && s.ShadowedBy != MovementState.NoShadow)
             {
                 s.ShadowedBy = MovementState.NoShadow;
-                MovementController.StageShadowEnd(movement, s, map);
+                if (!finishStep || !MovementController.TryFinishShadowStep(movement, c!, s, MovementScheduler.Instance.Clock.NowMs))
+                    MovementController.StageShadowEnd(movement, s, map);
             }
         }
         MovementScheduler.Instance.Signal(movement);

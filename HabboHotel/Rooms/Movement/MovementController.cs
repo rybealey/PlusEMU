@@ -66,6 +66,7 @@ public static class MovementController
         // are already halfway through.
         w.IntervalMs = w.DesiredIntervalMs;
         w.EmittedThroughEdge = -1;
+        w.FinishingShadowStep = false;
         w.Target = target;
         w.Tile = tile;
         w.TileZ = tileZ;
@@ -579,6 +580,9 @@ public static class MovementController
 
         // (a) commit the edge that just finished
         CommitEdgeSilently(room, w, nowMs);
+        // A suspect let go mid-step has now finished it (TryFinishShadowStep):
+        // from here they are an ordinary walker, and a click redirects again.
+        w.FinishingShadowStep = false;
 
         // (b) lateness: honour promises, never contradict them.
         if (lateMs > w.IntervalMs)
@@ -769,6 +773,7 @@ public static class MovementController
         w.EdgeTo = w.Tile;
         w.EdgeToZ = w.TileZ;
         w.DeferredRedirectTarget = null;
+        w.FinishingShadowStep = false;
         w.Route.Clear();
 
         if (!neverEmitted)
@@ -1185,6 +1190,7 @@ public static class MovementController
         room.Staged.RemoveAll(record => record.VirtualId == virtualId);
 
         s.DeferredRedirectTarget = null;
+        s.FinishingShadowStep = false;
         // The old walk's walk-end, if it was still on its way, is discarded
         // with the rest of that session - nothing is pending any more, so
         // RequestMove may resync from the RoomUser at once.
@@ -1233,6 +1239,54 @@ public static class MovementController
             System.Array.Empty<LookaheadTile>(), 0));
         room.HasStagedWork = true;
         room.HasImmediateWork = true;
+    }
+
+    /// <summary>
+    /// Release a shadow that is PART-WAY THROUGH A STEP by letting it finish
+    /// the step, instead of StageShadowEnd's walk-end at once. That walk-end
+    /// reached the client mid-step and the client forgets a unit on a
+    /// walk-end, so the avatar snapped forward onto the step's tile - the
+    /// snap an :uncuff mid-walk showed. False, changing nothing, when there is
+    /// no step in flight (the caller closes out as before).
+    ///
+    /// The shadow becomes an ordinary walker with no route left, due when the
+    /// step ends: AdvanceWalker commits it there, finds nothing to plan and
+    /// stops the walk on that tile - the same end every walk has. A click made
+    /// meanwhile is held (RequestMove) and walked from there.
+    ///
+    /// One publish-only record goes out now, so the client stops ON the tile
+    /// rather than walking on into the steps it was shown ahead: a rest at the
+    /// step's end, one revision up in the session the client holds this unit
+    /// under - the CAPTOR's, as every shadow record was. A higher revision is
+    /// what makes the client drop everything from that index on. The captor's
+    /// revision counts too: an early correction may have shown the shadow a
+    /// newer one than the last shadow edge carried. Caller holds MovementLock.
+    /// </summary>
+    public static bool TryFinishShadowStep(RoomMovement room, MovementState c, MovementState s, long nowMs)
+    {
+        var stepEnds = s.EdgeStartTick(s.EdgeIndex) + s.IntervalMs;
+        if (s.Tile == s.EdgeTo || nowMs >= stepEnds)
+            return false;
+
+        var index = s.EdgeIndex + 1;
+        var revision = System.Math.Max(s.RouteRevision, c.RouteRevision) + 1;
+        var z100 = MovementEdgeRecord.Z100(s.EdgeToZ);
+        room.Staged.Add(new MovementEdgeRecord(
+            s.VirtualId, c.WalkSessionId, revision, index, 0,
+            s.IntervalMs, s.EdgeStartTick(index),
+            s.EdgeTo.X, s.EdgeTo.Y, z100, s.EdgeTo.X, s.EdgeTo.Y, z100, s.EdgeToZ, s.Facing,
+            System.Array.Empty<LookaheadTile>(), 0, publishOnly: true));
+        room.HasStagedWork = true;
+        room.HasImmediateWork = true;
+
+        s.RouteRevision = revision;
+        s.Mode = MovementMode.Moving;
+        s.Route.Clear();
+        s.DeferredRedirectTarget = null;
+        s.EmittedThroughEdge = System.Math.Max(s.EmittedThroughEdge, s.EdgeIndex);
+        s.FinishingShadowStep = true;
+        room.Walkers.InsertOrUpdate(s, stepEnds);
+        return true;
     }
 
     /// <summary>
