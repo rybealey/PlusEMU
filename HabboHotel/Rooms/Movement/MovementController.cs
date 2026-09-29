@@ -1035,30 +1035,26 @@ public static class MovementController
 
         // NOT ON THEIR SIDE YET (a police escort begins with the suspect where
         // they stood - MovementV2Bridge.Pair). A walk-end or a turn leaves them
-        // there. Each captor step until they are, one of three, as HabRP's
-        // escort does it:
+        // there. The first captor step staged from here seats them, as HabRP's
+        // escort does:
         //
-        //   - the step would leave a ONE-TILE GAP between them (the suspect no
-        //     longer touching the tile the captor steps onto): the captor walks
-        //     it alone, and the suspect stays where they stood, still unseated;
-        //   - the gap is already there (the suspect not touching the tile the
-        //     captor steps off): the suspect JUMPS onto their side of that
-        //     tile, facing the captor's way, as the step starts;
-        //   - neither: nothing special.
-        //
-        // After a jump, and in the last case, the edge below runs from the
-        // suspect's tile (their EdgeTo) to the tile in front of where the
-        // captor is stepping, in the same beat: one tile after a jump; from
-        // where they stood, the slide a turn already makes.
+        //   - ESCORTED WHILE STANDING: that step is the captor's first, the
+        //     suspect is still touching the tile it leaves, and the edge below
+        //     SLIDES them from where they stood to the tile in front of where
+        //     the captor is stepping, in the same beat - the slide a turn
+        //     already makes, past the captor if they stood behind.
+        //   - ESCORTED MID-STEP: that step was already under way and is walked
+        //     alone (nothing is staged for the suspect until the next one). If
+        //     it took the captor away, leaving a ONE-TILE GAP, the next step
+        //     JUMPS the suspect onto their side of the tile the captor steps
+        //     off, facing the captor's way, and the edge below walks them on
+        //     from there one tile, in step. Otherwise it slides them.
         if (w.ShadowUnseated)
         {
             if (!moving)
                 return;
-            var gapNow = TileDistance(s.EdgeTo, w.Tile) >= 2;
-            if (!gapNow && TileDistance(s.EdgeTo, w.EdgeTo) >= 2)
-                return;
             w.ShadowUnseated = false;
-            if (gapNow)
+            if (TileDistance(s.EdgeTo, w.Tile) >= 2)
                 StageDisplacement(room, s, ShadowTile(map, w.Tile, w.Facing, w.ShadowBehind), w.Facing, map, w.EdgeStartTick(w.EdgeIndex));
         }
 
