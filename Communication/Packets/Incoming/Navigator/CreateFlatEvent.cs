@@ -52,8 +52,10 @@ internal class CreateFlatEvent : IPacketEvent
             category = RoomCategories.FallbackId;
         if (maxVisitors < 10 || maxVisitors > 25)
             maxVisitors = 10;
+        // pixelrp: an out-of-range value falls back to trading allowed, the
+        // hotel-wide default (225_TradingOnByDefault)
         if (tradeSettings < 0 || tradeSettings > 2)
-            tradeSettings = 0;
+            tradeSettings = 2;
         var newRoom = _roomManager.CreateRoom(session, name, description, category, maxVisitors, tradeSettings, model);
         if (newRoom != null)
             session.Send(new FlatCreatedComposer(newRoom.Id, name));

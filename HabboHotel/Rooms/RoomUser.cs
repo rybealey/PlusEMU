@@ -633,8 +633,9 @@ public class RoomUser
             {
                 if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null || user.GetClient().GetHabbo().IgnoresComponent.IsIgnored(_mClient.GetHabbo().Id))
                     continue;
-                if (_mRoom.ChatDistance > 0 && Gamemap.TileDistance(X, Y, user.X, user.Y) > _mRoom.ChatDistance)
-                    continue;
+                // pixelrp: no hearing distance - everyone in the room sees every
+                // chat bubble wherever they stand. The room's chat_hearing_distance
+                // is still stored and sent, but nothing reads it any more.
                 // pixelrp mention: everybody named sees this message in bubble
                 // style 25 so being addressed is unmissable. One packet, handed to
                 // each of them - it is the same bubble whoever is reading it.
