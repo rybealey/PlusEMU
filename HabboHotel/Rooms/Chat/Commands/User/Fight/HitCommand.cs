@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Rooms.Movement;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 
@@ -163,7 +164,13 @@ internal class HitCommand : ITargetChatCommand
 
         // The attacker's own tile plus the four sharing an edge with it: at most
         // one step, no diagonals. Nought covers two players on a shared tile.
-        var inReach = (Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y)) <= 1;
+        // Measured between the tiles the two are ON SCREEN, not RoomUser.X/Y,
+        // which for anyone mid-step still names the tile they are leaving - a
+        // punch thrown walking up to someone fell a tile short
+        // (MovementV2Bridge.ApparentTile, as :stun).
+        var from = MovementV2Bridge.ApparentTile(thisUser);
+        var to = MovementV2Bridge.ApparentTile(targetUser);
+        var inReach = (Math.Abs(to.X - from.X) + Math.Abs(to.Y - from.Y)) <= 1;
 
         // Leading AND trailing "*" matter: the client only treats a style-4
         // bubble as an action when the text is wrapped in them, and it then

@@ -115,6 +115,37 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
+    /// The tile a unit is on AS THE ROOM SEES IT, for reach checks - a stun
+    /// gun's firing line.
+    ///
+    /// RoomUser.X/Y is not it for anyone mid-step: ApplyMovementFrame puts it
+    /// on each step's FROM tile when the step begins, and only the next step
+    /// moves it on - so for the whole of a step it names the tile being left,
+    /// while every client has drawn the avatar most of the way onto the next.
+    /// An officer walking up to a suspect fired from a tile behind where they
+    /// stood on screen, and a shot that looked two tiles long missed at three.
+    ///
+    /// This rounds a step in flight to the nearer of its two tiles, by the
+    /// movement clock: the tile being left for the first half, the tile being
+    /// entered for the second. Anyone not mid-step - standing, or waiting for
+    /// a first step to start - is where RoomUser says. An escorted suspect
+    /// mid-step counts too: their state carries the step like a walker's.
+    /// </summary>
+    public static Point ApparentTile(RoomUser user)
+    {
+        var standing = new Point(user.X, user.Y);
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return standing;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed || !movement.States.TryGetValue(user.VirtualId, out var state) || state.Tile == state.EdgeTo)
+                return standing;
+            var elapsed = MovementScheduler.Instance.Clock.NowMs - state.EdgeStartTick(state.EdgeIndex);
+            return (elapsed * 2 >= state.IntervalMs) ? state.EdgeTo : state.Tile;
+        }
+    }
+
+    /// <summary>
     /// Route a walk request to V2. Returns void: there is no fallback engine,
     /// so an unroutable click is simply a no-op.
     /// </summary>

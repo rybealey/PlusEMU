@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
+using Plus.HabboHotel.Rooms.Movement;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
@@ -203,11 +204,19 @@ internal class StunCommand : ITargetChatCommand
     /// The firing line: straight along a row or column for two tiles, one tile
     /// on a true diagonal, nothing off those lines. The shared tile counts, as
     /// it does for a punch.
+    ///
+    /// Measured between the tiles the two are ON SCREEN
+    /// (MovementV2Bridge.ApparentTile), not RoomUser.X/Y, which for anyone
+    /// mid-step still names the tile they are leaving - so an officer firing
+    /// as they walked up to a target measured a tile short of where they
+    /// stood, and missed.
     /// </summary>
     private static bool InReach(RoomUser shooter, RoomUser target)
     {
-        var dx = Math.Abs(target.X - shooter.X);
-        var dy = Math.Abs(target.Y - shooter.Y);
+        var from = MovementV2Bridge.ApparentTile(shooter);
+        var to = MovementV2Bridge.ApparentTile(target);
+        var dx = Math.Abs(to.X - from.X);
+        var dy = Math.Abs(to.Y - from.Y);
         if (dx == 0 && dy == 0)
             return true;
         if (dx == 0 || dy == 0)
