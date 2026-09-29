@@ -34,7 +34,7 @@ internal class CreateFlatEvent : IPacketEvent
         var description = _wordFilterManager.CheckMessage(packet.ReadString());
         var modelName = packet.ReadString();
         var category = packet.ReadInt();
-        var maxVisitors = packet.ReadInt(); //10 = min, 25 = max.
+        var maxVisitors = packet.ReadInt();
         var tradeSettings = packet.ReadInt(); //2 = All can trade, 1 = owner only, 0 = no trading.
         if (name.Length < 3 || name.Length > 60)
         {
@@ -50,8 +50,9 @@ internal class CreateFlatEvent : IPacketEvent
             searchResultList.CategoryType != NavigatorCategoryType.Category ||
             searchResultList.RequiredRank > session.GetHabbo().Rank)
             category = RoomCategories.FallbackId;
-        if (maxVisitors < 10 || maxVisitors > 25)
-            maxVisitors = 10;
+        // pixelrp: 10 to 200 visitors (RoomLimits); anything else gets the default
+        if (maxVisitors < RoomLimits.MinVisitors || maxVisitors > RoomLimits.MaxVisitors)
+            maxVisitors = RoomLimits.DefaultVisitors;
         // pixelrp: an out-of-range value falls back to trading allowed, the
         // hotel-wide default (225_TradingOnByDefault)
         if (tradeSettings < 0 || tradeSettings > 2)

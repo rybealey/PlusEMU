@@ -505,22 +505,23 @@ public class RoomUser
         }
     }
 
+    // pixelrp: one gentle hotel-wide flood rule - 10 messages inside the
+    // window (8 ticks, about 4 seconds) mutes for 5 seconds, the same for
+    // everyone. It was 6 messages and a 20 second mute (7 gold VIP, 10 silver,
+    // 3 event staff). Rooms have no flood setting of their own: the stored
+    // chat_extra_flood was never read, and the Room tool no longer offers it.
+    private const int FloodMessageLimit = 10;
+    private const int FloodMuteSeconds = 5;
+
     public bool IncrementAndCheckFlood(out int muteTime)
     {
         muteTime = 0;
         ChatSpamCount++;
         if (ChatSpamTicks == -1)
             ChatSpamTicks = 8;
-        else if (ChatSpamCount >= 6)
+        else if (ChatSpamCount >= FloodMessageLimit)
         {
-            if (GetClient().GetHabbo().Permissions.HasRight("events_staff"))
-                muteTime = 3;
-            else if (GetClient().GetHabbo().Permissions.HasRight("gold_vip"))
-                muteTime = 7;
-            else if (GetClient().GetHabbo().Permissions.HasRight("silver_vip"))
-                muteTime = 10;
-            else
-                muteTime = 20;
+            muteTime = FloodMuteSeconds;
             GetClient().GetHabbo().FloodTime = UnixTimestamp.GetNow() + muteTime;
             ChatSpamCount = 0;
             return true;

@@ -109,10 +109,11 @@ internal class SaveRoomSettingsEvent : IPacketEvent
             name = name.Substring(0, 60);
         if (access == RoomAccess.Password && password.Length == 0)
             access = RoomAccess.Open;
-        if (maxUsers < 0)
-            maxUsers = 10;
-        if (maxUsers > 50)
-            maxUsers = 50;
+        // pixelrp: 10 to 200 visitors (RoomLimits), matching the Room tool's list
+        if (maxUsers < RoomLimits.MinVisitors)
+            maxUsers = RoomLimits.MinVisitors;
+        if (maxUsers > RoomLimits.MaxVisitors)
+            maxUsers = RoomLimits.MaxVisitors;
         // TryGetSearchResultList leaves searchResultList null when the packet-supplied
         // category id is unknown, so it has to be null-checked before it is read - not just
         // have categoryId reassigned.

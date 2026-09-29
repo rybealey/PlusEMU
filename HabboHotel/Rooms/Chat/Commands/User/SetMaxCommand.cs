@@ -20,7 +20,9 @@ internal class SetMaxCommand : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (!room.CheckRights(session, true))
+        // pixelrp: the visitor limit is a room setting, and room settings are
+        // staff only (Room.CanManageSettings) - owners no longer set it
+        if (!room.CanManageSettings(session))
             return;
         if (!parameters.Any())
         {
@@ -34,10 +36,10 @@ internal class SetMaxCommand : IChatCommand
                 maxAmount = 10;
                 session.SendWhisper("visitor amount too low, visitor amount has been set to 10.");
             }
-            else if (maxAmount > 200 && !session.GetHabbo().Permissions.HasRight("override_command_setmax_limit"))
+            else if (maxAmount > RoomLimits.MaxVisitors && !session.GetHabbo().Permissions.HasRight("override_command_setmax_limit"))
             {
-                maxAmount = 200;
-                session.SendWhisper("visitor amount too high for your rank, visitor amount has been set to 200.");
+                maxAmount = RoomLimits.MaxVisitors;
+                session.SendWhisper($"visitor amount too high for your rank, visitor amount has been set to {RoomLimits.MaxVisitors}.");
             }
             else
                 session.SendWhisper($"visitor amount set to {maxAmount}.");
