@@ -66,6 +66,16 @@ public class RpUseItemEvent : IPacketEvent
         // it back in the first free slot. Nothing is consumed either way.
         if (slot == weaponSlot || RpWeapons.IsWeapon(item))
         {
+            // pixelrp police: the stun gun is drawn only by a police officer -
+            // on duty or off: an officer off duty may hold theirs, and only
+            // firing it (:stun) needs the shift. Putting one away is anyone's
+            // business.
+            if (slot != weaponSlot && item == RpWeapons.StunGunItem
+                && !Plus.HabboHotel.Corporations.PoliceUtility.IsOfficer(habbo.Id))
+            {
+                session.SendWhisper("Only police officers can draw a stun gun.");
+                return;
+            }
             if (slot == weaponSlot)
             {
                 var used = habbo.LoadRpInventory().Select(entry => entry.Slot).ToHashSet();
@@ -215,6 +225,12 @@ public class RpUseItemEvent : IPacketEvent
             // throw as :fb. Throw spends it and resends the backpack itself.
             case Plus.HabboHotel.Rooms.Chat.Commands.User.Police.Flashbang.Item:
                 Plus.HabboHotel.Rooms.Chat.Commands.User.Police.Flashbang.Throw(session, habbo.CurrentRoom);
+                return;
+            // pixelrp police: pepper spray is aimed at someone. With a target
+            // selected the client sends the click as :ps (PepperSpray.Spray);
+            // a click that arrives here had nobody to aim at.
+            case Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PepperSpray.Item:
+                session.SendWhisper("No target selected.");
                 return;
             // pixelrp police: handcuffs are carried, never used up - :cuff
             // checks for them. Clicking them just says how.

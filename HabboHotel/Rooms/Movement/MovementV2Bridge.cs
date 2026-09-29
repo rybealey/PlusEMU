@@ -161,6 +161,40 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
+    /// pixelrp pepper spray: send <paramref name="user"/> stumbling
+    /// <paramref name="steps"/> tiles in the direction of (awayX, awayY) -
+    /// each -1, 0 or 1 - zig-zagging and facing <paramref name="facing"/>
+    /// throughout (MovementController.Stumble). Refused for a unit V2 does not
+    /// know, and for one somebody is escorting: end the escort first.
+    /// </summary>
+    public static void Stumble(RoomUser user, int awayX, int awayY, int steps, byte facing)
+    {
+        if (user == null)
+            return;
+        if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
+            return;
+        var ctx = MovementWalkerContext.For(user);
+        var now = MovementScheduler.Instance.Clock.NowMs;
+        lock (movement.MovementLock)
+        {
+            if (movement.Closed || !movement.States.TryGetValue(user.VirtualId, out var state))
+                return;
+            if (state.ShadowedBy != MovementState.NoShadow)
+                return;
+            // Standing: V2's anchor in step with RoomUser first, as RequestMove
+            // keeps it - and not while a walk-end is still on its way.
+            if (state.Mode != MovementMode.Moving && state.Mode != MovementMode.Pending
+                && Volatile.Read(ref user.V2WalkEndAppliedSession) >= state.WalkEndPendingSession)
+            {
+                state.Tile = new Point(user.X, user.Y);
+                state.TileZ = user.Z;
+            }
+            MovementController.Stumble(movement, state, new Point(awayX, awayY), steps, facing, ctx, now);
+        }
+        MovementScheduler.Instance.Signal(movement);
+    }
+
+    /// <summary>
     /// Route a walk request to V2. Returns void: there is no fallback engine,
     /// so an unroutable click is simply a no-op.
     /// </summary>
@@ -198,6 +232,10 @@ public static class MovementV2Bridge
                 // goes and nowhere else. CanWalk only gates the client's own click
                 // (MoveAvatarEvent); this closes every server-side path too.
                 if (state.ShadowedBy != MovementState.NoShadow)
+                    return;
+                // pixelrp pepper spray: a stumble goes where it was sent, and
+                // nothing - their own click, a push - replaces its route.
+                if (state.Stumbling)
                     return;
 
                 // Keep V2's idea of where the avatar stands in step with anything

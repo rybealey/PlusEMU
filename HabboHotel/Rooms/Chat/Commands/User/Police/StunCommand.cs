@@ -213,7 +213,7 @@ internal class StunCommand : ITargetChatCommand
     /// stepping onto, and on the one they are leaving for the first half of
     /// the step; the shot lands if any pairing is in line.
     /// </summary>
-    private static bool InReach(RoomUser shooter, RoomUser target)
+    internal static bool InReach(RoomUser shooter, RoomUser target)
     {
         var (shooterA, shooterB) = MovementV2Bridge.ReachTiles(shooter);
         var (targetA, targetB) = MovementV2Bridge.ReachTiles(target);

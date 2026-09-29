@@ -22,7 +22,8 @@ namespace Plus.HabboHotel.Items.Interactor;
 /// is moved there. Whatever weapon was equipped before swaps back into the
 /// backpack. A stun gun holds seven shots (PoliceState.StunGunShots), and one
 /// that has fired any is reloaded here. So "fully equipped" means cuffs held,
-/// a flashbang held, and a loaded stun gun in hand.
+/// a flashbang held, a can of pepper spray held, and a loaded stun gun in
+/// hand.
 ///
 /// Walk-up and facing are the ATM's (InteractorAtm): used from across the
 /// room, the officer walks over first.
@@ -70,6 +71,8 @@ public class InteractorPoliceReplenish : IFurniInteractor
         // A flashbang is spent on the throw, so this is the one the locker is
         // asked for most (Flashbang).
         var needsFlashbang = !inventory.Any(entry => entry.Item == Flashbang.Item);
+        // Spent on the spray, like the flashbang on the throw (PepperSpray).
+        var needsPepperSpray = !inventory.Any(entry => entry.Item == PepperSpray.Item);
         // The Weapon slot first: one already equipped is the one that counts.
         var stunSlot = inventory.Any(entry => entry.Slot == RpWeapons.WeaponSlot && entry.Item == RpWeapons.StunGunItem)
             ? RpWeapons.WeaponSlot
@@ -78,7 +81,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
         // fired any is reloaded here, and a new one comes full.
         var needsReload = (stunSlot != 0) && (PoliceState.StunGunShotsLeft(habbo.Id) < PoliceState.StunGunShots);
 
-        if (!needsCuffs && !needsFlashbang && stunSlot == RpWeapons.WeaponSlot && !needsReload)
+        if (!needsCuffs && !needsFlashbang && !needsPepperSpray && stunSlot == RpWeapons.WeaponSlot && !needsReload)
         {
             session.SendWhisper("You're already fully equipped.");
             return;
@@ -91,6 +94,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
         var cuffsGiven = false;
         var equipped = false;
         var flashbangGiven = false;
+        var pepperSprayGiven = false;
         var stunGunGiven = false;
         // The gun they already held, refilled - not a new one.
         var stunGunReloaded = false;
@@ -110,6 +114,15 @@ public class InteractorPoliceReplenish : IFurniInteractor
                 session.SendWhisper("Your backpack is full - there was no room for the flashbang.");
             else if (slot > 0)
                 flashbangGiven = true;
+        }
+
+        if (needsPepperSpray)
+        {
+            var slot = habbo.AddRpItem(PepperSpray.Item);
+            if (slot == -1)
+                session.SendWhisper("Your backpack is full - there was no room for the pepper spray.");
+            else if (slot > 0)
+                pepperSprayGiven = true;
         }
 
         if (stunSlot == 0)
@@ -150,7 +163,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             equipped = true;
         }
 
-        if (!cuffsGiven && !equipped && !flashbangGiven && !stunGunGiven && !stunGunReloaded)
+        if (!cuffsGiven && !equipped && !flashbangGiven && !pepperSprayGiven && !stunGunGiven && !stunGunReloaded)
             return;
 
         var after = habbo.LoadRpInventory();
@@ -168,6 +181,8 @@ public class InteractorPoliceReplenish : IFurniInteractor
             session.SendWhisper("Your stun gun has been replenished.");
         if (flashbangGiven)
             session.SendWhisper("You have received a flashbang.");
+        if (pepperSprayGiven)
+            session.SendWhisper("You have received a pepper spray.");
         if (cuffsGiven)
             session.SendWhisper("You have received a pair of handcuffs.");
     }

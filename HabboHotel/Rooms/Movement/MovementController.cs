@@ -47,6 +47,23 @@ public static class MovementController
         if (result == PathResult.None || !w.Route.HasNext)
             return false;
 
+        // An ordinary walk carries nothing of a stumble's.
+        w.Stumbling = false;
+        w.FacingOverride = -1;
+        w.PendingStumbleAway = null;
+
+        return BeginWalk(room, w, target, map, ctx, nowMs);
+    }
+
+    /// <summary>
+    /// Everything StartWalk does once w.Route holds the route: the new session,
+    /// the room's phase, and the first step - now, or Pending at the boundary.
+    /// Shared with <see cref="Stumble"/>, whose route is laid out rather than
+    /// searched for. Caller holds MovementLock.
+    /// </summary>
+    private static bool BeginWalk(
+        RoomMovement room, MovementState w, Point target, Gamemap map, in TraverseContext ctx, long nowMs)
+    {
         var tile = w.Tile;
         var tileZ = w.TileZ;
 
@@ -101,6 +118,118 @@ public static class MovementController
         w.Mode = MovementMode.Moving;
         PlanNextEdge(room, w, map, ctx, nowMs, immediate: true);
         return w.Mode == MovementMode.Moving;
+    }
+
+    /// <summary>
+    /// pixelrp pepper spray: send a unit STUMBLING <paramref name="steps"/>
+    /// tiles in <paramref name="away"/>'s direction, zig-zagging, facing
+    /// <paramref name="facing"/> the whole way (back at the officer).
+    ///
+    /// Standing, it begins now, on the room's beat like any walk. Waiting on a
+    /// first step (Pending), that walk is dropped - nothing of it was sent -
+    /// and the stumble begins in its place. MID-STEP, the step is walked out
+    /// and the stumble begins at its end (AdvanceWalker b1): cutting a step
+    /// off halfway would snap the avatar back to the tile it left.
+    ///
+    /// From here until the stumble's walk ends, RequestMove refuses the unit
+    /// (MovementState.Stumbling). Caller holds MovementLock.
+    /// </summary>
+    public static void Stumble(RoomMovement room, MovementState w, Point away, int steps, byte facing, in TraverseContext ctx, long nowMs)
+    {
+        if (room.Closed || steps <= 0 || (away.X == 0 && away.Y == 0))
+            return;
+        var map = room.Room.GetGameMap();
+        if (map == null)
+            return;
+
+        if (w.Mode == MovementMode.Moving)
+        {
+            w.PendingStumbleAway = away;
+            w.PendingStumbleSteps = steps;
+            w.PendingStumbleFacing = facing;
+            w.DeferredRedirectTarget = null;
+            w.Stumbling = true;
+            return;
+        }
+
+        if (w.Mode == MovementMode.Pending)
+            StopWalk(room, w, "stumble");
+
+        if (!LayStumble(map, w, away, steps, facing, ctx))
+            return;
+        w.Stumbling = true;
+        BeginWalk(room, w, w.Target, map, ctx, nowMs);
+    }
+
+    /// <summary>
+    /// Lay a stumble into w.Route from w.Tile, and set the walk's facing and
+    /// target to match. False, touching nothing, when not even one step can be
+    /// taken.
+    ///
+    /// THE ZIG-ZAG: a stumble straight along a row or column alternates the
+    /// two diagonals either side of it - east goes north-east, south-east,
+    /// north-east - so it wobbles a tile side to side while going the whole
+    /// distance. A diagonal stumble alternates the two straight steps that
+    /// make it up. Each step is checked as a walk would be; where the zig-zag's
+    /// step is blocked it tries straight on, then the other side, and where
+    /// all three are blocked the stumble stops there - a wall ends it early.
+    /// Occupancy is not consulted: players share tiles here.
+    ///
+    /// Every step is checked as a NON-final one, the last included, as
+    /// FrontTile does for an escort: tiles legal only as a route's last tile -
+    /// the door - are not places to send somebody who did not choose to go
+    /// there. A spray must never stumble a player out of the room.
+    /// </summary>
+    private static bool LayStumble(Gamemap map, MovementState w, Point away, int steps, byte facing, in TraverseContext ctx)
+    {
+        Point zig, zag;
+        if (away.X == 0 || away.Y == 0)
+        {
+            // Straight: the two diagonals, one either side.
+            var side = new Point(-away.Y, away.X);
+            zig = new Point(away.X + side.X, away.Y + side.Y);
+            zag = new Point(away.X - side.X, away.Y - side.Y);
+        }
+        else
+        {
+            // Diagonal: its two straight halves.
+            zig = new Point(away.X, 0);
+            zag = new Point(0, away.Y);
+        }
+
+        System.Span<Point> reversed = stackalloc Point[steps];
+        var count = 0;
+        var at = w.Tile;
+        for (var i = 0; i < steps; i++)
+        {
+            var first = (i % 2 == 0) ? zig : zag;
+            var other = (i % 2 == 0) ? zag : zig;
+            Point? next = null;
+            foreach (var step in new[] { first, away, other })
+            {
+                var candidate = new Point(at.X + step.X, at.Y + step.Y);
+                if (CanTraverse.IsPassable(CanTraverse.Evaluate(map, at, candidate, isFinalStep: false, ctx), false))
+                {
+                    next = candidate;
+                    break;
+                }
+            }
+            if (next is not { } tile)
+                break;
+            at = tile;
+            count++;
+            // Reversed, goal first, as SetFromReversed takes it: filled from
+            // the back as the stumble goes forward.
+            reversed[steps - count] = tile;
+        }
+
+        if (count == 0)
+            return false;
+
+        w.Route.SetFromReversed(reversed.Slice(steps - count), count, partial: false);
+        w.FacingOverride = facing;
+        w.Target = at;
+        return true;
     }
 
     /// <summary>
@@ -591,6 +720,22 @@ public static class MovementController
             SyncCommitsTo(room, w, elapsing, nowMs);
         }
 
+        // (b1) pixelrp pepper spray: a stumble asked for mid-step (Stumble)
+        // begins here, at the end of that step, laid out from the tile it
+        // ended on. It replaces the route, so it is a new revision; nowhere to
+        // stumble leaves no route, and the walk ends below. A click held for
+        // later dies with the old route - RequestMove refuses a stumbling
+        // unit anyway.
+        if (w.PendingStumbleAway is { } stumbleAway)
+        {
+            w.PendingStumbleAway = null;
+            w.DeferredRedirectTarget = null;
+            var stumbleCtx = MovementWalkerContext.For(room.Room, w.VirtualId);
+            if (!LayStumble(map, w, stumbleAway, w.PendingStumbleSteps, w.PendingStumbleFacing, stumbleCtx))
+                w.Route.Clear();
+            w.RouteRevision++;
+        }
+
         // (b2) a redirect deferred because the walker was behind the elapsing
         // index. Retried HERE because the commit above is the only thing that
         // brings w.EdgeIndex forward, and only while the two indexes now agree
@@ -740,7 +885,11 @@ public static class MovementController
         w.Route.Advance();
         w.EdgeTo = next;
         w.EdgeToZ = map.SqAbsoluteHeight(next.X, next.Y);
-        w.Facing = (byte)Rotation.Calculate(w.Tile.X, w.Tile.Y, next.X, next.Y);
+        // A stumble faces back at the officer on every step (FacingOverride);
+        // everything else faces the way it steps.
+        w.Facing = (w.FacingOverride >= 0)
+            ? (byte)w.FacingOverride
+            : (byte)Rotation.Calculate(w.Tile.X, w.Tile.Y, next.X, next.Y);
 
         // No tile-event barrier is armed here, and there is no longer one to
         // arm: tile effects run inline with the commit on the outbound thread,
@@ -774,6 +923,10 @@ public static class MovementController
         w.EdgeToZ = w.TileZ;
         w.DeferredRedirectTarget = null;
         w.FinishingShadowStep = false;
+        // A stumble ends with its walk.
+        w.Stumbling = false;
+        w.FacingOverride = -1;
+        w.PendingStumbleAway = null;
         w.Route.Clear();
 
         if (!neverEmitted)
@@ -878,12 +1031,19 @@ public static class MovementController
             }
         }
 
+        // pixelrp pepper spray: a stumble's steps are faced by the server, and
+        // field 6 carries that facing (RpMovementV2Flags.FixedFacing). This
+        // record only - never the shadow's, whose field 6 is its captor.
+        var fixedFacing = moving && w.FacingOverride >= 0;
+
         room.Staged.Add(new MovementEdgeRecord(
-            w.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex, flags,
+            w.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex,
+            fixedFacing ? (flags | RpMovementV2Flags.FixedFacing) : flags,
             w.IntervalMs, w.EdgeStartTick(w.EdgeIndex),
             w.Tile.X, w.Tile.Y, MovementEdgeRecord.Z100(w.TileZ),
             w.EdgeTo.X, w.EdgeTo.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
-            w.EdgeToZ, w.Facing, lookahead, lookCount, w.LastStartDelayMs));
+            w.EdgeToZ, w.Facing, lookahead, lookCount, w.LastStartDelayMs,
+            shadowOfVirtualId: fixedFacing ? w.FacingOverride : 0));
 
         // pixelrp police escort: the captor's shadow rides in the same frame.
         StageShadow(room, w, map, moving, flags);
@@ -1209,6 +1369,9 @@ public static class MovementController
 
         s.DeferredRedirectTarget = null;
         s.FinishingShadowStep = false;
+        s.Stumbling = false;
+        s.FacingOverride = -1;
+        s.PendingStumbleAway = null;
         // The old walk's walk-end, if it was still on its way, is discarded
         // with the rest of that session - nothing is pending any more, so
         // RequestMove may resync from the RoomUser at once.

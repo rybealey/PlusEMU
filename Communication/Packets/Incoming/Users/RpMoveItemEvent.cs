@@ -50,6 +50,17 @@ internal class RpMoveItemEvent : IPacketEvent
             session.SendWhisper("Your hands are cuffed.");
             return Task.CompletedTask;
         }
+        // pixelrp police: the stun gun is drawn only by a police officer, on
+        // duty or off - dragged onto the Weapon slot, or swapped in by dragging
+        // whatever is there onto it. Only firing it needs the shift. Putting
+        // one away is anyone's business.
+        var drawing = (to == weaponSlot) ? source.Item : ((from == weaponSlot && targetOccupied) ? target.Item : null);
+        if (drawing == Plus.HabboHotel.Users.RpWeapons.StunGunItem
+            && !Plus.HabboHotel.Corporations.PoliceUtility.IsOfficer(habbo.Id))
+        {
+            session.SendWhisper("Only police officers can draw a stun gun.");
+            return Task.CompletedTask;
+        }
         habbo.MoveRpItem(from, to);
         var after = habbo.LoadRpInventory();
         if (to == weaponSlot || from == weaponSlot)

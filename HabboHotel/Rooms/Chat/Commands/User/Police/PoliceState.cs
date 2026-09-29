@@ -230,19 +230,80 @@ public static class PoliceState
 
     /// <summary>
     /// Hand walking back, unless something else owns the flag. A knocked-out
-    /// player is frozen by their own health and an escorted suspect is pinned
-    /// by their captor; restoring CanWalk for either would let them walk away
-    /// from a state they are supposed to be stuck in.
+    /// player is frozen by their own health, an escorted suspect is pinned
+    /// by their captor, and a pepper-sprayed one is disoriented; restoring
+    /// CanWalk for any of them would let them walk away from a state they are
+    /// supposed to be stuck in.
     /// </summary>
     private static void Release(RoomUser user)
     {
         var habbo = user.GetClient()?.GetHabbo();
         var down = habbo != null && habbo.RpHealth <= 0;
-        if (!down && !IsBeingEscorted(user.UserId))
+        if (!down && !IsBeingEscorted(user.UserId) && !IsDisoriented(user.UserId))
             user.CanWalk = true;
         // Only clear the visual if it is still ours - nothing else applies 236
         // today, but a later enable would otherwise be wiped by a stun ending.
-        if (habbo?.Effects != null && habbo.Effects.CurrentEffect == StunEffectId)
+        // A pepper spray still running wears the same birds and keeps them.
+        if (!IsDisoriented(user.UserId) && habbo?.Effects != null && habbo.Effects.CurrentEffect == StunEffectId)
+            user.ApplyEffect(NoEffectId);
+        user.UpdateNeeded = true;
+    }
+
+    // ---- pepper spray -----------------------------------------------------
+
+    /// <summary>Pepper-sprayed player id -> when the disorientation lifts.</summary>
+    private static readonly ConcurrentDictionary<int, DateTime> Disoriented = new();
+
+    /// <summary>
+    /// What a disoriented player cannot do, by command key: fight. They cannot
+    /// walk either - CanWalk - while the stumble carries them.
+    /// </summary>
+    private static readonly HashSet<string> DisorientedCannot = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "hit", "slap", "stun", "fb", "ps"
+    };
+
+    public static bool IsDisoriented(int habboId) => Disoriented.ContainsKey(habboId);
+
+    /// <summary>Whether a pepper spray's disorientation stops this command.</summary>
+    public static bool DisorientedBlocks(int habboId, string commandKey) =>
+        IsDisoriented(habboId) && DisorientedCannot.Contains(commandKey);
+
+    /// <summary>
+    /// Disorient a player for <paramref name="milliseconds"/>: no walking and
+    /// no fighting. The stumble itself is the movement engine's
+    /// (MovementV2Bridge.Stumble); this owns only what they may do meanwhile.
+    /// A second spray refreshes the window rather than stacking.
+    /// </summary>
+    public static void Disorient(RoomUser user, int milliseconds)
+    {
+        if (user == null || user.IsBot)
+            return;
+        Disoriented[user.UserId] = DateTime.UtcNow.AddMilliseconds(milliseconds);
+        user.CanWalk = false;
+        // The stun's birds, for as long as it lasts (TickDisorient takes them
+        // off). Over handcuffs too: TickCuffs yields to them while this runs.
+        user.ApplyEffect(StunEffectId);
+        user.UpdateNeeded = true;
+    }
+
+    /// <summary>Lift a disorientation whose time is up. From the room tick, beside TickStun.</summary>
+    public static void TickDisorient(RoomUser user)
+    {
+        if (user == null || user.IsBot || Disoriented.IsEmpty)
+            return;
+        if (!Disoriented.TryGetValue(user.UserId, out var until) || DateTime.UtcNow < until)
+            return;
+        Disoriented.TryRemove(user.UserId, out _);
+        // Walking back, unless something else still owns it - a stun, a
+        // knockout, an escort.
+        var habbo = user.GetClient()?.GetHabbo();
+        var down = habbo != null && habbo.RpHealth <= 0;
+        if (!down && !IsBeingEscorted(user.UserId) && !IsStunned(user.UserId))
+            user.CanWalk = true;
+        // The birds off, if they are still ours - a stun still running keeps
+        // them, and anything else in the slot is left alone.
+        if (!IsStunned(user.UserId) && habbo?.Effects != null && habbo.Effects.CurrentEffect == StunEffectId)
             user.ApplyEffect(NoEffectId);
         user.UpdateNeeded = true;
     }
@@ -272,7 +333,7 @@ public static class PoliceState
         // Fighting.
         "hit", "slap",
         // Doing to somebody else what was done to you.
-        "stun", "fb", "cuff", "uncuff", "escort", "unescort",
+        "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort",
         // Trading, and handing things over.
         "offer", "sell", "give", "heal"
     };
@@ -359,7 +420,9 @@ public static class PoliceState
     {
         if (user == null || user.IsBot || Cuffed.IsEmpty)
             return;
-        if (!IsCuffed(user.UserId) || IsStunned(user.UserId))
+        // Stunned or pepper-sprayed, the birds hold the slot for their few
+        // seconds, and stay out of the snapshot below.
+        if (!IsCuffed(user.UserId) || IsStunned(user.UserId) || IsDisoriented(user.UserId))
             return;
         var effects = user.GetClient()?.GetHabbo()?.Effects;
         if (effects == null || effects.CurrentEffect == CuffEffectId)
@@ -662,11 +725,12 @@ public static class PoliceState
 
             if (suspectUser != null)
             {
-                // A suspect who is knocked out or still stunned keeps standing
-                // still - those states own the flag and clear it themselves.
+                // A suspect who is knocked out, still stunned or disoriented
+                // keeps standing still - those states own the flag and clear it
+                // themselves.
                 var habbo = suspectUser.GetClient()?.GetHabbo();
                 var down = habbo != null && habbo.RpHealth <= 0;
-                if (!down && !IsStunned(suspectId))
+                if (!down && !IsStunned(suspectId) && !IsDisoriented(suspectId))
                     suspectUser.CanWalk = true;
                 suspectUser.UpdateNeeded = true;
             }
@@ -1178,6 +1242,7 @@ public static class PoliceState
     public static void Forget(Room? room, int habboId)
     {
         Stunned.TryRemove(habboId, out _);
+        Disoriented.TryRemove(habboId, out _);
         Cuffed.TryRemove(habboId, out _);
         // The snapshot under the cuffs goes with them. Nothing to restore - the
         // player is on their way out - but this registry is process-global and

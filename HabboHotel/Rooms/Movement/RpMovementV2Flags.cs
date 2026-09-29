@@ -86,4 +86,21 @@ public static class RpMovementV2Flags
     /// </summary>
     public const int EscortShadow = 0x0200;
 
+    /// <summary>
+    /// pixelrp pepper spray: this edge is FACED BY THE SERVER, not by its own
+    /// step, and field 6 - the timingGroupId <see cref="EscortShadow"/> also
+    /// borrows - carries the facing, 0-7. A pepper-sprayed player stumbles
+    /// back from the officer still facing them (MovementState.FacingOverride),
+    /// so every step of that walk faces one fixed way that is not the way it
+    /// moves; a client facing it by the step would turn them round and the
+    /// status would turn them back, every step.
+    ///
+    /// The two never share a record: a stumbling player is nobody's escort
+    /// shadow - the spray ends any escort first. A flag bit and a borrowed
+    /// field for the reason <see cref="JoinStackedAtRequest"/> gives: no packet
+    /// length changes, and a client without it ignores both and faces by the
+    /// step, as before.
+    /// </summary>
+    public const int FixedFacing = 0x0400;
+
 }

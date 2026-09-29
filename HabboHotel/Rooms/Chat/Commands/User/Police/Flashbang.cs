@@ -63,6 +63,12 @@ public static class Flashbang
             session.SendWhisper("Your hands are cuffed.");
             return;
         }
+        // The backpack click comes here without passing CommandManager's gate.
+        if (PoliceState.IsDisoriented(habbo.Id))
+        {
+            session.SendWhisper("You are too disoriented to do that.");
+            return;
+        }
         if (PoliceState.IsBeingEscorted(habbo.Id))
         {
             session.SendWhisper("You cannot do that while you are being escorted.");

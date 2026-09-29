@@ -194,6 +194,35 @@ public sealed class MovementState : IDueHeapNode
     public bool FinishingShadowStep;
 
     /// <summary>
+    /// A pepper-sprayed stumble is under way or waiting to start
+    /// (MovementController.Stumble). While set, RequestMove refuses every walk
+    /// request for this unit - their own clicks, a push - so nothing replaces
+    /// the stumble's route. Cleared when that walk ends (StopWalk), by a
+    /// teleport, and by any new walk.
+    /// </summary>
+    public bool Stumbling;
+
+    /// <summary>
+    /// The facing, 0-7, every step of this walk is given instead of its own
+    /// direction, or -1 for none. A stumble faces back towards the officer who
+    /// sprayed them. Sent to the client as RpMovementV2Flags.FixedFacing.
+    /// Cleared with <see cref="Stumbling"/>.
+    /// </summary>
+    public int FacingOverride = -1;
+
+    /// <summary>
+    /// A stumble asked for while this unit was mid-step: the step is walked
+    /// out, and the stumble begins at its end (AdvanceWalker), built from the
+    /// tile it ends on. The direction to stumble in (each part -1, 0 or 1),
+    /// how many steps, and the facing. Null when none is waiting.
+    /// </summary>
+    public Point? PendingStumbleAway;
+
+    public int PendingStumbleSteps;
+
+    public byte PendingStumbleFacing;
+
+    /// <summary>
     /// VirtualId of the walker this unit is the shadow of, or
     /// <see cref="NoShadow"/>. While set, this
     /// unit's own walk requests are refused at RequestMove - nothing may give a

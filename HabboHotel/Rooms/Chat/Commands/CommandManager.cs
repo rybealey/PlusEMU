@@ -122,6 +122,12 @@ public class CommandManager : ICommandManager
                 session.SendWhisper("Your hands are cuffed.");
                 return true;
             }
+            // pixelrp police: pepper spray - nobody fights while they stumble.
+            if (User.Police.PoliceState.DisorientedBlocks(session.GetHabbo().Id, key.ToLower()))
+            {
+                session.SendWhisper("You are too disoriented to do that.");
+                return true;
+            }
             // pixelrp: out cold means doing nothing. Same reasoning as the cuffs:
             // one check here, not a copy in every command.
             if (IsPlayerCommand(command) && !KnockedOutCan.Contains(key) && KnockedOut.Refuse(session))
@@ -142,6 +148,17 @@ public class CommandManager : ICommandManager
                 }
 
                 var username = parameters[0];
+                // pixelrp: "x" is the client's shorthand for the selected HUD
+                // target, swapped for their name before the line is sent - typed,
+                // from a macro key, or from a backpack click. One that arrives
+                // as a bare "x" means nobody was selected, so say that rather
+                // than "User x seems to be offline": no player can be called x,
+                // names being three characters or more.
+                if (username.Equals("x", StringComparison.OrdinalIgnoreCase))
+                {
+                    session.SendWhisper(targetChatCommand.NoTargetMessage);
+                    return true;
+                }
                 parameters = parameters.Length > 1 ? parameters[1..] : Array.Empty<string>();
                 var target = _gameClientManager.GetClientByUsername(username);
                 if (target == null)

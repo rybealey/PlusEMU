@@ -1379,6 +1379,8 @@ public class RoomUserManager
                     HospitalAdmission.Tick(_room, user);
                     // pixelrp police: lift a stun whose few seconds are up.
                     Chat.Commands.User.Police.PoliceState.TickStun(user);
+                    // pixelrp police: and a pepper spray's disorientation.
+                    Chat.Commands.User.Police.PoliceState.TickDisorient(user);
                     // pixelrp hospital: hold the ambulance on both ends of a
                     // transport, against anything else that takes the slot.
                     Chat.Commands.User.Police.PoliceState.TickAmbulance(user);

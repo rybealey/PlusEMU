@@ -82,9 +82,10 @@ public static class PoliceUtility
 
     /// <summary>
     /// Take the force's equipment back from someone leaving it: every pair
-    /// of handcuffs, every stun gun and every flashbang in their backpack, the
-    /// Weapon slot included. The locker hands these out and only to officers, so they
-    /// go when the job does - on :quitjob, :fire and :superfire alike.
+    /// of handcuffs, every stun gun, every flashbang and every can of pepper
+    /// spray in their backpack, the Weapon slot included. The locker hands
+    /// these out and only to officers, so they go when the job does - on
+    /// :quitjob, :fire and :superfire alike.
     ///
     /// By user id, because a fired officer may be offline: the rows go either
     /// way, and an online one has their hand and backpack refreshed after.
@@ -95,11 +96,12 @@ public static class PoliceUtility
             return;
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
-            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `item` IN (@cuffs, @stun, @flashbang)");
+            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `item` IN (@cuffs, @stun, @flashbang, @pepperspray)");
             dbClient.AddParameter("id", userId);
             dbClient.AddParameter("cuffs", Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem);
             dbClient.AddParameter("stun", Users.RpWeapons.StunGunItem);
             dbClient.AddParameter("flashbang", Rooms.Chat.Commands.User.Police.Flashbang.Item);
+            dbClient.AddParameter("pepperspray", Rooms.Chat.Commands.User.Police.PepperSpray.Item);
             dbClient.RunQuery();
         }
         var habbo = session?.GetHabbo();
