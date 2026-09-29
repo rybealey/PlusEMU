@@ -1028,16 +1028,28 @@ public static class MovementController
 
         // NOT ON THEIR SIDE YET (a police escort begins with the suspect where
         // they stood - MovementV2Bridge.Pair). A walk-end with no step taken
-        // leaves them there. The captor's first step needs nothing special:
-        // the edge below runs from the suspect's own tile (their EdgeTo) to the
-        // tile in front of where the captor is stepping, in the same beat - the
-        // slide a turn already makes, up to about three tiles when they stood
-        // behind. No jump.
+        // leaves them there. On the captor's first step, the edge below runs
+        // from the suspect's own tile (their EdgeTo) to the tile in front of
+        // where the captor is stepping, in the same beat - the slide a turn
+        // already makes - when they stand in front of the captor, beside them
+        // or on their tile.
+        //
+        // BEHIND THE CAPTOR, that slide would carry them about three tiles
+        // straight through the captor. They JUMP instead, as HabRP's escort
+        // does: onto their side of the tile the captor is stepping off, facing
+        // the captor's way, as the step starts, and the edge below walks them
+        // on from there one tile, in step. "Behind" is measured against the
+        // step's own direction: any tile on the far side of the captor from it,
+        // diagonals included.
         if (w.ShadowUnseated)
         {
             if (!moving)
                 return;
             w.ShadowUnseated = false;
+            var step = FacingDelta(w.Facing);
+            var behind = (s.EdgeTo.X - w.Tile.X) * step.X + (s.EdgeTo.Y - w.Tile.Y) * step.Y < 0;
+            if (behind)
+                StageDisplacement(room, s, ShadowTile(map, w.Tile, w.Facing, w.ShadowBehind), w.Facing, map, w.EdgeStartTick(w.EdgeIndex));
         }
 
         Point from, to;
@@ -1433,10 +1445,16 @@ public static class MovementController
         // from lookahead, so on every mid-walk click that changes direction the
         // cop and the suspect were drawn a few frames facing - and starting
         // along - the old way before the correction turned them.
+        //
+        // Skipped too while the suspect is not on their side yet (ShadowUnseated
+        // - taken mid-walk, their first step still to come at the boundary):
+        // if they stand behind the captor that step starts with a jump, and an
+        // early record would run them from their own tile instead.
         MovementState? shadow = null;
         if (w.ShadowVirtualId != MovementState.NoShadow)
         {
             if (w.ShadowBehind
+                || w.ShadowUnseated
                 || !room.States.TryGetValue(w.ShadowVirtualId, out var s)
                 || s.ShadowedBy != w.VirtualId)
             {

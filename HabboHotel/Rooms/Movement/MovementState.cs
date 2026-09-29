@@ -171,8 +171,9 @@ public sealed class MovementState : IDueHeapNode
     /// <summary>
     /// The shadow has not been put on its side yet. A police escort leaves the
     /// suspect on their own tile, facing their own way, when it begins; the
-    /// captor's first step slides them in front (MovementController.StageShadow)
-    /// and clears this. Until then a turn or a walk-end leaves them where they
+    /// captor's first step slides them in front - or jumps them there, when
+    /// they stand behind the captor (MovementController.StageShadow) - and
+    /// clears this. Until then a turn or a walk-end leaves them where they
     /// are.
     ///
     /// On the CAPTOR, beside ShadowBehind, for the same reason: it is a
