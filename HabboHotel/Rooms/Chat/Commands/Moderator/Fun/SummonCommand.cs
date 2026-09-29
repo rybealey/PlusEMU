@@ -83,6 +83,11 @@ internal class SummonCommand : ITargetChatCommand
             }
         }
 
+        // pixelrp jail: a prisoner can be summoned out, into this room only;
+        // their time keeps running, and leaving it sends them back to jail.
+        if (User.Police.JailState.AllowSummon(target.Id, current.Id))
+            session.SendWhisper($"{target.Username} is serving a jail sentence. They go back to jail when they leave this room.");
+
         // Elsewhere, or nowhere. Set the arrival tile BEFORE the forward: the
         // marker is read when the room is entered, which begins the moment the
         // client acts on either call below.

@@ -194,6 +194,8 @@ public static class ServerPacketHeader
     public const uint RpNotificationComposer = 4021;
     public const uint RpInventoryComposer = 3904;
     public const uint RpStunGunChargeComposer = 4154;
+    public const uint RpRoomPoliceComposer = 4155;
+    public const uint RpJailComposer = 4156;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
     public const uint RpAirplaneModeComposer = 3935;

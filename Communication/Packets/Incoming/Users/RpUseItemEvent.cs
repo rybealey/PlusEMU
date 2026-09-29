@@ -57,6 +57,12 @@ public class RpUseItemEvent : IPacketEvent
         // Out cold, nothing comes out of the backpack either.
         if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
             return;
+        // pixelrp jail: nor in a cell - no gear, no snacks, nothing.
+        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailed(habbo.Id))
+        {
+            session.SendWhisper("You can't do that in jail.");
+            return;
+        }
         // Peek before consuming: a failed precondition must not burn the item.
         var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
         if (string.IsNullOrEmpty(item))

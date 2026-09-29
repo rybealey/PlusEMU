@@ -378,6 +378,8 @@ public class RoomUserManager
         // pixelrp police: an escort survives a room change. After the enrol,
         // because putting the pair back needs both units known to V2.
         Chat.Commands.User.Police.PoliceState.OnRoomEntered(_room, user);
+        // pixelrp jail: a prisoner's countdown, shown in the cell.
+        Chat.Commands.User.Police.JailState.OnRoomEntered(user);
         foreach (var bot in _bots.Values.ToList())
         {
             if (bot == null || bot.BotAi == null)
@@ -1390,6 +1392,8 @@ public class RoomUserManager
                     // pixelrp police: let go of anybody who could not follow
                     // their captor through a room change.
                     Chat.Commands.User.Police.PoliceState.TickTravel(_room, user);
+                    // pixelrp jail: let out anybody whose time is up.
+                    Chat.Commands.User.Police.JailState.Tick(user);
                     // pixelrp offers: drop what has run out. Memory only - no
                     // database, and packets only to the two people concerned -
                     // so the game loop can carry it.

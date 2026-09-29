@@ -703,6 +703,8 @@
     "RpNotificationComposer": 4021,
     "RpInventoryComposer": 3904,
     "RpStunGunChargeComposer": 4154,
+    "RpRoomPoliceComposer": 4155,
+    "RpJailComposer": 4156,
     "RpMessengerReceiptComposer": 3906,
     "RpMessengerFriendTypingComposer": 3932,
     "RpAirplaneModeComposer": 3935,

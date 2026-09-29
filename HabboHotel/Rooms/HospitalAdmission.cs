@@ -92,6 +92,12 @@ public static class HospitalAdmission
         var habbo = user.GetClient()?.GetHabbo();
         if (habbo == null)
             return;
+        // Nor for a prisoner. The jail's door would refuse the trip (Habbo.
+        // PrepareRoom) after they had been told they were on their way; the
+        // clock just keeps running, and the hospital collects them the first
+        // tick after they are released.
+        if (Chat.Commands.User.Police.JailState.IsJailed(id))
+            return;
         var limit = habbo.IsVip ? SecondsDownVip : SecondsDown;
         if ((DateTime.UtcNow - since).TotalSeconds < limit)
             return;

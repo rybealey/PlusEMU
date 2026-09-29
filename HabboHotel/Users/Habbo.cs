@@ -704,6 +704,9 @@ public class Habbo
         // CurrentRoom is still set at this point, which is what lets the escort
         // unpair properly; a session that has already lost its room clears anyway.
         Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.Forget(CurrentRoom, Id);
+        // pixelrp jail: a sentence is not session state - it waits for them.
+        // Only its clock stops, saved where it is.
+        Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.OnLogout(Id);
 
         Disconnected?.Invoke(this, EventArgs.Empty);
 
@@ -812,6 +815,30 @@ public class Habbo
         if (Client == null || Client.GetHabbo() == null)
             return;
 
+        // pixelrp jail: a prisoner goes nowhere but the jail. Every way out of
+        // a room ends up here - an arrow, a teleporter, :follow, an escort, the
+        // login forward - so this one check is the cell door. The exception is
+        // a staff :summon, which lets them into that one room (JailState.
+        // AllowSummon). In the jail already, they are simply told; anywhere
+        // else (the room they were summoned to, a relog that forwarded them
+        // somewhere else, a jail that has moved) they are sent back, onto a
+        // bed. The teleport an arrow or teleporter started is called off either
+        // way, or its flags would outlive the refusal.
+        if (!Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.MayEnter(Id, id, out var jailRoomId))
+        {
+            EndTeleport();
+            if (InRoom && CurrentRoom != null && Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailRoom(CurrentRoom.Id))
+            {
+                Client.SendWhisper("You are in jail.");
+                return;
+            }
+            Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.SendToJail(this, jailRoomId, forward: true);
+            return;
+        }
+        // And the one door that opens for them whatever the room's settings:
+        // a full or locked jail still takes a prisoner in.
+        var jailEntry = Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailed(Id);
+
         // AUTHORISE THE ROOM THE SERVER IS SENDING THEM TO, or the client's own
         // answer to the RoomReadyComposer below is thrown away as an injected
         // packet and they never arrive.
@@ -862,7 +889,7 @@ public class Habbo
             Eject();
             return;
         }
-        if (room.GetRoomUserManager().UserCount >= room.UsersMax && !Client.GetHabbo().Permissions.HasRight("room_enter_full") && Client.GetHabbo().Id != room.OwnerId)
+        if (room.GetRoomUserManager().UserCount >= room.UsersMax && !Client.GetHabbo().Permissions.HasRight("room_enter_full") && Client.GetHabbo().Id != room.OwnerId && !jailEntry)
         {
             Client.Send(new CantConnectComposer(1));
             Eject();
@@ -877,7 +904,7 @@ public class Habbo
             return;
         }
         Client.Send(new OpenConnectionComposer());
-        if (!room.CheckRights(Client, true, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping)
+        if (!room.CheckRights(Client, true, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping && !jailEntry)
         {
             if (room.Access == RoomAccess.Doorbell && !Client.GetHabbo().Permissions.HasRight("room_enter_locked"))
             {

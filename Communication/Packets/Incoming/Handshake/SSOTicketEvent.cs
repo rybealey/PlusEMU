@@ -190,6 +190,10 @@ public class SsoTicketEvent : IPacketEvent
             // the hotel, so a returning player's sheet is pushed forward by
             // however long they were away BEFORE the list is built from it.
             HabboHotel.Corporations.WantedUtility.ResumeAfterOffline(session.GetHabbo().Id);
+            // pixelrp jail: and a prisoner's sentence picks up where it
+            // stopped. Before the last-room forward further down, so that
+            // forward is already held to the jail (Habbo.PrepareRoom).
+            HabboHotel.Rooms.Chat.Commands.User.Police.JailState.OnLogin(session);
             // pixelrp: the wanted list, so the Wanted window has its rows and the
             // HUD can draw stars over whoever this player looks at.
             session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));

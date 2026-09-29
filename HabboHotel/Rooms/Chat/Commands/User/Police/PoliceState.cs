@@ -333,7 +333,7 @@ public static class PoliceState
         // Fighting.
         "hit", "slap",
         // Doing to somebody else what was done to you.
-        "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort",
+        "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort", "arrest",
         // Trading, and handing things over.
         "offer", "sell", "give", "heal"
     };

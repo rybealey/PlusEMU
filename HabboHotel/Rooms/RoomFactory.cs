@@ -76,7 +76,9 @@ public static class RoomFactory
             CorporationId = Convert.ToInt32(row["corporation_id"]),
             AllowMedical = ToBool(row["allow_medical"]),
             AllowPolice = ToBool(row["allow_police"]),
-            AllowStaff = ToBool(row["allow_staff"])
+            AllowStaff = ToBool(row["allow_staff"]),
+            IsArrestRoom = ToBool(row["rp_arrest_room"]),
+            IsJailRoom = ToBool(row["rp_jail_room"])
         };
     }
 
@@ -183,6 +185,8 @@ public static class RoomFactory
                 data.AllowMedical = ToBool(row["allow_medical"]);
                 data.AllowPolice = ToBool(row["allow_police"]);
                 data.AllowStaff = ToBool(row["allow_staff"]);
+                data.IsArrestRoom = ToBool(row["rp_arrest_room"]);
+                data.IsJailRoom = ToBool(row["rp_jail_room"]);
                 return true;
             }
         }

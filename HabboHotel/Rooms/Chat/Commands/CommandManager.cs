@@ -128,6 +128,12 @@ public class CommandManager : ICommandManager
                 session.SendWhisper("You are too disoriented to do that.");
                 return true;
             }
+            // pixelrp jail: a prisoner walks and talks, and that is all.
+            if (User.Police.JailState.Blocks(session.GetHabbo().Id, key.ToLower()))
+            {
+                session.SendWhisper("You can't do that in jail.");
+                return true;
+            }
             // pixelrp: out cold means doing nothing. Same reasoning as the cuffs:
             // one check here, not a copy in every command.
             if (IsPlayerCommand(command) && !KnockedOutCan.Contains(key) && KnockedOut.Refuse(session))
