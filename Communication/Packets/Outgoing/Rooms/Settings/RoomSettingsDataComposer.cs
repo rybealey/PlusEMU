@@ -22,7 +22,7 @@ public class RoomSettingsDataComposer : IServerPacket
         packet.WriteInteger(RoomAccessUtility.GetRoomAccessPacketNum(_room.Access));
         packet.WriteInteger(_room.Category);
         packet.WriteInteger(_room.UsersMax);
-        packet.WriteInteger(_room.Model.MapSizeX * _room.Model.MapSizeY > 100 ? 50 : 25);
+        packet.WriteInteger(RoomLimits.MaxVisitors); // pixelrp: the most the room may be set to hold
         packet.WriteInteger(_room.Tags.Count);
         foreach (var tag in _room.Tags.ToArray()) packet.WriteString(tag);
         packet.WriteInteger(_room.TradeSettings); //Trade
