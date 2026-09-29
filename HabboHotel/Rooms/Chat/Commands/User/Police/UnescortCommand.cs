@@ -52,6 +52,6 @@ internal class UnescortCommand : IChatCommand
         var name = suspectUser?.GetClient()?.GetHabbo()?.Username ?? (medical ? "their patient" : "their suspect");
         room.SendPacket(new ChatComposer(thisUser.VirtualId, medical
             ? $"*unloads {name} from the ambulance*"
-            : $"*releases {name} from custody*", 0, FightBubble));
+            : $"*unescorts {name}*", 0, FightBubble));
     }
 }

@@ -224,7 +224,7 @@ internal class EscortCommand : ITargetChatCommand
 
         room.SendPacket(new ChatComposer(thisUser.VirtualId, kind == PoliceState.EscortKind.Medical
             ? $"*loads {target.Username} into an ambulance*"
-            : $"*takes {target.Username} into custody*", 0, FightBubble));
+            : $"*starts escorting {target.Username}*", 0, FightBubble));
         return Task.CompletedTask;
     }
 }

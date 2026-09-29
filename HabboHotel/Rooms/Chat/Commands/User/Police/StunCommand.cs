@@ -172,10 +172,10 @@ internal class StunCommand : ITargetChatCommand
         if (InReach(thisUser, targetUser))
         {
             PoliceState.Stun(room, targetUser, StunSeconds);
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*stuns {target.Username}, freezing them in place*", 0, FightBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*fires a stun using their stun gun at {target.Username}, stunning them*", 0, FightBubble));
         }
         else
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*uses their stun gun on {target.Username}, but misses*", 0, FightBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*fires a stun using their stun gun at {target.Username} but misses*", 0, FightBubble));
 
         if (shotsLeft == 0)
         {

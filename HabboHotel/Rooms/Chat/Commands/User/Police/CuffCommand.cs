@@ -135,7 +135,7 @@ internal class CuffCommand : ITargetChatCommand
         // reads as cuffed rather than as still being tased.
         PoliceState.CancelStun(targetUser);
 
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*cuffs {target.Username}, restraining them*", 0, FightBubble));
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*takes out a pair of handcuffs and cuffs {target.Username}*", 0, FightBubble));
         return Task.CompletedTask;
     }
 }
