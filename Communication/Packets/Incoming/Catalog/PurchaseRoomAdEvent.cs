@@ -30,36 +30,8 @@ public class PurchaseRoomAdEvent : IPacketEvent
 
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
-        packet.ReadInt(); //pageId
-        packet.ReadInt(); //itemId
-        var roomId = packet.ReadUInt();
-        var name = _wordFilterManager.CheckMessage(packet.ReadString());
-        packet.ReadBool(); //junk
-        var desc = _wordFilterManager.CheckMessage(packet.ReadString());
-        var categoryId = packet.ReadInt();
-        if (!RoomFactory.TryGetData(roomId, out var data))
-            return;
-        if (data.OwnerId != session.GetHabbo().Id)
-            return;
-        if (data.Promotion == null)
-            data.Promotion = new(name, desc, categoryId);
-        else
-        {
-            data.Promotion.Name = name;
-            data.Promotion.Description = desc;
-            data.Promotion.TimestampExpires += 7200;
-        }
-        using (var connection = _database.Connection())
-        {
-            connection.Execute(
-                "REPLACE INTO `room_promotions` (`room_id`,`title`,`description`,`timestamp_start`,`timestamp_expire`,`category_id`) VALUES (@roomId, @title, @description, @start, @expires, @categoryId)",
-                new { roomId = roomId, title = name, description = desc, start = data.Promotion.TimestampStarted, expires = data.Promotion.TimestampExpires, categoryId = categoryId });
-        }
-        if (!session.GetHabbo().Inventory.Badges.HasBadge("RADZZ"))
-            await _badgeManager.GiveBadge(session.GetHabbo(), "RADZZ");
-        session.Send(new PurchaseOkComposer());
-        if (session.GetHabbo().InRoom && session.GetHabbo().CurrentRoom.Id == roomId)
-            session.GetHabbo().CurrentRoom?.SendPacket(new RoomEventComposer(data, data.Promotion));
-        _messengerDataLoader.BroadcastStatusUpdate(session.GetHabbo(), MessengerEventTypes.EventStarted, name);
+        // pixelrp: promoted rooms are gone (226_NoPromotedRooms) - there is
+        // nothing to buy, and the shop page that sold them is switched off.
+        await Task.CompletedTask;
     }
 }

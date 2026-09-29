@@ -27,7 +27,7 @@ public sealed class NavigatorManager : INavigatorManager
         //Does this need to be dynamic?
         _topLevelItems.Add(1, new(1, "official_view", "", ""));
         _topLevelItems.Add(2, new(2, "hotel_view", "", ""));
-        _topLevelItems.Add(3, new(3, "roomads_view", "", ""));
+        // pixelrp: no Events tab (roomads_view, the promoted-rooms list)
         _topLevelItems.Add(4, new(4, "myworld_view", "", ""));
         _featuredRooms = new();
     }
