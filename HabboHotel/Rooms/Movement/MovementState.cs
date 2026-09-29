@@ -169,6 +169,18 @@ public sealed class MovementState : IDueHeapNode
     public bool ShadowBehind;
 
     /// <summary>
+    /// The shadow has not been put on its side yet. A police escort leaves the
+    /// suspect on their own tile, facing their own way, when it begins; the
+    /// captor's first step puts them in front (MovementController.StageShadow)
+    /// and clears this. Until then a turn or a walk-end leaves them where they
+    /// are.
+    ///
+    /// On the CAPTOR, beside ShadowBehind, for the same reason: it is a
+    /// property of the pairing, and the captor is the side that stages both.
+    /// </summary>
+    public bool ShadowUnseated;
+
+    /// <summary>
     /// VirtualId of the walker this unit is the shadow of, or
     /// <see cref="NoShadow"/>. While set, this
     /// unit's own walk requests are refused at RequestMove - nothing may give a

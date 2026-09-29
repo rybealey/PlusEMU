@@ -1021,6 +1021,20 @@ public static class MovementController
         if (map == null)
             return;
 
+        // NOT ON THEIR SIDE YET (a police escort begins with the suspect where
+        // they stood - MovementV2Bridge.Pair). A walk-end with no step taken
+        // leaves them there. The captor's first step jumps them to their side
+        // of the tile the captor is stepping off, facing the captor's way, at
+        // the moment that step starts; the edge below then walks them on from
+        // there like every other, one tile, in step.
+        if (w.ShadowUnseated)
+        {
+            if (!moving)
+                return;
+            w.ShadowUnseated = false;
+            StageDisplacement(room, s, ShadowTile(map, w.Tile, w.Facing, w.ShadowBehind), w.Facing, map, w.EdgeStartTick(w.EdgeIndex));
+        }
+
         Point from, to;
         if (moving)
         {
@@ -1365,10 +1379,16 @@ public static class MovementController
         // from lookahead, so on every mid-walk click that changes direction the
         // cop and the suspect were drawn a few frames facing - and starting
         // along - the old way before the correction turned them.
+        //
+        // Skipped too while the suspect is not on their side yet (ShadowUnseated
+        // - taken mid-walk, the jump in front still to come at the boundary):
+        // an early record would run them from their own tile, which is not
+        // where the boundary's record will start them.
         MovementState? shadow = null;
         if (w.ShadowVirtualId != MovementState.NoShadow)
         {
             if (w.ShadowBehind
+                || w.ShadowUnseated
                 || !room.States.TryGetValue(w.ShadowVirtualId, out var s)
                 || s.ShadowedBy != w.VirtualId)
             {

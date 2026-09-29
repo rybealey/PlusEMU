@@ -235,8 +235,15 @@ public static class MovementV2Bridge
     /// the tile in front of the captor - in front of where the captor is
     /// heading if they are mid-walk - facing the captor's way. False when
     /// either unit is unknown to V2 or already in a pair.
+    ///
+    /// With <paramref name="seatNow"/> false the suspect is NOT moved yet: they
+    /// stay on their own tile, facing their own way, and the captor's first
+    /// step jumps them to the front (MovementController.StageShadow). A police
+    /// escort starts this way, so an officer can cuff and take a suspect where
+    /// they stand. A suspect caught mid-step goes on to the tile they were
+    /// stepping onto - never back to the one they left.
     /// </summary>
-    public static bool Pair(Room? room, RoomUser? captor, RoomUser? suspect, bool behind = false)
+    public static bool Pair(Room? room, RoomUser? captor, RoomUser? suspect, bool behind = false, bool seatNow = true)
     {
         if (room == null || captor == null || suspect == null || captor == suspect)
             return false;
@@ -280,12 +287,41 @@ public static class MovementV2Bridge
 
             c.ShadowVirtualId = s.VirtualId;
             c.ShadowBehind = behind;
+            c.ShadowUnseated = !seatNow;
             s.ShadowedBy = c.VirtualId;
-            // Seated on the side they will ride on, so the pairing does not
-            // begin with the shadow jumping across the captor on the first
-            // step. Same facing either way: a patient being pulled faces the
-            // way they are going, not back at the person pulling them.
-            MovementController.StageDisplacement(movement, s, MovementController.ShadowTile(map, anchor, facing, behind), facing, map, now);
+            if (seatNow)
+            {
+                // Seated on the side they will ride on, so the pairing does not
+                // begin with the shadow jumping across the captor on the first
+                // step. Same facing either way: a patient being pulled faces the
+                // way they are going, not back at the person pulling them.
+                MovementController.StageDisplacement(movement, s, MovementController.ShadowTile(map, anchor, facing, behind), facing, map, now);
+            }
+            else if (s.Mode == MovementMode.Moving)
+            {
+                // Mid-step: on to the tile being stepped onto, facing the way
+                // they were going. Read before StageDisplacement, whose StopWalk
+                // puts EdgeTo back on the tile they left.
+                var ahead = s.EdgeTo;
+                MovementController.StageDisplacement(movement, s, ahead, s.Facing, map, now);
+            }
+            else
+            {
+                // Standing, or a click not yet stepped on (Pending, which stops
+                // with nothing sent). Where they stand is theirs to keep - the
+                // same resync RequestMove makes, and not while a walk-end is
+                // still on its way, when RoomUser holds the tile BEFORE it.
+                if (s.Mode == MovementMode.Pending)
+                    MovementController.StopWalk(movement, s, "escort");
+                if (Volatile.Read(ref suspect.V2WalkEndAppliedSession) >= s.WalkEndPendingSession)
+                {
+                    s.Tile = new Point(suspect.X, suspect.Y);
+                    s.TileZ = suspect.Z;
+                }
+                s.EdgeTo = s.Tile;
+                s.EdgeToZ = s.TileZ;
+                s.Facing = (byte)suspect.RotBody;
+            }
         }
         MovementScheduler.Instance.Signal(movement);
         return true;
@@ -325,6 +361,7 @@ public static class MovementV2Bridge
             {
                 c.ShadowVirtualId = MovementState.NoShadow;
                 c.ShadowBehind = false;
+                c.ShadowUnseated = false;
             }
             if (s != null && s.ShadowedBy != MovementState.NoShadow)
             {

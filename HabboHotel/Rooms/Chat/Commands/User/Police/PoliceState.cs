@@ -430,7 +430,14 @@ public static class PoliceState
             // Which side the passenger rides on is the flavour's, not the
             // engine's: an officer marches a suspect ahead where they can be
             // watched, a paramedic leads and the patient follows.
-            if (!MovementV2Bridge.Pair(room, captor, suspect, behind: kind == EscortKind.Medical))
+            //
+            // A suspect is taken where they stand: they stay on their own tile,
+            // facing their own way, until the officer's first step jumps them
+            // in front. A patient is still lifted onto their side at once.
+            // RePair (a warp, a room change) always seats at once - the suspect
+            // arrives on the captor's own tile there.
+            var medical = kind == EscortKind.Medical;
+            if (!MovementV2Bridge.Pair(room, captor, suspect, behind: medical, seatNow: medical))
             {
                 EscortByCaptor.TryRemove(captorId, out _);
                 EscortBySuspect.TryRemove(suspectId, out _);
