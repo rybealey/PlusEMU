@@ -203,22 +203,36 @@ public sealed class MovementState : IDueHeapNode
     public bool Stumbling;
 
     /// <summary>
-    /// The facing, 0-7, every step of this walk is given instead of its own
-    /// direction, or -1 for none. A stumble faces back towards the officer who
-    /// sprayed them. Sent to the client as RpMovementV2Flags.FixedFacing.
-    /// Cleared with <see cref="Stumbling"/>.
+    /// The facing, 0-7, the first <see cref="FacingOverrideSteps"/> steps of
+    /// this walk are given instead of their own direction, or -1 for none. A
+    /// stumble's steps back face the officer who sprayed them. Sent to the
+    /// client as RpMovementV2Flags.FixedFacing. Cleared with
+    /// <see cref="Stumbling"/>.
     /// </summary>
     public int FacingOverride = -1;
 
     /// <summary>
+    /// How many more steps take <see cref="FacingOverride"/> - PlanNextEdge
+    /// counts it down. A stumble's random steps, after the steps back, face
+    /// the way they go.
+    /// </summary>
+    public int FacingOverrideSteps;
+
+    /// <summary>The step just planned was faced by <see cref="FacingOverride"/> (StageEdge sends it so).</summary>
+    public bool FixedFacingEdge;
+
+    /// <summary>
     /// A stumble asked for while this unit was mid-step: the step is walked
     /// out, and the stumble begins at its end (AdvanceWalker), built from the
-    /// tile it ends on. The direction to stumble in (each part -1, 0 or 1),
-    /// how many steps, and the facing. Null when none is waiting.
+    /// tile it ends on. The direction to stumble back in (each part -1, 0 or
+    /// 1), how many steps back and then at random, and the facing back. Null
+    /// when none is waiting.
     /// </summary>
     public Point? PendingStumbleAway;
 
-    public int PendingStumbleSteps;
+    public int PendingStumbleBack;
+
+    public int PendingStumbleRandom;
 
     public byte PendingStumbleFacing;
 

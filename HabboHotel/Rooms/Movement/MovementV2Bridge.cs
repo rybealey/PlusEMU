@@ -162,12 +162,13 @@ public static class MovementV2Bridge
 
     /// <summary>
     /// pixelrp pepper spray: send <paramref name="user"/> stumbling
-    /// <paramref name="steps"/> tiles in the direction of (awayX, awayY) -
-    /// each -1, 0 or 1 - zig-zagging and facing <paramref name="facing"/>
-    /// throughout (MovementController.Stumble). Refused for a unit V2 does not
-    /// know, and for one somebody is escorting: end the escort first.
+    /// <paramref name="backSteps"/> tiles back in the direction of (awayX,
+    /// awayY) - each -1, 0 or 1 - facing <paramref name="facing"/>, then
+    /// <paramref name="randomSteps"/> steps in random directions
+    /// (MovementController.Stumble). Refused for a unit V2 does not know, and
+    /// for one somebody is escorting: end the escort first.
     /// </summary>
-    public static void Stumble(RoomUser user, int awayX, int awayY, int steps, byte facing)
+    public static void Stumble(RoomUser user, int awayX, int awayY, int backSteps, int randomSteps, byte facing)
     {
         if (user == null)
             return;
@@ -189,7 +190,7 @@ public static class MovementV2Bridge
                 state.Tile = new Point(user.X, user.Y);
                 state.TileZ = user.Z;
             }
-            MovementController.Stumble(movement, state, new Point(awayX, awayY), steps, facing, ctx, now);
+            MovementController.Stumble(movement, state, new Point(awayX, awayY), backSteps, randomSteps, facing, ctx, now);
         }
         MovementScheduler.Instance.Signal(movement);
     }

@@ -50,6 +50,8 @@ public static class MovementController
         // An ordinary walk carries nothing of a stumble's.
         w.Stumbling = false;
         w.FacingOverride = -1;
+        w.FacingOverrideSteps = 0;
+        w.FixedFacingEdge = false;
         w.PendingStumbleAway = null;
 
         return BeginWalk(room, w, target, map, ctx, nowMs);
@@ -121,9 +123,11 @@ public static class MovementController
     }
 
     /// <summary>
-    /// pixelrp pepper spray: send a unit STUMBLING <paramref name="steps"/>
-    /// tiles in <paramref name="away"/>'s direction, zig-zagging, facing
-    /// <paramref name="facing"/> the whole way (back at the officer).
+    /// pixelrp pepper spray: send a unit STUMBLING - <paramref name="backSteps"/>
+    /// tiles back in <paramref name="away"/>'s direction, facing
+    /// <paramref name="facing"/> (back at the officer), then
+    /// <paramref name="randomSteps"/> steps in random directions, facing
+    /// wherever each one goes.
     ///
     /// Standing, it begins now, on the room's beat like any walk. Waiting on a
     /// first step (Pending), that walk is dropped - nothing of it was sent -
@@ -134,9 +138,9 @@ public static class MovementController
     /// From here until the stumble's walk ends, RequestMove refuses the unit
     /// (MovementState.Stumbling). Caller holds MovementLock.
     /// </summary>
-    public static void Stumble(RoomMovement room, MovementState w, Point away, int steps, byte facing, in TraverseContext ctx, long nowMs)
+    public static void Stumble(RoomMovement room, MovementState w, Point away, int backSteps, int randomSteps, byte facing, in TraverseContext ctx, long nowMs)
     {
-        if (room.Closed || steps <= 0 || (away.X == 0 && away.Y == 0))
+        if (room.Closed || (backSteps + randomSteps) <= 0 || (away.X == 0 && away.Y == 0))
             return;
         var map = room.Room.GetGameMap();
         if (map == null)
@@ -145,7 +149,8 @@ public static class MovementController
         if (w.Mode == MovementMode.Moving)
         {
             w.PendingStumbleAway = away;
-            w.PendingStumbleSteps = steps;
+            w.PendingStumbleBack = backSteps;
+            w.PendingStumbleRandom = randomSteps;
             w.PendingStumbleFacing = facing;
             w.DeferredRedirectTarget = null;
             w.Stumbling = true;
@@ -155,7 +160,7 @@ public static class MovementController
         if (w.Mode == MovementMode.Pending)
             StopWalk(room, w, "stumble");
 
-        if (!LayStumble(map, w, away, steps, facing, ctx))
+        if (!LayStumble(map, w, away, backSteps, randomSteps, facing, ctx))
             return;
         w.Stumbling = true;
         BeginWalk(room, w, w.Target, map, ctx, nowMs);
@@ -166,49 +171,54 @@ public static class MovementController
     /// target to match. False, touching nothing, when not even one step can be
     /// taken.
     ///
-    /// THE ZIG-ZAG: a stumble straight along a row or column alternates the
-    /// two diagonals either side of it - east goes north-east, south-east,
-    /// north-east - so it wobbles a tile side to side while going the whole
-    /// distance. A diagonal stumble alternates the two straight steps that
-    /// make it up. Each step is checked as a walk would be; where the zig-zag's
-    /// step is blocked it tries straight on, then the other side, and where
-    /// all three are blocked the stumble stops there - a wall ends it early.
-    /// Occupancy is not consulted: players share tiles here.
+    /// BACK: straight away from the officer; where that is blocked, the
+    /// diagonal either side of it (for a straight "away") or one of its two
+    /// straight halves (for a diagonal one); where all three are blocked the
+    /// back steps stop there - a wall ends them early. These are the steps
+    /// faced back at the officer (MovementState.FacingOverrideSteps).
+    ///
+    /// RANDOM: then each step goes one of the eight ways at random, among those
+    /// that can be walked, and not straight back onto the tile just left unless
+    /// nothing else can be - so it wanders rather than rocking on the spot. A
+    /// unit hemmed in on every side stops there.
     ///
     /// Every step is checked as a NON-final one, the last included, as
     /// FrontTile does for an escort: tiles legal only as a route's last tile -
     /// the door - are not places to send somebody who did not choose to go
-    /// there. A spray must never stumble a player out of the room.
+    /// there. A spray must never stumble a player out of the room. Occupancy is
+    /// not consulted: players share tiles here.
     /// </summary>
-    private static bool LayStumble(Gamemap map, MovementState w, Point away, int steps, byte facing, in TraverseContext ctx)
+    private static bool LayStumble(Gamemap map, MovementState w, Point away, int backSteps, int randomSteps, byte facing, in TraverseContext ctx)
     {
-        Point zig, zag;
+        Point sideA, sideB;
         if (away.X == 0 || away.Y == 0)
         {
             // Straight: the two diagonals, one either side.
             var side = new Point(-away.Y, away.X);
-            zig = new Point(away.X + side.X, away.Y + side.Y);
-            zag = new Point(away.X - side.X, away.Y - side.Y);
+            sideA = new Point(away.X + side.X, away.Y + side.Y);
+            sideB = new Point(away.X - side.X, away.Y - side.Y);
         }
         else
         {
             // Diagonal: its two straight halves.
-            zig = new Point(away.X, 0);
-            zag = new Point(0, away.Y);
+            sideA = new Point(away.X, 0);
+            sideB = new Point(0, away.Y);
         }
 
-        System.Span<Point> reversed = stackalloc Point[steps];
+        var total = backSteps + randomSteps;
+        System.Span<Point> reversed = stackalloc Point[total];
         var count = 0;
+        var laidBack = 0;
         var at = w.Tile;
-        for (var i = 0; i < steps; i++)
+        var previous = w.Tile;
+
+        for (var i = 0; i < backSteps; i++)
         {
-            var first = (i % 2 == 0) ? zig : zag;
-            var other = (i % 2 == 0) ? zag : zig;
             Point? next = null;
-            foreach (var step in new[] { first, away, other })
+            foreach (var step in new[] { away, sideA, sideB })
             {
                 var candidate = new Point(at.X + step.X, at.Y + step.Y);
-                if (CanTraverse.IsPassable(CanTraverse.Evaluate(map, at, candidate, isFinalStep: false, ctx), false))
+                if (StumbleStepOk(map, at, candidate, ctx))
                 {
                     next = candidate;
                     break;
@@ -216,20 +226,67 @@ public static class MovementController
             }
             if (next is not { } tile)
                 break;
+            previous = at;
             at = tile;
             count++;
+            laidBack++;
             // Reversed, goal first, as SetFromReversed takes it: filled from
             // the back as the stumble goes forward.
-            reversed[steps - count] = tile;
+            reversed[total - count] = tile;
+        }
+
+        for (var i = 0; i < randomSteps; i++)
+        {
+            Point? next = null;
+            Point? backtrack = null;
+            foreach (var facingIndex in RandomOrder())
+            {
+                var step = FacingDelta(facingIndex);
+                var candidate = new Point(at.X + step.X, at.Y + step.Y);
+                if (!StumbleStepOk(map, at, candidate, ctx))
+                    continue;
+                if (candidate == previous)
+                {
+                    backtrack ??= candidate;
+                    continue;
+                }
+                next = candidate;
+                break;
+            }
+            if ((next ?? backtrack) is not { } tile)
+                break;
+            previous = at;
+            at = tile;
+            count++;
+            reversed[total - count] = tile;
         }
 
         if (count == 0)
             return false;
 
-        w.Route.SetFromReversed(reversed.Slice(steps - count), count, partial: false);
+        w.Route.SetFromReversed(reversed.Slice(total - count), count, partial: false);
         w.FacingOverride = facing;
+        w.FacingOverrideSteps = laidBack;
         w.Target = at;
         return true;
+    }
+
+    private static bool StumbleStepOk(Gamemap map, Point from, Point to, in TraverseContext ctx) =>
+        CanTraverse.IsPassable(CanTraverse.Evaluate(map, from, to, isFinalStep: false, ctx), false);
+
+    /// <summary>
+    /// The eight facings, 0-7, in a fresh random order. Shuffled by hand:
+    /// Random.Shuffle is .NET 8, and this builds for .NET 7.
+    /// </summary>
+    private static byte[] RandomOrder()
+    {
+        var order = new byte[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+        for (var i = order.Length - 1; i > 0; i--)
+        {
+            var j = System.Random.Shared.Next(i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+        return order;
     }
 
     /// <summary>
@@ -731,7 +788,7 @@ public static class MovementController
             w.PendingStumbleAway = null;
             w.DeferredRedirectTarget = null;
             var stumbleCtx = MovementWalkerContext.For(room.Room, w.VirtualId);
-            if (!LayStumble(map, w, stumbleAway, w.PendingStumbleSteps, w.PendingStumbleFacing, stumbleCtx))
+            if (!LayStumble(map, w, stumbleAway, w.PendingStumbleBack, w.PendingStumbleRandom, w.PendingStumbleFacing, stumbleCtx))
                 w.Route.Clear();
             w.RouteRevision++;
         }
@@ -885,9 +942,13 @@ public static class MovementController
         w.Route.Advance();
         w.EdgeTo = next;
         w.EdgeToZ = map.SqAbsoluteHeight(next.X, next.Y);
-        // A stumble faces back at the officer on every step (FacingOverride);
-        // everything else faces the way it steps.
-        w.Facing = (w.FacingOverride >= 0)
+        // A stumble's steps back face the officer (FacingOverride, for
+        // FacingOverrideSteps of them); everything else, a stumble's random
+        // steps included, faces the way it steps.
+        w.FixedFacingEdge = w.FacingOverride >= 0 && w.FacingOverrideSteps > 0;
+        if (w.FixedFacingEdge)
+            w.FacingOverrideSteps--;
+        w.Facing = w.FixedFacingEdge
             ? (byte)w.FacingOverride
             : (byte)Rotation.Calculate(w.Tile.X, w.Tile.Y, next.X, next.Y);
 
@@ -926,6 +987,8 @@ public static class MovementController
         // A stumble ends with its walk.
         w.Stumbling = false;
         w.FacingOverride = -1;
+        w.FacingOverrideSteps = 0;
+        w.FixedFacingEdge = false;
         w.PendingStumbleAway = null;
         w.Route.Clear();
 
@@ -1015,9 +1078,21 @@ public static class MovementController
         var lookahead = System.Array.Empty<LookaheadTile>();
         var lookCount = 0;
         var map = room.Room.GetGameMap();
+
+        // pixelrp pepper spray: a stumble's steps back are faced by the server,
+        // and field 6 carries that facing (RpMovementV2Flags.FixedFacing). This
+        // record only - never the shadow's, whose field 6 is its captor.
+        var fixedFacing = moving && w.FixedFacingEdge;
+
         if (moving && w.Route.HasNext)
         {
             var max = System.Math.Min(MovementSettings.LookaheadMax, w.Route.Length - w.Route.Cursor);
+            // The client faces a fixed-facing record's lookahead the same fixed
+            // way, so only the steps back still to come ride on it - the random
+            // steps after them are faced by their own direction, and wait for
+            // their own records.
+            if (fixedFacing)
+                max = System.Math.Min(max, w.FacingOverrideSteps);
             if (max > 0 && map != null)
             {
                 lookahead = new LookaheadTile[max];
@@ -1030,11 +1105,6 @@ public static class MovementController
                 lookCount = max;
             }
         }
-
-        // pixelrp pepper spray: a stumble's steps are faced by the server, and
-        // field 6 carries that facing (RpMovementV2Flags.FixedFacing). This
-        // record only - never the shadow's, whose field 6 is its captor.
-        var fixedFacing = moving && w.FacingOverride >= 0;
 
         room.Staged.Add(new MovementEdgeRecord(
             w.VirtualId, w.WalkSessionId, w.RouteRevision, w.EdgeIndex,
@@ -1371,6 +1441,8 @@ public static class MovementController
         s.FinishingShadowStep = false;
         s.Stumbling = false;
         s.FacingOverride = -1;
+        s.FacingOverrideSteps = 0;
+        s.FixedFacingEdge = false;
         s.PendingStumbleAway = null;
         // The old walk's walk-end, if it was still on its way, is discarded
         // with the rest of that session - nothing is pending any more, so

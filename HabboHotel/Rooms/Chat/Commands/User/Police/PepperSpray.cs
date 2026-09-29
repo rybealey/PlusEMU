@@ -23,10 +23,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// cooldown: the supply is the limit.
 ///
 /// A hit DISORIENTS: for four seconds the target can neither walk nor fight,
-/// and wears the stun's birds (PoliceState.Disorient), and they stumble <see cref="StumbleSteps"/> tiles
-/// back from the officer in a zig-zag, facing the officer the whole way
-/// (MovementV2Bridge.Stumble). A wall or furni in the way ends the stumble
-/// early. Anybody in an escort is let go first - a suspect sprayed out of an
+/// and wears the stun's birds (PoliceState.Disorient). They stumble
+/// <see cref="StumbleBackSteps"/> tiles back from the officer, still facing
+/// them, then <see cref="StumbleRandomSteps"/> steps in random directions
+/// (MovementV2Bridge.Stumble). A wall or furni in the way cuts it short. Anybody in an escort is let go first - a suspect sprayed out of an
 /// officer's hands stumbles off, and an officer sprayed mid-escort lets go of
 /// theirs - because a stumble and an escort cannot both own one body.
 /// </summary>
@@ -35,12 +35,16 @@ public static class PepperSpray
     /// <summary>The backpack item key.</summary>
     public const string Item = "pepper_spray";
 
-    /// <summary>Tiles a hit sends the target stumbling back.</summary>
-    private const int StumbleSteps = 5;
+    /// <summary>Tiles a hit sends the target stumbling back, facing the officer.</summary>
+    private const int StumbleBackSteps = 2;
+
+    /// <summary>Steps in random directions after that, facing where they go.</summary>
+    private const int StumbleRandomSteps = 3;
 
     /// <summary>
     /// How long a hit disorients - no walking, no fighting: four seconds, the
-    /// same as a stun. The stumble's five steps take about half of that.
+    /// same as a stun. The stumble's five steps - two back, three at random -
+    /// take about half of that.
     /// </summary>
     private const int DisorientMs = 4000;
 
@@ -168,7 +172,7 @@ public static class PepperSpray
             // the birds on rather than flicking them off and on again.
             PoliceState.Disorient(targetUser, DisorientMs);
             PoliceState.CancelStun(targetUser);
-            MovementV2Bridge.Stumble(targetUser, awayX, awayY, StumbleSteps, facing);
+            MovementV2Bridge.Stumble(targetUser, awayX, awayY, StumbleBackSteps, StumbleRandomSteps, facing);
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*sprays their pepper spray at {target.Username}, disorienting them*", 0, FightBubble));
         }
         else
