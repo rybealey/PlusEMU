@@ -1,4 +1,3 @@
-using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
@@ -27,12 +26,14 @@ namespace Plus.HabboHotel.Items.Interactor;
 ///
 /// Walk-up and facing are the ATM's (InteractorAtm): used from across the
 /// room, the officer walks over first.
+///
+/// A restock says NOTHING to the room - there used to be a "*restocks their
+/// ...*" bubble. The officer alone is whispered what they got: "You have
+/// received a ..." for each thing handed out, and "Your stun gun has been
+/// replenished." for a reload.
 /// </summary>
 public class InteractorPoliceReplenish : IFurniInteractor
 {
-    /// <summary>The police / fight bubble, the one :cuff and :stun use.</summary>
-    private const int ActionBubble = 4;
-
     public void OnTrigger(GameClient session, Item item, int request, bool hasRights)
     {
         if (session == null || item == null)
@@ -85,19 +86,21 @@ public class InteractorPoliceReplenish : IFurniInteractor
 
         // Each one on its own: a full backpack that has room for one of the two
         // still gets that one, and is told plainly which did not fit.
-        var given = new List<string>();
+        // What was handed out, so the backpack update below goes out for it
+        // and each gets its whisper.
+        var cuffsGiven = false;
         var equipped = false;
-        // The flashbang is restocked QUIETLY - never named in the restock chat -
-        // but it still counts as something handed out, so the backpack update
-        // below goes out for it.
         var flashbangGiven = false;
+        var stunGunGiven = false;
+        // The gun they already held, refilled - not a new one.
+        var stunGunReloaded = false;
         if (needsCuffs)
         {
             var slot = habbo.AddRpItem(CuffCommand.HandcuffsItem);
             if (slot == -1)
                 session.SendWhisper("Your backpack is full - there was no room for the handcuffs.");
             else if (slot > 0)
-                given.Add("handcuffs");
+                cuffsGiven = true;
         }
 
         if (needsFlashbang)
@@ -115,7 +118,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             // weapon equipped, into the backpack first and swapped in below.
             if (habbo.AddRpItemEquipped(RpWeapons.StunGunItem))
             {
-                given.Add("stun gun");
+                stunGunGiven = true;
                 equipped = true;
                 PoliceState.RestockStunGun(habbo.Id);
             }
@@ -126,16 +129,16 @@ public class InteractorPoliceReplenish : IFurniInteractor
                     session.SendWhisper("Your backpack is full - there was no room for the stun gun.");
                 else if (stunSlot > 0)
                 {
-                    given.Add("stun gun");
+                    stunGunGiven = true;
                     PoliceState.RestockStunGun(habbo.Id);
                 }
             }
         }
         else if (needsReload)
         {
-            // The gun they hold, refilled - named in the restock chat like a new one.
+            // The gun they hold, refilled.
             PoliceState.RestockStunGun(habbo.Id);
-            given.Add("stun gun");
+            stunGunReloaded = true;
         }
 
         // One in a carry slot, held already or just handed out: move it into
@@ -147,25 +150,25 @@ public class InteractorPoliceReplenish : IFurniInteractor
             equipped = true;
         }
 
-        if (given.Count == 0 && !equipped && !flashbangGiven)
+        if (!cuffsGiven && !equipped && !flashbangGiven && !stunGunGiven && !stunGunReloaded)
             return;
 
         var after = habbo.LoadRpInventory();
         if (equipped)
             RpWeapons.ApplyToHand(habbo, after);
-        // Only a restock of the cuffs or the stun gun is announced. Equipping the
-        // stun gun says nothing - the gun appearing in the officer's hand is the
-        // whole of it - and neither does the flashbang (flashbangGiven).
-        if (given.Count > 0)
-        {
-            // "handcuffs", "stun gun", "handcuffs and stun gun"
-            var list = given.Count <= 1
-                ? string.Join("", given)
-                : string.Join(", ", given.Take(given.Count - 1)) + " and " + given[^1];
-            room.SendPacket(new ChatComposer(user.VirtualId, $"*restocks their {list}*", 0, ActionBubble));
-        }
         session.Send(new RpInventoryComposer(after));
         // The stun gun's bar in the backpack, full again after a reload or a new gun.
         session.Send(new RpStunGunChargeComposer(PoliceState.StunGunShotsLeft(habbo.Id), PoliceState.StunGunShots));
+
+        // Told privately, one line per thing, once the backpack shows it. Moving
+        // a stun gun they already had into the Weapon slot says nothing.
+        if (stunGunGiven)
+            session.SendWhisper("You have received a stun gun.");
+        if (stunGunReloaded)
+            session.SendWhisper("Your stun gun has been replenished.");
+        if (flashbangGiven)
+            session.SendWhisper("You have received a flashbang.");
+        if (cuffsGiven)
+            session.SendWhisper("You have received a pair of handcuffs.");
     }
 }
