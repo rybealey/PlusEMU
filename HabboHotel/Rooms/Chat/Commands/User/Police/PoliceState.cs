@@ -432,7 +432,7 @@ public static class PoliceState
             // watched, a paramedic leads and the patient follows.
             //
             // A suspect is taken where they stand: they stay on their own tile,
-            // facing their own way, until the officer's first step jumps them
+            // facing their own way, until the officer's first step slides them
             // in front. A patient is still lifted onto their side at once.
             // RePair (a warp, a room change) always seats at once - the suspect
             // arrives on the captor's own tile there.
