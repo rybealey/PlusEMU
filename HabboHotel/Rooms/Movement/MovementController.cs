@@ -958,6 +958,13 @@ public static class MovementController
     };
 
     /// <summary>
+    /// Tiles apart, counting a diagonal as one: 1 is touching, 2 is a
+    /// one-tile gap.
+    /// </summary>
+    private static int TileDistance(Point a, Point b) =>
+        System.Math.Max(System.Math.Abs(a.X - b.X), System.Math.Abs(a.Y - b.Y));
+
+    /// <summary>
     /// The tile one step in front of <paramref name="from"/> in <paramref name="facing"/>
     /// when a unit could walk onto it mid-route, else <paramref name="from"/>
     /// itself. The fallback is what happens when the captor walks face-first up
@@ -1027,28 +1034,31 @@ public static class MovementController
             return;
 
         // NOT ON THEIR SIDE YET (a police escort begins with the suspect where
-        // they stood - MovementV2Bridge.Pair). A walk-end with no step taken
-        // leaves them there. On the captor's first step, the edge below runs
-        // from the suspect's own tile (their EdgeTo) to the tile in front of
-        // where the captor is stepping, in the same beat - the slide a turn
-        // already makes - when they stand in front of the captor, beside them
-        // or on their tile.
+        // they stood - MovementV2Bridge.Pair). A walk-end or a turn leaves them
+        // there. Each captor step until they are, one of three, as HabRP's
+        // escort does it:
         //
-        // BEHIND THE CAPTOR, that slide would carry them about three tiles
-        // straight through the captor. They JUMP instead, as HabRP's escort
-        // does: onto their side of the tile the captor is stepping off, facing
-        // the captor's way, as the step starts, and the edge below walks them
-        // on from there one tile, in step. "Behind" is measured against the
-        // step's own direction: any tile on the far side of the captor from it,
-        // diagonals included.
+        //   - the step would leave a ONE-TILE GAP between them (the suspect no
+        //     longer touching the tile the captor steps onto): the captor walks
+        //     it alone, and the suspect stays where they stood, still unseated;
+        //   - the gap is already there (the suspect not touching the tile the
+        //     captor steps off): the suspect JUMPS onto their side of that
+        //     tile, facing the captor's way, as the step starts;
+        //   - neither: nothing special.
+        //
+        // After a jump, and in the last case, the edge below runs from the
+        // suspect's tile (their EdgeTo) to the tile in front of where the
+        // captor is stepping, in the same beat: one tile after a jump; from
+        // where they stood, the slide a turn already makes.
         if (w.ShadowUnseated)
         {
             if (!moving)
                 return;
+            var gapNow = TileDistance(s.EdgeTo, w.Tile) >= 2;
+            if (!gapNow && TileDistance(s.EdgeTo, w.EdgeTo) >= 2)
+                return;
             w.ShadowUnseated = false;
-            var step = FacingDelta(w.Facing);
-            var behind = (s.EdgeTo.X - w.Tile.X) * step.X + (s.EdgeTo.Y - w.Tile.Y) * step.Y < 0;
-            if (behind)
+            if (gapNow)
                 StageDisplacement(room, s, ShadowTile(map, w.Tile, w.Facing, w.ShadowBehind), w.Facing, map, w.EdgeStartTick(w.EdgeIndex));
         }
 
@@ -1447,8 +1457,7 @@ public static class MovementController
         // along - the old way before the correction turned them.
         //
         // Skipped too while the suspect is not on their side yet (ShadowUnseated
-        // - taken mid-walk, their first step still to come at the boundary):
-        // if they stand behind the captor that step starts with a jump, and an
+        // - they may stay put or jump at the boundary, HabRP-style, and an
         // early record would run them from their own tile instead.
         MovementState? shadow = null;
         if (w.ShadowVirtualId != MovementState.NoShadow)

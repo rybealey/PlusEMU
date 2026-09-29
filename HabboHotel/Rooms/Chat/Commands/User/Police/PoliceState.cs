@@ -433,8 +433,9 @@ public static class PoliceState
             //
             // A suspect is taken where they stand: they stay on their own tile,
             // facing their own way, until the officer's first step slides them
-            // in front - or, from behind the officer, jumps them there. A
-            // patient is still lifted onto their side at once.
+            // in front - or, if that step opens a one-tile gap between them,
+            // the next one jumps them there. A patient is still lifted onto
+            // their side at once.
             // RePair (a warp, a room change) always seats at once - the suspect
             // arrives on the captor's own tile there.
             var medical = kind == EscortKind.Medical;

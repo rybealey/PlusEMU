@@ -245,8 +245,8 @@ public static class MovementV2Bridge
     ///
     /// With <paramref name="seatNow"/> false the suspect is NOT moved yet: they
     /// stay on their own tile, facing their own way, and the captor's first
-    /// step slides them to the front, or jumps them there from behind
-    /// (MovementController.StageShadow). A police
+    /// step slides them to the front - or, if it opens a one-tile gap, the
+    /// next step jumps them there (MovementController.StageShadow). A police
     /// escort starts this way, so an officer can cuff and take a suspect where
     /// they stand. A suspect caught mid-step goes on to the tile they were
     /// stepping onto - never back to the one they left.
