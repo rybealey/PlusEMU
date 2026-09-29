@@ -205,16 +205,24 @@ internal class StunCommand : ITargetChatCommand
     /// on a true diagonal, nothing off those lines. The shared tile counts, as
     /// it does for a punch.
     ///
-    /// Measured between the tiles the two are ON SCREEN
-    /// (MovementV2Bridge.ApparentTile), not RoomUser.X/Y, which for anyone
+    /// Measured between the tiles the two count as on
+    /// (MovementV2Bridge.ReachTiles), not RoomUser.X/Y, which for anyone
     /// mid-step still names the tile they are leaving - so an officer firing
     /// as they walked up to a target measured a tile short of where they
-    /// stood, and missed.
+    /// stood, and missed. Someone mid-step counts as on the tile they are
+    /// stepping onto, and on the one they are leaving for the first half of
+    /// the step; the shot lands if any pairing is in line.
     /// </summary>
     private static bool InReach(RoomUser shooter, RoomUser target)
     {
-        var from = MovementV2Bridge.ApparentTile(shooter);
-        var to = MovementV2Bridge.ApparentTile(target);
+        var (shooterA, shooterB) = MovementV2Bridge.ReachTiles(shooter);
+        var (targetA, targetB) = MovementV2Bridge.ReachTiles(target);
+        return InLine(shooterA, targetA) || InLine(shooterA, targetB)
+            || InLine(shooterB, targetA) || InLine(shooterB, targetB);
+    }
+
+    private static bool InLine(System.Drawing.Point from, System.Drawing.Point to)
+    {
         var dx = Math.Abs(to.X - from.X);
         var dy = Math.Abs(to.Y - from.Y);
         if (dx == 0 && dy == 0)

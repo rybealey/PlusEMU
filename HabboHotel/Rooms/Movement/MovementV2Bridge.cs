@@ -115,8 +115,8 @@ public static class MovementV2Bridge
     }
 
     /// <summary>
-    /// The tile a unit is on AS THE ROOM SEES IT, for reach checks - a stun
-    /// gun's firing line.
+    /// The tiles a unit counts as on for reach checks - a stun gun's firing
+    /// line, a punch.
     ///
     /// RoomUser.X/Y is not it for anyone mid-step: ApplyMovementFrame puts it
     /// on each step's FROM tile when the step begins, and only the next step
@@ -125,23 +125,38 @@ public static class MovementV2Bridge
     /// An officer walking up to a suspect fired from a tile behind where they
     /// stood on screen, and a shot that looked two tiles long missed at three.
     ///
-    /// This rounds a step in flight to the nearer of its two tiles, by the
-    /// movement clock: the tile being left for the first half, the tile being
-    /// entered for the second. Anyone not mid-step - standing, or waiting for
-    /// a first step to start - is where RoomUser says. An escorted suspect
+    /// So a unit mid-step counts as on the tile it is stepping ONTO from the
+    /// moment the step begins, and ALSO on the tile it is leaving for the
+    /// first half of the step - while the room still sees it there. A reach
+    /// check passes from either. Walking into range is in range at once;
+    /// walking out of it is still in range until the avatar is visibly past
+    /// halfway gone, and out after that.
+    ///
+    /// Tried and rejected, by Twist's clips: the nearer tile alone missed a
+    /// stun fired just short of halfway through a step INTO range; both tiles
+    /// for the whole step let a target be hit after they had visibly left;
+    /// the tile being entered alone let a target escape the moment they
+    /// started stepping, while still in range on screen.
+    ///
+    /// Anyone not mid-step - standing, or a step not yet begun - is on one
+    /// tile, both values the same: RoomUser when standing. An escorted suspect
     /// mid-step counts too: their state carries the step like a walker's.
     /// </summary>
-    public static Point ApparentTile(RoomUser user)
+    public static (Point First, Point Second) ReachTiles(RoomUser user)
     {
         var standing = new Point(user.X, user.Y);
         if (!MovementRegistry.TryGet(user.RoomId, out var movement) || movement == null || movement.Closed)
-            return standing;
+            return (standing, standing);
         lock (movement.MovementLock)
         {
             if (movement.Closed || !movement.States.TryGetValue(user.VirtualId, out var state) || state.Tile == state.EdgeTo)
-                return standing;
+                return (standing, standing);
             var elapsed = MovementScheduler.Instance.Clock.NowMs - state.EdgeStartTick(state.EdgeIndex);
-            return (elapsed * 2 >= state.IntervalMs) ? state.EdgeTo : state.Tile;
+            if (elapsed < 0)
+                return (state.Tile, state.Tile);
+            if (elapsed * 2 < state.IntervalMs)
+                return (state.Tile, state.EdgeTo);
+            return (state.EdgeTo, state.EdgeTo);
         }
     }
 

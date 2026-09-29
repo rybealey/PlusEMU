@@ -166,11 +166,15 @@ internal class HitCommand : ITargetChatCommand
         // one step, no diagonals. Nought covers two players on a shared tile.
         // Measured between the tiles the two are ON SCREEN, not RoomUser.X/Y,
         // which for anyone mid-step still names the tile they are leaving - a
-        // punch thrown walking up to someone fell a tile short
-        // (MovementV2Bridge.ApparentTile, as :stun).
-        var from = MovementV2Bridge.ApparentTile(thisUser);
-        var to = MovementV2Bridge.ApparentTile(targetUser);
-        var inReach = (Math.Abs(to.X - from.X) + Math.Abs(to.Y - from.Y)) <= 1;
+        // punch thrown walking up to someone fell a tile short. Someone
+        // mid-step counts as on the tile they are stepping onto, and on the
+        // one they are leaving for the first half of the step; the punch
+        // lands from any pairing (MovementV2Bridge.ReachTiles, as :stun).
+        var (hitterA, hitterB) = MovementV2Bridge.ReachTiles(thisUser);
+        var (targetA, targetB) = MovementV2Bridge.ReachTiles(targetUser);
+        static bool Touching(System.Drawing.Point a, System.Drawing.Point b) => (Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y)) <= 1;
+        var inReach = Touching(hitterA, targetA) || Touching(hitterA, targetB)
+            || Touching(hitterB, targetA) || Touching(hitterB, targetB);
 
         // Leading AND trailing "*" matter: the client only treats a style-4
         // bubble as an action when the text is wrapped in them, and it then
