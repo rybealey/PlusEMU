@@ -65,8 +65,8 @@ public class ItemDataManager : IItemDataManager
                             AdjustableHeights = (!string.IsNullOrEmpty(Convert.ToString(row["height_adjustable"])) && Convert.ToString(row["height_adjustable"]) != "0")
                                 ? Convert.ToString(row["height_adjustable"]).Split(",").Select(double.Parse).ToList()
                                 : new(0),
-                            HeightMarker = Convert.ToString(row["height_marker"]) != "0",
-                            LayAcross = Convert.ToString(row["lay_across"]) == "1",
+                            HeightMarker = ToBool(row["height_marker"]),
+                            LayAcross = ToBool(row["lay_across"]),
                             EffectId = Convert.ToInt32(row["effect_id"]),
                             IsRare = row["is_rare"].ToString() == "1",
                             ExtraRot = row["extra_rot"].ToString() == "1",
@@ -106,6 +106,16 @@ public class ItemDataManager : IItemDataManager
         }
         _logger.LogInformation("Item Manager -> LOADED");
     }
+
+    // height_marker and lay_across are TINYINT(1), which MySqlConnector hands
+    // back as a .NET bool (TreatTinyAsBoolean, the default). Stringified that
+    // is "True"/"False", so comparing with "1" read every Lie across as off
+    // and comparing with "0" read every Height marker as on - both reverted to
+    // those after any restart, whatever the Function tool had saved. The
+    // enum('0','1') columns above still come back as strings. RoomFactory has
+    // the same helper for the same reason (hide-walls).
+    private static bool ToBool(object value) =>
+        value is bool b ? b : Convert.ToString(value) == "1";
 
     public ItemDefinition GetItemByName(string name)
     {
