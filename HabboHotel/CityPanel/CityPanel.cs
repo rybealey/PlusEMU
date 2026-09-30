@@ -43,7 +43,11 @@ public static class CityPanelAccess
         /// <summary>The sky: weather and time of day.</summary>
         World = 2048,
         /// <summary>Maintenance and the combat switch.</summary>
-        Hotel = 4096
+        Hotel = 4096,
+        /// <summary>Pay per rank and service prices.</summary>
+        Economy = 8192,
+        /// <summary>Clocking somebody out.</summary>
+        Shifts = 16384
     }
 
     private static readonly (Capability Capability, string Permission)[] Permissions =
@@ -60,7 +64,9 @@ public static class CityPanelAccess
         (Capability.AlertStaff, "command_staff_alert"),
         (Capability.AlertRoom, "command_room_alert"),
         (Capability.World, "rp_city_world"),
-        (Capability.Hotel, "rp_city_hotel")
+        (Capability.Hotel, "rp_city_hotel"),
+        (Capability.Economy, "rp_city_economy"),
+        (Capability.Shifts, "rp_city_shifts")
     };
 
     public static bool CanOpen(Habbo? habbo) => habbo != null && habbo.Permissions.HasCommand(OpenPermission);
