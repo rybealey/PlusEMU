@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Text;
 using Plus.Communication.Packets.Outgoing.Notifications;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items.Wired;
@@ -111,7 +112,14 @@ public class CommandManager : ICommandManager
             if (!string.IsNullOrEmpty(command.PermissionRequired))
             {
                 if (!session.GetHabbo().Permissions.HasCommand(command.PermissionRequired))
+                {
+                    // pixelrp: :sa from a non-staff player - the chat box kept
+                    // the prefix on send (RpRetainChatPrefixComposer), so tell it
+                    // this one did not go out.
+                    if (RpRetainChatPrefixComposer.Retains(key.ToLower()))
+                        session.Send(RpRetainChatPrefixComposer.Drop());
                     return false;
+                }
             }
             // pixelrp police: cuffs stop the things you do with your hands.
             // Here rather than inside each command, because eleven copies of

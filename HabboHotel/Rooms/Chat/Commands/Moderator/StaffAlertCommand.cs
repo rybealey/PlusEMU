@@ -52,6 +52,7 @@ internal class StaffAlertCommand : IChatCommand
         if (string.IsNullOrWhiteSpace(message))
         {
             session.SendWhisper("Usage: :sa <message>");
+            session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
 

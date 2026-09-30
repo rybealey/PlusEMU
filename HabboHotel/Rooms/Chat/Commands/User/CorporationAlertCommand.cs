@@ -37,17 +37,20 @@ internal class CorporationAlertCommand : IChatCommand
         if (employment == null || employment.CorpId == 0)
         {
             session.SendWhisper("You don't work for a corporation.");
+            session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
         if (!ShiftManager.IsOnDuty(habbo.Id))
         {
             session.SendWhisper("You must be clocked in to send a corporation alert.");
+            session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
         var message = CommandManager.MergeParams(parameters);
         if (string.IsNullOrWhiteSpace(message))
         {
             session.SendWhisper("Usage: :ca <message>");
+            session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
 

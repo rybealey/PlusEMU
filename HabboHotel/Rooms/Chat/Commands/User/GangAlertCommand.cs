@@ -42,12 +42,14 @@ internal class GangAlertCommand : IChatCommand
         if (gang == null)
         {
             session.SendWhisper("You're not in a gang.");
+            session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
         var message = CommandManager.MergeParams(parameters);
         if (string.IsNullOrWhiteSpace(message))
         {
             session.SendWhisper("Usage: :ga <message>");
+            session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
 
