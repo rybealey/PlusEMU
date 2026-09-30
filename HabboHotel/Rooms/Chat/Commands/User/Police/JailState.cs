@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Drawing;
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users;
@@ -333,6 +334,8 @@ public static class JailState
             LastSavedUtc = now
         };
         prisoner.Client?.Send(new RpJailComposer(seconds, seconds));
+        // The prisoner's uniform, from the booking on (UniformManager).
+        UniformManager.Refresh(prisoner.Client);
     }
 
     /// <summary>
@@ -352,6 +355,8 @@ public static class JailState
         }
         client?.Send(new RpJailComposer(0, 0));
         client?.SendWhisper("You have served your sentence.");
+        // Out of the prisoner's uniform - into their rank's, if they are on duty.
+        UniformManager.Refresh(client);
     }
 
     // ---- the session --------------------------------------------------------
@@ -422,6 +427,9 @@ public static class JailState
         if (!Serving.TryGetValue(user.UserId, out var sentence))
             return;
         user.GetClient()?.Send(new RpJailComposer(sentence.SecondsLeft, sentence.SentenceSeconds));
+        // Back in after a relog: the login set their own look, so dress them
+        // again here, where the room is known.
+        UniformManager.Refresh(user.GetClient());
     }
 
     /// <summary>

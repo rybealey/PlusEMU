@@ -74,6 +74,12 @@ public class Habbo
 
     public string Look { get; set; } = string.Empty;
 
+    // pixelrp uniforms (UniformManager): a uniform is worn in memory over the
+    // player's own look, which is kept here meanwhile - users.look is never
+    // written with a uniform, and nothing may save one while it is on.
+    public bool WearingUniform { get; set; }
+    public string? OwnLook { get; set; }
+
     public string Gender { get; set; } = string.Empty;
 
     public int Credits { get; set; }

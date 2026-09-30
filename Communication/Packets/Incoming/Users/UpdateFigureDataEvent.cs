@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Moderation;
+﻿using Plus.HabboHotel.Corporations;
+using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Core.FigureData;
@@ -27,6 +28,9 @@ internal class UpdateFigureDataEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var gender = packet.ReadString().ToUpper();
+        // pixelrp uniforms: the worn look is not theirs to save.
+        if (UniformManager.RefuseChange(session))
+            return Task.CompletedTask;
         // pixelrp: staff keep club clothing access even without an active VIP subscription.
         // pixelrp: HC/club clothing is not VIP-gated - everyone passes the
         // club check (sellable-clothing ownership still applies).

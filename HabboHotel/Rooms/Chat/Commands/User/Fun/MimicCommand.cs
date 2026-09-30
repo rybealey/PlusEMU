@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
+﻿using Plus.HabboHotel.Corporations;
+using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
@@ -27,6 +28,14 @@ internal class MimicCommand : ITargetChatCommand
         if (!target.AllowMimic)
         {
             session.SendWhisper("Oops, you cannot mimic this user - sorry!");
+            return Task.CompletedTask;
+        }
+        // pixelrp uniforms: neither out of one, nor into a copy of one.
+        if (UniformManager.RefuseChange(session))
+            return Task.CompletedTask;
+        if (target.WearingUniform)
+        {
+            session.SendWhisper("You can't copy someone's uniform.");
             return Task.CompletedTask;
         }
         var targetUser = session.GetHabbo().CurrentRoom.GetRoomUserManager().GetRoomUserByHabbo(target.Id);

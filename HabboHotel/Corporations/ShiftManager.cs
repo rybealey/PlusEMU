@@ -68,6 +68,9 @@ public static class ShiftManager
 
     public static bool IsOnDuty(int userId) => Sessions.ContainsKey(userId);
 
+    /// <summary>The rank a player is clocked in at, or 0 when they are off duty. Uniforms follow it.</summary>
+    public static int RankOf(int userId) => Sessions.TryGetValue(userId, out var session) ? session.RankId : 0;
+
     /// <summary>On duty AND the corporation is City Government.</summary>
     public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
 
@@ -407,11 +410,16 @@ public static class ShiftManager
     // Sets the in-memory motto and pushes it to the infostand (self + room).
     // users.motto is deliberately never written: the DB always holds the real
     // RP-managed motto, so any reload (relog, crash) self-heals.
+    //
+    // pixelrp uniforms: every clock-in, clock-out and rank refresh comes
+    // through here, so this is also where the rank's uniform goes on or comes
+    // off (UniformManager.Dress) - the same packet carries the look.
     private static void ApplyMotto(GameClient client, string motto)
     {
         var habbo = client?.GetHabbo();
         if (habbo == null) return;
         habbo.Motto = motto;
+        UniformManager.Dress(habbo);
         var room = habbo.CurrentRoom;
         var roomUser = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
         if (roomUser == null) return;

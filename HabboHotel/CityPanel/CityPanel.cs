@@ -35,7 +35,8 @@ public static class CityPanelAccess
         /// <summary>Release from jail and clear charges.</summary>
         Justice = 16,
         Balance = 32,
-        Backpack = 64
+        Backpack = 64,
+        Uniforms = 128
     }
 
     private static readonly (Capability Capability, string Permission)[] Permissions =
@@ -46,7 +47,8 @@ public static class CityPanelAccess
         (Capability.GoTo, "command_goto"),
         (Capability.Justice, "rp_city_justice"),
         (Capability.Balance, "rp_city_balance"),
-        (Capability.Backpack, "command_spawn")
+        (Capability.Backpack, "command_spawn"),
+        (Capability.Uniforms, "rp_city_uniforms")
     };
 
     public static bool CanOpen(Habbo? habbo) => habbo != null && habbo.Permissions.HasCommand(OpenPermission);

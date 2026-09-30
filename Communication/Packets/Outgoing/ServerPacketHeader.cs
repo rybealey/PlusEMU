@@ -201,6 +201,8 @@ public static class ServerPacketHeader
     public const uint RpCitySearchComposer = 4160;
     public const uint RpCityPlayerComposer = 4162;
     public const uint RpCityRoomsComposer = 4166;
+    public const uint RpCityUniformsComposer = 4168;
+    public const uint RpCityUniformComposer = 4170;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
     public const uint RpAirplaneModeComposer = 3935;

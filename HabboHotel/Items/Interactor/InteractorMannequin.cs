@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+﻿using Plus.HabboHotel.Corporations;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Items.Interactor;
@@ -19,6 +20,9 @@ internal class InteractorMannequin : IFurniInteractor
         var data = ItemBehaviourUtility.MannequinData(item);
         if (data.Data.TryGetValue("FIGURE", out var mannequinFigure) && !string.IsNullOrEmpty(mannequinFigure))
         {
+            // pixelrp uniforms: the worn look is not theirs to save.
+            if (UniformManager.RefuseChange(session))
+                return;
             session.GetHabbo().Gender = (data.Data.TryGetValue("GENDER", out var mannequinGender)
                 ? mannequinGender
                 : "m").ToUpper();

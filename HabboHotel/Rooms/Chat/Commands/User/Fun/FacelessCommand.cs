@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+﻿using Plus.HabboHotel.Corporations;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Core.FigureData;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
@@ -26,6 +27,9 @@ internal class FacelessCommand : IChatCommand
     {
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null || user.GetClient() == null)
+            return;
+        // pixelrp uniforms: the worn look is not theirs to save.
+        if (UniformManager.RefuseChange(session))
             return;
         string[] headParts;
         var figureParts = session.GetHabbo().Look.Split('.');
