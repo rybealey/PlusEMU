@@ -594,6 +594,10 @@ public class Habbo
         Support.SupportUtility.Forget(Id);
         // pixelrp offers: and any sale they were half way through.
         Rooms.Offers.OfferState.Forget(Id);
+        // pixelrp police: logging out in handcuffs is an arrest - charged with
+        // Logout and booked, the cuffs back to their officer. First, while the
+        // cuff is still on record: Forget below is what takes it off.
+        Plus.HabboHotel.Rooms.Chat.Commands.User.Police.ArrestCommand.OnCuffedLogout(this);
         // pixelrp police: a cuff, a stun and an escort are all session state, and
         // reloading the client ends the session - so the cuffs come off with it.
         // Done here rather than left to the room-leave path below because that

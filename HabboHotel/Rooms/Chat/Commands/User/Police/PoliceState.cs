@@ -359,11 +359,11 @@ public static class PoliceState
     /// <summary>
     /// pixelrp: give an officer back the pair of handcuffs they put on someone.
     ///
-    /// Called on :uncuff, and meant for the arrest when it exists - the two
-    /// moments the cuffs come back. Every other way a cuff ends (a knockout,
-    /// the suspect leaving the room, a restart) loses the pair, which is
-    /// harmless: the Police Replenish locker hands an officer with none a new
-    /// one.
+    /// Called on :uncuff, at :arrest, and when the suspect logs out in them
+    /// (ArrestCommand.OnCuffedLogout) - the moments the cuffs come back. Every
+    /// other way a cuff ends (a knockout, the suspect leaving the room, a
+    /// restart) loses the pair, which is harmless: the Police Replenish locker
+    /// hands an officer with none a new one.
     ///
     /// Only an officer who is online gets them; an offline one, one whose
     /// backpack is full, or one who already has a pair (one to an officer -

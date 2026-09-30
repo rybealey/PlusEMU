@@ -48,6 +48,12 @@ public class PlusEnvironment : IPlusEnvironment
 
     private static int _shuttingDown;
 
+    /// <summary>
+    /// pixelrp: the server is on its way down (PerformShutDown has begun), so
+    /// every session closing now is the restart, not a player leaving.
+    /// </summary>
+    public static bool IsShuttingDown => Volatile.Read(ref _shuttingDown) == 1;
+
     private static readonly List<char> Allowedchars = new(new[]
     {
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',

@@ -129,6 +129,21 @@ internal class ChargeCommand : ITargetChatCommand
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// File a charge the system raises rather than an officer - Logout, for
+    /// logging out in handcuffs. The same crime lookup and the same stackable
+    /// rule as :charge, with nothing announced. False when the crime is missing
+    /// or retired, or it cannot stack and is already on the sheet.
+    /// </summary>
+    internal static bool FileAuto(int userId, string key, int officerId)
+    {
+        var crime = FindCrime(key);
+        if (crime == null || (!crime.Stackable && HasOpenCharge(userId, crime.Id)))
+            return false;
+        File(userId, crime.Id, officerId);
+        return true;
+    }
+
     private static Crime FindCrime(string key)
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();

@@ -126,7 +126,7 @@ internal class ArrestCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        var minutes = (int)Math.Min(JailState.MaxSentenceSeconds / 60, (jailSeconds + 59) / 60);
+        var minutes = SentenceMinutes(jailSeconds);
         var unit = minutes == 1 ? "minute" : "minutes";
 
         // Served, so off the sheet.
@@ -156,6 +156,71 @@ internal class ArrestCommand : ITargetChatCommand
         WantedUtility.Broadcast();
         return Task.CompletedTask;
     }
+
+    /// <summary>The rp_crimes key a player logging out in handcuffs is charged with.</summary>
+    private const string LogoutCrime = "logout";
+
+    /// <summary>
+    /// Somebody logged out in handcuffs: charged with Logout and booked on the
+    /// spot, the way :arrest would have booked them - the whole sheet summed
+    /// and capped, the charges dropped, and the sentence waiting for them when
+    /// they log back in (its clock stops while they are away, and the jail's
+    /// door holds them to it). The cuffs go back to the officer whose they
+    /// were. From Habbo.OnDisconnect while the cuff is still recorded, which
+    /// is before PoliceState.Forget takes it off.
+    ///
+    /// A refresh is a logout, and so is a dropped connection: the server cannot
+    /// tell them apart, and walking out of custody by closing the tab is what
+    /// this stops. A server restart is not - every session closes then, and
+    /// nobody chose to leave, so it changes nothing here.
+    ///
+    /// No jail room, or a sheet that still carries no time (Logout retired in
+    /// housekeeping), and nobody is jailed: the cuffs still go back, and the
+    /// charge stays on the sheet for next time.
+    /// </summary>
+    internal static void OnCuffedLogout(Habbo prisoner)
+    {
+        if (prisoner == null || PlusEnvironment.IsShuttingDown || !PoliceState.IsCuffed(prisoner.Id))
+            return;
+        var cufferId = PoliceState.CufferOf(prisoner.Id);
+        var captorId = PoliceState.CaptorOf(prisoner.Id);
+        // On the record: the officer escorting them, else the one whose cuffs.
+        var officerId = (captorId != 0 && !PoliceState.IsMedicalEscort(captorId)) ? captorId : cufferId;
+
+        var minutes = 0;
+        if (!JailState.IsJailed(prisoner.Id))
+        {
+            // A lapsed count is nothing to serve, as at :arrest.
+            WantedUtility.ExpireLapsed();
+            ChargeCommand.FileAuto(prisoner.Id, LogoutCrime, officerId);
+            var (_, jailSeconds) = OpenSheet(prisoner.Id);
+            var jailRoomId = JailState.JailRoomId();
+            if (jailSeconds > 0 && jailRoomId != 0)
+            {
+                minutes = SentenceMinutes(jailSeconds);
+                DropCharges(prisoner.Id);
+                JailState.Start(prisoner, officerId, jailRoomId, minutes * 60);
+            }
+        }
+
+        var unit = minutes == 1 ? "minute" : "minutes";
+        var returned = cufferId != 0 && PoliceState.ReturnCuffs(cufferId);
+        var cuffer = PlusEnvironment.Game.ClientManager.GetClientByUserId(cufferId);
+        cuffer?.SendWhisper((minutes > 0
+                ? $"{prisoner.Username} logged out in your handcuffs and was sent to jail for {minutes} {unit}."
+                : $"{prisoner.Username} logged out in your handcuffs.")
+            + (returned ? " Your handcuffs are back in your backpack." : ""));
+        if (minutes > 0 && officerId != cufferId)
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(officerId)?.SendWhisper(
+                $"{prisoner.Username} logged out and was sent to jail for {minutes} {unit}.");
+    }
+
+    /// <summary>
+    /// A sheet's jail time as a sentence: rounded up to whole minutes, so the
+    /// bubble and the countdown agree, and never past JailState.MaxSentenceSeconds.
+    /// </summary>
+    private static int SentenceMinutes(long jailSeconds) =>
+        (int)Math.Min(JailState.MaxSentenceSeconds / 60, (jailSeconds + 59) / 60);
 
     /// <summary>
     /// The pair has stopped with one of them on an Arrest Point. Stopped means
