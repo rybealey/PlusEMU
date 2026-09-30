@@ -115,7 +115,6 @@ public class RoomData
         AllowMedical = data.AllowMedical;
         AllowPolice = data.AllowPolice;
         AllowStaff = data.AllowStaff;
-        IsArrestRoom = data.IsArrestRoom;
         IsJailRoom = data.IsJailRoom;
         Model = data.Model;
     }
@@ -186,10 +185,10 @@ public class RoomData
     public bool AllowPolice { get; set; }
     public bool AllowStaff { get; set; }
 
-    // pixelrp jail: an officer can :arrest here (rp_arrest_room), and an
-    // arrested player serves their time here (rp_jail_room). Staff tag both
-    // in the Room tool's Gameplay tab. Default off; assigned by RoomFactory.
-    public bool IsArrestRoom { get; set; }
+    // pixelrp jail: an arrested player serves their time here (rp_jail_room).
+    // Staff tag it in the Room tool's Gameplay tab. Default off; assigned by
+    // RoomFactory. Where an arrest is MADE is furni, not a room tag: an
+    // arrest_point (ArrestCommand). rooms.rp_arrest_room is no longer read.
     public bool IsJailRoom { get; set; }
 
 

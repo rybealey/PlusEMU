@@ -30,8 +30,8 @@ internal class GetRoomSettingsEvent : IPacketEvent
         // pixelrp: the Roleplay tab's HQ corp config (ranks + emergency
         // access flags) rides alongside the zone type for the same reason.
         session.Send(CorporationUtility.BuildRoomCorp(room));
-        // pixelrp jail: and the room's two police tags (arrest room, jail).
-        session.Send(new RpRoomPoliceComposer(room.Id, room.IsArrestRoom, room.IsJailRoom));
+        // pixelrp jail: and the room's police tag (jail).
+        session.Send(new RpRoomPoliceComposer(room.Id, room.IsJailRoom));
         return Task.CompletedTask;
     }
 }

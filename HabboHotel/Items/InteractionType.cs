@@ -115,6 +115,13 @@ public enum InteractionType
     /// </summary>
     PoliceReplenish,
 
+    /// <summary>
+    /// pixelrp: the booking spot. :arrest only works with the officer or the
+    /// suspect they are escorting standing on one (ArrestCommand). Inert
+    /// otherwise - it is where a station books, not a thing to click.
+    /// </summary>
+    ArrestPoint,
+
     WfFloorSwitch1,
     WfFloorSwitch2,
 

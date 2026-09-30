@@ -152,6 +152,8 @@ public static class InteractionTypes
                 return InteractionType.MedicalBed;
             case "police_replenish":
                 return InteractionType.PoliceReplenish;
+            case "arrest_point":
+                return InteractionType.ArrestPoint;
             case "wf_floor_switch1":
                 return InteractionType.WfFloorSwitch1;
             case "wf_floor_switch2":

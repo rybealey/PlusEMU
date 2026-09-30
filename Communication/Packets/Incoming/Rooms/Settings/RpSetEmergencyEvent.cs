@@ -12,10 +12,11 @@ namespace Plus.Communication.Packets.Incoming.Rooms.Settings;
 /// 2 staff) may work in this room. Editable by staff only
 /// (Room.CanManageSettings), like the HQ settings.
 ///
-/// Also the room's two police tags, 3 arrest room and 4 jail room (JailState),
-/// on the same packet rather than a new one: a staff switch on this room, and
-/// the same staff gate. Those two are answered with RpRoomPoliceComposer, the
-/// packet the Gameplay tab reads them from.
+/// Also the room's police tag, 4 jail room (JailState), on the same packet
+/// rather than a new one: a staff switch on this room, and the same staff
+/// gate. It is answered with RpRoomPoliceComposer, the packet the Gameplay tab
+/// reads it from. 3 was the arrest room tag, retired for the arrest_point
+/// behaviour (ArrestCommand); a 3 from an old client changes nothing.
 /// </summary>
 internal class RpSetEmergencyEvent : IPacketEvent
 {
@@ -51,10 +52,6 @@ internal class RpSetEmergencyEvent : IPacketEvent
                 column = "allow_staff";
                 room.AllowStaff = enabled;
                 break;
-            case 3:
-                column = "rp_arrest_room";
-                room.IsArrestRoom = enabled;
-                break;
             case 4:
                 column = "rp_jail_room";
                 room.IsJailRoom = enabled;
@@ -68,11 +65,11 @@ internal class RpSetEmergencyEvent : IPacketEvent
                 new { val = enabled ? "1" : "0", roomId = room.Id });
         }
         session.Send(CorporationUtility.BuildRoomCorp(room));
-        if (category >= 3)
+        if (category == 4)
         {
             // The jail moved, or grew: prisoners are held to the new set.
             JailState.ForgetJailRooms();
-            session.Send(new RpRoomPoliceComposer(room.Id, room.IsArrestRoom, room.IsJailRoom));
+            session.Send(new RpRoomPoliceComposer(room.Id, room.IsJailRoom));
         }
         return Task.CompletedTask;
     }

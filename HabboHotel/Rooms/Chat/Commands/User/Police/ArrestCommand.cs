@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.Movement;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
@@ -13,10 +14,12 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 ///
 /// The end of an arrest, not the start of one: by the time it is typed the
 /// suspect has been charged, cuffed and walked in under escort. So all of that
-/// is required, and one thing more - WHERE. Only in a room staff have tagged
-/// Arrest room (the station), and only with the suspect standing still ON the
-/// room's Action Point furni. Under escort the suspect walks a tile in front,
-/// so the officer brings them onto the point and stops one short of it.
+/// is required, and one thing more - WHERE. Only at an Arrest Point: furni
+/// staff have given the arrest_point behaviour (the booking desk of a
+/// station), with the officer OR the suspect standing still on it. Under
+/// escort the suspect walks a tile in front, so either works: the officer
+/// steps onto the point, or brings the suspect onto it and stops one short.
+/// The furni is the whole designation - any room with one placed books.
 ///
 /// THE SENTENCE IS THE SHEET, summed and capped. Every open charge's
 /// jail_seconds from housekeeping (rp_crimes), added up, rounded up to whole
@@ -37,7 +40,7 @@ internal class ArrestCommand : ITargetChatCommand
 
     public string Parameters => "%target%";
 
-    public string Description => "Send a wanted suspect you are escorting to jail, from the action point.";
+    public string Description => "Send a wanted suspect you are escorting to jail, from an arrest point.";
 
     public bool MustBeInSameRoom => true;
 
@@ -45,17 +48,6 @@ internal class ArrestCommand : ITargetChatCommand
 
     /// <summary>Blue bubble, the one every police action shares.</summary>
     private const int PoliceBubble = 4;
-
-    /// <summary>
-    /// The Action Point furni, by name: the Builders > Navigation one
-    /// (15_AddNavigationFurni) and the older one from the base catalogue. By
-    /// name because it is ordinary 'default' furni - giving it an interaction
-    /// type of its own would change every Action Point in the hotel.
-    /// </summary>
-    private static readonly HashSet<string> ActionPointNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "actionpoint", "actionpoint01"
-    };
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -74,12 +66,6 @@ internal class ArrestCommand : ITargetChatCommand
         if (AccountUtility.SameAccount(habbo.Id, target.Id))
         {
             session.SendWhisper("That is one of your own characters.");
-            return Task.CompletedTask;
-        }
-
-        if (!room.IsArrestRoom)
-        {
-            session.SendWhisper("You can't make arrests in this room.");
             return Task.CompletedTask;
         }
 
@@ -121,9 +107,9 @@ internal class ArrestCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (!OnActionPoint(room, officerUser, suspectUser))
+        if (!OnArrestPoint(room, officerUser, suspectUser))
         {
-            session.SendWhisper($"{target.Username} needs to be standing on the action point.");
+            session.SendWhisper($"You or {target.Username} need to be standing on an arrest point.");
             return Task.CompletedTask;
         }
 
@@ -172,25 +158,36 @@ internal class ArrestCommand : ITargetChatCommand
     }
 
     /// <summary>
-    /// The suspect is standing still on an Action Point. Still means the
-    /// officer has stopped - the suspect only moves when their captor does -
-    /// and the suspect is not part way through a step onto or off it: mid-step
-    /// the two reach tiles differ (MovementV2Bridge.ReachTiles), and an arrest
-    /// that lands a tile early is the thing this refuses.
+    /// The pair has stopped with one of them on an Arrest Point. Stopped means
+    /// the officer is not walking - the suspect only moves when their captor
+    /// does - and the suspect is not part way through a step: mid-step the two
+    /// reach tiles differ (MovementV2Bridge.ReachTiles), and an arrest that
+    /// lands a tile early is the thing this refuses. A stopped officer's own
+    /// tile is simply where they stand.
     /// </summary>
-    private static bool OnActionPoint(Room room, RoomUser officer, RoomUser suspect)
+    private static bool OnArrestPoint(Room room, RoomUser officer, RoomUser suspect)
     {
         if (MovementV2Bridge.IsWalkingOrWaiting(officer))
             return false;
         var (first, second) = MovementV2Bridge.ReachTiles(suspect);
         if (first != second)
             return false;
-        var items = room.GetGameMap()?.GetAllRoomItemForSquare(first.X, first.Y);
+        return IsArrestPoint(room, officer.X, officer.Y) || IsArrestPoint(room, first.X, first.Y);
+    }
+
+    /// <summary>
+    /// Whether an arrest_point furni covers this tile. The item's own
+    /// Definition, so a behaviour scoped to that one piece (the Furni function
+    /// editor's single-item scope) counts as much as one set on its type.
+    /// </summary>
+    private static bool IsArrestPoint(Room room, int x, int y)
+    {
+        var items = room.GetGameMap()?.GetAllRoomItemForSquare(x, y);
         if (items == null)
             return false;
         foreach (var item in items)
         {
-            if (item?.Definition != null && ActionPointNames.Contains(item.Definition.ItemName))
+            if (item?.Definition != null && item.Definition.InteractionType == InteractionType.ArrestPoint)
                 return true;
         }
         return false;
