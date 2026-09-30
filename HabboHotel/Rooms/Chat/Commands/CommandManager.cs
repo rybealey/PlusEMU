@@ -142,6 +142,13 @@ public class CommandManager : ICommandManager
                 session.SendWhisper("You can't do that in jail.");
                 return true;
             }
+            // pixelrp City Panel: staff can pause fighting city-wide. Backpack
+            // weapon clicks come through here as commands too.
+            if (Plus.HabboHotel.CityPanel.CityWorld.CombatBlocks(key.ToLower()))
+            {
+                session.SendWhisper("Fighting is paused city-wide.");
+                return true;
+            }
             // pixelrp: out cold means doing nothing. Same reasoning as the cuffs:
             // one check here, not a copy in every command.
             if (IsPlayerCommand(command) && !KnockedOutCan.Contains(key) && KnockedOut.Refuse(session))

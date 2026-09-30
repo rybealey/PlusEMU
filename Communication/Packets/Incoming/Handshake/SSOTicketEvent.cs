@@ -101,7 +101,8 @@ public class SsoTicketEvent : IPacketEvent
             // is behind this login. Clearing the pointer on refusal is the
             // second half of that: nobody is ever stranded on a character that
             // cannot get in.
-            if (Environment.GetEnvironmentVariable("STAFF_ONLY_LOGIN") == "1" &&
+            // pixelrp City Panel: maintenance (CityWorld) closes the same door.
+            if ((Environment.GetEnvironmentVariable("STAFF_ONLY_LOGIN") == "1" || HabboHotel.CityPanel.CityWorld.IsMaintenance) &&
                 HabboHotel.Users.Accounts.AccountUtility.AccountRank(session.GetHabbo().Id) < 5)
             {
                 _logger.LogWarning("Staff-only hotel: rejecting login for {user} (character rank {rank}).",

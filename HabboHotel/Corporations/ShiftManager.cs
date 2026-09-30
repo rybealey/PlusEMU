@@ -68,6 +68,9 @@ public static class ShiftManager
 
     public static bool IsOnDuty(int userId) => Sessions.ContainsKey(userId);
 
+    /// <summary>How many players are clocked in right now.</summary>
+    public static int OnDutyCount => Sessions.Count;
+
     /// <summary>The rank a player is clocked in at, or 0 when they are off duty. Uniforms follow it.</summary>
     public static int RankOf(int userId) => Sessions.TryGetValue(userId, out var session) ? session.RankId : 0;
 

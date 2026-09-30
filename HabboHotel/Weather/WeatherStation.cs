@@ -48,9 +48,79 @@ public static class WeatherStation
     /// <summary>Forces the type initializer, i.e. starts the fetch loop.</summary>
     public static void Touch() { _ = Loop; }
 
+    // pixelrp City Panel: staff can hold the sky. A weather code (WMO, the same
+    // numbers Open-Meteo sends) replaces the live one for everybody - the sky
+    // behind the rooms and the phone's Weather app alike - and a pinned time
+    // of day (minutes after midnight) stops the sky's clock. -1 is "follow San
+    // Francisco". Kept in server_settings, so a restart keeps them.
+    private const string WeatherPinnedKey = "city.weather.pinned";
+    private const string WeatherCodeKey = "city.weather.code";
+    private const string TimePinnedKey = "city.time.pinned";
+    private const string TimeMinutesKey = "city.time.minutes";
+
+    private static int? _overrideCode;
+    private static int? _pinnedMinutes;
+
+    /// <summary>The weather staff have set, or -1 to follow the live reading.</summary>
+    public static int OverrideCode
+    {
+        get
+        {
+            if (_overrideCode == null)
+            {
+                var settings = PlusEnvironment.SettingsManager;
+                _overrideCode = settings.TryGetValue(WeatherPinnedKey) == "1" && int.TryParse(settings.TryGetValue(WeatherCodeKey), out var code) ? code : -1;
+            }
+            return _overrideCode.Value;
+        }
+    }
+
+    /// <summary>The time of day staff have pinned, in minutes after midnight, or -1 to follow the clock.</summary>
+    public static int PinnedMinutes
+    {
+        get
+        {
+            if (_pinnedMinutes == null)
+            {
+                var settings = PlusEnvironment.SettingsManager;
+                _pinnedMinutes = settings.TryGetValue(TimePinnedKey) == "1" && int.TryParse(settings.TryGetValue(TimeMinutesKey), out var minutes) ? minutes : -1;
+            }
+            return _pinnedMinutes.Value;
+        }
+    }
+
+    /// <summary>The live San Francisco weather code, whatever is being shown; -1 before the first reading.</summary>
+    public static int LiveCode
+    {
+        get { lock (Lock) return _snapshot?.Code ?? -1; }
+    }
+
+    /// <summary>Hold the weather (a WMO code) or let it follow again (-1), and tell everybody.</summary>
+    public static void SetOverrideCode(int code)
+    {
+        var settings = PlusEnvironment.SettingsManager;
+        settings.Set(WeatherPinnedKey, code >= 0 ? "1" : "0");
+        if (code >= 0)
+            settings.Set(WeatherCodeKey, code.ToString());
+        _overrideCode = code >= 0 ? code : -1;
+        Broadcast();
+    }
+
+    /// <summary>Pin the time of day (0-1439) or let it follow the clock again (-1), and tell everybody.</summary>
+    public static void SetPinnedMinutes(int minutes)
+    {
+        var settings = PlusEnvironment.SettingsManager;
+        var pinned = minutes >= 0 ? Math.Clamp(minutes, 0, 1439) : -1;
+        settings.Set(TimePinnedKey, pinned >= 0 ? "1" : "0");
+        if (pinned >= 0)
+            settings.Set(TimeMinutesKey, pinned.ToString());
+        _pinnedMinutes = pinned;
+        Broadcast();
+    }
+
     public static RpWeatherComposer Compose()
     {
-        lock (Lock) return new RpWeatherComposer(_snapshot, _failures);
+        lock (Lock) return new RpWeatherComposer(_snapshot, _failures, OverrideCode, PinnedMinutes);
     }
 
     private static async Task RunLoop()

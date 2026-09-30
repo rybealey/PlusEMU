@@ -524,6 +524,9 @@ public static class ClientPacketHeader
     public const uint RpCityUniformsEvent = 4167;
     public const uint RpCityUniformEvent = 4169;
     public const uint RpCityUniformSaveEvent = 4171;
+    public const uint RpCityWorldEvent = 4172;
+    public const uint RpCityWorldSetEvent = 4174;
+    public const uint RpCityAlertEvent = 4175;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958
     // 3959 is BURNED: it collides with the stock client's PHOTO_COMPETITION

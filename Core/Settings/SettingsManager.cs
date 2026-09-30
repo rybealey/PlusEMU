@@ -24,4 +24,15 @@ public class SettingsManager : ISettingsManager
     }
 
     public string TryGetValue(string value) => _settings.ContainsKey(value) ? _settings[value] : "0";
+
+    public void Set(string key, string value)
+    {
+        value ??= "";
+        using (var connection = _database.Connection())
+            connection.Execute("INSERT INTO `server_settings` (`key`, `value`, `description`) VALUES (@key, @value, '') " +
+                               "ON DUPLICATE KEY UPDATE `value` = @value", new { key, value });
+        // A new dictionary rather than a write into the live one: readers on
+        // other threads never see it mid-change. Lowercased like Reload's.
+        _settings = new Dictionary<string, string>(_settings) { [key] = value.ToLower() };
+    }
 }

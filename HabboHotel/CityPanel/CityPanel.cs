@@ -36,7 +36,14 @@ public static class CityPanelAccess
         Justice = 16,
         Balance = 32,
         Backpack = 64,
-        Uniforms = 128
+        Uniforms = 128,
+        AlertHotel = 256,
+        AlertStaff = 512,
+        AlertRoom = 1024,
+        /// <summary>The sky: weather and time of day.</summary>
+        World = 2048,
+        /// <summary>Maintenance and the combat switch.</summary>
+        Hotel = 4096
     }
 
     private static readonly (Capability Capability, string Permission)[] Permissions =
@@ -48,7 +55,12 @@ public static class CityPanelAccess
         (Capability.Justice, "rp_city_justice"),
         (Capability.Balance, "rp_city_balance"),
         (Capability.Backpack, "command_spawn"),
-        (Capability.Uniforms, "rp_city_uniforms")
+        (Capability.Uniforms, "rp_city_uniforms"),
+        (Capability.AlertHotel, "command_hotel_alert"),
+        (Capability.AlertStaff, "command_staff_alert"),
+        (Capability.AlertRoom, "command_room_alert"),
+        (Capability.World, "rp_city_world"),
+        (Capability.Hotel, "rp_city_hotel")
     };
 
     public static bool CanOpen(Habbo? habbo) => habbo != null && habbo.Permissions.HasCommand(OpenPermission);
