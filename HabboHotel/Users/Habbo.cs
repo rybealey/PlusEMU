@@ -452,22 +452,11 @@ public class Habbo
     public const int RpCarrySlotsBase = 10;
     public int RpUnlockedSlots => IsVip ? RpCarrySlots : RpCarrySlotsBase;
 
-    public List<(int Slot, string Item, int Count)> LoadRpInventory()
-    {
-        var list = new List<(int, string, int)>();
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT `slot`,`item`,`count` FROM `user_rp_inventory` WHERE `user_id` = @id ORDER BY `slot`");
-        dbClient.AddParameter("id", Id);
-        var table = dbClient.GetTable();
-        if (table != null)
-            foreach (System.Data.DataRow row in table.Rows)
-                list.Add((Convert.ToInt32(row["slot"]), Convert.ToString(row["item"]), Convert.ToInt32(row["count"])));
-        return list;
-    }
+    // The backpack's logic lives in RpInventoryStore, keyed by user id, so the
+    // City Panel can reach an offline player's too. These are the logged-in
+    // player's doors onto it.
+    public List<(int Slot, string Item, int Count)> LoadRpInventory() => RpInventoryStore.Load(Id);
 
-    /// <summary>Adds one of an item (stacking onto an existing slot of the
-    /// same item, else the first free carry slot). Returns the slot, or -1
-    /// when the backpack is full.</summary>
     // A stack holds at most this many; the next item overflows into a free
     // slot (or fails as backpack-full like any other add).
     public const int RpStackCap = 10;
@@ -478,126 +467,30 @@ public class Habbo
     /// </summary>
     public const int RpAlreadyHeld = -2;
 
-    /// <summary>
-    /// Items nobody may hold more than one of. Handcuffs: an officer carries
-    /// one pair - the locker hands out a new pair when theirs is on a suspect
-    /// or lost, and a pair coming back off a suspect to someone who already
-    /// has one is simply lost. Enforced here because every way into a
-    /// backpack goes through AddRpItem.
-    /// </summary>
-    private static readonly HashSet<string> RpOnePerPlayer = new() { Plus.HabboHotel.Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem };
-
-    public int AddRpItem(string item)
-    {
-        var inventory = LoadRpInventory();
-        if (RpOnePerPlayer.Contains(item) && inventory.Any(entry => entry.Item == item))
-            return RpAlreadyHeld;
-        // pixelrp: weapons never stack - each is its own item, one to a slot -
-        // and only the carry slots are stacked onto, never the Weapon frame.
-        var existing = RpWeapons.IsWeapon(item)
-            ? default
-            : inventory.FirstOrDefault(entry => entry.Item == item && entry.Count < RpStackCap && entry.Slot >= 1 && entry.Slot <= RpCarrySlots);
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        if (existing.Item == item && existing.Slot > 0 && existing.Slot <= RpUnlockedSlots)
-        {
-            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` + 1 WHERE `user_id` = @id AND `slot` = @slot");
-            dbClient.AddParameter("id", Id);
-            dbClient.AddParameter("slot", existing.Slot);
-            dbClient.RunQuery();
-            return existing.Slot;
-        }
-        var used = inventory.Select(entry => entry.Slot).ToHashSet();
-        var slot = Enumerable.Range(1, RpUnlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
-        if (slot == 0)
-            return -1;
-        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("slot", slot);
-        dbClient.AddParameter("item", item);
-        dbClient.RunQuery();
-        return slot;
-    }
+    /// <summary>Adds one of an item (stacking onto an existing slot of the
+    /// same item, else the first free carry slot). Returns the slot, -1 when
+    /// the backpack is full, or <see cref="RpAlreadyHeld"/>.</summary>
+    public int AddRpItem(string item) => RpInventoryStore.Add(Id, item, RpUnlockedSlots);
 
     /// <summary>
     /// pixelrp: put a new weapon straight into the Weapon slot, which must be
     /// empty. Returns false when it is not. Needs no free carry slot, so a
     /// full backpack can still be handed one to hold.
     /// </summary>
-    public bool AddRpItemEquipped(string item)
-    {
-        if (!RpWeapons.IsWeapon(item) || !string.IsNullOrEmpty(RpWeapons.EquippedItem(LoadRpInventory())))
-            return false;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("slot", RpWeapons.WeaponSlot);
-        dbClient.AddParameter("item", item);
-        dbClient.RunQuery();
-        return true;
-    }
+    public bool AddRpItemEquipped(string item) => RpInventoryStore.AddEquipped(Id, item);
 
     /// <summary>Moves the backpack item in `from` into `to`, swapping when the
-    /// target slot is occupied. Rows keep their counts; the three-step dance
-    /// through temp slot 0 (never a real slot - they're 1-based) satisfies the
-    /// (user_id, slot) primary key.</summary>
-    public void MoveRpItem(int from, int to)
-    {
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = 0 WHERE `user_id` = @id AND `slot` = @from");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("from", from);
-        dbClient.RunQuery();
-        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = @from WHERE `user_id` = @id AND `slot` = @to");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("from", from);
-        dbClient.AddParameter("to", to);
-        dbClient.RunQuery();
-        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = @to WHERE `user_id` = @id AND `slot` = 0");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("to", to);
-        dbClient.RunQuery();
-    }
+    /// target slot is occupied.</summary>
+    public void MoveRpItem(int from, int to) => RpInventoryStore.Move(Id, from, to);
 
     /// <summary>Removes one of whatever sits in the slot. Returns the item
     /// key, or null when the slot is empty.</summary>
-    public string ConsumeRpItem(int slot)
-    {
-        var entry = LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot);
-        if (string.IsNullOrEmpty(entry.Item))
-            return null;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        if (entry.Count > 1)
-            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` - 1 WHERE `user_id` = @id AND `slot` = @slot");
-        else
-            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("slot", slot);
-        dbClient.RunQuery();
-        return entry.Item;
-    }
+    public string ConsumeRpItem(int slot) => RpInventoryStore.Consume(Id, slot);
 
     /// <summary>pixelrp: the backpack bin - throws away `count` of what sits
     /// in the slot, the whole stack when `count` covers it. Returns the item
     /// key and how many went, or (null, 0) when the slot is empty.</summary>
-    public (string Item, int Count) DiscardRpItem(int slot, int count)
-    {
-        var entry = LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot);
-        if (string.IsNullOrEmpty(entry.Item) || count < 1)
-            return (null, 0);
-        var removed = Math.Min(count, entry.Count);
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        if (removed < entry.Count)
-        {
-            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` - @removed WHERE `user_id` = @id AND `slot` = @slot");
-            dbClient.AddParameter("removed", removed);
-        }
-        else
-            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot");
-        dbClient.AddParameter("id", Id);
-        dbClient.AddParameter("slot", slot);
-        dbClient.RunQuery();
-        return (entry.Item, removed);
-    }
+    public (string Item, int Count) DiscardRpItem(int slot, int count) => RpInventoryStore.Discard(Id, slot, count);
 
     public int FastfoodScore { get; set; }
 

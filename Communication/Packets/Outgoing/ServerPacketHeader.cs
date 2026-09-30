@@ -196,6 +196,11 @@ public static class ServerPacketHeader
     public const uint RpStunGunChargeComposer = 4154;
     public const uint RpRoomPoliceComposer = 4155;
     public const uint RpJailComposer = 4156;
+    // pixelrp City Panel (HabboHotel/CityPanel): the staff window.
+    public const uint RpCityPanelComposer = 4158;
+    public const uint RpCitySearchComposer = 4160;
+    public const uint RpCityPlayerComposer = 4162;
+    public const uint RpCityRoomsComposer = 4166;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
     public const uint RpAirplaneModeComposer = 3935;

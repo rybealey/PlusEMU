@@ -514,6 +514,13 @@ public static class ClientPacketHeader
     public const uint RpRoomZoneTypeSaveEvent = 4150;
     // pixelrp turfs: the panel's Claim button.
     public const uint RpTurfClaimEvent = 4153;
+    // pixelrp City Panel (HabboHotel/CityPanel): the staff window.
+    public const uint RpCityPanelOpenEvent = 4157;
+    public const uint RpCitySearchEvent = 4159;
+    public const uint RpCityPlayerEvent = 4161;
+    public const uint RpCityPlayerActionEvent = 4163;
+    public const uint RpCityBackpackEvent = 4164;
+    public const uint RpCityRoomsEvent = 4165;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958
     // 3959 is BURNED: it collides with the stock client's PHOTO_COMPETITION

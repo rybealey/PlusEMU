@@ -367,7 +367,7 @@ public static class PoliceState
     ///
     /// Only an officer who is online gets them; an offline one, one whose
     /// backpack is full, or one who already has a pair (one to an officer -
-    /// Habbo.RpOnePerPlayer) loses it the same way. Returns whether they were
+    /// RpInventoryStore one-per-player) loses it the same way. Returns whether they were
     /// given back.
     /// </summary>
     public static bool ReturnCuffs(int officerId)

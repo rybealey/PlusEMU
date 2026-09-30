@@ -83,7 +83,7 @@ internal class PardonCommand : ITargetChatCommand
         // and let the count below say so honestly.
         WantedUtility.ExpireLapsed();
 
-        var dropped = Drop(target.Id, habbo.Id);
+        var dropped = WantedUtility.DropAll(target.Id);
         if (dropped == 0)
         {
             session.SendWhisper($"{target.Username} has nothing on their record.");
@@ -101,26 +101,5 @@ internal class PardonCommand : ITargetChatCommand
         // They may have been on the wanted list; they are not now.
         WantedUtility.Broadcast();
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Stamp every open charge as dropped and say how many there were.
-    /// `officer_id` is left as the officer who FILED each charge - that is
-    /// what it records - so who pardoned whom lives in the room log only.
-    /// </summary>
-    private static int Drop(int userId, int officerId)
-    {
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT COUNT(*) FROM `rp_charges` WHERE `user_id` = @user AND `dropped_at` = 0");
-        dbClient.AddParameter("user", userId);
-        var open = dbClient.GetInteger();
-        if (open == 0)
-            return 0;
-
-        dbClient.SetQuery("UPDATE `rp_charges` SET `dropped_at` = UNIX_TIMESTAMP() " +
-                          "WHERE `user_id` = @user AND `dropped_at` = 0");
-        dbClient.AddParameter("user", userId);
-        dbClient.RunQuery();
-        return open;
     }
 }

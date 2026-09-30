@@ -89,6 +89,54 @@ public static class JailState
 
     public static bool IsJailed(int habboId) => Serving.ContainsKey(habboId);
 
+    /// <summary>An online prisoner's time left in seconds; 0 for anybody not serving.</summary>
+    public static int SecondsLeft(int habboId) => Serving.TryGetValue(habboId, out var sentence) ? sentence.SecondsLeft : 0;
+
+    /// <summary>How many online players are serving right now.</summary>
+    public static int ServingCount => Serving.Count;
+
+    /// <summary>The online players serving right now.</summary>
+    public static IReadOnlyCollection<int> ServingIds => Serving.Keys.ToList();
+
+    /// <summary>
+    /// City Panel: a player's time left, online or not. Online it is the live
+    /// clock; offline, the saved one (the clock stops at logout).
+    /// </summary>
+    public static int SecondsLeftAnywhere(int habboId)
+    {
+        if (Serving.TryGetValue(habboId, out var sentence))
+            return sentence.SecondsLeft;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `seconds_left` FROM `rp_jail` WHERE `user_id` = @user AND `released_at` = 0 ORDER BY `id` DESC LIMIT 1");
+        dbClient.AddParameter("user", habboId);
+        var row = dbClient.GetRow();
+        return row == null ? 0 : Math.Max(0, Convert.ToInt32(row["seconds_left"]));
+    }
+
+    /// <summary>
+    /// City Panel: staff let a prisoner go early. Online through the one
+    /// release point (<see cref="Release"/>); offline, the open record is
+    /// closed, so their next login finds nothing to resume. False when there
+    /// was no sentence to end.
+    /// </summary>
+    public static bool StaffRelease(int habboId, GameClient? client)
+    {
+        if (Serving.ContainsKey(habboId))
+        {
+            Release(habboId, client);
+            return true;
+        }
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT COUNT(*) FROM `rp_jail` WHERE `user_id` = @user AND `released_at` = 0");
+        dbClient.AddParameter("user", habboId);
+        if (dbClient.GetInteger() == 0)
+            return false;
+        dbClient.SetQuery("UPDATE `rp_jail` SET `seconds_left` = 0, `released_at` = UNIX_TIMESTAMP() WHERE `user_id` = @user AND `released_at` = 0");
+        dbClient.AddParameter("user", habboId);
+        dbClient.RunQuery();
+        return true;
+    }
+
     /// <summary>Whether being in jail stops this command. One gate in CommandManager.</summary>
     public static bool Blocks(int habboId, string commandKey) =>
         IsJailed(habboId) && JailedCannot.Contains(commandKey);

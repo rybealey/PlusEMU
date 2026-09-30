@@ -28,6 +28,12 @@ internal class SpawnCommand : ITargetChatCommand
         { "pepperspray", ("pepper_spray", "Pepper Spray") }
     };
 
+    /// <summary>pixelrp City Panel: the items staff can hand out, by backpack key, with their names.</summary>
+    public static IEnumerable<(string ItemKey, string Name)> Spawnable => Items.Values;
+
+    /// <summary>Whether a backpack key is one of the items above.</summary>
+    public static bool IsSpawnable(string itemKey) => !string.IsNullOrEmpty(itemKey) && Items.Values.Any(entry => entry.ItemKey == itemKey);
+
     public string Key => "spawn";
     public string PermissionRequired => "command_spawn";
 

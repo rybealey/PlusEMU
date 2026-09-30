@@ -275,6 +275,29 @@ public static class WantedUtility
     /// (housekeeping) is not seen here, so that lands on the next charge or
     /// the next login.
     /// </summary>
+    /// <summary>
+    /// Stamp every open charge as dropped and say how many there were - :pardon
+    /// and the City Panel's Clear charges. `officer_id` is left as the officer
+    /// who FILED each charge - that is what it records - so who pardoned whom
+    /// lives in the room log (or the staff log) only. Call <see cref="Broadcast"/>
+    /// after, when it was more than zero.
+    /// </summary>
+    public static int DropAll(int userId)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT COUNT(*) FROM `rp_charges` WHERE `user_id` = @user AND `dropped_at` = 0");
+        dbClient.AddParameter("user", userId);
+        var open = dbClient.GetInteger();
+        if (open == 0)
+            return 0;
+
+        dbClient.SetQuery("UPDATE `rp_charges` SET `dropped_at` = UNIX_TIMESTAMP() " +
+                          "WHERE `user_id` = @user AND `dropped_at` = 0");
+        dbClient.AddParameter("user", userId);
+        dbClient.RunQuery();
+        return open;
+    }
+
     public static void Broadcast()
     {
         PlusEnvironment.Game.ClientManager.SendPacket(new RpWantedComposer(GetWanted()));
