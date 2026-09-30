@@ -82,7 +82,9 @@ public static class JailState
         // Trading, and handing things over.
         "offer", "sell", "give", "heal",
         // Out of the room behind somebody, and back on the clock.
-        "follow", "startwork"
+        "follow", "startwork",
+        // Down and off to the hospital (SuicideCommand).
+        "suicide"
     };
 
     public static bool IsJailed(int habboId) => Serving.ContainsKey(habboId);

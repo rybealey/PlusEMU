@@ -335,7 +335,9 @@ public static class PoliceState
         // Doing to somebody else what was done to you.
         "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort", "arrest",
         // Trading, and handing things over.
-        "offer", "sell", "give", "heal"
+        "offer", "sell", "give", "heal",
+        // Going down ends the cuffs and the escort (OnKnockout) - no way out.
+        "suicide"
     };
 
     /// <summary>
