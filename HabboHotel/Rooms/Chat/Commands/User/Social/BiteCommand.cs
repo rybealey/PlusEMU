@@ -10,4 +10,7 @@ internal class BiteCommand : SocialCommand
     protected override string SelfMessage => "You cannot bite yourself.";
 
     protected override string Action(string targetName) => $"gives {targetName} a little bite on their arm";
+
+    /// <summary>The kiss's hearts - Habbo's Love (fx 9).</summary>
+    protected override int OverlayExpression => 101;
 }

@@ -29,8 +29,8 @@ internal abstract class SocialCommand : ITargetChatCommand
     /// they read as one family, apart from the blue combat bubble.</summary>
     private const int RelationshipBubble = 16;
 
-    /// <summary>Seconds a player must wait between uses - 5 by default, matching :slap.</summary>
-    protected virtual int CooldownSeconds => 5;
+    /// <summary>Seconds a player must wait between uses of the same command.</summary>
+    private const int CooldownSeconds = 15;
 
     /// <summary>
     /// Last successful use per player id. Commands are DI singletons, so this
@@ -99,8 +99,8 @@ internal abstract class SocialCommand : ITargetChatCommand
             if (elapsed < CooldownSeconds)
             {
                 // Counts DOWN the seconds still to wait, the same way :slap
-                // does: [5/5] the instant you retry, [1/5] with under a second
-                // to go. Ceiling stops it reading [0/5] while the gate is shut.
+                // does: [15/15] the instant you retry, [1/15] with under a second
+                // to go. Ceiling stops it reading [0/15] while the gate is shut.
                 var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
                 session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
                 return Task.CompletedTask;
