@@ -216,7 +216,7 @@ public static class TurfManager
 
         if (!room.IsTurf)
         {
-            Fail(room, capture, null, "this room is no longer a turf");
+            Fail(room, capture, null);
             return;
         }
 
@@ -224,23 +224,23 @@ public static class TurfManager
         var claimer = users.GetRoomUserByHabbo(capture.ClaimerId);
         if (claimer == null)
         {
-            Fail(room, capture, null, $"{capture.ClaimerName} left the turf");
+            Fail(room, capture, null);
             return;
         }
         if (claimer.RpKnockedOut)
         {
-            Fail(room, capture, claimer, $"{capture.ClaimerName} was knocked out");
+            Fail(room, capture, claimer);
             return;
         }
         if (Rooms.Chat.Commands.User.Police.PoliceState.IsCuffed(capture.ClaimerId))
         {
-            Fail(room, capture, claimer, $"{capture.ClaimerName} was cuffed");
+            Fail(room, capture, claimer);
             return;
         }
         // asleep: five minutes without moving, talking or clicking (the Zzz)
         if (claimer.IsAsleep)
         {
-            Fail(room, capture, claimer, $"{capture.ClaimerName} went idle");
+            Fail(room, capture, claimer);
             return;
         }
 
@@ -300,14 +300,18 @@ public static class TurfManager
             Complete(room, capture, claimer);
     }
 
-    private static void Fail(Room room, Capture capture, RoomUser claimer, string why)
+    /// <summary>
+    /// End a claim that did not hold. Said the same way whatever ended it - the
+    /// room bubble, the gang alert and the turf panel name no reason.
+    /// </summary>
+    private static void Fail(Room room, Capture capture, RoomUser claimer)
     {
         if (!Captures.TryRemove(room.RoomId, out _))
             return;
         if (claimer != null)
-            room.SendPacket(new ChatComposer(claimer.VirtualId, $"*loses the claim on this turf - {why}*", 0, ActionBubble));
+            room.SendPacket(new ChatComposer(claimer.VirtualId, "*loses the claim on this turf*", 0, ActionBubble));
         GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} failed.");
-        Broadcast(room, $"Claim failed: {why}.");
+        Broadcast(room, "Claim failed.");
     }
 
     private static void Complete(Room room, Capture capture, RoomUser claimer)
@@ -412,7 +416,7 @@ public static class TurfManager
                 Captures.TryRemove(roomId, out _);
                 continue;
             }
-            Fail(claimRoom, capture, claimRoom.GetRoomUserManager().GetRoomUserByHabbo(userId), $"{capture.ClaimerName} left {capture.GangName}");
+            Fail(claimRoom, capture, claimRoom.GetRoomUserManager().GetRoomUserByHabbo(userId));
         }
 
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
