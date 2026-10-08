@@ -10,6 +10,9 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// Viewable by every player (no staff gate; corporations are the economy's
 /// front door).
 ///
+/// A corporation staff have hidden (rp_corporations.hidden, the City Panel's
+/// Economy tab) is left out of the directory for everybody.
+///
 /// The headcount leaves out staff who have hidden themselves, for the same
 /// reason the roster does: a directory reading 12 beside a roster listing 11
 /// says there is a twelfth just as plainly as naming them would.
@@ -29,7 +32,7 @@ internal class RpGetCorpsEvent : IPacketEvent
             " INNER JOIN `users` u ON u.`id` = e.`user_id` " +
             " WHERE e.`corporation_id` = c.`id` " +
             " AND (@seeHidden = 1 OR IFNULL(u.`hidden_staff`, 0) = 0 OR u.`id` = @viewerId)) AS employees " +
-            "FROM `rp_corporations` c ORDER BY c.`sort_order`, c.`id`", new { seeHidden, viewerId })
+            "FROM `rp_corporations` c WHERE c.`hidden` = 0 ORDER BY c.`sort_order`, c.`id`", new { seeHidden, viewerId })
             .Select(row => new RpCorpsComposer.CorpEntry(row.Id, row.Name, row.Badge, row.Employees))
             .ToList();
         session.Send(new RpCorpsComposer(corps));

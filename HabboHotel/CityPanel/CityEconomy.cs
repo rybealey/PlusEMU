@@ -86,6 +86,8 @@ public static class CityEconomy
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
+        /// <summary>Left out of the Corporations window (Settings > Hide corporation).</summary>
+        public bool Hidden { get; set; }
         public List<Rank> Ranks { get; } = new();
         public List<(int UserId, string Username, string RankName)> OnShift { get; } = new();
     }
@@ -96,7 +98,7 @@ public static class CityEconomy
         List<Rank> ranks;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
-            corps = connection.Query<Corp>("SELECT `id` AS Id, `name` AS Name FROM `rp_corporations` ORDER BY `sort_order`, `id`").ToList();
+            corps = connection.Query<Corp>("SELECT `id` AS Id, `name` AS Name, `hidden` AS Hidden FROM `rp_corporations` ORDER BY `sort_order`, `id`").ToList();
             ranks = connection.Query<Rank>(
                 "SELECT `id` AS Id, `corporation_id` AS CorporationId, `name` AS Name, `pay` AS Pay " +
                 "FROM `rp_corporation_ranks` ORDER BY `rank_order` DESC").ToList();
@@ -115,6 +117,19 @@ public static class CityEconomy
             corp.OnShift.Add((userId, habbo?.Username ?? $"#{userId}", rankNames.GetValueOrDefault(rankId, "")));
         }
         return corps;
+    }
+
+    /// <summary>Corporation settings, by number - RpCityCorpSettingEvent's.</summary>
+    public const int SettingHidden = 1;
+
+    /// <summary>Change one of a corporation's settings. False for a corporation or setting that does not exist.</summary>
+    public static bool SetCorpSetting(int corpId, int setting, int value)
+    {
+        if (setting != SettingHidden)
+            return false;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.Execute("UPDATE `rp_corporations` SET `hidden` = @hidden WHERE `id` = @corpId LIMIT 1",
+            new { hidden = value == 1 ? 1 : 0, corpId }) > 0;
     }
 
     /// <summary>

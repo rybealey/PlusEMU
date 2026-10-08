@@ -372,6 +372,7 @@
     "RpCityPaySaveEvent": 4178,
     "RpCityPriceSaveEvent": 4179,
     "RpCityClockOutEvent": 4180,
+    "RpCityCorpSettingEvent": 4183,
     "RpSetHudTargetEvent": 4181,
     "RpSetRoomCorpEvent": 3958,
     "RpSetHqRankEvent": 3962,

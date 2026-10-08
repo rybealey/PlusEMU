@@ -531,6 +531,7 @@ public static class ClientPacketHeader
     public const uint RpCityPaySaveEvent = 4178;
     public const uint RpCityPriceSaveEvent = 4179;
     public const uint RpCityClockOutEvent = 4180;
+    public const uint RpCityCorpSettingEvent = 4183;
     // pixelrp: who is selected in the HUD - a target command typed without a name is aimed at them
     public const uint RpSetHudTargetEvent = 4181;
     // Internal 439xx / wire 39xx - see the album note above.

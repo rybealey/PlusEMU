@@ -44,6 +44,8 @@ public class RpCityEconomyComposer : IServerPacket
                 packet.WriteString(username);
                 packet.WriteString(rankName);
             }
+            // Settings.
+            packet.WriteBoolean(corp.Hidden);
         }
         packet.WriteInteger(_prices.Count);
         foreach (var price in _prices)
