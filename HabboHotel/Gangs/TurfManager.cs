@@ -199,10 +199,10 @@ public static class TurfManager
         if (user != null)
             room.SendPacket(new ChatComposer(user.VirtualId, $"*starts claiming this turf for {gang.Name}*", 0, ActionBubble));
 
-        GangAlert(gang.GangId, $"[Turf]: {claimer.Username} is claiming {room.Name} - hold it for {Clock(CaptureSeconds())}.");
+        GangAlert(gang.GangId, $"[Turf]: {gang.Name} is contesting {room.Name}. Hold it for {Clock(CaptureSeconds())}.");
         var owner = OwnerOf(room.RoomId);
         if (owner > 0 && owner != gang.GangId)
-            GangAlert(owner, $"[Turf]: {gang.Name} is trying to take {room.Name}!");
+            GangAlert(owner, $"[Turf]: {gang.Name} is contesting {room.Name}.");
         Broadcast(room);
         return true;
     }
@@ -278,10 +278,10 @@ public static class TurfManager
                 capture.Contested = true;
                 capture.ContestedBy = rivalNames[0];
                 capture.ContestedByGang = GangNameOf(rivalGangOf[rivalNames[0]]);
-                room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claim contested - {rivalNames[0]} is here*", 0, ActionBubble));
-                GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} is contested.");
+                room.SendPacket(new ChatComposer(claimer.VirtualId, $"*blocked - {rivalNames[0]} is here*", 0, ActionBubble));
+                GangAlert(capture.GangId, $"[Turf]: {room.Name} is contested.");
                 foreach (var rival in rivalGangs)
-                    GangAlert(rival, $"[Turf]: Your gang is contesting {capture.GangName}'s claim on {room.Name}.");
+                    GangAlert(rival, $"[Turf]: {room.Name} is contested.");
                 Broadcast(room);
             }
             else if (!rivalNames.Contains(capture.ContestedBy))
@@ -300,8 +300,8 @@ public static class TurfManager
             capture.Contested = false;
             capture.ContestedBy = "";
             capture.ContestedByGang = "";
-            room.SendPacket(new ChatComposer(claimer.VirtualId, "*the claim on this turf continues*", 0, ActionBubble));
-            GangAlert(capture.GangId, $"[Turf]: No rivals are left standing in {room.Name} - the claim continues.");
+            room.SendPacket(new ChatComposer(claimer.VirtualId, "*the claim continues*", 0, ActionBubble));
+            GangAlert(capture.GangId, $"[Turf]: {room.Name} is clear. The claim continues.");
             Broadcast(room);
             return; // this tick's time went to a contested room
         }
@@ -342,9 +342,9 @@ public static class TurfManager
         Recolour(room);
 
         room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claims this turf for {capture.GangName}*", 0, ActionBubble));
-        GangAlert(capture.GangId, $"[Turf]: {capture.ClaimerName} claimed {room.Name} for the gang.");
+        GangAlert(capture.GangId, $"[Turf]: {capture.GangName} now holds {room.Name}.");
         if (previous > 0 && previous != capture.GangId)
-            GangAlert(previous, $"[Turf]: {capture.GangName} took {room.Name} from you.");
+            GangAlert(previous, $"[Turf]: {capture.GangName} took {room.Name}.");
     }
 
     /// <summary>
