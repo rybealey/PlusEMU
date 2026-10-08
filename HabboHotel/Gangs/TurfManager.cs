@@ -199,10 +199,10 @@ public static class TurfManager
         if (user != null)
             room.SendPacket(new ChatComposer(user.VirtualId, $"*starts claiming this turf for {gang.Name}*", 0, ActionBubble));
 
-        GangAlert(gang.GangId, $"[Turf]: {gang.Name} is contesting {room.Name}. Hold it for {Clock(CaptureSeconds())}.");
+        GangAlert(gang.GangId, $"[Turf]: {gang.Name} has started claiming {room.Name}. Hold it for {Clock(CaptureSeconds())}.");
         var owner = OwnerOf(room.RoomId);
         if (owner > 0 && owner != gang.GangId)
-            GangAlert(owner, $"[Turf]: {gang.Name} is contesting {room.Name}.");
+            GangAlert(owner, $"[Turf]: {gang.Name} has started claiming {room.Name}.");
         Broadcast(room);
         return true;
     }
@@ -278,7 +278,6 @@ public static class TurfManager
                 capture.Contested = true;
                 capture.ContestedBy = rivalNames[0];
                 capture.ContestedByGang = GangNameOf(rivalGangOf[rivalNames[0]]);
-                room.SendPacket(new ChatComposer(claimer.VirtualId, $"*blocked - {rivalNames[0]} is here*", 0, ActionBubble));
                 GangAlert(capture.GangId, $"[Turf]: {room.Name} is contested.");
                 foreach (var rival in rivalGangs)
                     GangAlert(rival, $"[Turf]: {room.Name} is contested.");
