@@ -60,6 +60,14 @@ internal abstract class SocialCommand : ITargetChatCommand
     /// <summary>Whispered back when the actor targets themselves.</summary>
     protected abstract string SelfMessage { get; }
 
+    /// <summary>
+    /// Anything a command shows beyond its bubble, once the room has heard it.
+    /// Nothing by default; :kiss floats hearts over both of them.
+    /// </summary>
+    protected virtual void OnLanded(Room room, RoomUser actor, RoomUser target)
+    {
+    }
+
     // A missing username, an offline target and a target in another room are
     // all answered by CommandManager before Execute runs.
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
@@ -103,6 +111,7 @@ internal abstract class SocialCommand : ITargetChatCommand
 
         _lastUse[session.GetHabbo().Id] = DateTime.UtcNow;
         room.SendPacket(new ShoutComposer(thisUser.VirtualId, $"*{Action(target.Username)}*", 0, RelationshipBubble));
+        OnLanded(room, thisUser, targetUser);
         return Task.CompletedTask;
     }
 }
