@@ -292,6 +292,11 @@ public class Habbo
     public int RpPassiveSeconds { get; set; }
     public long RpPassiveLastTick { get; set; }
 
+    // Who the player has selected in their HUD, by user id - 0 for nobody.
+    // The client reports every change (RpSetHudTargetEvent); a target
+    // command typed without a name is aimed here (CommandManager). Transient.
+    public int RpHudTargetId { get; set; }
+
     public void EnsureRpStatsLoaded()
     {
         if (RpStatsLoaded)

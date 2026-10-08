@@ -531,6 +531,8 @@ public static class ClientPacketHeader
     public const uint RpCityPaySaveEvent = 4178;
     public const uint RpCityPriceSaveEvent = 4179;
     public const uint RpCityClockOutEvent = 4180;
+    // pixelrp: who is selected in the HUD - a target command typed without a name is aimed at them
+    public const uint RpSetHudTargetEvent = 4181;
     // Internal 439xx / wire 39xx - see the album note above.
     public const uint RpSetRoomCorpEvent = 43958; //3958
     // 3959 is BURNED: it collides with the stock client's PHOTO_COMPETITION
