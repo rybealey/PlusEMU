@@ -7,7 +7,7 @@ internal class KissCommand : SocialCommand
 {
     /// <summary>
     /// The client's kiss hearts: Habbo's Love effect (fx 9) floated over an
-    /// avatar for three seconds. Sent as an expression, but the client never
+    /// avatar for two seconds. Sent as an expression, but the client never
     /// treats it as one - it is drawn beside whatever effect is worn
     /// (LoveHeartAddition in the renderer patch kiss-hearts), so handcuffs,
     /// the stun's birds, the ambulance and the staff and passive markers all
