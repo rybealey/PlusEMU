@@ -250,6 +250,8 @@ public static class InteractionTypes
                 return InteractionType.ZaraShop;
             case "atm":
                 return InteractionType.Atm;
+            case "deposit_box":
+                return InteractionType.DepositBox;
             default:
             {
                 //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);

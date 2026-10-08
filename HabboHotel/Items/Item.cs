@@ -1222,6 +1222,9 @@ public class Item
         // furni only has to open it.
         if (Definition.InteractionType == InteractionType.ZaraShop)
             user.GetClient().Send(new Communication.Packets.Outgoing.Users.RpOpenClothingStoreComposer());
+        // The bank deposit box opens while its owner stands on it.
+        if (Definition.InteractionType == InteractionType.DepositBox)
+            Users.Banking.DepositBox.Open(user.GetClient());
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
         user.LastItem = this;
     }
@@ -1249,6 +1252,10 @@ public class Item
         if (Definition.InteractionType == InteractionType.PressurePad ||
             Definition.InteractionType == InteractionType.CorpGate)
             SetPressurePad(false, user);
+        // ...and closes when they step off. Onto a neighbouring box tile, the
+        // walk-on there opens it again straight after.
+        if (Definition.InteractionType == InteractionType.DepositBox)
+            Users.Banking.DepositBox.Close(user.GetClient());
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
     }
 

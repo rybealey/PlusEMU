@@ -182,5 +182,10 @@ public enum InteractionType
     // pixelrp: the ATM. A BEHAVIOUR rather than a classname check, so
     // a bank set can put it on a teller window or a wall panel without a code
     // change - the same route the jukebox took.
-    Atm
+    Atm,
+
+    // pixelrp: the bank deposit box. Step on it and your box opens beside
+    // your backpack; step off and it closes (DepositBox). A behaviour, so a
+    // bank set can make any counter or vault door one.
+    DepositBox
 }
