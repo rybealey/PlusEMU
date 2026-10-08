@@ -13,6 +13,4 @@ internal class KissCommand : SocialCommand
 
     /// <summary>Habbo's Love (fx 9): small pink hearts floating up.</summary>
     protected override int OverlayExpression => 101;
-
-    protected override int CooldownSeconds => 15;
 }

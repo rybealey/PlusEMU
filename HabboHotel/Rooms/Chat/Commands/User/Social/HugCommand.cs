@@ -13,6 +13,4 @@ internal class HugCommand : SocialCommand
 
     /// <summary>Habbo's Spinning Hearts (fx 168): a ring of big pink hearts.</summary>
     protected override int OverlayExpression => 102;
-
-    protected override int CooldownSeconds => 15;
 }
