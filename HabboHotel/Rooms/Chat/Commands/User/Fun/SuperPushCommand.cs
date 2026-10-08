@@ -26,6 +26,8 @@ internal class SuperPushCommand : ITargetChatCommand
     public string Description => "Superpush another user. (Pushes them 3 squares away)";
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     /// <summary>Combat wording: you pick a target, you do not type a username.</summary>
     public string NoTargetMessage => "No target selected.";
 
@@ -69,7 +71,7 @@ internal class SuperPushCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper("An error occurred whilst finding that user, maybe they're not online or in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
 
@@ -98,7 +100,7 @@ internal class SuperPushCommand : ITargetChatCommand
         // Same tile, or one step in any direction including the diagonals.
         if (Math.Abs(targetUser.X - thisUser.X) > 1 || Math.Abs(targetUser.Y - thisUser.Y) > 1)
         {
-            session.SendWhisper($"Oops, {target.Username} is not close enough.");
+            session.SendWhisper(RangeMessages.TooFar(target.Username));
             return Task.CompletedTask;
         }
 

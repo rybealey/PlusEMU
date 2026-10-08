@@ -204,7 +204,7 @@ public class CommandManager : ICommandManager
                 var targetHabbo = target.GetHabbo();
                 if (targetChatCommand.MustBeInSameRoom && session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom)
                 {
-                    session.SendWhisper($"You must be in the same room as {targetHabbo.Username} to execute this command.");
+                    session.SendWhisper(targetChatCommand.IsRanged ? RangeMessages.NotInRoom : $"You must be in the same room as {targetHabbo.Username} to execute this command.");
                     return true;
                 }
 

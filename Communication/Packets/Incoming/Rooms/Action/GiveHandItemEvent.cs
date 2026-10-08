@@ -1,6 +1,7 @@
 ﻿using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.Chat.Commands;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Action;
 
@@ -43,6 +44,11 @@ internal class GiveHandItemEvent : RoomPacketEvent
                 user.CarryItem(0);
                 targetUser.DanceId = 0;
             }
+        }
+        else if (user.CarryItemId > 0 && user.CarryTimer > 0)
+        {
+            // pixelrp: out of reach (three tiles or more) is said, not swallowed.
+            session.SendWhisper(RangeMessages.TooFar(targetUser.GetUsername()));
         }
         return Task.CompletedTask;
     }

@@ -52,6 +52,8 @@ internal class HitCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     /// <summary>Combat wording: you pick a target, you do not type a username.</summary>
     public string NoTargetMessage => "No target selected.";
 
@@ -90,7 +92,7 @@ internal class HitCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper($"{target.Username} is not in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
 
