@@ -24,8 +24,9 @@ namespace Plus.HabboHotel.Gangs;
 ///
 /// A CLAIM holds the room for turf.capture.seconds (five minutes) of
 /// UNCONTESTED time. A member of any OTHER gang in the room - the owners
-/// included, which is how a turf is defended - CONTESTS it: the clock stops
-/// where it is and starts again, from there, once every one of them has left.
+/// included, which is how a turf is defended - CONTESTS it while they are on
+/// their feet: the clock stops where it is and starts again, from there, once
+/// every one of them has left or been knocked out (cuffed, they still count).
 /// A claim FAILS only if the claimer leaves, is knocked out or is cuffed. A
 /// rival takes a held turf the same way. Captures live in memory only: a
 /// restart drops one in progress, which costs a re-claim and nothing else.
@@ -236,32 +237,42 @@ public static class TurfManager
             return;
         }
 
-        // Any member of another gang here contests the claim. Their gangs are
-        // named once, on the moment it becomes contested.
-        string rivalName = null;
+        // Any member of another gang here contests the claim - while they are
+        // standing. One knocked out on the floor is no defence, and the claim
+        // runs on over them; back on their feet, they contest it again. Cuffed
+        // still counts. Their gangs are named once, on the moment it becomes
+        // contested.
+        var rivalNames = new List<string>();
         var rivalGangs = new HashSet<int>();
         foreach (var user in users.GetRoomUsers().ToList())
         {
             var habbo = user?.GetClient()?.GetHabbo();
-            if (user == null || user.IsBot || habbo == null)
+            if (user == null || user.IsBot || habbo == null || user.RpKnockedOut)
                 continue;
             var theirs = capture.GangOf.GetOrAdd(habbo.Id, id => GangUtility.GetGang(id)?.GangId ?? 0);
             if (theirs == 0 || theirs == capture.GangId)
                 continue;
-            rivalName ??= habbo.Username;
+            rivalNames.Add(habbo.Username);
             rivalGangs.Add(theirs);
         }
 
-        if (rivalName != null)
+        if (rivalNames.Count > 0)
         {
             if (!capture.Contested)
             {
                 capture.Contested = true;
-                capture.ContestedBy = rivalName;
-                room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claim contested - {rivalName} is here*", 0, ActionBubble));
+                capture.ContestedBy = rivalNames[0];
+                room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claim contested - {rivalNames[0]} is here*", 0, ActionBubble));
                 GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} is contested - it pauses until the rivals leave.");
                 foreach (var rival in rivalGangs)
                     GangAlert(rival, $"[Turf]: Your gang is contesting {capture.GangName}'s claim on {room.Name} - stay in the room to hold it off.");
+                Broadcast(room);
+            }
+            else if (!rivalNames.Contains(capture.ContestedBy))
+            {
+                // the rival the panel names went down or left while others
+                // still stand - name one who is holding it off now
+                capture.ContestedBy = rivalNames[0];
                 Broadcast(room);
             }
             return;
@@ -272,7 +283,7 @@ public static class TurfManager
             capture.Contested = false;
             capture.ContestedBy = "";
             room.SendPacket(new ChatComposer(claimer.VirtualId, "*the claim on this turf continues*", 0, ActionBubble));
-            GangAlert(capture.GangId, $"[Turf]: The rivals left {room.Name} - the claim continues.");
+            GangAlert(capture.GangId, $"[Turf]: No rivals are left standing in {room.Name} - the claim continues.");
             Broadcast(room);
             return; // this tick's time went to a contested room
         }
