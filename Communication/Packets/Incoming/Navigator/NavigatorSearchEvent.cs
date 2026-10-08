@@ -1,4 +1,5 @@
 ﻿using Plus.Communication.Attributes;
+using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Navigator.New;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Navigator;
@@ -33,12 +34,18 @@ internal class NavigatorSearchEvent : IPacketEvent
                 categories = _navigatorManager.GetResultByIdentifier(category).ToList();
                 if (categories.Count > 0)
                 {
-                    session.Send(new NavigatorSearchResultSetComposer(category, search, categories, session, 2, 100));
+                    var deep = new NavigatorSearchResultSetComposer(category, search, categories, session, 2, 100);
+                    session.Send(deep);
+                    session.Send(new RpNavigatorZonesComposer(deep.Rooms));
                     return Task.CompletedTask;
                 }
             }
         }
-        session.Send(new NavigatorSearchResultSetComposer(category, search, categories, session));
+        var results = new NavigatorSearchResultSetComposer(category, search, categories, session);
+        session.Send(results);
+        // pixelrp: the listed rooms' zones, for the navigator's SAFE / UNSAFE / TURF tags
+        // (Send composes at once, so Rooms is filled by now)
+        session.Send(new RpNavigatorZonesComposer(results.Rooms));
         return Task.CompletedTask;
     }
 }

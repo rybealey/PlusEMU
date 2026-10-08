@@ -7,7 +7,10 @@ namespace Plus.HabboHotel.Navigator;
 internal static class NavigatorHandler
 {
     // Fuck me
-    public static void Search(IOutgoingPacket packet, SearchResultList result, string query, GameClient session, int limit)
+    // pixelrp: every room written is also added to `seen`, when given, so the
+    // caller can send the rooms' zones after the results (RpNavigatorZonesComposer).
+    public static void Search(IOutgoingPacket packet, SearchResultList result, string query, GameClient session, int limit,
+        ICollection<RoomData> seen = null)
     {
         if (session == null)
             return;
@@ -51,16 +54,27 @@ internal static class NavigatorHandler
                             getRooms = null;
                         }
                         packet.WriteInteger(results.Count);
-                        foreach (var data in results.ToList()) RoomAppender.WriteRoom(packet, data);
+                        foreach (var data in results.ToList()) Write(packet, data, seen);
                         results = null;
                     }
+                }
+                else if (query.ToLower().StartsWith("id:"))
+                {
+                    // pixelrp: one room by its id (the navigator's Room ID filter)
+                    var results = new List<RoomData>();
+                    if (uint.TryParse(query.Remove(0, 3).Trim(), out var roomId)
+                        && RoomFactory.TryGetData(roomId, out var data)
+                        && data.Access != RoomAccess.Invisible)
+                        results.Add(data);
+                    packet.WriteInteger(results.Count);
+                    foreach (var room in results) Write(packet, room, seen);
                 }
                 else if (query.ToLower().StartsWith("tag:"))
                 {
                     query = query.Remove(0, 4);
                     ICollection<Room> tagMatches = PlusEnvironment.Game.RoomManager.SearchTaggedRooms(query);
                     packet.WriteInteger(tagMatches.Count);
-                    foreach (RoomData data in tagMatches.ToList()) RoomAppender.WriteRoom(packet, data);
+                    foreach (RoomData data in tagMatches.ToList()) Write(packet, data, seen);
                     tagMatches = null;
                 }
                 else if (query.ToLower().StartsWith("group:"))
@@ -68,7 +82,7 @@ internal static class NavigatorHandler
                     query = query.Remove(0, 6);
                     ICollection<Room> groupRooms = PlusEnvironment.Game.RoomManager.SearchGroupRooms(query);
                     packet.WriteInteger(groupRooms.Count);
-                    foreach (RoomData data in groupRooms.ToList()) RoomAppender.WriteRoom(packet, data);
+                    foreach (RoomData data in groupRooms.ToList()) Write(packet, data, seen);
                     groupRooms = null;
                 }
                 else
@@ -99,7 +113,7 @@ internal static class NavigatorHandler
                             table = null;
                         }
                         packet.WriteInteger(results.Count);
-                        foreach (var data in results.ToList()) RoomAppender.WriteRoom(packet, data);
+                        foreach (var data in results.ToList()) Write(packet, data, seen);
                         results = null;
                     }
                 }
@@ -109,7 +123,7 @@ internal static class NavigatorHandler
             {
                 var popularRooms = PlusEnvironment.Game.RoomManager.GetPopularRooms(-1, limit);
                 packet.WriteInteger(popularRooms.Count);
-                foreach (RoomData data in popularRooms.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (RoomData data in popularRooms.ToList()) Write(packet, data, seen);
                 popularRooms = null;
                 break;
             }
@@ -120,7 +134,7 @@ internal static class NavigatorHandler
                 // recommendable.
                 var recommendedRooms = RoomFactory.GetRoomsDataRecommended(limit);
                 packet.WriteInteger(recommendedRooms.Count);
-                foreach (RoomData data in recommendedRooms.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (RoomData data in recommendedRooms.ToList()) Write(packet, data, seen);
                 recommendedRooms = null;
                 break;
             }
@@ -131,7 +145,7 @@ internal static class NavigatorHandler
                 // vanished from its category until somebody walked back in.
                 var getRoomsByCategory = RoomFactory.GetRoomsDataByCategory(result.Id, limit);
                 packet.WriteInteger(getRoomsByCategory.Count);
-                foreach (RoomData data in getRoomsByCategory.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (RoomData data in getRoomsByCategory.ToList()) Write(packet, data, seen);
                 getRoomsByCategory = null;
                 break;
             }
@@ -139,7 +153,7 @@ internal static class NavigatorHandler
             {
                 ICollection<RoomData> rooms = RoomFactory.GetRoomsDataByOwnerSortByName(session.GetHabbo().Id).OrderByDescending(x => x.UsersNow).ToList();
                 packet.WriteInteger(rooms.Count);
-                foreach (var data in rooms.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (var data in rooms.ToList()) Write(packet, data, seen);
                 break;
             }
             case NavigatorCategoryType.MyFavourites:
@@ -154,7 +168,7 @@ internal static class NavigatorHandler
                         favourites.Add(data);
                 }
                 packet.WriteInteger(favourites.Count);
-                foreach (var data in favourites.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (var data in favourites.ToList()) Write(packet, data, seen);
                 favourites = null;
                 break;
             }
@@ -172,7 +186,7 @@ internal static class NavigatorHandler
                 }
                 myGroups = myGroups.Take(limit).ToList();
                 packet.WriteInteger(myGroups.Count);
-                foreach (var data in myGroups.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (var data in myGroups.ToList()) Write(packet, data, seen);
                 myGroups = null;
                 break;
             }
@@ -204,7 +218,7 @@ internal static class NavigatorHandler
                 var myFriendsRooms = PlusEnvironment.Game.RoomManager.GetRoomsByIds(roomIds.ToList());
                 packet.WriteInteger(myFriendsRooms.Count);
                 foreach (var data in myFriendsRooms.ToList())
-                    RoomAppender.WriteRoom(packet, data);
+                    Write(packet, data, seen);
                 break;
             }
             case NavigatorCategoryType.MyRights:
@@ -226,7 +240,7 @@ internal static class NavigatorHandler
                     }
                 }
                 packet.WriteInteger(myRights.Count);
-                foreach (var data in myRights.ToList()) RoomAppender.WriteRoom(packet, data);
+                foreach (var data in myRights.ToList()) Write(packet, data, seen);
                 myRights = null;
                 break;
             }
@@ -237,5 +251,11 @@ internal static class NavigatorHandler
                 packet.WriteInteger(0);
                 break;
         }
+    }
+
+    private static void Write(IOutgoingPacket packet, RoomData data, ICollection<RoomData> seen)
+    {
+        RoomAppender.WriteRoom(packet, data);
+        seen?.Add(data);
     }
 }

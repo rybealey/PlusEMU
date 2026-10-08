@@ -1,5 +1,6 @@
 ﻿using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Navigator;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Outgoing.Navigator.New;
 
@@ -11,6 +12,9 @@ public class NavigatorSearchResultSetComposer : IServerPacket
     private readonly GameClient _session;
     private readonly int _goBack;
     private readonly int _fetchLimit;
+
+    /// <summary>pixelrp: every room this result set wrote, filled by Compose - their zones follow in RpNavigatorZonesComposer.</summary>
+    public List<RoomData> Rooms { get; } = new();
     public uint MessageId => ServerPacketHeader.NavigatorSearchResultSetComposer;
 
     public NavigatorSearchResultSetComposer(string category, string data,
@@ -41,7 +45,7 @@ public class NavigatorSearchResultSetComposer : IServerPacket
             packet.WriteInteger(searchResult.ViewMode == NavigatorViewMode.Regular ? 0 :
                 searchResult.ViewMode == NavigatorViewMode.Thumbnail ? 1 :
                 0); //View mode, 0 = tiny/regular, 1 = thumbnail
-            NavigatorHandler.Search(packet, searchResult, _data, _session, _fetchLimit);
+            NavigatorHandler.Search(packet, searchResult, _data, _session, _fetchLimit, Rooms);
         }
     }
 }
