@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
@@ -28,8 +29,8 @@ internal abstract class SocialCommand : ITargetChatCommand
     /// they read as one family, apart from the blue combat bubble.</summary>
     private const int RelationshipBubble = 16;
 
-    /// <summary>Seconds a player must wait between uses, matching :slap.</summary>
-    private const int CooldownSeconds = 5;
+    /// <summary>Seconds a player must wait between uses - 5 by default, matching :slap.</summary>
+    protected virtual int CooldownSeconds => 5;
 
     /// <summary>
     /// Last successful use per player id. Commands are DI singletons, so this
@@ -61,12 +62,15 @@ internal abstract class SocialCommand : ITargetChatCommand
     protected abstract string SelfMessage { get; }
 
     /// <summary>
-    /// Anything a command shows beyond its bubble, once the room has heard it.
-    /// Nothing by default; :kiss floats hearts over both of them.
+    /// The effect floated over both people once the room has heard the action,
+    /// for two seconds - 0 for none. Sent as an expression, but the client
+    /// never treats it as one: the renderer patch social-effects draws the
+    /// effect's sprites beside whatever effect is worn (SocialEffectAddition),
+    /// so handcuffs, the stun's birds, the ambulance and the staff and passive
+    /// markers all stay on screen, and nothing here takes an effect off or
+    /// puts one back. The ids are the client's (AvatarLogic.RP_SOCIAL_EFFECTS).
     /// </summary>
-    protected virtual void OnLanded(Room room, RoomUser actor, RoomUser target)
-    {
-    }
+    protected virtual int OverlayExpression => 0;
 
     // A missing username, an offline target and a target in another room are
     // all answered by CommandManager before Execute runs.
@@ -111,7 +115,11 @@ internal abstract class SocialCommand : ITargetChatCommand
 
         _lastUse[session.GetHabbo().Id] = DateTime.UtcNow;
         room.SendPacket(new ShoutComposer(thisUser.VirtualId, $"*{Action(target.Username)}*", 0, RelationshipBubble));
-        OnLanded(room, thisUser, targetUser);
+        if (OverlayExpression > 0)
+        {
+            room.SendPacket(new ActionComposer(thisUser.VirtualId, OverlayExpression));
+            room.SendPacket(new ActionComposer(targetUser.VirtualId, OverlayExpression));
+        }
         return Task.CompletedTask;
     }
 }

@@ -10,4 +10,9 @@ internal class HugCommand : SocialCommand
     protected override string SelfMessage => "You cannot hug yourself.";
 
     protected override string Action(string targetName) => $"wraps their arms around {targetName}, giving them a big hug";
+
+    /// <summary>Habbo's Spinning Hearts (fx 168): a ring of big pink hearts.</summary>
+    protected override int OverlayExpression => 102;
+
+    protected override int CooldownSeconds => 15;
 }
