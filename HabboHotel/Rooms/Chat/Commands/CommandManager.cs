@@ -102,7 +102,11 @@ public class CommandManager : ICommandManager
         if (string.IsNullOrWhiteSpace(message))
             return false;
 
-        var split = message.Split(' ');
+        // pixelrp: empty pieces dropped, so a stray or doubled space never
+        // reads as a blank player name ("User  seems to be offline").
+        var split = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (split.Length == 0)
+            return false;
         var key = split[0];
         var parameters = split.Length > 1 ? split[1..] : Array.Empty<string>();
         if (_commands.TryGetValue(key.ToLower(), out var command))
@@ -162,39 +166,60 @@ public class CommandManager : ICommandManager
             }
             else if (command is ITargetChatCommand targetChatCommand)
             {
-                if (!parameters.Any())
+                // pixelrp: who it is aimed at. A name typed first wins. Failing
+                // that, the player's HUD target (Habbo.RpHudTargetId) - so
+                // ":kiss" alone kisses whoever is selected, and ":charge theft"
+                // charges them, every word kept for the command. "x" is the
+                // client's shorthand for the HUD target, swapped for the name
+                // before sending; one that arrives as a bare "x" means the
+                // client had nobody selected, and it is dropped the same way.
+                var typed = parameters.Length > 0 ? parameters[0] : null;
+                var typedX = typed != null && typed.Equals("x", StringComparison.OrdinalIgnoreCase);
+                GameClient? target = null;
+                if (typed != null && !typedX)
                 {
-                    session.SendWhisper(targetChatCommand.NoTargetMessage);
+                    target = _gameClientManager.GetClientByUsername(typed);
+                    if (target != null)
+                        parameters = parameters[1..];
+                }
+                else if (typedX)
+                {
+                    parameters = parameters[1..];
+                }
+
+                if (target?.GetHabbo() == null)
+                {
+                    var hudTargetId = session.GetHabbo().RpHudTargetId;
+                    target = hudTargetId > 0 ? _gameClientManager.GetClientByUserId(hudTargetId) : null;
+                }
+
+                if (target?.GetHabbo() == null)
+                {
+                    // Nothing typed (or only "x") and nobody selected; or a name
+                    // that is not online, with nobody selected to fall back on.
+                    session.SendWhisper(typed == null || typedX ? targetChatCommand.NoTargetMessage : $"User {typed} seems to be offline.");
                     return true;
                 }
 
-                var username = parameters[0];
-                // pixelrp: "x" is the client's shorthand for the selected HUD
-                // target, swapped for their name before the line is sent - typed,
-                // from a macro key, or from a backpack click. One that arrives
-                // as a bare "x" means nobody was selected, so say that rather
-                // than "User x seems to be offline": no player can be called x,
-                // names being three characters or more.
-                if (username.Equals("x", StringComparison.OrdinalIgnoreCase))
+                var targetHabbo = target.GetHabbo();
+                if (targetChatCommand.MustBeInSameRoom && session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom)
                 {
-                    session.SendWhisper(targetChatCommand.NoTargetMessage);
-                    return true;
-                }
-                parameters = parameters.Length > 1 ? parameters[1..] : Array.Empty<string>();
-                var target = _gameClientManager.GetClientByUsername(username);
-                if (target == null)
-                {
-                    session.SendWhisper($"User {username} seems to be offline.");
+                    session.SendWhisper($"You must be in the same room as {targetHabbo.Username} to execute this command.");
                     return true;
                 }
 
-                if (targetChatCommand.MustBeInSameRoom && session.GetHabbo().CurrentRoom != target.GetHabbo().CurrentRoom)
+                // A command missing the rest of what it needs (":ban" with no
+                // length, ":givebadge" with no badge) throws reading it, and a
+                // packet that throws disconnects the player. The HUD target
+                // makes those easy to send, so answer with the usage instead.
+                try
                 {
-                    session.SendWhisper($"You must be in the same room as {username} to execute this command.");
-                    return true;
+                    await targetChatCommand.Execute(session, session.GetHabbo().CurrentRoom, targetHabbo, parameters);
                 }
-
-                await targetChatCommand.Execute(session, session.GetHabbo().CurrentRoom, target.GetHabbo(), parameters);
+                catch (Exception e) when (e is IndexOutOfRangeException or FormatException or OverflowException or ArgumentOutOfRangeException)
+                {
+                    session.SendWhisper($"Usage: :{key.ToLower()} {targetChatCommand.Parameters.Trim()}");
+                }
             }
             return true;
         }
