@@ -36,15 +36,15 @@ public static class PepperSpray
     public const string Item = "pepper_spray";
 
     /// <summary>Tiles a hit sends the target stumbling back, facing the officer.</summary>
-    private const int StumbleBackSteps = 2;
+    private const int StumbleBackSteps = 1;
 
     /// <summary>Steps in random directions after that, facing where they go.</summary>
-    private const int StumbleRandomSteps = 3;
+    private const int StumbleRandomSteps = 2;
 
     /// <summary>
     /// How long a hit disorients - no walking, no fighting: four seconds, the
-    /// same as a stun. The stumble's five steps - two back, three at random -
-    /// take about half of that.
+    /// same as a stun. The stumble's three steps - one back, two at random -
+    /// take well under half of that.
     /// </summary>
     private const int DisorientMs = 4000;
 
