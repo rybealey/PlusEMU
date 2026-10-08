@@ -128,6 +128,10 @@ public static class TurfManager
         var habbo = session?.GetHabbo();
         if (habbo == null || room == null)
             return;
+        // Pressing Claim is activity, like walking or talking: it wakes an idle
+        // player (the Zzz goes). Without it a claim started from idle would fail
+        // on the next tick, the claimer still asleep.
+        room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id)?.UnIdle();
         if (!room.IsTurf)
         {
             session.SendWhisper("This room isn't a turf.");
