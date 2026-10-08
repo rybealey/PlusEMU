@@ -99,7 +99,7 @@ public static class PepperSpray
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper($"{target.Username} is not in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return;
         }
         var thisUser = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);

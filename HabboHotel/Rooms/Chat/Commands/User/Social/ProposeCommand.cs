@@ -32,6 +32,8 @@ internal class ProposeCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     public string NoTargetMessage => "Propose to who? :propose <player>";
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
@@ -56,7 +58,7 @@ internal class ProposeCommand : ITargetChatCommand
                 session.SendWhisper("That is one of your own characters.");
                 return Task.CompletedTask;
             case OfferState.StartResult.TooFar:
-                session.SendWhisper($"You need to be standing next to {target.Username} for that.");
+                session.SendWhisper(RangeMessages.TooFar(target.Username));
                 return Task.CompletedTask;
             case OfferState.StartResult.SellerPartnered:
                 session.SendWhisper("You are already in a partnership.");

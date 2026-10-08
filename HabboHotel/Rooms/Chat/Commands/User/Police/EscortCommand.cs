@@ -52,6 +52,8 @@ internal class EscortCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     public string NoTargetMessage => "No target selected.";
 
     private const int FightBubble = 4;
@@ -113,7 +115,7 @@ internal class EscortCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper($"{target.Username} is not in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
 
@@ -207,9 +209,7 @@ internal class EscortCommand : ITargetChatCommand
         // Hands-on, like the cuff itself - and like lifting somebody.
         if (Math.Abs(targetUser.X - thisUser.X) > 1 || Math.Abs(targetUser.Y - thisUser.Y) > 1)
         {
-            session.SendWhisper(kind == PoliceState.EscortKind.Medical
-                ? $"You need to be right next to {target.Username} to lift them."
-                : $"You need to be right next to {target.Username} to escort them.");
+            session.SendWhisper(RangeMessages.TooFar(target.Username));
             return Task.CompletedTask;
         }
 

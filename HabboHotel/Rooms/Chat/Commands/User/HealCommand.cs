@@ -39,6 +39,8 @@ internal class HealCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     public string NoTargetMessage => "Heal who? :heal <player>";
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
@@ -80,7 +82,7 @@ internal class HealCommand : ITargetChatCommand
         var patient = manager?.GetRoomUserByHabbo(target.Id);
         if (healer == null || patient == null)
         {
-            session.SendWhisper("They are not here.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
 
@@ -89,7 +91,7 @@ internal class HealCommand : ITargetChatCommand
         // press against somebody, so it reaches exactly as far as a punch.
         if ((Math.Abs(patient.X - healer.X) + Math.Abs(patient.Y - healer.Y)) > 1)
         {
-            session.SendWhisper($"You need to be next to {target.Username} to do that.");
+            session.SendWhisper(RangeMessages.TooFar(target.Username));
             return Task.CompletedTask;
         }
 

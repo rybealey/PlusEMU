@@ -37,6 +37,8 @@ internal class SlapCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     /// <summary>Combat wording: you pick a target, you do not type a username.</summary>
     public string NoTargetMessage => "No target selected.";
 
@@ -79,7 +81,7 @@ internal class SlapCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper($"{target.Username} is not in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
 
@@ -151,7 +153,7 @@ internal class SlapCommand : ITargetChatCommand
         // out of reach for both attacks.
         if ((Math.Abs(targetUser.X - thisUser.X) + Math.Abs(targetUser.Y - thisUser.Y)) > 1)
         {
-            session.SendWhisper($"Oops, {target.Username} is not close enough.");
+            session.SendWhisper(RangeMessages.TooFar(target.Username));
             return Task.CompletedTask;
         }
 

@@ -14,6 +14,8 @@ internal class PullCommand : ITargetChatCommand
     public string Description => "Pull another user towards you.";
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     /// <summary>
     /// Blue bubble, the style the client narrates. Kept in step with
     /// PushCommand's FightBubble.
@@ -35,7 +37,7 @@ internal class PullCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper("An error occoured whilst finding that user, maybe they're not online or in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
         if (targetUser.TeleportEnabled)
@@ -65,7 +67,7 @@ internal class PullCommand : ITargetChatCommand
                 PullTarget(targetUser, thisUser.X, thisUser.Y, thisUser.RotBody);
             return Task.CompletedTask;
         }
-        session.SendWhisper("That user is not close enough to you to be pulled, try getting closer!");
+        session.SendWhisper(RangeMessages.TooFar(target.Username));
         return Task.CompletedTask;
     }
 

@@ -40,6 +40,8 @@ internal class StunCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     public string NoTargetMessage => "No target selected.";
 
     /// <summary>Blue bubble, the one every combat action shares.</summary>
@@ -104,7 +106,7 @@ internal class StunCommand : ITargetChatCommand
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser == null)
         {
-            session.SendWhisper($"{target.Username} is not in this room.");
+            session.SendWhisper(RangeMessages.NotInRoom);
             return Task.CompletedTask;
         }
 

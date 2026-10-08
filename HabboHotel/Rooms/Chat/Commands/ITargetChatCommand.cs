@@ -22,6 +22,14 @@ public interface ITargetChatCommand : ICommandBase
     string NoTargetMessage => "No username specified.";
 
     /// <summary>
+    /// pixelrp: done standing near the target - a kiss, a cuff, a slap. A
+    /// target in another room is then answered with RangeMessages.NotInRoom
+    /// rather than the generic same-room whisper, and the command words its
+    /// own reach check with RangeMessages.TooFar.
+    /// </summary>
+    bool IsRanged => false;
+
+    /// <summary>
     /// Execute the command.
     /// </summary>
     /// <param name="session"><see cref="GameClient"/> session executing the command.</param>

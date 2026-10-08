@@ -19,6 +19,8 @@ internal class PepperSprayCommand : ITargetChatCommand
 
     public bool MustBeInSameRoom => true;
 
+    public bool IsRanged => true;
+
     public string NoTargetMessage => "No target selected.";
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
