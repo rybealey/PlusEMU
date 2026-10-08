@@ -520,7 +520,7 @@ public static class ClientPacketHeader
     public const uint RpCityPlayerEvent = 4161;
     public const uint RpCityPlayerActionEvent = 4163;
     public const uint RpCityBackpackEvent = 4164;
-    public const uint RpCityRoomsEvent = 4165;
+    // 4165 retired: RpCityRoomsEvent (the City Panel's Rooms & Zones tab, removed).
     public const uint RpCityUniformsEvent = 4167;
     public const uint RpCityUniformEvent = 4169;
     public const uint RpCityUniformSaveEvent = 4171;
