@@ -6,7 +6,7 @@ namespace Plus.Communication.Packets.Outgoing.Rooms.Settings;
 /// <summary>
 /// pixelrp turfs: the turf panel's state (TurfManager.Describe) - whether the
 /// room is a turf, who holds it and since when, the claim running in it if any
-/// (held seconds, total, contested and by whom), a failure to show once, and
+/// (held seconds, total, contested and by whom - the player and their gang), a failure to show once, and
 /// the viewer's own gang so the panel can word its button.
 ///
 /// The first four fields are the ones Room settings > Zoning reads; everything
@@ -44,6 +44,8 @@ public class RpRoomTurfComposer : IServerPacket
         packet.WriteString(_view.ContestedBy ?? "");
         packet.WriteString(_view.FailReason ?? "");
         packet.WriteInteger(_view.ViewerGangId);
+        // appended last, so a reader that stops at the viewer's gang is untouched
+        packet.WriteString(_view.ContestedByGang ?? "");
     }
 
     /// <summary>The state of this room, as one viewer sees it.</summary>

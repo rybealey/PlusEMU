@@ -73,6 +73,8 @@ public static class TurfManager
         public DateTime LastTick;
         public bool Contested;
         public string ContestedBy = "";
+        /// <summary>The gang of the rival ContestedBy names - what the turf panel shows.</summary>
+        public string ContestedByGang = "";
         /// <summary>
         /// Each user's gang, looked up ONCE per capture: Tick runs every room
         /// cycle, and a query per user per tick is not a price worth paying to
@@ -255,6 +257,7 @@ public static class TurfManager
         // Their gangs are named once, on the moment it becomes contested.
         var rivalNames = new List<string>();
         var rivalGangs = new HashSet<int>();
+        var rivalGangOf = new Dictionary<string, int>();
         foreach (var user in users.GetRoomUsers().ToList())
         {
             var habbo = user?.GetClient()?.GetHabbo();
@@ -265,6 +268,7 @@ public static class TurfManager
                 continue;
             rivalNames.Add(habbo.Username);
             rivalGangs.Add(theirs);
+            rivalGangOf[habbo.Username] = theirs;
         }
 
         if (rivalNames.Count > 0)
@@ -273,6 +277,7 @@ public static class TurfManager
             {
                 capture.Contested = true;
                 capture.ContestedBy = rivalNames[0];
+                capture.ContestedByGang = GangNameOf(rivalGangOf[rivalNames[0]]);
                 room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claim contested - {rivalNames[0]} is here*", 0, ActionBubble));
                 GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} is contested.");
                 foreach (var rival in rivalGangs)
@@ -284,6 +289,7 @@ public static class TurfManager
                 // the rival the panel names went down, went idle or left while
                 // others still stand - name one who is holding it off now
                 capture.ContestedBy = rivalNames[0];
+                capture.ContestedByGang = GangNameOf(rivalGangOf[rivalNames[0]]);
                 Broadcast(room);
             }
             return;
@@ -293,6 +299,7 @@ public static class TurfManager
         {
             capture.Contested = false;
             capture.ContestedBy = "";
+            capture.ContestedByGang = "";
             room.SendPacket(new ChatComposer(claimer.VirtualId, "*the claim on this turf continues*", 0, ActionBubble));
             GangAlert(capture.GangId, $"[Turf]: No rivals are left standing in {room.Name} - the claim continues.");
             Broadcast(room);
@@ -470,7 +477,7 @@ public static class TurfManager
     {
         if (room == null || !room.IsTurf)
             return new TurfView(room?.RoomId ?? 0, false, 0, "", NeutralColourA, NeutralColourB, 0,
-                false, "", 0, "", NeutralColourA, 0, CaptureSeconds(), false, "", "", 0);
+                false, "", 0, "", NeutralColourA, 0, CaptureSeconds(), false, "", "", 0, "");
 
         var holding = HoldingOf(room.RoomId);
         var ownerName = "";
@@ -487,11 +494,12 @@ public static class TurfManager
 
         if (!Captures.TryGetValue(room.RoomId, out var capture))
             return new TurfView(room.RoomId, true, holding.GangId, ownerName, colourA, colourB, heldFor,
-                false, "", 0, "", NeutralColourA, 0, CaptureSeconds(), false, "", failReason, viewerGang);
+                false, "", 0, "", NeutralColourA, 0, CaptureSeconds(), false, "", failReason, viewerGang, "");
 
         return new TurfView(room.RoomId, true, holding.GangId, ownerName, colourA, colourB, heldFor,
             true, capture.ClaimerName, capture.GangId, capture.GangName, capture.GangColourA,
-            (int)(capture.ElapsedMs / 1000), CaptureSeconds(), capture.Contested, capture.ContestedBy, failReason, viewerGang);
+            (int)(capture.ElapsedMs / 1000), CaptureSeconds(), capture.Contested, capture.ContestedBy, failReason, viewerGang,
+            capture.ContestedByGang);
     }
 
     private static bool IsPainted(Item item) =>
@@ -526,6 +534,9 @@ public static class TurfManager
         return true;
     }
 
+    private static string GangNameOf(int gangId) =>
+        PlusEnvironment.Game.GroupManager.TryGetGroup(gangId, out var gang) ? gang.Name ?? "" : "";
+
     /// <summary>A gang colour (raw RGB) as the hex the group furni visualisation reads - no '#'.</summary>
     public static string Hex(int colour) => (colour & 0xFFFFFF).ToString("x6");
 
@@ -543,9 +554,11 @@ public static class TurfManager
 /// <summary>
 /// pixelrp: what the turf panel shows (RpRoomTurfComposer). Colours are hex
 /// without '#'. ElapsedSeconds is held, uncontested time; the client counts on
-/// from it while the claim is running and not contested.
+/// from it while the claim is running and not contested. ContestedByGang is
+/// the gang of the rival ContestedBy names.
 /// </summary>
 public readonly record struct TurfView(
     uint RoomId, bool IsTurf, int OwnerGangId, string OwnerName, string OwnerColourA, string OwnerColourB, int HeldForSeconds,
     bool Capturing, string ClaimerName, int ClaimGangId, string ClaimGangName, string ClaimColourA,
-    int ElapsedSeconds, int TotalSeconds, bool Contested, string ContestedBy, string FailReason, int ViewerGangId);
+    int ElapsedSeconds, int TotalSeconds, bool Contested, string ContestedBy, string FailReason, int ViewerGangId,
+    string ContestedByGang);
