@@ -270,9 +270,9 @@ public static class TurfManager
                 capture.Contested = true;
                 capture.ContestedBy = rivalNames[0];
                 room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claim contested - {rivalNames[0]} is here*", 0, ActionBubble));
-                GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} is contested - it pauses until the rivals leave.");
+                GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} is contested.");
                 foreach (var rival in rivalGangs)
-                    GangAlert(rival, $"[Turf]: Your gang is contesting {capture.GangName}'s claim on {room.Name} - stay in the room to hold it off.");
+                    GangAlert(rival, $"[Turf]: Your gang is contesting {capture.GangName}'s claim on {room.Name}.");
                 Broadcast(room);
             }
             else if (!rivalNames.Contains(capture.ContestedBy))
@@ -306,7 +306,7 @@ public static class TurfManager
             return;
         if (claimer != null)
             room.SendPacket(new ChatComposer(claimer.VirtualId, $"*loses the claim on this turf - {why}*", 0, ActionBubble));
-        GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} failed - {why}.");
+        GangAlert(capture.GangId, $"[Turf]: The claim on {room.Name} failed.");
         Broadcast(room, $"Claim failed: {why}.");
     }
 
