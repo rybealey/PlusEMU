@@ -119,6 +119,46 @@ public static class CityEconomy
         return corps;
     }
 
+    // ---- live shifts ----------------------------------------------------------
+
+    /// <summary>A burst of shift changes (a shift change of crew) goes out as one update.</summary>
+    private const int ShiftsPushDelayMs = 500;
+
+    private static int _shiftsPushPending;
+
+    /// <summary>
+    /// Somebody clocked in or out (ShiftManager): send the Economy tab's state
+    /// to every staff member who can open the City Panel, so On shift now is
+    /// live. Coalesced - a burst of changes within half a second is one send -
+    /// and off the caller's thread, since the caller is the shift tick or a
+    /// packet. A client without the Economy tab open ignores it.
+    /// </summary>
+    public static void ShiftsChanged()
+    {
+        if (Interlocked.Exchange(ref _shiftsPushPending, 1) == 1)
+            return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(ShiftsPushDelayMs);
+            Interlocked.Exchange(ref _shiftsPushPending, 0);
+            try
+            {
+                var staff = PlusEnvironment.Game.ClientManager.GetClients
+                    .Where(client => CityPanelAccess.CanOpen(client?.GetHabbo()))
+                    .ToList();
+                if (staff.Count == 0)
+                    return;
+                var packet = new Communication.Packets.Outgoing.CityPanel.RpCityEconomyComposer(Corporations(), ServicePrices.All());
+                foreach (var client in staff)
+                    client.Send(packet);
+            }
+            catch (Exception)
+            {
+                // A live refresh is a nicety; the tab still loads on open.
+            }
+        });
+    }
+
     /// <summary>Corporation settings, by number - RpCityCorpSettingEvent's.</summary>
     public const int SettingHidden = 1;
 

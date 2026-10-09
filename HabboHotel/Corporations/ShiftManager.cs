@@ -315,6 +315,8 @@ public static class ShiftManager
     public static void InterruptForDisconnect(Habbo habbo)
     {
         if (habbo == null || !Sessions.TryRemove(habbo.Id, out var session)) return;
+        // No motto to revert on this path, so the City Panel is told here.
+        CityPanel.CityEconomy.ShiftsChanged();
         lock (session)
         {
             var elapsed = Elapsed(session);
@@ -427,6 +429,9 @@ public static class ShiftManager
         if (habbo == null) return;
         habbo.Motto = motto;
         UniformManager.Dress(habbo);
+        // Every clock-in, clock-out and rank refresh passes here: the City
+        // Panel's On shift now follows it live.
+        CityPanel.CityEconomy.ShiftsChanged();
         var room = habbo.CurrentRoom;
         var roomUser = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
         if (roomUser == null) return;
