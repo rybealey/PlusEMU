@@ -74,6 +74,7 @@ internal class BuyOfferEvent : IPacketEvent
                 return Task.CompletedTask;
             }
             session.GetHabbo().Credits -= Convert.ToInt32(row["total_price"]);
+            Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), -Convert.ToInt32(row["total_price"]), "Marketplace purchase");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
             var giveItem = _itemFactory.CreateSingleItem(item, session.GetHabbo(), Convert.ToString(row["extra_data"]), Convert.ToString(row["extra_data"]), Convert.ToUInt32(row["furni_id"]),
                 Convert.ToUInt32(row["limited_number"]), Convert.ToUInt32(row["limited_stack"])).ToInventoryItem();

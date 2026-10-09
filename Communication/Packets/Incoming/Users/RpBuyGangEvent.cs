@@ -92,6 +92,7 @@ internal class RpBuyGangEvent : IPacketEvent
 
         // charge only after everything succeeded
         habbo.Credits -= cost;
+        Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, -cost, "Gang founded");
         session.Send(new CreditBalanceComposer(habbo.Credits));
 
         GangUtility.BroadcastGangMembership(habbo.Id);

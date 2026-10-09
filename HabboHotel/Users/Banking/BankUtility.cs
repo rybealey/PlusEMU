@@ -601,6 +601,7 @@ public static class BankUtility
                 // hedge that the logout save will rewrite from memory anyway.
                 habbo.Credits -= (int)amount;
                 PersistHandCredits(connection, habbo.Id, -amount);
+                CoinLedger.Record(habbo, -(int)amount, "Bank deposit");
 
                 var rows = connection.Execute(
                     "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` + @amount " +
@@ -613,6 +614,7 @@ public static class BankUtility
                     habbo.Credits += (int)amount;
                     PersistHandCredits(connection, habbo.Id, amount);
                     message = "You do not have a bank account.";
+                    CoinLedger.Record(habbo, (int)amount, "Bank deposit refunded - no account");
                     return BankResult.NoAccount;
                 }
                 account = Refresh(connection, habbo.Id);
@@ -693,6 +695,7 @@ public static class BankUtility
                 account = Refresh(connection, habbo.Id);
                 habbo.Credits += (int)amount;
                 PersistHandCredits(connection, habbo.Id, amount);
+                CoinLedger.Record(habbo, (int)amount, "Bank withdrawal");
                 LogMovement(connection, habbo.Id, habbo.Username, BankTransactionKind.Withdraw,
                     BankAccountKind.Current, -amount, account?.Current ?? 0, source);
                 return BankResult.Ok;

@@ -114,7 +114,7 @@ internal class RpCityPlayerActionEvent : IPacketEvent
             case AdjustBalance:
                 if (amount == 0 || Math.Abs(amount) > MaxBalanceChange)
                     return $"Change the balance by 1 to {MaxBalanceChange:N0} coins.";
-                CityPlayers.AdjustCredits(userId, amount);
+                CityPlayers.AdjustCredits(userId, amount, staff.Username);
                 return null;
         }
         return "Unknown action.";

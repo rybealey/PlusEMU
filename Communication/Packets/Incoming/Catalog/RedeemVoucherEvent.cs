@@ -57,6 +57,7 @@ public class RedeemVoucherEvent : IPacketEvent
         if (voucher.Type == VoucherType.Credit)
         {
             session.GetHabbo().Credits += voucher.Value;
+            Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), voucher.Value, "Voucher");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         }
         else if (voucher.Type == VoucherType.Ducket)

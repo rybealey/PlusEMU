@@ -31,6 +31,7 @@ internal class RedeemOfferCreditsEvent : IPacketEvent
             if (creditsOwed >= 1)
             {
                 session.GetHabbo().Credits += creditsOwed;
+                Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), creditsOwed, "Marketplace sales");
                 session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
             }
             using var dbClient = _database.GetQueryReactor();

@@ -7,6 +7,7 @@ using Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
+using Plus.HabboHotel.Users.Banking;
 
 namespace Plus.HabboHotel.CityPanel;
 
@@ -337,26 +338,38 @@ public static class CityPlayers
     /// either way the row moves by the same amount now, so a crash in between
     /// loses nothing. Returns the new balance.
     /// </summary>
-    public static int AdjustCredits(int userId, int delta)
+    public static int AdjustCredits(int userId, int delta, string staffName = "")
     {
+        var source = string.IsNullOrEmpty(staffName) ? "Staff adjustment" : $"Staff adjustment by {staffName}";
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
         var habbo = client?.GetHabbo();
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         if (habbo != null)
         {
             delta = Math.Max(delta, -habbo.Credits);
             habbo.Credits += delta;
             client!.Send(new CreditBalanceComposer(habbo.Credits));
+            CoinLedger.Record(habbo, delta, source);
+            dbClient.SetQuery("UPDATE `users` SET `credits` = GREATEST(0, `credits` + @delta) WHERE `id` = @id LIMIT 1");
+            dbClient.AddParameter("delta", delta);
+            dbClient.AddParameter("id", userId);
+            dbClient.RunQuery();
+            return habbo.Credits;
         }
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `users` SET `credits` = GREATEST(0, `credits` + @delta) WHERE `id` = @id LIMIT 1");
+
+        // Offline: never below zero, so what was actually moved is worked out
+        // from the balance first - that is what the ledger records.
+        var user = LoadUser(userId);
+        if (user == null)
+            return 0;
+        delta = Math.Max(delta, -user.Value.Credits);
+        dbClient.SetQuery("UPDATE `users` SET `credits` = `credits` + @delta WHERE `id` = @id LIMIT 1");
         dbClient.AddParameter("delta", delta);
         dbClient.AddParameter("id", userId);
         dbClient.RunQuery();
-        if (habbo != null)
-            return habbo.Credits;
-        dbClient.SetQuery("SELECT `credits` FROM `users` WHERE `id` = @id LIMIT 1");
-        dbClient.AddParameter("id", userId);
-        return dbClient.GetInteger();
+        var after = user.Value.Credits + delta;
+        CoinLedger.Record(userId, user.Value.Username, delta, after, source);
+        return after;
     }
 
     /// <summary>Full health and energy for a player who is offline (online ones go through :restore).</summary>

@@ -120,6 +120,7 @@ internal class RpBuyClothingEvent : IPacketEvent
         if (charged > 0)
         {
             habbo.Credits -= charged;
+            Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, -charged, "Clothing store");
             using var connection = _database.Connection();
             connection.Execute("UPDATE `users` SET `credits` = `credits` - @amount WHERE `id` = @userId LIMIT 1", new { amount = charged, userId = habbo.Id });
             session.Send(new CreditBalanceComposer(habbo.Credits));

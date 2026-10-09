@@ -110,6 +110,7 @@ internal class GiveCommand : ITargetChatCommand
 
                 habbo.Credits -= amount;
                 target.Credits += amount;
+                Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, -amount, $"Gave to {target.Username}"); Plus.HabboHotel.Users.Banking.CoinLedger.Record(target, amount, $"Given by {habbo.Username}");
                 session.Send(new CreditBalanceComposer(habbo.Credits));
                 target.Client?.Send(new CreditBalanceComposer(target.Credits));
                 Announce(room, habbo, target, TextHandling.GetMoney(amount));

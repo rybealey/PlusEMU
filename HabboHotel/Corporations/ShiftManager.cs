@@ -330,6 +330,7 @@ public static class ShiftManager
                     continue;
                 habbo.Credits += session.RankPay;
                 PersistCredits(session.UserId, session.RankPay);
+                Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, session.RankPay, $"Wage - {session.CorpName}");
             }
             var paySeconds = PayProgress(session, elapsed);
             Flush(session, elapsed, paySeconds, offDuty: true);
@@ -549,6 +550,7 @@ public static class ShiftManager
             }
             habbo.Credits += session.RankPay;
             PersistCredits(session.UserId, session.RankPay);
+            Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, session.RankPay, $"Wage - {session.CorpName}");
             client.Send(new CreditBalanceComposer(habbo.Credits));
             client.SendWhisper($"You have earned {TextHandling.GetMoney(session.RankPay)} for this shift.");
         }

@@ -143,6 +143,7 @@ public sealed class Trade
             if (item.Definition.InteractionType == InteractionType.Exchange && PlusEnvironment.SettingsManager.TryGetValue("trading.auto_exchange_redeemables") == "1")
             {
                 roomUserTwo.GetClient().GetHabbo().Credits += item.Definition.BehaviourData;
+                Plus.HabboHotel.Users.Banking.CoinLedger.Record(roomUserTwo.GetClient().GetHabbo(), item.Definition.BehaviourData, "Traded credit furni redeemed");
                 roomUserTwo.GetClient().Send(new CreditBalanceComposer(roomUserTwo.GetClient().GetHabbo().Credits));
                 dbClient.SetQuery("DELETE FROM `items` WHERE `id` = @id LIMIT 1");
                 dbClient.AddParameter("id", item.Id);
@@ -169,6 +170,7 @@ public sealed class Trade
             if (item.Definition.InteractionType == InteractionType.Exchange && PlusEnvironment.SettingsManager.TryGetValue("trading.auto_exchange_redeemables") == "1")
             {
                 roomUserOne.GetClient().GetHabbo().Credits += item.Definition.BehaviourData;
+                Plus.HabboHotel.Users.Banking.CoinLedger.Record(roomUserOne.GetClient().GetHabbo(), item.Definition.BehaviourData, "Traded credit furni redeemed");
                 roomUserOne.GetClient().Send(new CreditBalanceComposer(roomUserOne.GetClient().GetHabbo().Credits));
                 dbClient.SetQuery("DELETE FROM `items` WHERE `id` = @id LIMIT 1");
                 dbClient.AddParameter("id", item.Id);

@@ -41,6 +41,7 @@ internal class GiveUserCurrencyCommand : IRconCommand
             case "credits":
             {
                 client.GetHabbo().Credits += amount;
+                Plus.HabboHotel.Users.Banking.CoinLedger.Record(client.GetHabbo(), amount, "Given by RCON");
                 using (var dbClient = _database.GetQueryReactor())
                 {
                     dbClient.SetQuery("UPDATE `users` SET `credits` = @credits WHERE `id` = @id LIMIT 1");

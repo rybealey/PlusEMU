@@ -55,6 +55,7 @@ internal class ConvertCreditsCommand : IChatCommand
                     if (value > 0)
                     {
                         session.GetHabbo().Credits += value;
+                        Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), value, "Redeemed credit furni");
                         session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
                     }
                 }
