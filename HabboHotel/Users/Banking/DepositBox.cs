@@ -32,6 +32,8 @@ public static class DepositBox
 
     public const int Store = 0;
     public const int Withdraw = 1;
+    /// <summary>Within the box: move an item to another slot, swapping with what is there.</summary>
+    public const int Rearrange = 2;
 
     public static int OpenSlots(Habbo habbo) => habbo.IsVip ? VipSlots : BaseSlots;
 
@@ -86,7 +88,7 @@ public static class DepositBox
     /// One move: store (backpack slot -> box) or withdraw (box slot -> backpack),
     /// one item or the whole stack. Returns what to tell the player.
     /// </summary>
-    public static string Move(GameClient client, int direction, int slot, bool all)
+    public static string Move(GameClient client, int direction, int slot, bool all, int toSlot = 0)
     {
         var habbo = client.GetHabbo();
         var room = habbo.CurrentRoom;
@@ -98,7 +100,44 @@ public static class DepositBox
         if (PoliceState.IsCuffed(habbo.Id))
             return "Your hands are cuffed.";
 
-        return direction == Store ? StoreItems(habbo, slot, all) : WithdrawItems(habbo, slot, all);
+        return direction switch
+        {
+            Store => StoreItems(habbo, slot, all),
+            Withdraw => WithdrawItems(habbo, slot, all),
+            Rearrange => RearrangeItems(habbo, slot, toSlot),
+            _ => ""
+        };
+    }
+
+    /// <summary>
+    /// Move the item in one box slot to another: into it when it is empty, a
+    /// swap when it is not. Only open slots are a destination - an item may sit
+    /// in a VIP slot after the VIP ran out, and can be moved out of it, but
+    /// nothing new goes in.
+    /// </summary>
+    private static string RearrangeItems(Habbo habbo, int from, int to)
+    {
+        if (from == to || to < 1 || to > OpenSlots(habbo))
+            return "";
+        if (Load(habbo.Id).All(row => row.Slot != from))
+            return "";
+        // Through slot 0 (never a real slot) for the (user_id, slot) key -
+        // the backpack's MoveRpItem dance.
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `slot` = 0 WHERE `user_id` = @id AND `slot` = @from");
+        dbClient.AddParameter("id", habbo.Id);
+        dbClient.AddParameter("from", from);
+        dbClient.RunQuery();
+        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `slot` = @from WHERE `user_id` = @id AND `slot` = @to");
+        dbClient.AddParameter("id", habbo.Id);
+        dbClient.AddParameter("from", from);
+        dbClient.AddParameter("to", to);
+        dbClient.RunQuery();
+        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `slot` = @to WHERE `user_id` = @id AND `slot` = 0");
+        dbClient.AddParameter("id", habbo.Id);
+        dbClient.AddParameter("to", to);
+        dbClient.RunQuery();
+        return "";
     }
 
     private static string StoreItems(Habbo habbo, int slot, bool all)
