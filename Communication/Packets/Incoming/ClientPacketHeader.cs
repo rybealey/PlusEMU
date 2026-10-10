@@ -535,6 +535,7 @@ public static class ClientPacketHeader
     // pixelrp bank deposit box (DepositBox): one move, store or withdraw.
     public const uint RpDepositMoveEvent = 4185;
     public const uint RpCityLedgerEvent = 4186;
+    public const uint RpEmergencyCallActionEvent = 4189;
     // pixelrp: who is selected in the HUD - a target command typed without a name is aimed at them
     public const uint RpSetHudTargetEvent = 4181;
     // Internal 439xx / wire 39xx - see the album note above.

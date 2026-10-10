@@ -29,13 +29,15 @@ public class CommandManager : ICommandManager
     /// An allow list rather than a block list, so a new command is refused
     /// while out cold until somebody decides otherwise. What is here only
     /// looks something up, sets a preference, or talks - :ga and :ca are gang
-    /// and corporation chat, and talking stays open.
+    /// and corporation chat, and talking stays open. :911 / :999 too: someone
+    /// lying knocked out is who most needs to call it.
     /// </summary>
     private static readonly HashSet<string> KnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
     {
         "about", "stats",
         "dnd", "disablegifts", "disablemimic", "flagme",
-        "ga", "ca"
+        "ga", "ca",
+        "911", "999"
     };
 
     private static bool IsPlayerCommand(ICommandBase command) =>

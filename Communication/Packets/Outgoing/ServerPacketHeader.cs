@@ -208,6 +208,7 @@ public static class ServerPacketHeader
     // pixelrp bank deposit box (DepositBox): open with its contents, or closed.
     public const uint RpDepositBoxComposer = 4184;
     public const uint RpCityLedgerComposer = 4187;
+    public const uint RpEmergencyCallsComposer = 4188;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

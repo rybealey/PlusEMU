@@ -338,9 +338,15 @@ public static class CityPlayers
     /// either way the row moves by the same amount now, so a crash in between
     /// loses nothing. Returns the new balance.
     /// </summary>
-    public static int AdjustCredits(int userId, int delta, string staffName = "")
+    public static int AdjustCredits(int userId, int delta, string staffName = "") =>
+        AdjustCreditsFor(userId, delta, string.IsNullOrEmpty(staffName) ? "Staff adjustment" : $"Staff adjustment by {staffName}");
+
+    /// <summary>
+    /// Coins on hand, up or down, online or off, never below zero - recorded in
+    /// the coin ledger as `source`. The balance it left.
+    /// </summary>
+    public static int AdjustCreditsFor(int userId, int delta, string source)
     {
-        var source = string.IsNullOrEmpty(staffName) ? "Staff adjustment" : $"Staff adjustment by {staffName}";
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
         var habbo = client?.GetHabbo();
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();

@@ -64,7 +64,10 @@ public static class PoliceUtility
         var habbo = session?.GetHabbo();
         if (habbo == null)
             return;
-        session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(IsOnDutyOfficer(habbo.Id)));
+        var onDuty = IsOnDutyOfficer(habbo.Id);
+        session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(onDuty));
+        // The Emergency Calls window is open exactly while this is true.
+        EmergencyCalls.PushWindow(session, onDuty);
     }
 
     public static bool RequireOnDuty(GameClient session, string verb)
