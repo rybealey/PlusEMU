@@ -25,7 +25,8 @@ namespace Plus.HabboHotel.Corporations;
 /// - Helpful: the caller is paid <see cref="HelpfulReward"/> coins;
 /// - Abuse: the caller is charged with 911abuse, filed by the officer who
 ///   responded.
-/// Nobody may respond to, or mark, a call from one of their own characters.
+/// Nobody may respond to, or mark, a call from one of their own characters,
+/// and a player with an open 911 Abuse charge cannot call until it is gone.
 /// </summary>
 public static class EmergencyCalls
 {
@@ -101,6 +102,13 @@ public static class EmergencyCalls
             return "Usage: :911 <what is happening>";
         if (message.Length > MaxMessageLength)
             message = message[..MaxMessageLength];
+
+        // A caller charged with 911 Abuse has lost the line until the charge
+        // is gone - pardoned, or lapsed (cleared first, so a lapsed one never
+        // blocks).
+        WantedUtility.ExpireLapsed();
+        if (HasOpenAbuseCharge(habbo.Id))
+            return "You cannot call 911 while you are charged with 911 Abuse.";
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         if (LastCall.TryGetValue(habbo.Id, out var last) && now - last < CooldownSeconds)
@@ -290,6 +298,15 @@ public static class EmergencyCalls
 
     private static void Send(GameClient session, string notice) =>
         session.Send(new RpEmergencyCallsComposer(true, Newest(), notice));
+
+    private static bool HasOpenAbuseCharge(int userId)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM `rp_charges` ch JOIN `rp_crimes` c ON c.`id` = ch.`crime_id` " +
+            "WHERE ch.`user_id` = @userId AND ch.`dropped_at` = 0 AND c.`key_name` = @crime",
+            new { userId, crime = AbuseCrime }) > 0;
+    }
 
     private static string Truncate(string value, int length) => value.Length <= length ? value : value[..length];
 }
