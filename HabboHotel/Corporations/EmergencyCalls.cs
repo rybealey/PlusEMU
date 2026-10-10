@@ -16,7 +16,8 @@ namespace Plus.HabboHotel.Corporations;
 /// next officer to clock in finds it waiting. Every on-duty officer has the
 /// Emergency Calls window open, newest call first; it opens on clock-in and
 /// closes on clock-out (PushWindow, from PoliceUtility.PushPardonRights, which
-/// runs at exactly those moments), and has no close button.
+/// runs at exactly those moments). An officer may close it; the next new call
+/// brings it back up (the client's doing - every change is broadcast anyway).
 ///
 /// On a call: Respond claims it (the first officer to press it; the caller is
 /// told), and after that the button is Go to room. Once responded, any officer
