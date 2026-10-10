@@ -50,14 +50,12 @@ internal class HireCommand : IChatCommand
         }
         int rankId;
         int tier;
-        string rankName;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             var rank = connection.QuerySingleOrDefault<(int Id, string Name, int Tiers)>(
                 "SELECT `id`, `name`, `tiers` FROM `rp_corporation_ranks` WHERE `corporation_id` = @corpId ORDER BY `rank_order` LIMIT 1",
                 new { corpId = context.CorpId });
             rankId = rank.Id;
-            rankName = rank.Name;
             tier = (rank.Tiers > 0) ? 1 : 0;
             connection.Execute(
                 "INSERT INTO `rp_corporation_employees` (`user_id`, `corporation_id`, `rank_id`, `tier`, `hired_at`) " +
@@ -67,11 +65,8 @@ internal class HireCommand : IChatCommand
         CorporationUtility.BroadcastEmployment(targetId);
 
         var actorRoomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(session.GetHabbo().Id);
-        actorRoomUser?.OnChat(23, $"*has hired {target.GetHabbo().Username} at {context.CorpName}*", true);
-        var targetRoomUser = target.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(targetId);
-        if (targetRoomUser != null)
-            targetRoomUser.OnChat(4, $"*has been hired at {context.CorpName} as {rankName}*", true);
-        else
-            target.SendWhisper($"You've been hired at {context.CorpName} as {rankName}!");
+        actorRoomUser?.OnChat(23, $"*hires {target.GetHabbo().Username} at {context.CorpName}*", true);
+        // Nothing for the new hire - no "*has been hired*" bubble, no whisper.
+        // Their job shows up by itself (BroadcastEmployment, above).
     }
 }

@@ -102,14 +102,10 @@ internal class SuperHireCommand : IChatCommand
         CorporationUtility.BroadcastEmployment(target.Id);
 
         // Announce theatrically: the staff member shouts the hire in their
-        // room (bubble 23) and an online new hire shouts in theirs (bubble 4).
+        // room (bubble 23). Nothing for the new hire - no "*has been hired*"
+        // bubble, no whisper; their job shows up by itself (BroadcastEmployment).
         var title = string.IsNullOrEmpty(TierNumeral(tier)) ? rank.Name : $"{rank.Name} {TierNumeral(tier)}";
         var staffRoomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(session.GetHabbo().Id);
-        staffRoomUser?.OnChat(23, $"*has hired {target.Username} into {corp.Name} as {title}*", true);
-        var targetRoomUser = target.Client?.GetHabbo()?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(target.Id);
-        if (targetRoomUser != null)
-            targetRoomUser.OnChat(4, $"*has been hired into {corp.Name} as {title}*", true);
-        else
-            target.Client?.SendWhisper($"You've been hired into {corp.Name} as {title}!");
+        staffRoomUser?.OnChat(23, $"*hires {target.Username} into {corp.Name} as {title}*", true);
     }
 }
