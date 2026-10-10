@@ -117,7 +117,12 @@ internal class HealCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        var slot = habbo.LoadRpInventory().FirstOrDefault(entry => entry.Item == "medkit").Slot;
+        // A Cop Medkit heals the same as a medkit. It goes first: the police
+        // locker replaces it for nothing, and a medkit costs money.
+        var inventory = habbo.LoadRpInventory();
+        var slot = inventory.FirstOrDefault(entry => entry.Item == PoliceUtility.CopMedkitItem).Slot;
+        if (slot <= 0)
+            slot = inventory.FirstOrDefault(entry => entry.Item == "medkit").Slot;
         if (slot <= 0)
         {
             session.SendWhisper("You need a medkit in your backpack to do that.");

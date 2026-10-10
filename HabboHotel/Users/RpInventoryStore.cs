@@ -20,10 +20,11 @@ public static class RpInventoryStore
     /// Items nobody may hold more than one of. Handcuffs: an officer carries
     /// one pair - the locker hands out a new pair when theirs is on a suspect
     /// or lost, and a pair coming back off a suspect to someone who already
-    /// has one is simply lost. Enforced here because every way into a
-    /// backpack goes through <see cref="Add"/>.
+    /// has one is simply lost. The Cop Medkit: one to an officer, and the
+    /// locker hands out another once it is used. Enforced here because every
+    /// way into a backpack goes through <see cref="Add"/>.
     /// </summary>
-    private static readonly HashSet<string> OnePerPlayer = new() { CuffCommand.HandcuffsItem };
+    private static readonly HashSet<string> OnePerPlayer = new() { CuffCommand.HandcuffsItem, Corporations.PoliceUtility.CopMedkitItem };
 
     public static bool IsOnePerPlayer(string item) => OnePerPlayer.Contains(item);
 

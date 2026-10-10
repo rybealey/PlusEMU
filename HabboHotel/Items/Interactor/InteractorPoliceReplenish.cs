@@ -12,7 +12,8 @@ namespace Plus.HabboHotel.Items.Interactor;
 /// pixelrp: the police equipment locker.
 ///
 /// An on-duty officer double-clicks it and is TOPPED UP: a pair of handcuffs
-/// if they carry none, a stun gun if they carry none. What they already have
+/// if they carry none, a stun gun if they carry none, a Cop Medkit if they
+/// carry none (PoliceUtility.CopMedkitItem). What they already have
 /// is left alone, so a second click says they are fully equipped and hands
 /// out nothing - which is also why there is no cooldown. It only ever fills a
 /// gap, so there is nothing to farm.
@@ -22,8 +23,8 @@ namespace Plus.HabboHotel.Items.Interactor;
 /// is moved there. Whatever weapon was equipped before swaps back into the
 /// backpack. A stun gun holds seven shots (PoliceState.StunGunShots), and one
 /// that has fired any is reloaded here. So "fully equipped" means cuffs held,
-/// a flashbang held, a can of pepper spray held, and a loaded stun gun in
-/// hand.
+/// a flashbang held, a can of pepper spray held, a cop medkit held, and a
+/// loaded stun gun in hand.
 ///
 /// Walk-up and facing are the ATM's (InteractorAtm): used from across the
 /// room, the officer walks over first.
@@ -73,6 +74,8 @@ public class InteractorPoliceReplenish : IFurniInteractor
         var needsFlashbang = !inventory.Any(entry => entry.Item == Flashbang.Item);
         // Spent on the spray, like the flashbang on the throw (PepperSpray).
         var needsPepperSpray = !inventory.Any(entry => entry.Item == PepperSpray.Item);
+        // Spent on a heal, like a medkit (PoliceUtility.CopMedkitItem).
+        var needsCopMedkit = !inventory.Any(entry => entry.Item == PoliceUtility.CopMedkitItem);
         // The Weapon slot first: one already equipped is the one that counts.
         var stunSlot = inventory.Any(entry => entry.Slot == RpWeapons.WeaponSlot && entry.Item == RpWeapons.StunGunItem)
             ? RpWeapons.WeaponSlot
@@ -81,7 +84,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
         // fired any is reloaded here, and a new one comes full.
         var needsReload = (stunSlot != 0) && (PoliceState.StunGunShotsLeft(habbo.Id) < PoliceState.StunGunShots);
 
-        if (!needsCuffs && !needsFlashbang && !needsPepperSpray && stunSlot == RpWeapons.WeaponSlot && !needsReload)
+        if (!needsCuffs && !needsFlashbang && !needsPepperSpray && !needsCopMedkit && stunSlot == RpWeapons.WeaponSlot && !needsReload)
         {
             session.SendWhisper("You're already fully equipped.");
             return;
@@ -95,6 +98,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
         var equipped = false;
         var flashbangGiven = false;
         var pepperSprayGiven = false;
+        var copMedkitGiven = false;
         var stunGunGiven = false;
         // The gun they already held, refilled - not a new one.
         var stunGunReloaded = false;
@@ -123,6 +127,15 @@ public class InteractorPoliceReplenish : IFurniInteractor
                 session.SendWhisper("Your backpack is full - there was no room for the pepper spray.");
             else if (slot > 0)
                 pepperSprayGiven = true;
+        }
+
+        if (needsCopMedkit)
+        {
+            var slot = habbo.AddRpItem(PoliceUtility.CopMedkitItem);
+            if (slot == -1)
+                session.SendWhisper("Your backpack is full - there was no room for the cop medkit.");
+            else if (slot > 0)
+                copMedkitGiven = true;
         }
 
         if (stunSlot == 0)
@@ -163,7 +176,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             equipped = true;
         }
 
-        if (!cuffsGiven && !equipped && !flashbangGiven && !pepperSprayGiven && !stunGunGiven && !stunGunReloaded)
+        if (!cuffsGiven && !equipped && !flashbangGiven && !pepperSprayGiven && !copMedkitGiven && !stunGunGiven && !stunGunReloaded)
             return;
 
         var after = habbo.LoadRpInventory();
@@ -185,5 +198,7 @@ public class InteractorPoliceReplenish : IFurniInteractor
             session.SendWhisper("You have received a pepper spray.");
         if (cuffsGiven)
             session.SendWhisper("You have received a pair of handcuffs.");
+        if (copMedkitGiven)
+            session.SendWhisper("You have received a cop medkit.");
     }
 }

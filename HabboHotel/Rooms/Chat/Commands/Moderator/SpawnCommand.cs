@@ -25,7 +25,8 @@ internal class SpawnCommand : ITargetChatCommand
         { "stun", ("stun_gun", "Stun Gun") },
         { "cuffs", ("handcuffs", "Handcuffs") },
         { "flashbang", ("flashbang", "Flashbang") },
-        { "pepperspray", ("pepper_spray", "Pepper Spray") }
+        { "pepperspray", ("pepper_spray", "Pepper Spray") },
+        { "copmedkit", (Corporations.PoliceUtility.CopMedkitItem, "Cop Medkit") }
     };
 
     /// <summary>pixelrp City Panel: the items staff can hand out, by backpack key, with their names.</summary>

@@ -29,8 +29,17 @@ public static class PoliceUtility
         Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem,
         Users.RpWeapons.StunGunItem,
         Rooms.Chat.Commands.User.Police.Flashbang.Item,
-        Rooms.Chat.Commands.User.Police.PepperSpray.Item
+        Rooms.Chat.Commands.User.Police.PepperSpray.Item,
+        CopMedkitItem
     };
+
+    /// <summary>
+    /// pixelrp: the Cop Medkit - the force's own medkit, from the locker. It
+    /// heals exactly as a medkit does, on yourself or with :heal; what makes it
+    /// police gear is everything else: one to an officer (RpInventoryStore
+    /// one-per-player), never into the deposit box, and gone with the job.
+    /// </summary>
+    public const string CopMedkitItem = "cop_medkit";
 
     public static bool IsPoliceGear(string item) => PoliceGear.Contains(item);
 
@@ -102,11 +111,12 @@ public static class PoliceUtility
 
     /// <summary>
     /// Take the force's equipment (PoliceGear) back from someone leaving it:
-    /// every pair of handcuffs, every stun gun, every flashbang and every can
-    /// of pepper spray in their backpack, the Weapon slot included - and in
-    /// their bank deposit box, which keeps police gear out but may hold some
-    /// stored before it did. The locker hands these out and only to officers,
-    /// so they go when the job does - on :quitjob, :fire and :superfire alike.
+    /// every pair of handcuffs, every stun gun, every flashbang, every can of
+    /// pepper spray and every cop medkit in their backpack, the Weapon slot
+    /// included - and in their bank deposit box, which keeps police gear out
+    /// but may hold some stored before it did. The locker hands these out and
+    /// only to officers, so they go when the job does - on :quitjob, :fire and
+    /// :superfire alike.
     ///
     /// By user id, because a fired officer may be offline: the rows go either
     /// way, and an online one has their hand and backpack refreshed after.

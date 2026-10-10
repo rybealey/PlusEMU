@@ -178,7 +178,9 @@ public class RpUseItemEvent : IPacketEvent
                     session.SendWhisper("You eat the snack. Your energy comes back over the next minute.");
                 break;
             }
+            // The Cop Medkit is a medkit in police colours: it heals the same.
             case "medkit":
+            case Plus.HabboHotel.Corporations.PoliceUtility.CopMedkitItem:
             {
                 habbo.EnsureRpStatsLoaded();
                 // Out cold is out of the fight: :hit refuses a target on zero
