@@ -236,7 +236,7 @@ public static class EmergencyCalls
         if (mark == MarkHelpful)
         {
             CityPlayers.AdjustCreditsFor(call.CallerId, HelpfulReward, "Helpful 911 call");
-            caller?.SendWhisper($"Your 911 call was marked helpful. You have been paid {HelpfulReward}c.");
+            caller?.SendWhisper($"Your 911 call was marked helpful. You have been tipped {HelpfulReward}c.");
             notice = $"Marked helpful - {call.CallerName} was paid {HelpfulReward}c.";
         }
         else if (ChargeCommand.FileAuto(call.CallerId, AbuseCrime, call.ResponderId))
