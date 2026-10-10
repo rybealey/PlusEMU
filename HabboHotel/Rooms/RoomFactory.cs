@@ -86,8 +86,8 @@ public static class RoomFactory
     /// the loaded-room dictionary.
     ///
     /// RoomManager only holds rooms that are loaded, and a room unloads after
-    /// 60 idle cycles with nobody in it (Room.ProcessRoom) - so listing from
-    /// there means an empty room drops out of the navigator entirely a minute
+    /// a few idle minutes with nobody in it (Room.ProcessRoom) - so listing from
+    /// there means an empty room drops out of the navigator entirely soon
     /// after the last person leaves, which is exactly the "my room is not in
     /// the navigator" complaint. Search never had the problem because it has
     /// always queried the table.

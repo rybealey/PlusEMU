@@ -397,6 +397,21 @@ public class RoomItemHandling
         return mMessage;
     }
 
+    /// <summary>
+    /// pixelrp: write what Dispose writes - the furni moved or switched since
+    /// the last save - without unloading. Room.ProcessRoom calls it as an empty
+    /// room goes quiet, the moment it used to be unloaded (and so saved); a room
+    /// now kept in memory, a key room for good, would otherwise hold those
+    /// changes only in memory until it finally unloads.
+    /// </summary>
+    public void SaveChanges()
+    {
+        var saving = _movedItems.Keys.ToList();
+        SaveFurniture();
+        foreach (var id in saving)
+            _movedItems.TryRemove(id, out _);
+    }
+
     private void SaveFurniture()
     {
         try

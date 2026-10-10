@@ -196,12 +196,28 @@ public class Room : RoomData
         var data = dbClient.GetTable();
         if (data == null)
             return;
+        // pixelrp: every bot's lines in ONE query, not one per bot - a room load
+        // waited on each in turn. Ordered as each bot's own query read them.
+        var speechByBot = new Dictionary<int, List<RandomSpeech>>();
+        if (data.Rows.Count > 0)
+        {
+            var botIds = string.Join(",", data.Rows.Cast<DataRow>().Select(bot => Convert.ToInt32(bot["id"])));
+            dbClient.SetQuery($"SELECT `bot_id`,`text` FROM `bots_speech` WHERE `bot_id` IN ({botIds}) ORDER BY `bot_id`,`id`");
+            var allSpeech = dbClient.GetTable();
+            if (allSpeech != null)
+            {
+                foreach (DataRow speech in allSpeech.Rows)
+                {
+                    var botId = Convert.ToInt32(speech["bot_id"]);
+                    if (!speechByBot.TryGetValue(botId, out var lines))
+                        speechByBot[botId] = lines = new List<RandomSpeech>();
+                    lines.Add(new(Convert.ToString(speech["text"]), botId));
+                }
+            }
+        }
         foreach (DataRow bot in data.Rows)
         {
-            dbClient.SetQuery($"SELECT `text` FROM `bots_speech` WHERE `bot_id` = '{Convert.ToInt32(bot["id"])}'");
-            var botSpeech = dbClient.GetTable();
-            var speeches = new List<RandomSpeech>();
-            foreach (DataRow speech in botSpeech.Rows) speeches.Add(new(Convert.ToString(speech["text"]), Convert.ToInt32(bot["id"])));
+            var speeches = speechByBot.TryGetValue(Convert.ToInt32(bot["id"]), out var botLines) ? botLines : new List<RandomSpeech>();
             _roomUserManager.DeployBot(
                 new(Convert.ToInt32(bot["id"]), Convert.ToUInt32(bot["room_id"]), Convert.ToString(bot["ai_type"]), Convert.ToString(bot["walk_mode"]), Convert.ToString(bot["name"]),
                     Convert.ToString(bot["motto"]), Convert.ToString(bot["look"]), int.Parse(bot["x"].ToString()), int.Parse(bot["y"].ToString()), int.Parse(bot["z"].ToString()),
@@ -213,23 +229,24 @@ public class Room : RoomData
     public void InitPets()
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery($"SELECT `id`,`user_id`,`room_id`,`name`,`x`,`y`,`z` FROM `bots` WHERE `room_id` = '{RoomId}' AND `ai_type` = 'pet'");
+        // pixelrp: each pet with its pet data in ONE query, not one more per pet.
+        // The inner join leaves out a pet with no bots_petdata row, which the
+        // per-pet lookup skipped too.
+        dbClient.SetQuery(
+            "SELECT b.`id`,b.`user_id`,b.`room_id`,b.`name`,b.`x`,b.`y`,b.`z`," +
+            "p.`type`,p.`race`,p.`color`,p.`experience`,p.`energy`,p.`nutrition`,p.`respect`,p.`createstamp`,p.`have_saddle`,p.`anyone_ride`,p.`hairdye`,p.`pethair`,p.`gnome_clothing` " +
+            $"FROM `bots` b INNER JOIN `bots_petdata` p ON p.`id` = b.`id` WHERE b.`room_id` = '{RoomId}' AND b.`ai_type` = 'pet'");
         var data = dbClient.GetTable();
         if (data == null)
             return;
         foreach (DataRow row in data.Rows)
         {
-            dbClient.SetQuery(
-                $"SELECT `type`,`race`,`color`,`experience`,`energy`,`nutrition`,`respect`,`createstamp`,`have_saddle`,`anyone_ride`,`hairdye`,`pethair`,`gnome_clothing` FROM `bots_petdata` WHERE `id` = '{row[0]}' LIMIT 1");
-            var mRow = dbClient.GetRow();
-            if (mRow == null)
-                continue;
-            var pet = new Pet(Convert.ToInt32(row["id"]), Convert.ToInt32(row["user_id"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["name"]), Convert.ToInt32(mRow["type"]),
-                Convert.ToString(mRow["race"]),
-                Convert.ToString(mRow["color"]), Convert.ToInt32(mRow["experience"]), Convert.ToInt32(mRow["energy"]), Convert.ToInt32(mRow["nutrition"]), Convert.ToInt32(mRow["respect"]),
-                Convert.ToDouble(mRow["createstamp"]), Convert.ToInt32(row["x"]), Convert.ToInt32(row["y"]),
-                Convert.ToDouble(row["z"]), Convert.ToInt32(mRow["have_saddle"]), Convert.ToInt32(mRow["anyone_ride"]), Convert.ToInt32(mRow["hairdye"]), Convert.ToInt32(mRow["pethair"]),
-                Convert.ToString(mRow["gnome_clothing"]));
+            var pet = new Pet(Convert.ToInt32(row["id"]), Convert.ToInt32(row["user_id"]), Convert.ToUInt32(row["room_id"]), Convert.ToString(row["name"]), Convert.ToInt32(row["type"]),
+                Convert.ToString(row["race"]),
+                Convert.ToString(row["color"]), Convert.ToInt32(row["experience"]), Convert.ToInt32(row["energy"]), Convert.ToInt32(row["nutrition"]), Convert.ToInt32(row["respect"]),
+                Convert.ToDouble(row["createstamp"]), Convert.ToInt32(row["x"]), Convert.ToInt32(row["y"]),
+                Convert.ToDouble(row["z"]), Convert.ToInt32(row["have_saddle"]), Convert.ToInt32(row["anyone_ride"]), Convert.ToInt32(row["hairdye"]), Convert.ToInt32(row["pethair"]),
+                Convert.ToString(row["gnome_clothing"]));
             var rndSpeechList = new List<RandomSpeech>();
             _roomUserManager.DeployBot(
                 new(pet.PetId, RoomId, "pet", "freeroam", pet.Name, "", pet.Look, pet.X, pet.Y, Convert.ToInt32(pet.Z), 0, 0, 0, 0, 0, ref rndSpeechList, "", 0, pet.OwnerId, false, 0, false,
@@ -408,6 +425,25 @@ public class Room : RoomData
         }
     }
 
+    /// <summary>
+    /// pixelrp: how many 500ms ticks a room with nobody in it stays loaded -
+    /// five minutes (was 60, half a minute). Arrows mostly lead into rooms
+    /// someone was in a little while ago; a room still loaded is entered from
+    /// memory, a cold one costs a database load of every item, bot and pet
+    /// first. Key rooms (KeyRooms) are never unloaded for being empty.
+    /// </summary>
+    private const int IdleUnloadTicks = 600;
+
+    /// <summary>
+    /// pixelrp: how many 500ms ticks a room with nobody in it keeps running -
+    /// half a minute, which is where it used to be unloaded. After that it is
+    /// quiet until somebody comes back: no rollers, wired, bots or pets, nothing
+    /// a room does on its own - just as when it was unloaded at this point, only
+    /// still in memory to walk back into. So keeping rooms loaded longer costs
+    /// memory, not ticking.
+    /// </summary>
+    private const int QuietAfterTicks = 60;
+
     public void ProcessRoom()
     {
         if (IsCrashed || MDisposed)
@@ -418,9 +454,18 @@ public class Room : RoomData
                 IdleTime++;
             else if (IdleTime > 0)
                 IdleTime = 0;
-            if (IdleTime >= 60)
+            if (IdleTime >= IdleUnloadTicks && !KeyRooms.StaysLoaded(this))
             {
                 PlusEnvironment.Game.RoomManager.UnloadRoom(Id);
+                return;
+            }
+            if (IdleTime >= QuietAfterTicks)
+            {
+                // Going quiet is where it used to be unloaded, so it is where
+                // it is saved: what Dispose writes (furni moved or switched,
+                // pets), once, now.
+                if (IdleTime == QuietAfterTicks)
+                    SaveQuietChanges();
                 return;
             }
             // TEMP stall telemetry (2026-08-25): a phase that overruns the
@@ -504,6 +549,26 @@ public class Room : RoomData
         }
     }
 
+    private void SaveQuietChanges()
+    {
+        try
+        {
+            GetRoomItemHandler()?.SaveChanges();
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+        }
+        try
+        {
+            GetRoomUserManager()?.UpdatePets();
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+        }
+    }
+
     private void OnRoomCrash(Exception e)
     {
         try
@@ -546,11 +611,28 @@ public class Room : RoomData
         return false;
     }
 
-    public void SendObjects(GameClient session)
+    /// <summary>
+    /// pixelrp: the room's shape - what the client builds the room from, and the
+    /// end of the blank screen. Sent first, ahead of the entering player's own
+    /// lookups (GetRoomEntryDataEvent), not as the start of SendObjects.
+    /// </summary>
+    public void SendHeightmaps(GameClient session)
     {
         session.Send(new HeightMapComposer(GetGameMap().Model.Heightmap));
         session.Send(new FloorHeightMapComposer(GetGameMap().Model.GetRelativeHeightmap(), GetGameMap().StaticModel.WallHeight));
-        foreach (var user in _roomUserManager.GetUserList().ToList())
+    }
+
+    public void SendObjects(GameClient session)
+    {
+        var units = _roomUserManager.GetUserList().ToList();
+        // pixelrp: everyone's employment in ONE query, not one per player in
+        // the room - those ran one after another before the furni was sent.
+        var employments = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployments(
+                units.Where(unit => unit != null && !unit.IsBot && !unit.IsPet && unit.GetClient()?.GetHabbo() != null)
+                    .Select(unit => unit.GetClient().GetHabbo().Id))
+            .GroupBy(employment => employment.UserId)
+            .ToDictionary(group => group.Key, group => group.First());
+        foreach (var user in units)
         {
             if (user == null)
                 continue;
@@ -564,7 +646,7 @@ public class Room : RoomData
                 session.Send(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
                 // pixelrp corporations: the entering client learns everyone's
                 // employment (infostand corp badge slot / profile row).
-                var employment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(habbo.Id);
+                employments.TryGetValue(habbo.Id, out var employment);
                 if (employment != null)
                     session.Send(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(habbo.Id, employment));
             }

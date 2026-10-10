@@ -116,15 +116,13 @@ public static class HospitalAdmission
         var hqId = HeadquartersRoomId();
         if (hqId == 0)
             return;
-        if (!PlusEnvironment.Game.RoomManager.TryLoadRoom(hqId, out var hq) || hq == null)
-            return;
 
-        var bed = PickBed(hq);
-        habbo.Client?.SendNotification("You were found unconscious and taken to the hospital.");
-
-        // Already in the ward: no room change, just put them on the bed.
+        // Already in the ward: no room change, just put them on the bed - here,
+        // on this tick. Nothing to load; the ward is this room.
         if (room.RoomId == hqId)
         {
+            var bed = PickBed(room);
+            habbo.Client?.SendNotification("You were found unconscious and taken to the hospital.");
             if (bed == null)
                 return;
             room.GetGameMap().TeleportToItem(user, bed);
@@ -133,13 +131,37 @@ public static class HospitalAdmission
             return;
         }
 
-        // Elsewhere. The arrival tile is set BEFORE the forward, the way
-        // :summon does it - the marker is read as the room is entered, which
-        // begins the moment PrepareRoom is acted on. With no bed to name they
-        // still go, and arrive at the door.
+        // Elsewhere. The trip runs on a RoomTransfers thread, not here: this is
+        // the room tick, inside _cycleLock - which the movement sender needs for
+        // every room - and a hospital nobody has been in lately is loaded cold
+        // from the database before anybody can be taken there.
+        RoomTransfers.Start(habbo, room, null, () => AdmitElsewhere(room, habbo, hqId), null);
+    }
+
+    private static void AdmitElsewhere(Room room, Habbo habbo, uint hqId)
+    {
+        if (!PlusEnvironment.Game.RoomManager.TryLoadRoom(hqId, out var hq) || hq == null)
+            return;
+
+        // Still for the hospital to do: the same session, in the same room,
+        // still on the floor, and nobody has picked them up or put them on a bed
+        // while the ward was loading. If somebody has, the clock simply starts
+        // again (Tick), the forgiving direction.
+        var user = room.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        if (habbo.Client?.GetHabbo() != habbo || habbo.CurrentRoom != room || user == null || !user.RpKnockedOut
+            || Chat.Commands.User.Police.PoliceState.IsBeingEscorted(habbo.Id) || MedicalBed.Under(room, user) != null)
+            return;
+
+        var bed = PickBed(hq);
+        habbo.Client?.SendNotification("You were found unconscious and taken to the hospital.");
+
+        // The arrival tile is set BEFORE the forward, the way :summon does it -
+        // the marker is read as the room is entered, which begins the moment
+        // PrepareRoom is acted on. With no bed to name they still go, and arrive
+        // at the door.
         if (bed != null)
             habbo.PendingRestore = new PendingRoomRestore(hqId, bed.GetX, bed.GetY, bed.Rotation);
-        habbo.PrepareRoom(hqId, "");
+        habbo.PrepareRoom(hqId, "", lockOldRoom: true);
     }
 
     /// <summary>

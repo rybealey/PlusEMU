@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using Dapper;
 using Plus.Core;
 using Plus.HabboHotel.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms;
 
@@ -26,14 +28,29 @@ namespace Plus.HabboHotel.Rooms;
 /// reads and writes under a per-player lock, so a queued save and a direct one
 /// (:hit, :heal, a medkit, a moderator command) cannot interleave: whichever
 /// finishes last carries the newest values.
+///
+/// THE ORDERED QUEUE is the other kind: writes of what WAS, made in the order
+/// they happened - a room visit opened and closed, the position a player left
+/// a room at, the periodic position snapshots. A room change used to make
+/// those writes itself, one after another, before the player was let into the
+/// next room; now it only queues them. In order matters: a visit is closed
+/// after it was opened, and a newer position can never be overwritten by an
+/// older one (each position save used to be its own pool task, free to land
+/// in any order).
+///
+/// A RESTART WAITS FOR IT (Drain, from PlusEnvironment's shutdown), so a
+/// deploy loses nothing; only a crash can lose what was still waiting - in
+/// practice the last few milliseconds.
 /// </summary>
 public static class RoomTickWriter
 {
     private static readonly ConcurrentDictionary<int, Habbo> PendingStats = new();
     private static readonly ConcurrentDictionary<uint, Room> PendingCounts = new();
+    private static readonly ConcurrentQueue<Action> Ordered = new();
     private static readonly ManualResetEventSlim Wake = new(false);
     private static readonly object StartLock = new();
     private static Thread? _thread;
+    private static int _busy;
 
     /// <summary>Save this player's RP stats soon, with whatever they are then.</summary>
     public static void QueueRpStats(Habbo? habbo)
@@ -51,6 +68,60 @@ public static class RoomTickWriter
             return;
         PendingCounts[room.RoomId] = room;
         Signal();
+    }
+
+    /// <summary>Make this write soon, after every ordered write queued before it.</summary>
+    public static void QueueOrdered(Action write)
+    {
+        Ordered.Enqueue(write);
+        Signal();
+    }
+
+    /// <summary>A room visit begins: one row, open until its exit is written.</summary>
+    public static void QueueVisitEntry(int userId, uint roomId)
+    {
+        var entryTimestamp = UnixTimestamp.GetNow();
+        QueueOrdered(() =>
+        {
+            using var dbClient = PlusEnvironment.DatabaseManager.Connection();
+            dbClient.Execute("INSERT INTO user_roomvisits (user_id,room_id,entry_timestamp,exit_timestamp) VALUES (@userId, @roomId, @entryTimestamp, 0)",
+                new { userId, roomId, entryTimestamp });
+        });
+    }
+
+    /// <summary>
+    /// A room visit ends: close the newest OPEN visit to this room. (It used to
+    /// close the row with the highest exit time - from a player's second visit
+    /// to a room, an older, already closed one - so the visit in progress was
+    /// left open for ever and the old one's exit was overwritten.)
+    /// </summary>
+    public static void QueueVisitExit(int userId, uint roomId)
+    {
+        var exitTimestamp = UnixTimestamp.GetNow();
+        QueueOrdered(() =>
+        {
+            using var dbClient = PlusEnvironment.DatabaseManager.Connection();
+            dbClient.Execute("UPDATE user_roomvisits SET exit_timestamp = @exitTimestamp WHERE user_id = @userId AND room_id = @roomId AND exit_timestamp = 0 ORDER BY id DESC LIMIT 1",
+                new { userId, roomId, exitTimestamp });
+        });
+    }
+
+    /// <summary>
+    /// Wait for everything queued to be written - for the shutdown, so a
+    /// restart loses nothing. False if it was still writing when the time ran
+    /// out.
+    /// </summary>
+    public static bool Drain(TimeSpan timeout)
+    {
+        Signal();
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (PendingStats.IsEmpty && PendingCounts.IsEmpty && Ordered.IsEmpty && Volatile.Read(ref _busy) == 0)
+                return true;
+            Thread.Sleep(20);
+        }
+        return false;
     }
 
     private static void Signal()
@@ -80,6 +151,9 @@ public static class RoomTickWriter
                 // Reset BEFORE draining: a request that lands after this point
                 // sets Wake again, so nothing queued can be missed.
                 Wake.Reset();
+                // Busy BEFORE anything is taken off a queue, so Drain never
+                // sees empty queues while a write is still in hand.
+                Volatile.Write(ref _busy, 1);
 
                 foreach (var id in PendingStats.Keys)
                 {
@@ -92,12 +166,19 @@ public static class RoomTickWriter
                     if (PendingCounts.TryRemove(id, out var room))
                         Try(() => SaveUserCount(room));
                 }
+
+                while (Ordered.TryDequeue(out var write))
+                    Try(write);
             }
             catch (Exception e)
             {
                 // Same rule as the movement threads: this loop must not end.
                 ExceptionLogger.LogException(e);
                 Thread.Sleep(100);
+            }
+            finally
+            {
+                Volatile.Write(ref _busy, 0);
             }
         }
     }

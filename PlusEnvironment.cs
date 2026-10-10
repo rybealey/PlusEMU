@@ -159,6 +159,10 @@ public class PlusEnvironment : IPlusEnvironment
 
             await _game.Init();
             _game.StartGameLoop();
+            // pixelrp: the hospital, jail and corporation HQs, loaded now so the
+            // first trip to one never waits on it. In the background - READY
+            // does not wait for it.
+            HabboHotel.Rooms.KeyRooms.PreloadInBackground();
             var timeUsed = DateTime.Now - ServerStarted;
             Console.WriteLine();
             Log.Info($"EMULATOR -> READY! ({timeUsed.Seconds} s, {timeUsed.Milliseconds} ms)");
@@ -342,6 +346,10 @@ public class PlusEnvironment : IPlusEnvironment
         _flashServer.Stop();
         Game.ClientManager.CloseAll(); //Close all connections
         Game.RoomManager.Dispose(); //Stop the game loop.
+        // pixelrp: the writes the rooms queued instead of making on the spot -
+        // positions, room visits, RP stats - are written before the server goes.
+        if (!HabboHotel.Rooms.RoomTickWriter.Drain(TimeSpan.FromSeconds(15)))
+            Log.Warn("Shutdown: RoomTickWriter was still writing after 15s; some queued writes may be lost.");
         if (!Debugger.IsAttached)
         {
             using var dbClient = _database.GetQueryReactor();

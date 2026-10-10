@@ -718,7 +718,13 @@ public class Habbo
         dbClient.RunQuery();
     }
 
-    public void PrepareRoom(uint id, string password)
+    /// <param name="lockOldRoom">
+    /// pixelrp: take the old room's _cycleLock while leaving it - for a room
+    /// change run off that room's own threads (RoomTransfers), so the removal
+    /// cannot interleave with the room's tick or its movement frames, as it
+    /// could not when those trips ran on them.
+    /// </param>
+    public void PrepareRoom(uint id, string password, bool lockOldRoom = false)
     {
         if (Client == null || Client.GetHabbo() == null)
             return;
@@ -773,7 +779,9 @@ public class Habbo
             // A disposed room (unloaded while we were still in it, e.g. a floor
             // plan save) has no user manager left; clear the stale reference or
             // every future room entry NREs and the client stays on a black screen.
-            if (oldRoom != null && !oldRoom.MDisposed)
+            if (oldRoom != null && !oldRoom.MDisposed && lockOldRoom)
+                oldRoom.GetRoomUserManager().RemoveUserFromRoomLocked(Client);
+            else if (oldRoom != null && !oldRoom.MDisposed)
                 oldRoom.GetRoomUserManager().RemoveUserFromRoom(Client, false);
             else
                 Client.GetHabbo().CurrentRoom = null;
@@ -860,17 +868,9 @@ public class Habbo
             Client.Send(new RoomPropertyComposer("floor", room.Floor));
         Client.Send(new RoomPropertyComposer("landscape", room.Landscape));
         Client.Send(new RoomRatingComposer(room.Score, !(Client.GetHabbo().RatedRooms.Contains(room.RoomId) || room.OwnerId == Client.GetHabbo().Id)));
-        using (var dbClient = PlusEnvironment.DatabaseManager.Connection())
-        {
-            dbClient.Execute("INSERT INTO user_roomvisits (user_id,room_id,entry_timestamp,exit_timestamp) VALUES (@userId, @roomId, @entryTimestamp, @exitTimestamp)",
-                new
-                {
-                    userId = Client.GetHabbo().Id,
-                    roomId = Client.GetHabbo().CurrentRoom.RoomId,
-                    entryTimestamp = UnixTimestamp.GetNow(),
-                    exitTimestamp = 0,
-                });
-        }
+        // pixelrp: queued, not written here (RoomTickWriter's ordered queue, so
+        // the visit is opened before anything closes it).
+        RoomTickWriter.QueueVisitEntry(Client.GetHabbo().Id, room.RoomId);
 
         if (room.OwnerId != Id)
         {

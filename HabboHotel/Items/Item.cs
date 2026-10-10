@@ -468,17 +468,11 @@ public class Item
                                     user.AllowOverride = false;
                                     if (user.TeleDelay == 0)
                                     {
-                                        var roomHopId = ItemHopperFinder.GetAHopper(user.RoomId); // TODO @80O: Remove cast
-                                        var nextHopperId = ItemHopperFinder.GetHopperId(roomHopId);
-                                        if (!user.IsBot && user.GetClient() != null &&
-                                            user.GetClient().GetHabbo() != null)
-                                        {
-                                            user.GetClient().GetHabbo().IsHopping = true;
-                                            user.GetClient().GetHabbo().HopperId = nextHopperId;
-                                            user.GetClient().GetHabbo().PrepareRoom(roomHopId, "");
-                                            //User.GetClient().SendMessage(new RoomForwardComposer(RoomHopId));
+                                        // pixelrp: finding the next hopper and the room change
+                                        // run on a RoomTransfers thread, not this room's tick -
+                                        // PrepareRoom can load that room cold from the database.
+                                        if (!user.IsBot && RoomTransfers.StartHopper(user.GetClient()?.GetHabbo(), GetRoom()))
                                             InteractingUser = 0;
-                                        }
                                     }
                                     else
                                     {
@@ -618,17 +612,11 @@ public class Item
                                             {
                                                 if (user.TeleDelay == 0)
                                                 {
-                                                    // Let's run the teleport delegate to take futher care of this.. WHY DARIO?!
-                                                    if (!user.IsBot && user != null && user.GetClient() != null &&
-                                                        user.GetClient().GetHabbo() != null)
-                                                    {
-                                                        user.GetClient().GetHabbo().IsTeleporting = true;
-                                                        user.GetClient().GetHabbo().TeleportingRoomId = roomId;
-                                                        user.GetClient().GetHabbo().TeleporterId = teleId;
-                                                        user.GetClient().GetHabbo().PrepareRoom(roomId, "");
-                                                        //User.GetClient().SendMessage(new RoomForwardComposer(RoomId));
+                                                    // pixelrp: the room change runs on a RoomTransfers
+                                                    // thread, not this room's tick - PrepareRoom can load
+                                                    // the twin's room cold from the database.
+                                                    if (!user.IsBot && RoomTransfers.StartTeleporter(user.GetClient()?.GetHabbo(), GetRoom(), teleId, roomId))
                                                         InteractingUser = 0;
-                                                    }
                                                 }
                                                 else
                                                 {

@@ -389,6 +389,20 @@ public class RoomUserManager
         return true;
     }
 
+    /// <summary>
+    /// pixelrp: RemoveUserFromRoom under _cycleLock - for RoomTransfers, whose
+    /// trips used to run on this room's movement frame or tick (an arrow, the
+    /// hospital: inside this lock) and now run on threads of their own. Taken
+    /// only around the removal: its writes are queued (RoomTickWriter), so it
+    /// holds the lock about as long as the frame that used to run it did, and
+    /// in the same order - _cycleLock, then whatever the removal takes.
+    /// </summary>
+    public void RemoveUserFromRoomLocked(GameClient session)
+    {
+        lock (_cycleLock)
+            RemoveUserFromRoom(session, false);
+    }
+
     public void RemoveUserFromRoom(GameClient session, bool nofityUser, bool notifyKick = false)
     {
         try
@@ -466,38 +480,22 @@ public class RoomUserManager
 
                 //Session.GetHabbo().CurrentRoomId = 0;
                     session.GetHabbo().Messenger?.NotifyChangesToFriends();
-                using (var dbClient = PlusEnvironment.DatabaseManager.Connection())
-                {
-                    dbClient.Execute("UPDATE user_roomvisits SET exit_timestamp = @exitTimestamp WHERE room_id = @roomId AND user_id = @userId ORDER BY exit_timestamp DESC LIMIT 1",
-                        new
-                        {
-                            userId = session.GetHabbo().Id,
-                            roomId = _room.RoomId,
-                            exitTimestamp = UnixTimestamp.GetNow(),
-                        });
-
-                    dbClient.Execute("UPDATE `rooms` SET `users_now` = @usersNow WHERE `id` = @roomId LIMIT 1",
-                        new
-                        {
-                            usersNow = _room.UsersNow,
-                            roomId = _room.RoomId
-                        });
-
-                    // Keep the home room in sync with the last room the user was in, so
-                    // the "Home" button and the login restore always agree (they are
-                    // otherwise independent). New users - who have never left a room -
-                    // keep home_room = 0 and default-spawn into room 1 (Moody's Pointe).
-                    dbClient.Execute(
-                        "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot, `home_room` = @roomId WHERE `id` = @userId LIMIT 1",
-                        new
-                        {
-                            userId = session.GetHabbo().Id,
-                            roomId = _room.RoomId,
-                            x = lastX,
-                            y = lastY,
-                            rot = lastRot
-                        });
-                }
+                // pixelrp: queued, not written here - a room change used to wait
+                // on these before letting the player into the next room. In order
+                // (RoomTickWriter's ordered queue), so the visit closes after it
+                // opened and this position cannot land over a newer one.
+                //
+                // The position also keeps the home room in sync with the last room
+                // the user was in, so the "Home" button and the login restore always
+                // agree (they are otherwise independent). New users - who have never
+                // left a room - keep home_room = 0 and default-spawn into room 1
+                // (Moody's Pointe).
+                //
+                // No users_now write: it was the count from BEFORE this user left,
+                // and the next room tick queues the right one (UpdateUserCount).
+                RoomTickWriter.QueueVisitExit(session.GetHabbo().Id, _room.RoomId);
+                var leftAt = new List<object> { new { userId = session.GetHabbo().Id, roomId = _room.RoomId, x = lastX, y = lastY, rot = lastRot } };
+                RoomTickWriter.QueueOrdered(() => FlushPositions(leftAt));
                 // Mirror it in memory so the logout save (which writes HomeRoom) does not
                 // clobber it with the stale value.
                 session.GetHabbo().HomeRoom = _room.RoomId;
@@ -1486,9 +1484,9 @@ public class RoomUserManager
                 }
                 if (dirtyPositions != null)
                 {
-                    // Snapshot in-memory here; the MySQL writes run on a
-                    // background task, OFF _cycleLock and off the tick
-                    // thread. This flush used to execute synchronous UPDATEs
+                    // Snapshot in-memory here; the MySQL writes run on
+                    // RoomTickWriter's thread, in order, OFF _cycleLock and off
+                    // the tick thread. This flush used to execute synchronous UPDATEs
                     // while holding the lock every walker's 500ms beat needs
                     // to emit its step - one slow query stalled EVERY
                     // walker's beat by the same amount (field: beat-late
@@ -1515,7 +1513,7 @@ public class RoomUserManager
                         habbo.HomeRoom = _room.RoomId;
                     }
                     if (positionSnapshots.Count > 0)
-                        _ = Task.Run(() => FlushPositions(positionSnapshots));
+                        RoomTickWriter.QueueOrdered(() => FlushPositions(positionSnapshots));
                 }
                 foreach (var userToRemove in toRemove.ToList())
                 {
@@ -1780,43 +1778,31 @@ public class RoomUserManager
                                 // room's leftover avatar around the new room's map.
                                 if (room != _room)
                                     break;
-                                if (!ItemTeleporterFinder.IsTeleLinked(item.Id, room))
+                                // Already on their way out (this arrow fired for them
+                                // a moment ago): nothing to look up again.
+                                if (RoomTransfers.IsTravelling(user.GetClient().GetHabbo().Id))
+                                    break;
+                                // One lookup here, on the movement thread: where the
+                                // twin is. (It used to be four - IsTeleLinked repeated
+                                // both of GetLinkedTele's and GetTeleRoomId's queries.)
+                                var linkedTele = ItemTeleporterFinder.GetLinkedTele(item.Id);
+                                var targetItem = (linkedTele == 0) ? null : room.GetRoomItemHandler().GetItem(linkedTele);
+                                if (linkedTele == 0)
                                     user.UnlockWalking();
+                                else if (targetItem != null)
+                                {
+                                    // Out of the twin facing the way they were
+                                    // walking when they stepped on this one.
+                                    room.GetGameMap().TeleportToTile(user, targetItem.GetX, targetItem.GetY, targetItem.GetZ, user.RotBody);
+                                }
                                 else
                                 {
-                                    var linkedTele = ItemTeleporterFinder.GetLinkedTele(item.Id);
-                                    var teleRoomId = ItemTeleporterFinder.GetTeleRoomId(linkedTele, room);
-                                    if (teleRoomId == room.RoomId)
-                                    {
-                                        var targetItem = room.GetRoomItemHandler().GetItem(linkedTele);
-                                        if (targetItem == null)
-                                        {
-                                            if (user.GetClient() != null)
-                                                user.GetClient().SendWhisper("Hey, that arrow is poorly!");
-                                            return;
-                                        }
-                                        // Out of the twin facing the way they were
-                                        // walking when they stepped on this one.
-                                        room.GetGameMap().TeleportToTile(user, targetItem.GetX, targetItem.GetY, targetItem.GetZ, user.RotBody);
-                                    }
-                                    else if (teleRoomId != room.RoomId)
-                                    {
-                                        if (user != null && !user.IsBot && user.GetClient() != null && user.GetClient().GetHabbo() != null)
-                                        {
-                                            user.GetClient().GetHabbo().IsTeleporting = true;
-                                            user.GetClient().GetHabbo().TeleportingRoomId = teleRoomId;
-                                            user.GetClient().GetHabbo().TeleporterId = linkedTele;
-                                            user.GetClient().GetHabbo().TeleportFacing = user.RotBody;
-                                            user.GetClient().GetHabbo().PrepareRoom(teleRoomId, "");
-                                        }
-                                    }
-                                    else if (_room.GetRoomItemHandler().GetItem(linkedTele) != null)
-                                    {
-                                        user.SetPos(item.GetX, item.GetY, item.GetZ);
-                                        user.SetRot(item.Rotation, false);
-                                    }
-                                    else
-                                        user.UnlockWalking();
+                                    // The twin is in another room. The trip runs on a
+                                    // RoomTransfers thread, not this one: PrepareRoom
+                                    // can load that room cold from the database, and
+                                    // here it held every room's walking until it had.
+                                    if (!user.IsBot)
+                                        RoomTransfers.StartArrow(user.GetClient().GetHabbo(), room, linkedTele, user.RotBody);
                                 }
                             }
                             break;

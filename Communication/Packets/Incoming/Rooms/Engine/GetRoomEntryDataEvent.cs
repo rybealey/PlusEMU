@@ -22,6 +22,15 @@ internal class GetRoomEntryDataEvent : IPacketEvent
         if (room == null)
             return Task.CompletedTask;
         var roomUserManager = room.GetRoomUserManager();
+        // pixelrp: the room's shape first. The client builds the room the moment
+        // it has it - the end of the blank screen - so it no longer waits on the
+        // database lookups AddAvatarToRoom makes for the entering player (their
+        // job, their inventory's weapon, a turf room's gang). Everything that
+        // used to arrive before the room existed and was dropped (this player's
+        // own avatar, effect and hand item) is now applied instead, and the
+        // copies SendObjects sends after it change nothing: the client skips an
+        // avatar it already has (RoomEngine.addRoomObjectUser).
+        room.SendHeightmaps(session);
         // Only add the avatar on a genuine first entry. A duplicated GetRoomEntryData
         // - the login room-forward processed twice by the client under network latency
         // - arrives with the user already in the room from the first entry.
