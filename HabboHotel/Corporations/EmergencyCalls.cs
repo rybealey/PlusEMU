@@ -245,7 +245,7 @@ public static class EmergencyCalls
             notice = $"Marked as abuse - {call.CallerName} was charged with 911 Abuse.";
         }
         else
-            notice = $"Marked as abuse. {call.CallerName} already has an open 911 Abuse charge.";
+            notice = $"Marked as abuse, but the 911 Abuse charge could not be filed - check the 911abuse crime in housekeeping.";
         Broadcast(habbo.Id, notice);
     }
 
