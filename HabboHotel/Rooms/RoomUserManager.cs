@@ -262,15 +262,15 @@ public class RoomUserManager
                     item.LegacyDataString = "2";
                     item.UpdateState(false, true);
                     user.SetPos(item.GetX, item.GetY, item.GetZ);
-                    // An arrow sends you on facing the way you were walking
-                    // when you stepped on it, not the way the arrow points.
-                    // Set directly: SetRot only turns the head for a small
-                    // turn, and a new avatar starts at rotation 0.
-                    var facing = session.GetHabbo().TeleportFacing;
-                    if (item.Definition.InteractionType == InteractionType.Arrow && facing >= 0)
+                    // An arrow sends you on facing the way the arrow you come
+                    // out of points (it used to keep the way you were walking
+                    // when you stepped on the first one). Set directly: SetRot
+                    // only turns the head for a small turn, and a new avatar
+                    // starts at rotation 0.
+                    if (item.Definition.InteractionType == InteractionType.Arrow)
                     {
-                        user.RotBody = facing;
-                        user.RotHead = facing;
+                        user.RotBody = item.Rotation;
+                        user.RotHead = item.Rotation;
                     }
                     else
                         user.SetRot(item.Rotation, false);
@@ -1797,9 +1797,8 @@ public class RoomUserManager
                                     user.UnlockWalking();
                                 else if (targetItem != null)
                                 {
-                                    // Out of the twin facing the way they were
-                                    // walking when they stepped on this one.
-                                    room.GetGameMap().TeleportToTile(user, targetItem.GetX, targetItem.GetY, targetItem.GetZ, user.RotBody);
+                                    // Out of the twin facing the way the twin points.
+                                    room.GetGameMap().TeleportToTile(user, targetItem.GetX, targetItem.GetY, targetItem.GetZ, targetItem.Rotation);
                                 }
                                 else
                                 {
@@ -1808,7 +1807,7 @@ public class RoomUserManager
                                     // can load that room cold from the database, and
                                     // here it held every room's walking until it had.
                                     if (!user.IsBot)
-                                        RoomTransfers.StartArrow(user.GetClient().GetHabbo(), room, linkedTele, user.RotBody);
+                                        RoomTransfers.StartArrow(user.GetClient().GetHabbo(), room, linkedTele);
                                 }
                             }
                             break;

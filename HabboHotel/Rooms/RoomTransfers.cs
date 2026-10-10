@@ -62,7 +62,7 @@ public static class RoomTransfers
     /// Send this player through an arrow whose twin is not in the room they are
     /// in. False when a trip of theirs is already under way.
     /// </summary>
-    public static bool StartArrow(Habbo? habbo, Room? from, uint linkedArrowId, int facing)
+    public static bool StartArrow(Habbo? habbo, Room? from, uint linkedArrowId)
     {
         if (habbo == null || from == null)
             return false;
@@ -71,7 +71,6 @@ public static class RoomTransfers
             {
                 habbo.IsTeleporting = true;
                 habbo.TeleporterId = linkedArrowId;
-                habbo.TeleportFacing = facing;
             },
             () => TravelByArrow(habbo, from, linkedArrowId),
             () => CallOff(habbo, from));

@@ -201,13 +201,6 @@ public class Habbo
     public uint TeleportingRoomId { get; set; }
 
     /// <summary>
-    /// The way an arrow's rider was walking when they stepped on it, so they
-    /// come out of the linked arrow in another room still facing that way.
-    /// -1 when there is none. Only an arrow landing reads it.
-    /// </summary>
-    public int TeleportFacing { get; set; } = -1;
-
-    /// <summary>
     /// A teleport or a hopper is one trip, and this is the end of it.
     ///
     /// The V1 movement engine cleared these on the player's first step out of
@@ -222,7 +215,6 @@ public class Habbo
         IsTeleporting = false;
         TeleportingRoomId = 0;
         TeleporterId = 0;
-        TeleportFacing = -1;
         IsHopping = false;
         HopperId = 0;
     }
