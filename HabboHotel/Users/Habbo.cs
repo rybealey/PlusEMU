@@ -234,6 +234,14 @@ public class Habbo
     /// </summary>
     public uint AuthorizedRoomEntryId { get; set; }
 
+    /// <summary>
+    /// pixelrp: the room the server has already sent this client, unasked, on
+    /// entering it (RoomEntry, from EnterRoom) - so the client's own
+    /// GetRoomEntryData for it is not answered a second time. 0 when a send
+    /// failed and the client's request should be answered after all.
+    /// </summary>
+    public uint EntrySentRoomId { get; set; }
+
     public bool HasSpoken { get; set; }
 
     public double LastAdvertiseReport { get; set; }
@@ -861,6 +869,10 @@ public class Habbo
         if (room == null)
             return false;
         Client.GetHabbo().CurrentRoom = room;
+        // pixelrp: marked BEFORE RoomReady goes out - the client asks for the
+        // room the moment RoomReady reaches it, and that request must find the
+        // room already marked as sent (RoomEntry, below), however fast it is.
+        EntrySentRoomId = room.RoomId;
         Client.Send(new RoomReadyComposer(room.RoomId, room.ModelName));
         if (room.Wallpaper != "0.0")
             Client.Send(new RoomPropertyComposer("wallpaper", room.Wallpaper));
@@ -876,6 +888,20 @@ public class Habbo
         {
             Client.GetHabbo().HabboStats.RoomVisits += 1;
             PlusEnvironment.Game.AchievementManager.ProgressAchievement(Client, "ACH_RoomEntry", 1);
+        }
+
+        // pixelrp: the room itself - its shape, everybody in it, its furni -
+        // straight behind RoomReady, instead of a round trip later when the
+        // client asks for it (RoomEntry). If it fails part way, the mark comes
+        // off so the client's own request gets the room after all.
+        try
+        {
+            RoomEntry.Send(Client, room, PlusEnvironment.Game.QuestManager);
+        }
+        catch (Exception e)
+        {
+            EntrySentRoomId = 0;
+            Core.ExceptionLogger.LogException(e);
         }
         return true;
     }

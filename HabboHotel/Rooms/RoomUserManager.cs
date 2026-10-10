@@ -60,14 +60,14 @@ public class RoomUserManager
 
     public RoomUser DeployBot(RoomBot bot, Pet pet)
     {
-        var user = new RoomUser(0, _room.RoomId, _primaryPrivateUserId++, _room);
+        var user = new RoomUser(0, _room.RoomId, Interlocked.Increment(ref _primaryPrivateUserId) - 1, _room);
         // Match the avatar's virtual id. Using _primaryPrivateUserId here read
         // the ALREADY-incremented counter, so BotData.VirtualId was one ahead of
         // the bot's own avatar (and collided with the next avatar deployed) —
         // which is why "Copy my looks" (UserChangeComposer(BotData)) targeted the
         // wrong/missing avatar and never applied.
         bot.VirtualId = user.VirtualId;
-        var personalId = _secondaryPrivateUserId++;
+        var personalId = Interlocked.Increment(ref _secondaryPrivateUserId) - 1;
         user.InternalRoomId = personalId;
         _users.TryAdd(personalId, user);
         var model = _room.GetGameMap().Model;
@@ -189,12 +189,18 @@ public class RoomUserManager
             return false;
         if (_users.Any(u => u.Value.UserId == session.GetHabbo().Id))
             return false;
-        var user = new RoomUser(session.GetHabbo().Id, _room.RoomId, _primaryPrivateUserId++, _room);
+        // pixelrp: Interlocked, not ++. Entries are not one at a time: the room
+        // is sent the moment a room change is made (RoomEntry), on whichever
+        // thread made it, and a group through one arrow into a room nobody was
+        // in all wait on that one load and come out of it together. A plain ++
+        // from two of them at once can hand both the same id - one avatar drawn
+        // over the other, or TryAdd below refusing the second outright.
+        var user = new RoomUser(session.GetHabbo().Id, _room.RoomId, Interlocked.Increment(ref _primaryPrivateUserId) - 1, _room);
         if (user == null || user.GetClient() == null)
             return false;
         user.UserId = session.GetHabbo().Id;
         session.GetHabbo().TentId = 0;
-        var personalId = _secondaryPrivateUserId++;
+        var personalId = Interlocked.Increment(ref _secondaryPrivateUserId) - 1;
         user.InternalRoomId = personalId;
         session.GetHabbo().CurrentRoom = _room;
         if (!_users.TryAdd(personalId, user))
