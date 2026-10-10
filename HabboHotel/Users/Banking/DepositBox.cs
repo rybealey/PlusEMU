@@ -1,4 +1,5 @@
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
@@ -21,6 +22,9 @@ namespace Plus.HabboHotel.Users.Banking;
 /// never stack), else the first free slot; the handcuffs rule holds coming
 /// out (RpInventoryStore.Add). A move that runs out of room stops part way and
 /// says so - nothing is ever lost between the two.
+///
+/// Police equipment never goes in (PoliceUtility.PoliceGear): the window greys
+/// it out on the backpack side, from the list the box is sent with.
 /// </summary>
 public static class DepositBox
 {
@@ -147,6 +151,11 @@ public static class DepositBox
             return "Put it in your backpack first.";
         var entry = habbo.LoadRpInventory().FirstOrDefault(row => row.Slot == slot);
         if (string.IsNullOrEmpty(entry.Item))
+            return "";
+        // Police equipment stays out (PoliceUtility.PoliceGear). The window
+        // greys it out and will not send it, so this only turns away a client
+        // that sends it anyway - and says nothing.
+        if (PoliceUtility.IsPoliceGear(entry.Item))
             return "";
         var wanted = all ? entry.Count : 1;
         var moved = 0;

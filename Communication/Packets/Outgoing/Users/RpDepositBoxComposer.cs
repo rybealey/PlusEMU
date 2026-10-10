@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Outgoing.Users;
@@ -7,6 +8,9 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// stepping onto one, and after every move), or closed (on stepping off).
 /// `openSlots` is how many slots the player may use (16, or 20 with VIP);
 /// `notice` is what to tell them about their last move ("" for nothing).
+/// Last, the items that cannot be stored (PoliceUtility.PoliceGear), which the
+/// window greys out on the backpack side - appended at the end, so a client
+/// from before it still reads everything ahead of it.
 /// </summary>
 public class RpDepositBoxComposer : IServerPacket
 {
@@ -37,5 +41,8 @@ public class RpDepositBoxComposer : IServerPacket
             packet.WriteInteger(count);
         }
         packet.WriteString(_notice);
+        packet.WriteInteger(PoliceUtility.PoliceGear.Count);
+        foreach (var item in PoliceUtility.PoliceGear)
+            packet.WriteString(item);
     }
 }

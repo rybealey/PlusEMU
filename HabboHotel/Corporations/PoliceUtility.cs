@@ -17,6 +17,23 @@ namespace Plus.HabboHotel.Corporations;
 /// </summary>
 public static class PoliceUtility
 {
+    /// <summary>
+    /// pixelrp: the force's equipment - what the locker hands out
+    /// (InteractorPoliceReplenish) and takes back when the job goes
+    /// (RemovePoliceGear). One list, so the deposit box keeps out exactly what
+    /// a leaving officer loses: stored there, gear would outlive the job, and
+    /// an officer could stock up by storing it and drawing more from the locker.
+    /// </summary>
+    public static readonly IReadOnlyList<string> PoliceGear = new[]
+    {
+        Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem,
+        Users.RpWeapons.StunGunItem,
+        Rooms.Chat.Commands.User.Police.Flashbang.Item,
+        Rooms.Chat.Commands.User.Police.PepperSpray.Item
+    };
+
+    public static bool IsPoliceGear(string item) => PoliceGear.Contains(item);
+
     public static bool IsOnDutyOfficer(int userId)
     {
         if (userId <= 0)
@@ -84,11 +101,12 @@ public static class PoliceUtility
     }
 
     /// <summary>
-    /// Take the force's equipment back from someone leaving it: every pair
-    /// of handcuffs, every stun gun, every flashbang and every can of pepper
-    /// spray in their backpack, the Weapon slot included. The locker hands
-    /// these out and only to officers, so they go when the job does - on
-    /// :quitjob, :fire and :superfire alike.
+    /// Take the force's equipment (PoliceGear) back from someone leaving it:
+    /// every pair of handcuffs, every stun gun, every flashbang and every can
+    /// of pepper spray in their backpack, the Weapon slot included - and in
+    /// their bank deposit box, which keeps police gear out but may hold some
+    /// stored before it did. The locker hands these out and only to officers,
+    /// so they go when the job does - on :quitjob, :fire and :superfire alike.
     ///
     /// By user id, because a fired officer may be offline: the rows go either
     /// way, and an online one has their hand and backpack refreshed after.
@@ -97,15 +115,17 @@ public static class PoliceUtility
     {
         if (userId <= 0)
             return;
+        var gear = string.Join(", ", PoliceGear.Select((_, index) => $"@gear{index}"));
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
-            dbClient.SetQuery("DELETE FROM `user_rp_inventory` WHERE `user_id` = @id AND `item` IN (@cuffs, @stun, @flashbang, @pepperspray)");
-            dbClient.AddParameter("id", userId);
-            dbClient.AddParameter("cuffs", Rooms.Chat.Commands.User.Police.CuffCommand.HandcuffsItem);
-            dbClient.AddParameter("stun", Users.RpWeapons.StunGunItem);
-            dbClient.AddParameter("flashbang", Rooms.Chat.Commands.User.Police.Flashbang.Item);
-            dbClient.AddParameter("pepperspray", Rooms.Chat.Commands.User.Police.PepperSpray.Item);
-            dbClient.RunQuery();
+            foreach (var table in new[] { "user_rp_inventory", "user_rp_deposit_box" })
+            {
+                dbClient.SetQuery($"DELETE FROM `{table}` WHERE `user_id` = @id AND `item` IN ({gear})");
+                dbClient.AddParameter("id", userId);
+                for (var index = 0; index < PoliceGear.Count; index++)
+                    dbClient.AddParameter($"gear{index}", PoliceGear[index]);
+                dbClient.RunQuery();
+            }
         }
         var habbo = session?.GetHabbo();
         if (habbo == null || habbo.Id != userId)
