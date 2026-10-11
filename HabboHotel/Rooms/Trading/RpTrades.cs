@@ -61,6 +61,8 @@ public static class RpTrades
         public string RoomName = "";
         public readonly Side[] Sides = new Side[2];
         public readonly object Gate = new();
+        /// <summary>The swap has started (or the trade has ended): nothing more is taken from either side.</summary>
+        public bool Closing;
 
         public Side Mine(int userId) => Sides[0].UserId == userId ? Sides[0] : Sides[1];
         public Side Theirs(int userId) => Sides[0].UserId == userId ? Sides[1] : Sides[0];
@@ -147,6 +149,8 @@ public static class RpTrades
         string notice;
         lock (session.Gate)
         {
+            if (session.Closing)
+                return;
             var mine = session.Mine(habbo.Id);
             switch (action)
             {
@@ -227,10 +231,14 @@ public static class RpTrades
         bool swap;
         lock (session.Gate)
         {
-            if (!session.Sides.All(side => side.Ready))
+            if (session.Closing || !session.Sides.All(side => side.Ready))
                 return;
             session.Mine(habbo.Id).Confirmed = true;
             swap = session.Sides.All(side => side.Confirmed);
+            // One swap, however many Confirms arrive: a double click, or both
+            // sides at once, must not run it twice.
+            if (swap)
+                session.Closing = true;
         }
         if (!swap)
         {
@@ -266,7 +274,19 @@ public static class RpTrades
         if (why != null)
         {
             lock (session.Gate)
+            {
                 Changed(session);
+                session.Closing = false;
+            }
+            // Somebody who left while the swap was being checked had their
+            // leaving put off by it: end the trade for them now.
+            var gone = session.Sides.FirstOrDefault(side =>
+                PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId)?.GetHabbo()?.CurrentRoom?.RoomId != session.RoomId);
+            if (gone != null)
+            {
+                End(gone.UserId, $"{gone.Name} left.");
+                return;
+            }
             Push(session, 0, why);
             return;
         }
@@ -414,6 +434,13 @@ public static class RpTrades
     {
         if (!ByUser.TryGetValue(userId, out var session))
             return;
+        lock (session.Gate)
+        {
+            // A swap under way finishes; leaving mid-swap does not undo it.
+            if (session.Closing)
+                return;
+            session.Closing = true;
+        }
         foreach (var side in session.Sides)
             ByUser.TryRemove(side.UserId, out _);
         foreach (var side in session.Sides)
