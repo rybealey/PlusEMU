@@ -36,7 +36,7 @@ public static class MovementController
 
         // Standing next to a counter and clicking it again: the last search
         // already found there is no closer tile, so nothing would move.
-        if (RecentlyUnreachable(w, target, nowMs))
+        if (RecentlyUnreachable(w, target, nowMs, ctx.AllowOverride))
             return false;
 
         var result = AStarPathfinder.FindRoute(
@@ -390,9 +390,16 @@ public static class MovementController
     /// Was <paramref name="target"/> found unreachable (no complete route) by a
     /// search in the last UnreachableRepathMs? Counts the skip when it was.
     /// Keyed on the exact tile, so a click anywhere else always searches.
+    ///
+    /// Never for a walk with :override (or a one-way door's, which grants it):
+    /// the remembered verdict was reached WITHOUT it, so "no route" says
+    /// nothing about this search - a door that walked its user onto its own
+    /// tile right after a refused click would otherwise be skipped unsearched.
     /// </summary>
-    private static bool RecentlyUnreachable(MovementState w, Point target, long nowMs)
+    private static bool RecentlyUnreachable(MovementState w, Point target, long nowMs, bool allowOverride)
     {
+        if (allowOverride)
+            return false;
         if (w.UnreachableTarget is not { } unreachable || unreachable != target)
             return false;
         if (nowMs - w.UnreachableAtMs >= MovementSettings.UnreachableRepathMs)
@@ -453,7 +460,7 @@ public static class MovementController
             return true;
         }
 
-        if (RecentlyUnreachable(w, target, nowMs))
+        if (RecentlyUnreachable(w, target, nowMs, ctx.AllowOverride))
             return true;
 
         var result = AStarPathfinder.FindRoute(
@@ -538,7 +545,7 @@ public static class MovementController
         // already ending); only the search is skipped. The latest click is the
         // latest intent, so a redirect waiting on the commit path is dropped,
         // as the same-target skip above does.
-        if (RecentlyUnreachable(w, target, nowMs))
+        if (RecentlyUnreachable(w, target, nowMs, ctx.AllowOverride))
         {
             w.DeferredRedirectTarget = null;
             return false;

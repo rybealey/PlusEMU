@@ -352,6 +352,11 @@ public class Item
     /// <summary>Cycles a walker may stand in the open door before being put out the far side.</summary>
     private const int OneWayGateStepOutWait = 4;
 
+    /// <summary>Cycles the walk onto the door may take before the door places them on it.</summary>
+    private const int OneWayGateWalkInWait = 3;
+
+    private static readonly NLog.Logger OneWayGateLog = NLog.LogManager.GetLogger("OneWayGate");
+
     private int _oneWayGateWait;
 
     /// <summary>
@@ -398,9 +403,25 @@ public class Item
         if (user.X == GetX && user.Y == GetY && _oneWayGateWait >= OneWayGateStepOutWait)
         {
             // Still standing in the open door: put them out the far side.
+            OneWayGateLog.Info($"[GATE] item={Id} user={user.HabboId} walk out did not leave the door " +
+                               $"(walking={Rooms.Movement.MovementV2Bridge.IsWalkingOrWaiting(user)} " +
+                               $"routeLeft={Rooms.Movement.MovementV2Bridge.RemainingRouteTiles(user)}) - placed behind it");
             GetRoom().GetGameMap().TeleportToTile(user, SquareBehind.X, SquareBehind.Y,
                 GetRoom().GetGameMap().SqAbsoluteHeight(SquareBehind.X, SquareBehind.Y), user.RotBody);
             ReleaseOneWayGate(user);
+            return;
+        }
+        if (LegacyDataString != "1" && (user.X != GetX || user.Y != GetY) && _oneWayGateWait >= OneWayGateWalkInWait)
+        {
+            // The walk onto the door never arrived: place them on it, facing
+            // through, and say why so the walk can be put right.
+            OneWayGateLog.Info($"[GATE] item={Id} user={user.HabboId} walk onto the door did not arrive " +
+                               $"(at {user.X},{user.Y}, door {GetX},{GetY}, override={user.AllowOverride}, " +
+                               $"walking={Rooms.Movement.MovementV2Bridge.IsWalkingOrWaiting(user)} " +
+                               $"routeLeft={Rooms.Movement.MovementV2Bridge.RemainingRouteTiles(user)}) - placed on it");
+            GetRoom().GetGameMap().TeleportToTile(user, GetX, GetY, GetZ,
+                Rooms.PathFinding.Rotation.Calculate(GetX, GetY, SquareBehind.X, SquareBehind.Y));
+            RequestUpdate(1, false);
             return;
         }
         // Still on the way - to the door, or through it.
