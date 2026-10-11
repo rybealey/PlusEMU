@@ -15,7 +15,8 @@ internal class StatsCommand : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        var minutes = session.GetHabbo().HabboStats.OnlineTime / 60;
+        // Saved sessions plus this one so far.
+        var minutes = session.GetHabbo().OnlineTimeTotal / 60;
         var hours = minutes / 60;
         var onlineTime = Convert.ToInt32(hours);
         var s = onlineTime == 1 ? "" : "s";

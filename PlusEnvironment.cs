@@ -201,6 +201,13 @@ public class PlusEnvironment : IPlusEnvironment
         await connection.ExecuteAsync("UPDATE `rooms` SET `users_now` = '0' WHERE `users_now` > '0';");
         await connection.ExecuteAsync("UPDATE `users` SET `online` = false WHERE `online` = true");
         await connection.ExecuteAsync("UPDATE `server_status` SET `users_online` = '0', `loaded_rooms` = '0'");
+        // pixelrp: online time that cannot be real. Until Habbo.SessionStart
+        // was set again, every save wrote a unix timestamp into this column
+        // (or wrapped it negative) - and the server being replaced writes
+        // those for everyone online as it shuts down, AFTER any migration, so
+        // it is cleared here, on the way up. Ten years is the line: nothing
+        // honest gets near it, and every wrong value is far past it or below 0.
+        await connection.ExecuteAsync("UPDATE `user_statistics` SET `OnlineTime` = 0 WHERE `OnlineTime` < 0 OR `OnlineTime` > 315360000");
     }
 
     [Obsolete]
