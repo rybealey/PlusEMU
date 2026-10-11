@@ -122,6 +122,25 @@ public static class GymState
 
     private static readonly ConcurrentDictionary<int, Session> Training = new();
 
+    /// <summary>
+    /// Seconds after a workout ends before another can start - stepping on and
+    /// off, or dozing and waking, would otherwise fill the room with bubbles.
+    /// It holds a START only: a workout under way carries on.
+    /// </summary>
+    private const int CooldownSeconds = 5;
+
+    /// <summary>When each player's last workout ended (Environment.TickCount64).</summary>
+    private static readonly ConcurrentDictionary<int, long> LastEnded = new();
+
+    /// <summary>Whole seconds still to wait before a workout can start, 0 when it can.</summary>
+    private static int CooldownLeft(int userId, long now)
+    {
+        if (!LastEnded.TryGetValue(userId, out var ended))
+            return 0;
+        var leftMs = CooldownSeconds * 1000L - (now - ended);
+        return leftMs <= 0 ? 0 : (int)Math.Ceiling(leftMs / 1000.0);
+    }
+
     /// <summary>The gym equipment under this unit, or null.</summary>
     public static Item? MachineUnder(Room room, RoomUser user)
     {
@@ -189,6 +208,15 @@ public static class GymState
         session.HadMembership = hasMembership;
 
         var pause = PauseReason(user, habbo, stat, hasMembership);
+        // The cooldown, last: only a workout that could otherwise start waits
+        // on it. Counted down the way :hit's is - [5/5] the moment they step
+        // back on, [1/5] with under a second to go.
+        if (pause.Length == 0 && !session.Animating)
+        {
+            var wait = CooldownLeft(habbo.Id, now);
+            if (wait > 0)
+                pause = $"Cooldown [{wait}/{CooldownSeconds}]";
+        }
         // Seen only while it counts: paused, they just stand there.
         if (pause.Length == 0 && !session.Animating)
             StartAnimating(room, user, habbo, session);
@@ -311,6 +339,7 @@ public static class GymState
     private static void StopAnimating(Habbo habbo, Session session, Room? room = null, RoomUser? user = null)
     {
         session.Animating = false;
+        LastEnded[habbo.Id] = Environment.TickCount64;
         if (room != null && user != null)
             room.SendPacket(new ChatComposer(user.VirtualId, "*stops working out*", 0, ActionBubble));
         if (habbo.Effects != null && habbo.Effects.CurrentEffect == EffectFor(session.Stat))
@@ -467,6 +496,7 @@ public static class GymState
         // Still in the room at this point, so the machine can be stopped.
         if (Training.TryRemove(habbo.Id, out var session) && session.Animating)
             StopAnimating(habbo, session);
+        LastEnded.TryRemove(habbo.Id, out _);
         if (!habbo.RpStatsLoaded)
             return;
         habbo.StopRpOnlineClock();
