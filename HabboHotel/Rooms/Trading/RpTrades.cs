@@ -451,6 +451,9 @@ public static class RpTrades
             var text = side.UserId == userId ? toThem : toOthers;
             client.Send(RpTradeComposer.Closed(ResultCancelled,
                 (text.Length > 0 ? text + " " : "") + "Nothing changed hands."));
+            // The window just closes, so whoever did not end it is told why.
+            if (side.UserId != userId && toOthers.Length > 0)
+                client.SendWhisper(toOthers);
         }
     }
 
