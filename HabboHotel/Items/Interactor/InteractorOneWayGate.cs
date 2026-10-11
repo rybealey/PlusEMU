@@ -70,6 +70,11 @@ public class InteractorOneWayGate : IFurniInteractor
                 user.GateId = 0;
             }
             if (!item.GetRoom().GetGameMap().CanWalk(item.SquareBehind.X, item.SquareBehind.Y, user.AllowOverride)) return;
+            // pixelrp: a claim held by somebody no longer in the room is stale -
+            // free the door rather than leave it ignoring everyone.
+            if (item.InteractingUser != 0 && item.InteractingUser != user.HabboId &&
+                item.GetRoom().GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser) == null)
+                item.InteractingUser = 0;
             if (item.InteractingUser == 0)
             {
                 user.InteractingGate = true;

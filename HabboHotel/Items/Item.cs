@@ -346,6 +346,79 @@ public class Item
         GetAffectedTiles = tiles;
     }
 
+    /// <summary>Cycles a one-way door waits for its walker before letting go (half a second each).</summary>
+    private const int OneWayGateMaxWait = 20;
+
+    private int _oneWayGateWait;
+
+    /// <summary>
+    /// pixelrp: the one-way door, for Movement V2.
+    ///
+    /// Habbo's version looked once, a tick after each move, and assumed the
+    /// walker had arrived: under V1 a step was one tick, so they had. Under V2
+    /// a step takes its own time, so the look usually found them still between
+    /// tiles - and then it closed the door WITHOUT asking again. The door
+    /// stayed claimed by that walker (InteractingUser) forever, ignoring
+    /// everyone else, and the walker stayed locked (CanWalk false). Nobody got
+    /// through.
+    ///
+    /// Now it keeps looking every cycle until the walker is through, opening
+    /// when they reach the door tile and letting go once they stand behind it.
+    /// A walker who never gets there (pulled away, logged out) is released
+    /// after <see cref="OneWayGateMaxWait"/> cycles, and the door with them.
+    /// </summary>
+    private void OneWayGateCycle()
+    {
+        var user = InteractingUser > 0 ? GetRoom().GetRoomUserManager().GetRoomUserByHabbo(InteractingUser) : null;
+        if (user == null)
+        {
+            ReleaseOneWayGate(null);
+            return;
+        }
+        if (user.Coordinate == SquareBehind)
+        {
+            ReleaseOneWayGate(user);
+            return;
+        }
+        if (user.X == GetX && user.Y == GetY && LegacyDataString != "1")
+        {
+            // On the door: it opens and they walk out the far side.
+            LegacyDataString = "1";
+            UpdateState(false, true);
+            user.MoveTo(SquareBehind);
+            user.InteractingGate = false;
+            user.GateId = 0;
+            _oneWayGateWait = 0;
+            RequestUpdate(1, false);
+            return;
+        }
+        // Still on the way - to the door, or through it.
+        if (++_oneWayGateWait < OneWayGateMaxWait)
+        {
+            RequestUpdate(1, false);
+            return;
+        }
+        ReleaseOneWayGate(user);
+    }
+
+    /// <summary>The door closes and is free; its walker (if still here) can walk again.</summary>
+    private void ReleaseOneWayGate(RoomUser? user)
+    {
+        if (user != null)
+        {
+            user.UnlockWalking();
+            user.InteractingGate = false;
+            user.GateId = 0;
+        }
+        InteractingUser = 0;
+        _oneWayGateWait = 0;
+        if (LegacyDataString != "0")
+        {
+            LegacyDataString = "0";
+            UpdateState(false, true);
+        }
+    }
+
     public void ProcessUpdates()
     {
         try
@@ -389,32 +462,7 @@ public class Item
                     }
                     case InteractionType.OneWayGate:
                     case InteractionType.JailExitGate:
-                        user = null;
-                        if (InteractingUser > 0) user = GetRoom().GetRoomUserManager().GetRoomUserByHabbo(InteractingUser);
-                        if (user != null && user.X == GetX && user.Y == GetY)
-                        {
-                            LegacyDataString = "1";
-                            user.MoveTo(SquareBehind);
-                            user.InteractingGate = false;
-                            user.GateId = 0;
-                            RequestUpdate(1, false);
-                            UpdateState(false, true);
-                        }
-                        else if (user != null && user.Coordinate == SquareBehind)
-                        {
-                            user.UnlockWalking();
-                            LegacyDataString = "0";
-                            InteractingUser = 0;
-                            user.InteractingGate = false;
-                            user.GateId = 0;
-                            UpdateState(false, true);
-                        }
-                        else if (LegacyDataString == "1")
-                        {
-                            LegacyDataString = "0";
-                            UpdateState(false, true);
-                        }
-                        if (user == null) InteractingUser = 0;
+                        OneWayGateCycle();
                         break;
                     case InteractionType.GateVip:
                         user = null;
