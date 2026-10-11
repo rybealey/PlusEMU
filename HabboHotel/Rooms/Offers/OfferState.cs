@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Chat.Commands;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
 using Plus.HabboHotel.Users.Relationships;
@@ -102,9 +103,11 @@ public static class OfferState
     /// <summary>
     /// What a card is asking. A SALE is goods for money under every rule above;
     /// a PROPOSAL is :propose, which borrows the card and the queue and nothing
-    /// else - no catalogue, no staff gate, no tool, no money, no backpack.
+    /// else - no catalogue, no staff gate, no tool, no money, no backpack. A
+    /// TRADE is a trade request (RpTrades): a yes opens the trade window for
+    /// both, and nothing on the card itself changes hands.
     /// </summary>
-    public enum OfferKind { Sale, Proposal }
+    public enum OfferKind { Sale, Proposal, Trade }
 
     public sealed class Offer
     {
@@ -122,11 +125,12 @@ public static class OfferState
         public DateTime ExpiresAt;
 
         public bool IsProposal => Kind == OfferKind.Proposal;
+        public bool IsTrade => Kind == OfferKind.Trade;
         public int Total => Price * Quantity;
-        public string Key => IsProposal ? "proposal" : Ware!.Key;
-        public string Label => IsProposal ? "proposal" : (Quantity == 1) ? Ware!.One : Ware!.Many;
-        /// <summary>The noun the seller's whispers use: "your offer", "your proposal".</summary>
-        public string Noun => IsProposal ? "proposal" : "offer";
+        public string Key => IsProposal ? "proposal" : IsTrade ? "trade" : Ware!.Key;
+        public string Label => IsProposal ? "proposal" : IsTrade ? "trade" : (Quantity == 1) ? Ware!.One : Ware!.Many;
+        /// <summary>The noun the seller's whispers use: "your offer", "your proposal", "your trade request".</summary>
+        public string Noun => IsProposal ? "proposal" : IsTrade ? "trade request" : "offer";
     }
 
     private static int _nextId;
@@ -163,7 +167,7 @@ public static class OfferState
         // A proposal costs nothing and puts nothing in a backpack. Whether
         // either of them has married somebody else since is asked at the tap,
         // where the answer can still change what happens.
-        if (offer.IsProposal)
+        if (offer.IsProposal || offer.IsTrade)
             return null;
         if (offer.Ware!.GoesInBackpack && !CanTake(buyer, offer.Ware.Key, offer.Quantity))
             return "Your backpack is full";
@@ -320,6 +324,75 @@ public static class OfferState
         return StartResult.Ok;
     }
 
+    /// <summary>
+    /// A trade request (the avatar menu's Trade): the card asks the buyer
+    /// whether to open a trade. Null when it went up, else what to tell the
+    /// one asking. Room-level rules (trading allowed here, trading bans,
+    /// requests turned off) are InitTradeEvent's; these are the two people.
+    /// </summary>
+    public static string? StartTrade(Room room, RoomUser sellerUser, GameClient sellerSession, GameClient buyerSession)
+    {
+        var seller = sellerSession?.GetHabbo();
+        var buyer = buyerSession?.GetHabbo();
+        if (room == null || sellerUser == null || seller == null || buyer == null)
+            return "";
+        if (seller.Id == buyer.Id)
+            return "You cannot trade with yourself.";
+        if (AccountUtility.SameAccount(seller.Id, buyer.Id))
+            return "That is one of your own characters.";
+        var buyerUser = room.GetRoomUserManager()?.GetRoomUserByHabbo(buyer.Id);
+        if (buyerUser == null || !Gamemap.TilesTouching(sellerUser.X, sellerUser.Y, buyerUser.X, buyerUser.Y))
+            return RangeMessages.TooFar(buyer.Username);
+        var refusal = Trading.RpTrades.Refusal(sellerSession);
+        if (refusal != null)
+            return refusal;
+        if (Trading.RpTrades.Refusal(buyerSession) != null)
+            return $"{buyer.Username} cannot trade right now.";
+        if (SellerHasOpen(seller.Id))
+            return "You already have an offer waiting to be answered.";
+        Showing(buyer.Id, out var queued);
+        if (queued >= MaxQueued)
+            return $"{buyer.Username} has too many offers waiting.";
+
+        var offer = new Offer
+        {
+            Id = Interlocked.Increment(ref _nextId),
+            Kind = OfferKind.Trade,
+            SellerId = seller.Id,
+            SellerName = seller.Username,
+            BuyerId = buyer.Id,
+            BuyerName = buyer.Username,
+            Quantity = 1,
+            RoomId = room.RoomId,
+            ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
+        };
+        Live[offer.Id] = offer;
+        Announce(room, seller.Id, $"sends {buyer.Username} a trade request");
+        Push(buyer.Id);
+        return null;
+    }
+
+    /// <summary>A yes to a trade request: both still able, and the window opens for both.</summary>
+    private static bool AcceptTrade(Offer offer, Room room, GameClient buyerSession, Habbo buyer, GameClient sellerSession)
+    {
+        Live.TryRemove(offer.Id, out _);
+        Push(buyer.Id);
+        var refusal = Trading.RpTrades.Refusal(buyerSession);
+        if (refusal != null)
+        {
+            buyerSession.SendWhisper(refusal);
+            return false;
+        }
+        if (Trading.RpTrades.Refusal(sellerSession) != null)
+        {
+            buyerSession.SendWhisper($"{offer.SellerName} cannot trade right now.");
+            return false;
+        }
+        Announce(room, buyer.Id, $"accepts the trade request from {offer.SellerName}");
+        Trading.RpTrades.Begin(sellerSession, buyerSession, room);
+        return true;
+    }
+
     // ---- answering -----------------------------------------------------------
 
     public static void Decline(int offerId, Habbo buyer)
@@ -380,6 +453,8 @@ public static class OfferState
         }
         if (offer.IsProposal)
             return AcceptProposal(offer, room, buyerSession!, buyer, sellerSession!, seller);
+        if (offer.IsTrade)
+            return AcceptTrade(offer, room, buyerSession!, buyer, sellerSession!);
         var sellerUser = room.GetRoomUserManager()?.GetRoomUserByHabbo(seller.Id);
         if (!MedicalUtility.IsOnDutyHospitalStaff(seller.Id) ||
             (offer.Ware!.RequiredHandItem != 0 && sellerUser?.CarryItemId != offer.Ware.RequiredHandItem))
@@ -494,6 +569,7 @@ public static class OfferState
     /// </summary>
     public static string Goods(Offer offer) =>
         offer.IsProposal ? "a proposal" :
+        offer.IsTrade ? "a trade" :
         offer.Ware!.TakesQuantity
             ? $"{TextHandling.GetNumber(offer.Quantity)} {offer.Label}"
             : $"a {offer.Ware.One.ToLowerInvariant()}";

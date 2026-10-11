@@ -53,6 +53,6 @@ public class RpOfferComposer : IServerPacket
         packet.WriteString(_blocked);
         // Last, so everything before it reads exactly as it did: what the card
         // is asking - a sale, or :propose borrowing the card for a proposal.
-        packet.WriteString(_offer.IsProposal ? "proposal" : "sale");
+        packet.WriteString(_offer.IsProposal ? "proposal" : _offer.IsTrade ? "trade" : "sale");
     }
 }

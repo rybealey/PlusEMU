@@ -432,6 +432,8 @@ public class RoomUserManager
             // pixelrp offers: a sale is a thing between two people standing in
             // one room. Neither end of it survives the door.
             Offers.OfferState.Forget(session.GetHabbo().Id);
+            // A trade too: both people have to be in the room to finish one.
+            Trading.RpTrades.Forget(session.GetHabbo().Id, false);
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {

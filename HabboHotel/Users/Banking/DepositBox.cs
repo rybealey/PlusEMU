@@ -103,6 +103,9 @@ public static class DepositBox
             return "Open a bank account to get a deposit box.";
         if (PoliceState.IsCuffed(habbo.Id))
             return "Your hands are cuffed.";
+        // pixelrp trading: the backpack is frozen while a trade is open.
+        if (Rooms.Trading.RpTrades.IsTrading(habbo.Id))
+            return Rooms.Trading.RpTrades.FrozenMessage;
 
         return direction switch
         {

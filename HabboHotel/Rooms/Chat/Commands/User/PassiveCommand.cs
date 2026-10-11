@@ -94,6 +94,13 @@ internal class PassiveCommand : IChatCommand
             return;
         }
 
+        // pixelrp trading: the backpack is frozen while a trade is open.
+        if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
+        {
+            session.SendWhisper(Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
+            return;
+        }
+
         // The same two gates the Backpack path applies, checked BEFORE the
         // consume so a failed one never burns the smoothie.
         if (!room.IsSafeZone)

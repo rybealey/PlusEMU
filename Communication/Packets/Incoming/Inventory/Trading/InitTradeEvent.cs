@@ -1,4 +1,4 @@
-﻿using Plus.Communication.Packets.Outgoing.Inventory.Trading;
+﻿using Plus.HabboHotel.Rooms.Offers;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users.Accounts;
@@ -54,53 +54,25 @@ internal class InitTradeEvent : IPacketEvent
             using var connection = _database.Connection();
             connection.Execute("UPDATE `user_info` SET `trading_locked` = '0' WHERE `id` = @userId LIMIT 1", new { userId = session.GetHabbo().Id });
         }
-        if (!session.GetHabbo().Permissions.HasRight("room_trade_override"))
+        if (!session.GetHabbo().Permissions.HasRight("room_trade_override") &&
+            (room.TradeSettings == 0 || (room.TradeSettings == 1 && room.OwnerId != session.GetHabbo().Id)))
         {
-            if (room.TradeSettings == 0)
-            {
-                session.Send(new TradingErrorComposer(6, targetUser.GetUsername()));
-                return Task.CompletedTask;
-            }
-            if (room.TradeSettings == 1 && room.OwnerId != session.GetHabbo().Id)
-            {
-                session.Send(new TradingErrorComposer(6, targetUser.GetUsername()));
-                return Task.CompletedTask;
-            }
-        }
-        if (roomUser.IsTrading && roomUser.TradePartner != targetUser.UserId)
-        {
-            session.Send(new TradingErrorComposer(7, targetUser.GetUsername()));
+            session.SendWhisper("Trading is not allowed in this room.");
             return Task.CompletedTask;
         }
-        if (targetUser.IsTrading && targetUser.TradePartner != roomUser.UserId)
+        var target = targetUser.GetClient();
+        if (target?.GetHabbo() == null)
+            return Task.CompletedTask;
+        if (!target.GetHabbo().AllowTradingRequests)
         {
-            session.Send(new TradingErrorComposer(8, targetUser.GetUsername()));
+            session.SendWhisper($"{target.GetHabbo().Username} is not taking trade requests.");
             return Task.CompletedTask;
         }
-        if (!targetUser.GetClient().GetHabbo().AllowTradingRequests)
-        {
-            session.Send(new TradingErrorComposer(4, targetUser.GetUsername()));
-            return Task.CompletedTask;
-        }
-        if (targetUser.GetClient().GetHabbo().TradingLockExpiry > 0)
-        {
-            session.Send(new TradingErrorComposer(4, targetUser.GetUsername()));
-            return Task.CompletedTask;
-        }
-        if (!room.GetTrading().StartTrade(roomUser, targetUser, out var trade))
-        {
-            session.SendNotification("An error occured trying to start this trade");
-            return Task.CompletedTask;
-        }
-        if (targetUser.HasStatus("trd"))
-            targetUser.RemoveStatus("trd");
-        if (roomUser.HasStatus("trd"))
-            roomUser.RemoveStatus("trd");
-        targetUser.SetStatus("trd");
-        targetUser.UpdateNeeded = true;
-        roomUser.SetStatus("trd");
-        roomUser.UpdateNeeded = true;
-        trade.SendPacket(new TradingStartComposer(roomUser.UserId, targetUser.UserId));
+        // pixelrp: Habbo's furni trade is gone. Trade sends a request on the
+        // offer card, and a yes opens the backpack trade (RpTrades).
+        var refusal = OfferState.StartTrade(room, roomUser, session, target);
+        if (!string.IsNullOrEmpty(refusal))
+            session.SendWhisper(refusal);
         return Task.CompletedTask;
     }
 }

@@ -117,6 +117,13 @@ internal class HealCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
+        // pixelrp trading: the backpack is frozen while a trade is open.
+        if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
+        {
+            session.SendWhisper(Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
+            return Task.CompletedTask;
+        }
+
         // A Cop Medkit heals the same as a medkit. It goes first: the police
         // locker replaces it for nothing, and a medkit costs money.
         var inventory = habbo.LoadRpInventory();

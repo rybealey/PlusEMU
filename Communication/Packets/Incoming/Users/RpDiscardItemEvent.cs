@@ -24,6 +24,12 @@ internal class RpDiscardItemEvent : IPacketEvent
         var weaponSlot = Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
         if ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot)
             return Task.CompletedTask;
+        // pixelrp trading: nothing leaves the backpack while a trade is open.
+        if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
+        {
+            session.SendWhisper(Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
+            return Task.CompletedTask;
+        }
         var (item, _) = habbo.DiscardRpItem(slot, count);
         if (item == null)
             return Task.CompletedTask;

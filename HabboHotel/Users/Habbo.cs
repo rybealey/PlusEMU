@@ -599,6 +599,8 @@ public class Habbo
         Support.SupportUtility.Forget(Id);
         // pixelrp offers: and any sale they were half way through.
         Rooms.Offers.OfferState.Forget(Id);
+        // pixelrp trading: and any trade - nothing changes hands.
+        Rooms.Trading.RpTrades.Forget(Id, true);
         // pixelrp police: logging out in handcuffs is an arrest - charged with
         // Logout and booked, the cuffs back to their officer. First, while the
         // cuff is still on record: Forget below is what takes it off.

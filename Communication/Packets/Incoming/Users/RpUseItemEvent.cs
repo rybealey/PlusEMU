@@ -63,6 +63,13 @@ public class RpUseItemEvent : IPacketEvent
             session.SendWhisper("You can't do that in jail.");
             return;
         }
+        // pixelrp trading: the backpack is frozen while a trade is open, so
+        // nothing offered can be spent out from under it.
+        if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
+        {
+            session.SendWhisper(Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
+            return;
+        }
         // Peek before consuming: a failed precondition must not burn the item.
         var item = habbo.LoadRpInventory().FirstOrDefault(candidate => candidate.Slot == slot).Item;
         if (string.IsNullOrEmpty(item))

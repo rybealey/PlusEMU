@@ -209,6 +209,8 @@ public static class ServerPacketHeader
     public const uint RpDepositBoxComposer = 4184;
     public const uint RpCityLedgerComposer = 4187;
     public const uint RpEmergencyCallsComposer = 4188;
+    public const uint RpTradeComposer = 4190;
+    public const uint RpCityTradesComposer = 4193;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
