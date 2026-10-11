@@ -10,5 +10,8 @@ public enum BotAiType
     // carries this through BotUtility.GetAiFromString, which is the only thing
     // that survives the purchase - `bots` keeps no link back to the catalog
     // row it came from, so the AI type IS the identity.
-    Banker
+    Banker,
+
+    // pixelrp: the Gym bot - sells gym memberships (GymBot), the same way.
+    Gym
 }

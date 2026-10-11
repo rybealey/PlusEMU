@@ -538,6 +538,8 @@ public static class ClientPacketHeader
     public const uint RpEmergencyCallActionEvent = 4189;
     public const uint RpTradeActionEvent = 4191;
     public const uint RpCityTradesEvent = 4192;
+    public const uint RpGymBotActionEvent = 4196;
+    public const uint RpGetGymLevelsEvent = 4197;
     // pixelrp: who is selected in the HUD - a target command typed without a name is aimed at them
     public const uint RpSetHudTargetEvent = 4181;
     // Internal 439xx / wire 39xx - see the album note above.

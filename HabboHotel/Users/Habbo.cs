@@ -254,6 +254,38 @@ public class Habbo
     public int RpEnergy { get; set; } = 100;
     public int RpEnergyMax { get; set; } = 100;
 
+    // pixelrp gym (GymState): Strength and Stamina, levels 0-10, and the
+    // seconds trained toward the next level. Stamina sets RpHealthMax. Saved
+    // with the rest of the row by SaveRpStats.
+    public int RpStrengthLevel { get; set; }
+    public int RpStrengthSeconds { get; set; }
+    public int RpStaminaLevel { get; set; }
+    public int RpStaminaSeconds { get; set; }
+
+    // Readings of RpOnlineSeconds: when the membership runs out, and when the
+    // treadmill was last used (the Stamina drop's clock). RpStaminaDropped is
+    // set by the drop and cleared by the next workout - it only drops once.
+    public int RpGymUntil { get; set; }
+    public int RpStaminaTrainedAt { get; set; }
+    public bool RpStaminaDropped { get; set; }
+
+    // The gym's own clock of time logged in (user_rp_stats.online_seconds).
+    // The hotel's user_statistics.onlineTime cannot be trusted: SessionStart
+    // is never set, so every logout adds a whole unix timestamp to it.
+    // Runs from the stats load to logout (StopRpOnlineClock); only for a live
+    // session - an offline Habbo loaded for a lookup never ticks.
+    private int _rpOnlineBase;
+    private long _rpOnlineAnchor;
+
+    public int RpOnlineSeconds =>
+        _rpOnlineBase + (_rpOnlineAnchor == 0 ? 0 : (int)((Environment.TickCount64 - _rpOnlineAnchor) / 1000));
+
+    public void StopRpOnlineClock()
+    {
+        _rpOnlineBase = RpOnlineSeconds;
+        _rpOnlineAnchor = 0;
+    }
+
     // Aggression is transient (not persisted): set via :setagg (or future RP
     // systems) and drained by the room tick at 100 points per 45 seconds.
     // Stored as double so the per-tick decay can be fractional.
@@ -301,7 +333,13 @@ public class Habbo
             return;
         RpStatsLoaded = true;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT `health`,`health_max`,`energy`,`energy_max`,`passive_seconds` FROM `user_rp_stats` WHERE `user_id` = @id LIMIT 1");
+        // The gym's online clock starts with the load, for a live session only.
+        if (Client != null)
+            _rpOnlineAnchor = Environment.TickCount64;
+        dbClient.SetQuery("SELECT `health`,`health_max`,`energy`,`energy_max`,`passive_seconds`," +
+                          "`strength_level`,`strength_seconds`,`stamina_level`,`stamina_seconds`," +
+                          "`stamina_trained_at`,`stamina_dropped`,`gym_until`,`online_seconds` " +
+                          "FROM `user_rp_stats` WHERE `user_id` = @id LIMIT 1");
         dbClient.AddParameter("id", Id);
         var row = dbClient.GetRow();
         if (row == null)
@@ -316,6 +354,17 @@ public class Habbo
         RpEnergy = Convert.ToInt32(row["energy"]);
         RpEnergyMax = Convert.ToInt32(row["energy_max"]);
         RpPassiveSeconds = Convert.ToInt32(row["passive_seconds"]);
+        RpStrengthLevel = Convert.ToInt32(row["strength_level"]);
+        RpStrengthSeconds = Convert.ToInt32(row["strength_seconds"]);
+        RpStaminaLevel = Convert.ToInt32(row["stamina_level"]);
+        RpStaminaSeconds = Convert.ToInt32(row["stamina_seconds"]);
+        RpStaminaTrainedAt = Convert.ToInt32(row["stamina_trained_at"]);
+        RpStaminaDropped = Convert.ToInt32(row["stamina_dropped"]) != 0;
+        RpGymUntil = Convert.ToInt32(row["gym_until"]);
+        _rpOnlineBase = Convert.ToInt32(row["online_seconds"]);
+        // Stamina IS max health: whatever the row says, the level decides.
+        RpHealthMax = Rooms.Gym.GymState.MaxHealthFor(RpStaminaLevel);
+        RpHealth = Math.Min(RpHealth, RpHealthMax);
     }
 
     // Read-and-write of one player's RP stats is one step under this lock, so
@@ -330,12 +379,22 @@ public class Habbo
         lock (_rpStatsSaveLock)
         {
             using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-            dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax, `passive_seconds` = @passive WHERE `user_id` = @id");
+            dbClient.SetQuery("UPDATE `user_rp_stats` SET `health` = @hp, `health_max` = @hpmax, `energy` = @en, `energy_max` = @enmax, `passive_seconds` = @passive, " +
+                              "`strength_level` = @strlvl, `strength_seconds` = @strsec, `stamina_level` = @stalvl, `stamina_seconds` = @stasec, " +
+                              "`stamina_trained_at` = @statrained, `stamina_dropped` = @stadropped, `gym_until` = @gymuntil, `online_seconds` = @online WHERE `user_id` = @id");
             dbClient.AddParameter("hp", RpHealth);
             dbClient.AddParameter("hpmax", RpHealthMax);
             dbClient.AddParameter("en", RpEnergy);
             dbClient.AddParameter("enmax", RpEnergyMax);
             dbClient.AddParameter("passive", RpPassiveSeconds);
+            dbClient.AddParameter("strlvl", RpStrengthLevel);
+            dbClient.AddParameter("strsec", RpStrengthSeconds);
+            dbClient.AddParameter("stalvl", RpStaminaLevel);
+            dbClient.AddParameter("stasec", RpStaminaSeconds);
+            dbClient.AddParameter("statrained", RpStaminaTrainedAt);
+            dbClient.AddParameter("stadropped", RpStaminaDropped ? 1 : 0);
+            dbClient.AddParameter("gymuntil", RpGymUntil);
+            dbClient.AddParameter("online", RpOnlineSeconds);
             dbClient.AddParameter("id", Id);
             dbClient.RunQuery();
         }
@@ -599,6 +658,9 @@ public class Habbo
         Rooms.Offers.OfferState.Forget(Id);
         // pixelrp trading: and any trade - nothing changes hands.
         Rooms.Trading.RpTrades.Forget(Id, true);
+        // pixelrp gym: the online clock stops here, and the training done
+        // since the last save is kept.
+        Rooms.Gym.GymState.OnLogout(this);
         // pixelrp police: logging out in handcuffs is an arrest - charged with
         // Logout and booked, the cuffs back to their officer. First, while the
         // cuff is still on record: Forget below is what takes it off.

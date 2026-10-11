@@ -252,6 +252,10 @@ public static class InteractionTypes
                 return InteractionType.Atm;
             case "deposit_box":
                 return InteractionType.DepositBox;
+            case "gym_stamina":
+                return InteractionType.GymStamina;
+            case "gym_strength":
+                return InteractionType.GymStrength;
             default:
             {
                 //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);

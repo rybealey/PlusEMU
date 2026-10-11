@@ -335,6 +335,9 @@ public class RoomUserManager
         user.UpdateRpKnockoutState();
         ApplyRoomRights(session, user);
         PushTellerBots(session);
+        PushGymBots(session);
+        // pixelrp gym: the membership left, for a Gym bot's menu.
+        Gym.GymState.Refresh(session);
         user.UpdateNeeded = true;
         // Staff are no longer given a forced effect (102) on room entry.
         if (session.GetHabbo().IsAmbassador && !session.GetHabbo().DisableForcedEffects && !session.GetHabbo().Permissions.HasRight("mod_tool"))
@@ -434,6 +437,8 @@ public class RoomUserManager
             Offers.OfferState.Forget(session.GetHabbo().Id);
             // A trade too: both people have to be in the room to finish one.
             Trading.RpTrades.Forget(session.GetHabbo().Id, false);
+            // And a workout: off the machine, the panel down.
+            Gym.GymState.Forget(session);
             var user = GetRoomUserByHabbo(session.GetHabbo().Id);
             if (user != null)
             {
@@ -743,6 +748,21 @@ public class RoomUserManager
     /// </summary>
     public void BroadcastTellerBots() =>
         _room.SendPacket(new Communication.Packets.Outgoing.Rooms.AI.Bots.RpTellerBotsComposer(TellerVirtualIds()));
+
+    /// <summary>pixelrp: the Gym bots standing in this room - the tellers' twin, for the same reason.</summary>
+    private List<int> GymVirtualIds() =>
+        _bots.Values
+            .Where(bot => bot != null && bot.BotAi is AI.Types.GymBot)
+            .Select(bot => bot.VirtualId)
+            .ToList();
+
+    /// <summary>Tell one player which bots here are Gym bots - on room entry.</summary>
+    public void PushGymBots(GameClient session) =>
+        session?.Send(new Communication.Packets.Outgoing.Rooms.AI.Bots.RpGymBotsComposer(GymVirtualIds()));
+
+    /// <summary>Tell everybody, after a bot was placed or picked up.</summary>
+    public void BroadcastGymBots() =>
+        _room.SendPacket(new Communication.Packets.Outgoing.Rooms.AI.Bots.RpGymBotsComposer(GymVirtualIds()));
 
     public RoomUser GetRoomUserByHabbo(int id)
     {
@@ -1337,6 +1357,9 @@ public class RoomUserManager
                         }
                     }
                 }
+                // pixelrp gym: training on a machine, and the Stamina drop.
+                if (!user.IsBot)
+                    Gym.GymState.Tick(_room, user);
                 // pixelrp consumables: a snack or a medkit still filling a bar.
                 //
                 // Energy and health advance independently - eating and

@@ -187,5 +187,11 @@ public enum InteractionType
     // pixelrp: the bank deposit box. Step on it and your box opens beside
     // your backpack; step off and it closes (DepositBox). A behaviour, so a
     // bank set can make any counter or vault door one.
-    DepositBox
+    DepositBox,
+
+    // pixelrp: gym equipment (GymState). Standing on one with a membership
+    // trains that stat. On the treadmill and the crosstrainer by default
+    // (migration 245); a behaviour, so any furni can be made one.
+    GymStamina,
+    GymStrength
 }

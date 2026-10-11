@@ -16,9 +16,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 ///
 /// A swing always happens. What decides the outcome is REACH: the attacker's
 /// own tile plus the four sharing an edge with it (Manhattan distance &lt;= 1).
-/// On one of those the punch lands for 3-5; anywhere else it is thrown and
-/// missed, in public, for nothing. There is no dice roll - in range is always
-/// a hit. The shared tile counts because two players standing on one are as
+/// On one of those the punch lands for 3-5, more with the attacker's gym
+/// Strength (GymState.PunchDamage: 18-20 at level 10); anywhere else it is
+/// thrown and missed, in public, for nothing. There is no dice roll - in range
+/// is always a hit. The shared tile counts because two players standing on one are as
 /// close as it gets. :slap reaches identically - one rule for how close a
 /// fight has to be - while :push still takes the whole 3x3 with diagonals.
 ///
@@ -63,10 +64,6 @@ internal class HitCommand : ITargetChatCommand
     /// <summary>Seconds between punches. Shorter than the five :slap and the
     /// social commands use - a fight has to be able to trade blows.</summary>
     private const int CooldownSeconds = 3;
-
-    /// <summary>Damage a landed punch takes off, inclusive.</summary>
-    private const int MinDamage = 3;
-    private const int MaxDamage = 5;
 
     /// <summary>What a swing sets the attacker's aggression to.</summary>
     private const int AggressionOnSwing = 100;
@@ -184,7 +181,9 @@ internal class HitCommand : ITargetChatCommand
         // "*Yavn swings at twist, causing 4 damage*".
         if (inReach)
         {
-            var damage = Random.Shared.Next(MinDamage, MaxDamage + 1);
+            // Strength is the gym's: the range grows with the attacker's level.
+            var (minDamage, maxDamage) = Gym.GymState.PunchDamage(habbo.RpStrengthLevel);
+            var damage = Random.Shared.Next(minDamage, maxDamage + 1);
             target.RpHealth = Math.Max(0, target.RpHealth - damage);
 
             // pixelrp consumables: a punch that lands ruins a medkit. The

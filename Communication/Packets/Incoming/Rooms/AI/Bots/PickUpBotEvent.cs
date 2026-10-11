@@ -44,6 +44,7 @@ internal class PickUpBotEvent : IPacketEvent
         // After the removal, so the set the client gets no longer holds a
         // virtual id nothing answers to.
         room.GetRoomUserManager().BroadcastTellerBots();
+        room.GetRoomUserManager().BroadcastGymBots();
         return Task.CompletedTask;
     }
 }

@@ -89,6 +89,7 @@ internal class PlaceBotEvent : RoomPacketEvent
         // A teller only exists for the client once it knows which bots are
         // tellers, so the set is re-sent the moment one lands.
         room.GetRoomUserManager().BroadcastTellerBots();
+        room.GetRoomUserManager().BroadcastGymBots();
         room.GetGameMap().UpdateUserMovement(new(x, y), new(x, y), botUser);
         if (!session.GetHabbo().Inventory.Bots.RemoveBot(botId))
         {
