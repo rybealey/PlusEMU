@@ -252,6 +252,8 @@ public static class InteractionTypes
                 return InteractionType.Atm;
             case "deposit_box":
                 return InteractionType.DepositBox;
+            case "jail_exit_gate":
+                return InteractionType.JailExitGate;
             case "gym_stamina":
                 return InteractionType.GymStamina;
             case "gym_strength":

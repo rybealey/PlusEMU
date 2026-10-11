@@ -40,10 +40,19 @@ public class InteractorOneWayGate : IFurniInteractor
         if (session == null)
             return;
         var user = item.GetRoom().GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+        if (user == null) return;
+        // pixelrp: the jail exit door is this door with one rule - nobody
+        // serving a sentence uses it. Asked first, so a prisoner is not even
+        // walked up to it.
+        if (item.Definition.InteractionType == InteractionType.JailExitGate &&
+            Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailed(user.HabboId))
+        {
+            session.SendWhisper("Prisoners cannot use this door.");
+            return;
+        }
         if (item.InteractingUser2 != user.UserId)
             item.InteractingUser2 = user.UserId;
-        if (user == null) return;
-        if (item.Definition.InteractionType == InteractionType.OneWayGate)
+        if (item.Definition.InteractionType is InteractionType.OneWayGate or InteractionType.JailExitGate)
         {
             if (user.Coordinate != item.SquareInFront && user.CanWalk)
             {

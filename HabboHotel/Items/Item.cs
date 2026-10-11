@@ -257,6 +257,7 @@ public class Item
                 case InteractionType.LoveShuffler:
                     return new InteractorLoveShuffler();
                 case InteractionType.OneWayGate:
+                case InteractionType.JailExitGate:
                     return new InteractorOneWayGate();
                 case InteractionType.Alert:
                     return new InteractorAlert();
@@ -387,6 +388,7 @@ public class Item
                         break;
                     }
                     case InteractionType.OneWayGate:
+                    case InteractionType.JailExitGate:
                         user = null;
                         if (InteractingUser > 0) user = GetRoom().GetRoomUserManager().GetRoomUserByHabbo(InteractingUser);
                         if (user != null && user.X == GetX && user.Y == GetY)

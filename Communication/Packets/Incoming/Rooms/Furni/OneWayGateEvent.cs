@@ -17,7 +17,7 @@ internal class OneWayGateEvent : IPacketEvent
         if (KnockedOut.Refuse(session))
             return Task.CompletedTask;
         var hasRights = room.CheckRights(session);
-        if (item.Definition.InteractionType == InteractionType.OneWayGate)
+        if (item.Definition.InteractionType is InteractionType.OneWayGate or InteractionType.JailExitGate)
         {
             item.Interactor.OnTrigger(session, item, -1, hasRights);
             return Task.CompletedTask;

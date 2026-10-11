@@ -189,6 +189,11 @@ public enum InteractionType
     // bank set can make any counter or vault door one.
     DepositBox,
 
+    // pixelrp: the jail's way out - a one-way door (the same mechanic as
+    // OneWayGate, InteractorOneWayGate) that refuses anybody serving a
+    // sentence (JailState.IsJailed). Visitors, officers and staff pass.
+    JailExitGate,
+
     // pixelrp: gym equipment (GymState). Standing on one with a membership
     // trains that stat. On the treadmill and the crosstrainer by default
     // (migration 245); a behaviour, so any furni can be made one.
