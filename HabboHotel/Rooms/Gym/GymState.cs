@@ -27,7 +27,9 @@ namespace Plus.HabboHotel.Rooms.Gym;
 /// pauses while the player is asleep, on duty, knocked out, cuffed, escorted
 /// or in jail; passive is fine. Each stat takes five hours: 48 minutes for
 /// level 1 and four fewer for each level after, down to 12 for level 10.
-/// Stepping off keeps the progress.
+/// Stepping off keeps the progress. That progress is shown as XP on the
+/// profile (XpOf): 100 to reach level 1, 100 more each level, 1,000 for 10 -
+/// the same training time, so XP comes in faster the higher the level.
 ///
 /// MEMBERSHIP is bought from a Gym bot (GymBot): 30c for an hour of ONLINE
 /// time, stackable. It counts down whenever the player is logged in, anywhere.
@@ -123,14 +125,18 @@ public static class GymState
     private static readonly ConcurrentDictionary<int, Session> Training = new();
 
     /// <summary>
-    /// Seconds after a workout ends before another can start - stepping on and
-    /// off, or dozing and waking, would otherwise fill the room with bubbles.
-    /// It holds a START only: a workout under way carries on.
+    /// Seconds after a workout ends before a step onto a machine can start
+    /// another - stepping on and off would otherwise fill the room with
+    /// bubbles. It is asked on the step only: a workout under way, paused and
+    /// resumed, carries on.
     /// </summary>
     private const int CooldownSeconds = 5;
 
     /// <summary>When each player's last workout ended (Environment.TickCount64).</summary>
     private static readonly ConcurrentDictionary<int, long> LastEnded = new();
+
+    /// <summary>The machine a player stepped onto inside the cooldown, until they step off it.</summary>
+    private static readonly ConcurrentDictionary<int, uint> Refused = new();
 
     /// <summary>Whole seconds still to wait before a workout can start, 0 when it can.</summary>
     private static int CooldownLeft(int userId, long now)
@@ -176,6 +182,8 @@ public static class GymState
         var machine = user.IsWalking ? null : MachineUnder(room, user);
         if (machine == null)
         {
+            // Off the machine, so the next step onto one is asked afresh.
+            Refused.TryRemove(habbo.Id, out _);
             Stop(client, habbo, room, user);
             return;
         }
@@ -185,12 +193,23 @@ public static class GymState
         if (!Training.TryGetValue(habbo.Id, out var session) || session.Stat != stat || session.Item?.Id != machine.Id)
         {
             if (session != null)
+                Stop(client, habbo, room, user);
+
+            // A step onto a machine inside the cooldown is refused - told once,
+            // in a whisper like :hit's ([5/5] the moment they step on, [1/5]
+            // with under a second to go) - and nothing starts while they stay
+            // on it, even once the cooldown has run out: they step off and
+            // back on to start.
+            if (Refused.TryGetValue(habbo.Id, out var refusedId) && refusedId == machine.Id)
+                return;
+            var wait = CooldownLeft(habbo.Id, now);
+            if (wait > 0)
             {
-                if (session.Animating)
-                    StopAnimating(habbo, session, room, user);
-                if (session.Unsaved > 0)
-                    RoomTickWriter.QueueRpStats(habbo);
+                Refused[habbo.Id] = machine.Id;
+                client.SendWhisper($"Cooldown [{wait}/{CooldownSeconds}]");
+                return;
             }
+
             session = new Session
             {
                 Stat = stat,
@@ -208,15 +227,6 @@ public static class GymState
         session.HadMembership = hasMembership;
 
         var pause = PauseReason(user, habbo, stat, hasMembership);
-        // The cooldown, last: only a workout that could otherwise start waits
-        // on it. Counted down the way :hit's is - [5/5] the moment they step
-        // back on, [1/5] with under a second to go.
-        if (pause.Length == 0 && !session.Animating)
-        {
-            var wait = CooldownLeft(habbo.Id, now);
-            if (wait > 0)
-                pause = $"Cooldown [{wait}/{CooldownSeconds}]";
-        }
         // Seen only while it counts: paused, they just stand there.
         if (pause.Length == 0 && !session.Animating)
             StartAnimating(room, user, habbo, session);
@@ -486,8 +496,10 @@ public static class GymState
     public static void Forget(GameClient? client)
     {
         var habbo = client?.GetHabbo();
-        if (habbo != null)
-            Stop(client, habbo);
+        if (habbo == null)
+            return;
+        Refused.TryRemove(habbo.Id, out _);
+        Stop(client, habbo);
     }
 
     /// <summary>Logging out: the online clock stops, and the row is saved as it stands.</summary>
@@ -497,6 +509,7 @@ public static class GymState
         if (Training.TryRemove(habbo.Id, out var session) && session.Animating)
             StopAnimating(habbo, session);
         LastEnded.TryRemove(habbo.Id, out _);
+        Refused.TryRemove(habbo.Id, out _);
         if (!habbo.RpStatsLoaded)
             return;
         habbo.StopRpOnlineClock();
@@ -550,25 +563,62 @@ public static class GymState
         Refresh(habbo.Client);
     }
 
-    /// <summary>A player's two levels for a profile: live if they are online, else as last saved.</summary>
-    public static (int Strength, int Stamina) LevelsOf(int userId)
+    // ---- XP --------------------------------------------------------------------
+
+    /// <summary>XP to reach `level` from the one below it: 100 for level 1, 100 more each level, 1,000 for 10.</summary>
+    public static int XpForLevel(int level) => 100 * Math.Clamp(level, 1, MaxLevel);
+
+    /// <summary>
+    /// XP toward the next level, and how much that level takes - (0, 0) at
+    /// level 10. It is the training already stored, scaled to the level's XP:
+    /// XP has no column of its own and the time a level takes is unchanged, so
+    /// it simply comes in faster the higher the level.
+    /// </summary>
+    public static (int Xp, int Needed) XpOf(int level, int seconds)
     {
+        if (level >= MaxLevel)
+            return (0, 0);
+        var next = level + 1;
+        var needed = XpForLevel(next);
+        var xp = (int)Math.Min(needed, (long)Math.Max(0, seconds) * needed / SecondsForLevel(next));
+        return (xp, needed);
+    }
+
+    /// <summary>A player's two levels and the XP toward each next one, for a profile.</summary>
+    public readonly record struct Levels(int Strength, int StrengthXp, int StrengthXpNeeded, int Stamina, int StaminaXp, int StaminaXpNeeded);
+
+    /// <summary>A player's gym levels for a profile: live if they are online, else as last saved.</summary>
+    public static Levels LevelsOf(int userId)
+    {
+        int strength, strengthSeconds, stamina, staminaSeconds;
         var online = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.GetHabbo();
         if (online != null)
         {
             online.EnsureRpStatsLoaded();
-            return (online.RpStrengthLevel, online.RpStaminaLevel);
+            (strength, strengthSeconds, stamina, staminaSeconds) =
+                (online.RpStrengthLevel, online.RpStrengthSeconds, online.RpStaminaLevel, online.RpStaminaSeconds);
         }
-        using var connection = PlusEnvironment.DatabaseManager.Connection();
-        var row = connection.QueryFirstOrDefault<LevelsRow>(
-            "SELECT `strength_level` AS Strength, `stamina_level` AS Stamina FROM `user_rp_stats` WHERE `user_id` = @userId LIMIT 1",
-            new { userId });
-        return row == null ? (0, 0) : (row.Strength, row.Stamina);
+        else
+        {
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+            var row = connection.QueryFirstOrDefault<LevelsRow>(
+                "SELECT `strength_level` AS Strength, `strength_seconds` AS StrengthSeconds, " +
+                "`stamina_level` AS Stamina, `stamina_seconds` AS StaminaSeconds FROM `user_rp_stats` WHERE `user_id` = @userId LIMIT 1",
+                new { userId });
+            (strength, strengthSeconds, stamina, staminaSeconds) = row == null
+                ? (0, 0, 0, 0)
+                : (row.Strength, row.StrengthSeconds, row.Stamina, row.StaminaSeconds);
+        }
+        var (strengthXp, strengthNeeded) = XpOf(strength, strengthSeconds);
+        var (staminaXp, staminaNeeded) = XpOf(stamina, staminaSeconds);
+        return new Levels(strength, strengthXp, strengthNeeded, stamina, staminaXp, staminaNeeded);
     }
 
     private sealed class LevelsRow
     {
         public int Strength { get; set; }
+        public int StrengthSeconds { get; set; }
         public int Stamina { get; set; }
+        public int StaminaSeconds { get; set; }
     }
 }

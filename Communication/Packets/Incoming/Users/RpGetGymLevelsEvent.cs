@@ -19,8 +19,7 @@ internal class RpGetGymLevelsEvent : IPacketEvent
         if (userId <= 0)
             return Task.CompletedTask;
 
-        var (strength, stamina) = GymState.LevelsOf(userId);
-        session.Send(new RpGymLevelsComposer(userId, strength, stamina));
+        session.Send(new RpGymLevelsComposer(userId, GymState.LevelsOf(userId)));
         return Task.CompletedTask;
     }
 }
