@@ -119,8 +119,6 @@ public class Habbo
     public bool IsVip => VipExpire > DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public int VipRank => IsVip ? 1 : 0;
 
-    public bool AllowTradingRequests { get; set; }
-
     public bool AllowUserFollowing { get; set; }
 
     public bool AllowMessengerInvites { get; set; }

@@ -63,11 +63,6 @@ internal class InitTradeEvent : IPacketEvent
         var target = targetUser.GetClient();
         if (target?.GetHabbo() == null)
             return Task.CompletedTask;
-        if (!target.GetHabbo().AllowTradingRequests)
-        {
-            session.SendWhisper($"{target.GetHabbo().Username} is not taking trade requests.");
-            return Task.CompletedTask;
-        }
         // pixelrp: Habbo's furni trade is gone. Trade sends a request on the
         // offer card, and a yes opens the backpack trade (RpTrades).
         var refusal = OfferState.StartTrade(room, roomUser, session, target);
