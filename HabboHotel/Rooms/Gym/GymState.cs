@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.Corporations;
@@ -39,6 +40,14 @@ namespace Plus.HabboHotel.Rooms.Gym;
 ///
 /// Both clocks are readings of Habbo.RpOnlineSeconds, the gym's own record of
 /// time logged in (see there for why the hotel's onlineTime cannot be used).
+///
+/// THE WORKOUT IS SEEN. While training counts - not while paused - the player
+/// wears Habbo's own effect for the machine (194 Treadmill, 195 CrossTrainer:
+/// the walk played in place), faces along it, and the machine runs (state 1).
+/// Paused, off or gone, the effect they wore before comes back and the machine
+/// stops once nobody is training on it. Both ends are said in the blue action
+/// bubble - "*starts a stamina workout*", "*stops working out*" - except a
+/// stop by leaving the room or logging out.
 /// </summary>
 public static class GymState
 {
@@ -56,6 +65,12 @@ public static class GymState
 
     /// <summary>The panel counts down by itself; this re-syncs it now and then.</summary>
     private const long ResendEveryMs = 30_000;
+
+    /// <summary>Habbo's own workout effects (EffectMap): the walk, played in place.</summary>
+    public const int TreadmillEffectId = 194;
+    public const int CrossTrainerEffectId = 195;
+
+    private static int EffectFor(Stat stat) => stat == Stat.Stamina ? TreadmillEffectId : CrossTrainerEffectId;
 
     public enum Stat
     {
@@ -90,7 +105,12 @@ public static class GymState
     private sealed class Session
     {
         public Stat Stat;
+        public Item? Item;
         public string Machine = "";
+        /// <summary>Wearing the workout effect, with the machine running for them.</summary>
+        public bool Animating;
+        /// <summary>The effect they wore before it, given back when it comes off.</summary>
+        public int PreviousEffect;
         public long LastTick;
         public long Milliseconds;
         public int Unsaved;
@@ -137,20 +157,26 @@ public static class GymState
         var machine = user.IsWalking ? null : MachineUnder(room, user);
         if (machine == null)
         {
-            Stop(client, habbo);
+            Stop(client, habbo, room, user);
             return;
         }
 
         var stat = machine.Definition.InteractionType == InteractionType.GymStamina ? Stat.Stamina : Stat.Strength;
         var now = Environment.TickCount64;
-        if (!Training.TryGetValue(habbo.Id, out var session) || session.Stat != stat)
+        if (!Training.TryGetValue(habbo.Id, out var session) || session.Stat != stat || session.Item?.Id != machine.Id)
         {
-            if (session != null && session.Unsaved > 0)
-                RoomTickWriter.QueueRpStats(habbo);
+            if (session != null)
+            {
+                if (session.Animating)
+                    StopAnimating(habbo, session, room, user);
+                if (session.Unsaved > 0)
+                    RoomTickWriter.QueueRpStats(habbo);
+            }
             session = new Session
             {
                 Stat = stat,
-                Machine = machine.Definition.PublicName ?? "",
+                Item = machine,
+                Machine = PanelName(machine),
                 LastTick = now,
                 HadMembership = MembershipLeft(habbo) > 0
             };
@@ -163,6 +189,11 @@ public static class GymState
         session.HadMembership = hasMembership;
 
         var pause = PauseReason(user, habbo, stat, hasMembership);
+        // Seen only while it counts: paused, they just stand there.
+        if (pause.Length == 0 && !session.Animating)
+            StartAnimating(room, user, habbo, session);
+        else if (pause.Length > 0 && session.Animating)
+            StopAnimating(habbo, session, room, user);
         // Capped, so a stalled tick cannot hand out a burst of training.
         var elapsed = Math.Clamp(now - session.LastTick, 0, 2000);
         session.LastTick = now;
@@ -223,6 +254,89 @@ public static class GymState
         if (user.IsAsleep)
             return "Paused: you're asleep";
         return "";
+    }
+
+    // ---- the workout, seen ---------------------------------------------------
+
+    /// <summary>The blue action bubble (style 4) every PixelRP action uses: "*Twist starts a stamina workout*".</summary>
+    private const int ActionBubble = 4;
+
+    /// <summary>
+    /// What the panel calls the machine: the two gym machines by a short name
+    /// ("Hi-tech Crosstrainer" is the shop's), anything else given a gym
+    /// behaviour by its own.
+    /// </summary>
+    private static string PanelName(Item machine) => machine.Definition.ItemName switch
+    {
+        "olympics_c16_treadmill" => "Treadmill",
+        "olympics_c16_crosstrainer" => "Crosstrainer",
+        _ => machine.Definition.PublicName ?? ""
+    };
+
+    /// <summary>Training has started counting: said out loud, the effect on, turned along the machine, the machine running.</summary>
+    private static void StartAnimating(Room room, RoomUser user, Habbo habbo, Session session)
+    {
+        room.SendPacket(new ChatComposer(user.VirtualId,
+            $"*starts a {(session.Stat == Stat.Stamina ? "stamina" : "strength")} workout*", 0, ActionBubble));
+        var effect = EffectFor(session.Stat);
+        if (habbo.Effects != null)
+        {
+            var current = habbo.Effects.CurrentEffect;
+            session.PreviousEffect = current == effect ? 0 : current;
+            habbo.Effects.ApplyEffect(effect);
+        }
+        // The machine's console is at the end it points to (direction 0 up
+        // and right, 2 down and right, ...), so facing its rotation faces the
+        // console. Set directly, as an arrow does: SetRot only turns the head
+        // for a small turn. Once, at the start - turning to look round
+        // afterwards is the player's business.
+        if (session.Item != null)
+        {
+            user.RotBody = session.Item.Rotation;
+            user.RotHead = session.Item.Rotation;
+            user.UpdateNeeded = true;
+        }
+        session.Animating = true;
+        UpdateMachine(session.Item);
+    }
+
+    /// <summary>
+    /// Paused, off the machine or gone: the effect they wore before comes back
+    /// - unless something has replaced the workout effect since (cuffs), which
+    /// is left alone - and the machine stops if nobody else is on it. Said out
+    /// loud when it stops in front of the room (`room`/`user` given); not when
+    /// they leave the room or log out, which would bubble over somebody
+    /// already gone.
+    /// </summary>
+    private static void StopAnimating(Habbo habbo, Session session, Room? room = null, RoomUser? user = null)
+    {
+        session.Animating = false;
+        if (room != null && user != null)
+            room.SendPacket(new ChatComposer(user.VirtualId, "*stops working out*", 0, ActionBubble));
+        if (habbo.Effects != null && habbo.Effects.CurrentEffect == EffectFor(session.Stat))
+        {
+            var previous = Math.Max(0, session.PreviousEffect);
+            habbo.Effects.ApplyEffect(previous);
+            // ApplyEffect does nothing for somebody no longer in a room, and an
+            // effect follows its wearer into the next one - so it is set here
+            // as well, or the workout would walk out of the gym with them.
+            habbo.Effects.CurrentEffect = previous;
+        }
+        UpdateMachine(session.Item);
+    }
+
+    /// <summary>The machine runs (state 1) while anybody is training on it - tiles can be shared.</summary>
+    private static void UpdateMachine(Item? item)
+    {
+        if (item == null || item.GetRoom() == null)
+            return;
+        var want = Training.Values.Any(other => other.Animating && other.Item?.Id == item.Id) ? "1" : "0";
+        // Every change is a packet to the whole room.
+        if (item.LegacyDataString == want)
+            return;
+        item.LegacyDataString = want;
+        // Not saved: a machine that is running is not a state worth keeping.
+        item.UpdateState(false, true);
     }
 
     private static void Train(Room room, RoomUser user, Habbo habbo, Stat stat, int seconds)
@@ -307,11 +421,16 @@ public static class GymState
     private static RpGymComposer Hidden(Habbo habbo) =>
         new(false, "", "", 0, 0, 0, MembershipLeft(habbo), "");
 
-    /// <summary>Off the machine: bank what was trained and take the panel down.</summary>
-    private static void Stop(GameClient? client, Habbo habbo)
+    /// <summary>
+    /// Off the machine: bank what was trained and take the panel down. `room`
+    /// and `user` when they walked off in front of the room, so it is said.
+    /// </summary>
+    private static void Stop(GameClient? client, Habbo habbo, Room? room = null, RoomUser? user = null)
     {
         if (!Training.TryRemove(habbo.Id, out var session))
             return;
+        if (session.Animating)
+            StopAnimating(habbo, session, room, user);
         if (session.Unsaved > 0)
             RoomTickWriter.QueueRpStats(habbo);
         client?.Send(Hidden(habbo));
@@ -345,7 +464,9 @@ public static class GymState
     /// <summary>Logging out: the online clock stops, and the row is saved as it stands.</summary>
     public static void OnLogout(Habbo habbo)
     {
-        Training.TryRemove(habbo.Id, out _);
+        // Still in the room at this point, so the machine can be stopped.
+        if (Training.TryRemove(habbo.Id, out var session) && session.Animating)
+            StopAnimating(habbo, session);
         if (!habbo.RpStatsLoaded)
             return;
         habbo.StopRpOnlineClock();
