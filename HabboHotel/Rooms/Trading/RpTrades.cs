@@ -116,6 +116,10 @@ public static class RpTrades
         session.Sides[1] = new Side { UserId = second.GetHabbo().Id, Name = second.GetHabbo().Username };
         ByUser[session.Sides[0].UserId] = session;
         ByUser[session.Sides[1].UserId] = session;
+        // The window shows the backpack beside the offers, and this is the one
+        // moment it is certainly current.
+        foreach (var client in new[] { first, second })
+            client.Send(new RpInventoryComposer(client.GetHabbo().LoadRpInventory()));
         Push(session);
     }
 
