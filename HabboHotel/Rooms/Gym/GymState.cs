@@ -135,8 +135,54 @@ public static class GymState
     /// <summary>When each player's last workout ended (Environment.TickCount64).</summary>
     private static readonly ConcurrentDictionary<int, long> LastEnded = new();
 
-    /// <summary>The machine a player stepped onto inside the cooldown, until they step off it.</summary>
-    private static readonly ConcurrentDictionary<int, uint> Refused = new();
+    /// <summary>A step onto a machine inside the cooldown, and whether they have been told.</summary>
+    private sealed class Refusal
+    {
+        public uint ItemId;
+        public int Wait;
+        public bool Told;
+    }
+
+    /// <summary>
+    /// The machine each player stepped onto inside the cooldown. It holds until
+    /// the step OFF that machine (SteppedOff) - not until the cooldown runs out,
+    /// and not on a tick that merely finds them mid-step - so they stand still
+    /// on it until they step off and back on.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, Refusal> Refused = new();
+
+    /// <summary>
+    /// Item.UserWalksOnFurni on gym equipment - the game's own step event, which
+    /// fires on every arrival on the tile, so no step can fall between ticks.
+    /// Inside the cooldown the step is refused (Tick tells them once they stop).
+    /// </summary>
+    public static void SteppedOn(RoomUser user, Item item)
+    {
+        var habbo = user?.GetClient()?.GetHabbo();
+        if (habbo == null)
+            return;
+        var wait = CooldownLeft(habbo.Id, Environment.TickCount64);
+        if (wait > 0)
+            Refused[habbo.Id] = new Refusal { ItemId = item.Id, Wait = wait };
+        else
+            Refused.TryRemove(habbo.Id, out _);
+    }
+
+    /// <summary>
+    /// Item.UserWalksOffFurni on gym equipment: the workout on it ends there and
+    /// then (the bubble, and the cooldown's start), and a refusal of it is over.
+    /// </summary>
+    public static void SteppedOff(Room room, RoomUser user, Item item)
+    {
+        var client = user?.GetClient();
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+        if (Refused.TryGetValue(habbo.Id, out var refusal) && refusal.ItemId == item.Id)
+            Refused.TryRemove(habbo.Id, out _);
+        if (Training.TryGetValue(habbo.Id, out var session) && session.Item?.Id == item.Id)
+            Stop(client, habbo, room, user);
+    }
 
     /// <summary>Whole seconds still to wait before a workout can start, 0 when it can.</summary>
     private static int CooldownLeft(int userId, long now)
@@ -178,35 +224,47 @@ public static class GymState
 
         CheckStaminaDrop(room, user, habbo);
 
-        // Standing ON it: somebody walking across a treadmill is not on it.
-        var machine = user.IsWalking ? null : MachineUnder(room, user);
+        var machine = MachineUnder(room, user);
         if (machine == null)
         {
-            // Off the machine, so the next step onto one is asked afresh.
+            // The safety net: a step off ends a workout on the spot
+            // (SteppedOff); this catches the rest - the machine picked up or
+            // moved, a teleport off it.
             Refused.TryRemove(habbo.Id, out _);
             Stop(client, habbo, room, user);
             return;
         }
 
-        var stat = machine.Definition.InteractionType == InteractionType.GymStamina ? Stat.Stamina : Stat.Strength;
         var now = Environment.TickCount64;
+        // Walking on it - passing over, or setting off: nothing starts and no
+        // training counts, but nothing ends either. Leaving is the step-off
+        // event's to decide, so a moment's "walking" without leaving the tile
+        // cannot end a workout or undo a refusal.
+        if (user.IsWalking)
+        {
+            if (Training.TryGetValue(habbo.Id, out var walking))
+                walking.LastTick = now;
+            return;
+        }
+
+        var stat = machine.Definition.InteractionType == InteractionType.GymStamina ? Stat.Stamina : Stat.Strength;
         if (!Training.TryGetValue(habbo.Id, out var session) || session.Stat != stat || session.Item?.Id != machine.Id)
         {
             if (session != null)
                 Stop(client, habbo, room, user);
 
-            // A step onto a machine inside the cooldown is refused - told once,
-            // in a whisper like :hit's ([5/5] the moment they step on, [1/5]
-            // with under a second to go) - and nothing starts while they stay
-            // on it, even once the cooldown has run out: they step off and
-            // back on to start.
-            if (Refused.TryGetValue(habbo.Id, out var refusedId) && refusedId == machine.Id)
-                return;
-            var wait = CooldownLeft(habbo.Id, now);
-            if (wait > 0)
+            // Stepped on inside the cooldown (SteppedOn): they stand still -
+            // told once, in a whisper like :hit's, [5/5] the moment they step
+            // on, [1/5] with under a second to go - and nothing starts while
+            // they stay on it, even once the cooldown has run out. They step
+            // off and back on to start.
+            if (Refused.TryGetValue(habbo.Id, out var refusal) && refusal.ItemId == machine.Id)
             {
-                Refused[habbo.Id] = machine.Id;
-                client.SendWhisper($"Cooldown [{wait}/{CooldownSeconds}]");
+                if (!refusal.Told)
+                {
+                    refusal.Told = true;
+                    client.SendWhisper($"Cooldown [{refusal.Wait}/{CooldownSeconds}]");
+                }
                 return;
             }
 

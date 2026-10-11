@@ -1213,6 +1213,9 @@ public class Item
         // The bank deposit box opens while its owner stands on it.
         if (Definition.InteractionType == InteractionType.DepositBox)
             Users.Banking.DepositBox.Open(user.GetClient());
+        // Gym equipment: a step on inside the workout cooldown is refused.
+        if (Definition.InteractionType is InteractionType.GymStamina or InteractionType.GymStrength)
+            Rooms.Gym.GymState.SteppedOn(user, this);
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOnFurni, user.GetClient().GetHabbo(), this);
         user.LastItem = this;
     }
@@ -1244,6 +1247,9 @@ public class Item
         // walk-on there opens it again straight after.
         if (Definition.InteractionType == InteractionType.DepositBox)
             Users.Banking.DepositBox.Close(user.GetClient());
+        // ...and a workout on gym equipment ends with the step off it.
+        if (Definition.InteractionType is InteractionType.GymStamina or InteractionType.GymStrength)
+            Rooms.Gym.GymState.SteppedOff(room, user, this);
         room.GetWired().TriggerEvent(WiredBoxType.TriggerWalkOffFurni, user.GetClient().GetHabbo(), this);
     }
 
