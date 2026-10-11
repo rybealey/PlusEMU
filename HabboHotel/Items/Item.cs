@@ -349,6 +349,9 @@ public class Item
     /// <summary>Cycles a one-way door waits for its walker before letting go (half a second each).</summary>
     private const int OneWayGateMaxWait = 20;
 
+    /// <summary>Cycles a walker may stand in the open door before being put out the far side.</summary>
+    private const int OneWayGateStepOutWait = 4;
+
     private int _oneWayGateWait;
 
     /// <summary>
@@ -390,6 +393,14 @@ public class Item
             user.GateId = 0;
             _oneWayGateWait = 0;
             RequestUpdate(1, false);
+            return;
+        }
+        if (user.X == GetX && user.Y == GetY && _oneWayGateWait >= OneWayGateStepOutWait)
+        {
+            // Still standing in the open door: put them out the far side.
+            GetRoom().GetGameMap().TeleportToTile(user, SquareBehind.X, SquareBehind.Y,
+                GetRoom().GetGameMap().SqAbsoluteHeight(SquareBehind.X, SquareBehind.Y), user.RotBody);
+            ReleaseOneWayGate(user);
             return;
         }
         // Still on the way - to the door, or through it.

@@ -83,8 +83,15 @@ public class InteractorOneWayGate : IFurniInteractor
                 user.CanWalk = false;
                 if (user.IsWalking && (user.GoalX != item.SquareInFront.X || user.GoalY != item.SquareInFront.Y)) user.ClearMovement(true);
                 user.AllowOverride = true;
-                user.MoveTo(item.Coordinate);
-                item.RequestUpdate(4, true);
+                // pixelrp: step them ONTO the door directly, facing through it.
+                // Movement V2 would not route a walk onto the door's own tile,
+                // so the door claimed the walker, froze them and never let them
+                // in. The walk out the far side is an ordinary one, and the door
+                // places them behind it if that walk never happens
+                // (Item.OneWayGateCycle).
+                item.GetRoom().GetGameMap().TeleportToTile(user, item.GetX, item.GetY, item.GetZ,
+                    Plus.HabboHotel.Rooms.PathFinding.Rotation.Calculate(item.GetX, item.GetY, item.SquareBehind.X, item.SquareBehind.Y));
+                item.RequestUpdate(1, true);
             }
         }
     }
