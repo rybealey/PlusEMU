@@ -1289,8 +1289,9 @@ public class RoomUserManager
                 // each whisper so a crash/logout loses <60s of countdown.
                 // pixelrp :walk - staff-forced patrol. Re-evaluated every
                 // cycle so the user reverses at the lane end without pausing;
-                // the same lane scan the bot patrol uses (GenericBot).
-                if (!user.IsBot && user.ForcedWalkAxis is { } forcedAxis && !user.IsWalking && user.CanWalk)
+                // the same lane scan the bot patrol uses (GenericBot). Bots
+                // too (not pets): their own walking stands aside meanwhile.
+                if (!user.IsPet && user.ForcedWalkAxis is { } forcedAxis && !user.IsWalking && user.CanWalk)
                 {
                     var lane = FindForcedWalkEnd(user.X, user.Y, forcedAxis, user.ForcedWalkDirection);
                     if (lane.X == user.X && lane.Y == user.Y)

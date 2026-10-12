@@ -95,7 +95,9 @@ internal class BartenderBot : BotAi
         }
         else
             _speechTimer--;
-        if (_actionTimer <= 0)
+        // pixelrp: a staff :walk lane owns the bot's feet while it runs
+        // (RoomUserManager drives it); its own walking waits until :walk stop.
+        if (_actionTimer <= 0 && GetRoomUser()?.ForcedWalkAxis == null)
         {
             Point nextCoord;
             switch (GetBotData().WalkingMode.ToLower())
