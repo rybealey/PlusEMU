@@ -262,6 +262,13 @@ public static class EmergencyCalls
     /// Open or close one officer's window: open with the calls while they are an
     /// on-duty officer, closed otherwise.
     /// </summary>
+    /// <summary>
+    /// :calls - the window back up for an on-duty officer (or on-duty staff),
+    /// even if they put it away with its X. The caller has checked the duty.
+    /// </summary>
+    public static void Reopen(GameClient session) =>
+        session.Send(new RpEmergencyCallsComposer(true, Newest(), "", reopen: true));
+
     public static void PushWindow(GameClient? session, bool onDuty)
     {
         if (session?.GetHabbo() == null)

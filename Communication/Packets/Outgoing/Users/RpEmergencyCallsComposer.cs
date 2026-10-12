@@ -9,21 +9,24 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// clock-out, and to every on-duty officer whenever a call comes in, is
 /// responded to or is marked. `notice` is what to tell this officer about
 /// their own last press. A call's age is sent in seconds, not as a time, so a
-/// client's clock cannot skew it.
+/// client's clock cannot skew it. `reopen` (appended last) brings the window
+/// back up even if it was put away with its X - :calls.
 /// </summary>
 public class RpEmergencyCallsComposer : IServerPacket
 {
     private readonly bool _open;
     private readonly List<EmergencyCalls.Call> _calls;
     private readonly string _notice;
+    private readonly bool _reopen;
 
     public uint MessageId => ServerPacketHeader.RpEmergencyCallsComposer;
 
-    public RpEmergencyCallsComposer(bool open, List<EmergencyCalls.Call> calls, string notice = "")
+    public RpEmergencyCallsComposer(bool open, List<EmergencyCalls.Call> calls, string notice = "", bool reopen = false)
     {
         _open = open;
         _calls = calls;
         _notice = notice ?? "";
+        _reopen = reopen;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -48,5 +51,6 @@ public class RpEmergencyCallsComposer : IServerPacket
             packet.WriteString(call.MarkedByName);
         }
         packet.WriteString(_notice);
+        packet.WriteBoolean(_reopen);
     }
 }
