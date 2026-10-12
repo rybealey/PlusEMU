@@ -93,6 +93,15 @@ public class RoomUserManager
         }
         else
             user.BotAi.Init(bot.BotId, user.VirtualId, _room.RoomId, user, _room);
+        // pixelrp: a bot put down on a seat or a bed takes its pose, height and
+        // facing from it, as a player entering the room does (AddAvatarToRoom).
+        // Without this, a bot placed on a chair stood inside it at floor height,
+        // and a room loading stood every seated bot back up. Before the
+        // UsersComposer, so the room first sees it already seated, and before
+        // Movement V2 enrols it, which takes its height from here. Pets keep
+        // their own postures.
+        if (!user.IsPet)
+            UpdateUserStatus(user, false);
         user.UpdateNeeded = true;
         _room.SendPacket(new UsersComposer(user));
         if (user.IsPet)
