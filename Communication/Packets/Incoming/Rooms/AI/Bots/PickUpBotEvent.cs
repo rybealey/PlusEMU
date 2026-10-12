@@ -1,6 +1,7 @@
 ﻿using Plus.Communication.Packets.Outgoing.Inventory.Bots;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.AI.Bots;
 
@@ -25,17 +26,26 @@ internal class PickUpBotEvent : IPacketEvent
             return Task.CompletedTask;
         if (!room.GetRoomUserManager().TryGetBot(botId, out var botUser))
             return Task.CompletedTask;
-        if (session.GetHabbo().Id != botUser.BotData.OwnerId && !session.GetHabbo().Permissions.HasRight("bot_place_any_override"))
+        // pixelrp: in a PixelRP room, a bot a staff member picks up becomes
+        // theirs, like furni there (PixelRpRooms).
+        var staffTakesIt = PixelRpRooms.StaffTakesIt(room, session);
+        if (session.GetHabbo().Id != botUser.BotData.OwnerId && !session.GetHabbo().Permissions.HasRight("bot_place_any_override") && !staffTakesIt)
         {
             session.SendWhisper("You can only pick up your own bots!");
             return Task.CompletedTask;
         }
         using (var dbClient = _database.GetQueryReactor())
         {
-            dbClient.SetQuery("UPDATE `bots` SET `room_id` = '0' WHERE `id` = @id LIMIT 1");
+            dbClient.SetQuery(staffTakesIt
+                ? "UPDATE `bots` SET `room_id` = '0', `user_id` = @owner WHERE `id` = @id LIMIT 1"
+                : "UPDATE `bots` SET `room_id` = '0' WHERE `id` = @id LIMIT 1");
             dbClient.AddParameter("id", botId);
+            if (staffTakesIt)
+                dbClient.AddParameter("owner", session.GetHabbo().Id);
             dbClient.RunQuery();
         }
+        if (staffTakesIt)
+            botUser.BotData.OwnerId = session.GetHabbo().Id;
         room.GetGameMap().RemoveUserFromMap(botUser, new(botUser.X, botUser.Y));
         session.GetHabbo().Inventory.Bots.AddBot(new(Convert.ToInt32(botUser.BotData.Id), Convert.ToInt32(botUser.BotData.OwnerId), botUser.BotData.Name, botUser.BotData.Motto,
             botUser.BotData.Look, botUser.BotData.Gender));

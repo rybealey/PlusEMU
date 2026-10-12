@@ -33,7 +33,7 @@ public static class CityTrades
         if (query.Length > 0)
         {
             var like = query.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
-            ids = connection.Query<int>("SELECT `id` FROM `users` WHERE `username` LIKE @like ORDER BY `username` LIMIT 50", new { like }).ToList();
+            ids = connection.Query<int>("SELECT `id` FROM `users` WHERE `username` LIKE @like AND `rp_system_account` = 0 ORDER BY `username` LIMIT 50", new { like }).ToList();
             if (ids.Count == 0)
                 return (new List<Row>(), false);
         }

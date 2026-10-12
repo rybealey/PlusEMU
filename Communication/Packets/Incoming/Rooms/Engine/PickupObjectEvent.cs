@@ -4,6 +4,7 @@ using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Engine;
 
@@ -41,6 +42,10 @@ internal class PickupObjectEvent : IPacketEvent
         // the button rather than to its owner. Off duty, neither answers.
         var canTakeAnyones = session.GetHabbo().Permissions.HasRight("room_item_take") &&
                              HabboHotel.Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id);
+        // pixelrp: in a PixelRP room, furni a staff member picks up becomes
+        // theirs - into their own inventory, never sent to PixelRP's, where
+        // nobody could reach it (PixelRpRooms).
+        var staffTakesIt = PixelRpRooms.StaffTakesIt(room, session);
 
         var itemRights = false;
         if (item.UserId == session.GetHabbo().Id || room.CheckRights(session, false))
@@ -62,8 +67,10 @@ internal class PickupObjectEvent : IPacketEvent
             {
                 await connection.ExecuteAsync("DELETE FROM `room_items_toner` WHERE `id` = @id LIMIT 1", new { id = item.Id });
             }
-            if (item.UserId == session.GetHabbo().Id || canTakeAnyones)
+            if (item.UserId == session.GetHabbo().Id || canTakeAnyones || staffTakesIt)
             {
+                if (staffTakesIt)
+                    PixelRpRooms.SetItemOwner(item, session.GetHabbo().Id, session.GetHabbo().Username);
                 room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
                 session.GetHabbo().Inventory.Furniture.AddItem(item.ToInventoryItem());
                 session.Send(new FurniListUpdateComposer());
@@ -83,7 +90,11 @@ internal class PickupObjectEvent : IPacketEvent
                 }
             }
 
-            await connection.ExecuteAsync("UPDATE `items` SET `room_id` = '0' WHERE `id` = @id LIMIT 1", new { id = item.Id });
+            if (staffTakesIt)
+                await connection.ExecuteAsync("UPDATE `items` SET `room_id` = '0', `user_id` = @owner WHERE `id` = @id LIMIT 1",
+                    new { id = item.Id, owner = session.GetHabbo().Id });
+            else
+                await connection.ExecuteAsync("UPDATE `items` SET `room_id` = '0' WHERE `id` = @id LIMIT 1", new { id = item.Id });
 
             _questManager.ProgressUserQuest(session, QuestType.FurniPick);
         }

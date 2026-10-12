@@ -478,6 +478,8 @@ public class RoomItemHandling
             item.Username = session?.GetHabbo() != null && session.GetHabbo().Id == item.UserId
                 ? session.GetHabbo().Username
                 : PlusEnvironment.GetUsernameById(item.UserId);
+            // pixelrp: in a PixelRP room the furni becomes PixelRP's.
+            PixelRpRooms.ClaimPlacedItem(_room, item);
         }
         var needsReAdd = false;
         if (newItem)
@@ -824,6 +826,8 @@ public class RoomItemHandling
         item.Username = session?.GetHabbo() != null && session.GetHabbo().Id == item.UserId
             ? session.GetHabbo().Username
             : PlusEnvironment.GetUsernameById(item.UserId);
+        // pixelrp: in a PixelRP room the furni becomes PixelRP's.
+        PixelRpRooms.ClaimPlacedItem(_room, item);
         item.Interactor.OnPlace(session, item);
         if (item.Definition.InteractionType == InteractionType.Moodlight)
         {

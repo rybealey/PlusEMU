@@ -504,7 +504,7 @@ public static class SitchUtility
             "(SELECT COUNT(*) FROM `rp_sitch_follows` b WHERE b.`follower_id` = u.`id`) AS Following, " +
             "EXISTS(SELECT 1 FROM `rp_sitch_follows` m WHERE m.`follower_id` = @viewerId AND m.`followee_id` = u.`id`) AS Follows " +
             "FROM `users` u LEFT JOIN `rp_sitch_profiles` s ON s.`user_id` = u.`id` " +
-            "WHERE u.`username` LIKE @like " +
+            "WHERE u.`username` LIKE @like AND u.`rp_system_account` = 0 " +
             // A name that STARTS with the query is what somebody typing a name
             // means; a name that merely contains it comes after.
             "ORDER BY (u.`username` LIKE @prefix) DESC, u.`username` ASC LIMIT @limit",

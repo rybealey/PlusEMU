@@ -380,6 +380,7 @@
     "RpCityTradesEvent": 4192,
     "RpGymBotActionEvent": 4196,
     "RpGetGymLevelsEvent": 4197,
+    "RpMakePixelRpRoomEvent": 4199,
     "RpSetHudTargetEvent": 4181,
     "RpSetRoomCorpEvent": 3958,
     "RpSetHqRankEvent": 3962,

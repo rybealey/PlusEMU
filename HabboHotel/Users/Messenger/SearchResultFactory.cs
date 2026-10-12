@@ -17,7 +17,8 @@ public class SearchResultFactory : ISearchResultFactory
         DataTable dTable;
         using (var dbClient = _database.GetQueryReactor())
         {
-            dbClient.SetQuery("SELECT `id`,`username`,`motto`,`look`,`last_online` FROM users WHERE username LIKE @query LIMIT 50");
+            // pixelrp: the hotel's own accounts (PixelRP) are never found.
+            dbClient.SetQuery("SELECT `id`,`username`,`motto`,`look`,`last_online` FROM users WHERE username LIKE @query AND `rp_system_account` = 0 LIMIT 50");
             dbClient.AddParameter("query", $"{query}%");
             dTable = dbClient.GetTable();
         }

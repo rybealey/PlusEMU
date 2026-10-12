@@ -2,6 +2,7 @@ using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.Friends;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Groups;
+using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.UserData;
 
@@ -28,6 +29,11 @@ internal class OpenPlayerProfileEvent : IPacketEvent
     {
         var userId = packet.ReadInt();
         packet.ReadBool(); //IsMe?
+
+        // pixelrp: the hotel's own account (PixelRP, the owner of PixelRP
+        // rooms) has no profile to show. Nothing in the client offers it.
+        if (userId > 0 && userId == PixelRpRooms.AccountId)
+            return;
 
         var targetData = _gameClientManager.GetClientByUserId(userId)?.GetHabbo();
 

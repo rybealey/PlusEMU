@@ -85,6 +85,17 @@ internal class PlaceBotEvent : RoomPacketEvent
             new(bot.Id, room.RoomId, Convert.ToString(getData["ai_type"]), Convert.ToString(getData["walk_mode"]), bot.Name, "", bot.Figure, x, y, 0, PlacementRotation, 0, 0, 0, 0,
                 ref botSpeechList, "", 0, bot.OwnerId, ConvertExtensions.EnumToBool(getData["automatic_chat"].ToString()), Convert.ToInt32(getData["speaking_interval"]),
                 ConvertExtensions.EnumToBool(getData["mix_sentences"].ToString()), Convert.ToInt32(getData["chat_bubble"])), null);
+        // pixelrp: in a PixelRP room the bot becomes PixelRP's, like furni
+        // put down there (PixelRpRooms) - so its old owner cannot take it back.
+        if (PixelRpRooms.IsPixelRpRoom(room))
+        {
+            botUser.BotData.OwnerId = room.OwnerId;
+            using var dbClient = _database.GetQueryReactor();
+            dbClient.SetQuery("UPDATE `bots` SET `user_id` = @owner WHERE `id` = @id LIMIT 1");
+            dbClient.AddParameter("owner", room.OwnerId);
+            dbClient.AddParameter("id", bot.Id);
+            dbClient.RunQuery();
+        }
         botUser.Chat("Hello!");
         // A teller only exists for the client once it knows which bots are
         // tellers, so the set is re-sent the moment one lands.

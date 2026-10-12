@@ -204,7 +204,7 @@ public static class CityPlayers
         else
         {
             using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-            dbClient.SetQuery("SELECT `id`, `username`, `look`, `gender` FROM `users` WHERE `username` LIKE @query ORDER BY `username` LIMIT " + SearchLimit);
+            dbClient.SetQuery("SELECT `id`, `username`, `look`, `gender` FROM `users` WHERE `username` LIKE @query AND `rp_system_account` = 0 ORDER BY `username` LIMIT " + SearchLimit);
             dbClient.AddParameter("query", query + "%");
             var table = dbClient.GetTable();
             if (table != null)
