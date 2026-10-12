@@ -1314,7 +1314,7 @@ public class RoomUserManager
                 // timeline and the phase and plans from the terminal of the
                 // elapsing edge, so the avatar flows straight into the new leg
                 // without a pause and without a beat being lost.
-                if (!user.IsBot && user.ForcedWalkRandom && user.CanWalk)
+                if (!user.IsPet && user.ForcedWalkRandom && user.CanWalk)
                 {
                     var remaining = Movement.MovementV2Bridge.RemainingRouteTiles(user);
                     // -1 = standing (start a leg); <= 1 = on the last tile or
