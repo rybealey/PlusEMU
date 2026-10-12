@@ -223,14 +223,15 @@ public static class MovementRegistry
             var holders = 0;
 
             // inPhase IS THE SUCCESS CONDITION, evaluated directly: do all the
-            // real users currently holding the phase share one cycleStart % 500?
+            // walkers currently holding the phase (players, and bots while
+            // BotsHoldPhase is on) share one cycleStart % 500?
             // Reading it off two unit lines by eye is exactly the kind of manual
             // comparison that hides an intermittent failure.
             var inPhase = true;
             var observed = -1L;
             foreach (var unit in room.States.Values)
             {
-                if (!unit.IsRealUser ||
+                if (!unit.HoldsPhase ||
                     (unit.Mode != MovementMode.Moving && unit.Mode != MovementMode.Pending))
                     continue;
                 holders++;

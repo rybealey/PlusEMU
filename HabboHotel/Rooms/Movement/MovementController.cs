@@ -321,21 +321,27 @@ public static class MovementController
 
         var holder = PhaseHolder(room, w);
 
-        // BOTS AND PETS FOLLOW THE PLAYERS' BEAT, BUT NEVER SET OR HOLD IT.
+        // PETS FOLLOW THE BEAT, BUT NEVER SET OR HOLD IT - and so do bots while
+        // MovementSettings.BotsHoldPhase is off.
         //
-        // Following: while a player is walking, a bot or pet waits for the same
+        // Following: while somebody holds the beat, a pet waits for the same
         // 500ms boundary, so everything in the room steps together - and a
         // ridden horse, which counts as a pet, sets off on the same beat as its
         // rider instead of up to a tile ahead of them.
         //
-        // Never holding: PhaseHolder only ever counts real users, and a bot
-        // never writes PhaseAnchor. A patrol bot is almost always moving, so a
-        // bot that held the beat would charge every player click the wait,
-        // permanently. With no player walking, a bot starts at once, as before.
+        // Never holding: PhaseHolder only counts walkers that HoldsPhase, and a
+        // follower never writes PhaseAnchor. With nobody holding, a follower
+        // starts at once.
         //
-        // LastStartDelayMs stays 0 for them on purpose: it rides the 4110 as the
-        // join wait, and the client's JOIN diagnostics are about players.
-        if (!w.IsRealUser)
+        // BOTS HOLD IT (BotsHoldPhase, Twist 2026-10-12): a bot already walking
+        // is a holder, so a player who clicks then waits for the bot's beat and
+        // the two never walk half a tile apart. That wait is the price, on every
+        // click made while any bot is moving.
+        //
+        // LastStartDelayMs stays 0 for anyone but a player on purpose: it rides
+        // the 4110 as the join wait, and the client's JOIN diagnostics are about
+        // players.
+        if (!w.HoldsPhase)
         {
             if (holder == null)
             {
@@ -371,12 +377,13 @@ public static class MovementController
         // its own either: it is already on the boundary, and this returns nowMs
         // with a zero delay, which is exactly that.
         w.LastPhaseDecision = PhaseDecision.Aligned;
-        w.LastStartDelayMs = (int)delta;
+        w.LastStartDelayMs = w.IsRealUser ? (int)delta : 0;
         return nowMs + delta;
     }
 
     /// <summary>
-    /// Is any OTHER real user currently holding the room's phase?
+    /// Is any OTHER walker that holds the phase (a player, or a bot while
+    /// MovementSettings.BotsHoldPhase is on) currently holding it?
     ///
     /// DERIVED BY SCANNING, never counted. A missed decrement on some exit from
     /// Moving would clear the phase while avatars were still walking, and the
@@ -428,7 +435,7 @@ public static class MovementController
     {
         foreach (var other in room.States.Values)
         {
-            if (ReferenceEquals(other, self) || !other.IsRealUser)
+            if (ReferenceEquals(other, self) || !other.HoldsPhase)
                 continue;
             if (other.Mode == MovementMode.Moving || other.Mode == MovementMode.Pending)
                 return other;

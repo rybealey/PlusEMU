@@ -342,12 +342,18 @@ public sealed class MovementState : IDueHeapNode
     public EdgeIdentity? LastEarlyPublish;
 
     /// <summary>
-    /// Real players only establish and hold the room phase. Bots and pets walk
-    /// on their own timelines and are ignored entirely for alignment: a patrol
-    /// bot is almost always moving, so letting one hold the phase would charge
-    /// every player click the alignment wait, permanently.
+    /// A real player - not a bot or a pet. What the movement diagnostics and
+    /// :forceredirect are about; who holds the room's phase is
+    /// <see cref="HoldsPhase"/>.
     /// </summary>
     public bool IsRealUser;
+
+    /// <summary>
+    /// pixelrp: establishes and holds the room's movement phase - every player,
+    /// and every bot while MovementSettings.BotsHoldPhase is on. Pets never do:
+    /// they follow the beat of whoever holds it.
+    /// </summary>
+    public bool HoldsPhase;
 
     // ---- diagnostics: how the last walk start resolved --------------------
     public PhaseDecision LastPhaseDecision;

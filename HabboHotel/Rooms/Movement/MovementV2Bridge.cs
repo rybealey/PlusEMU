@@ -32,8 +32,10 @@ public static class MovementV2Bridge
             if (movement.Closed)
                 return;
             var state = MovementRegistry.GetOrCreateState(movement, user.VirtualId);
-            // Only real players establish and hold the room's movement phase.
+            // Players, and bots (MovementSettings.BotsHoldPhase), establish and
+            // hold the room's movement phase; pets only follow it.
             state.IsRealUser = !user.IsBot && !user.IsPet;
+            state.HoldsPhase = state.IsRealUser || (MovementSettings.BotsHoldPhase && user.IsBot && !user.IsPet);
             state.Tile = new Point(user.X, user.Y);
             state.TileZ = user.Z;
             state.EdgeTo = state.Tile;

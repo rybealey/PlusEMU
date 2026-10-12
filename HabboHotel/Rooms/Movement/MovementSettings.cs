@@ -25,6 +25,20 @@ public static class MovementSettings
     public const int IntervalMs = 500;
 
     /// <summary>
+    /// pixelrp: do BOTS establish and hold the room's movement phase, as
+    /// players do? (Twist, 2026-10-12: yes.) Then a player who clicks while a
+    /// bot is walking waits for the bot's beat - up to one interval, ~250ms on
+    /// average - and the two walk either on one tile or a whole tile apart,
+    /// never half overlapping. The price is that wait on every click made while
+    /// any bot (patrol, free-roam, :walk, :wander) is moving.
+    ///
+    /// false puts back the old rule: bots FOLLOW a player's beat but never set
+    /// or hold one, so a bot already walking when a player starts a fresh beat
+    /// stays out of step until its next walk. Pets only ever follow.
+    /// </summary>
+    public const bool BotsHoldPhase = true;
+
+    /// <summary>
     /// THE ONE EXCEPTION: an ambulance run, twice normal pace.
     ///
     /// A paramedic carrying an unconscious patient moves at one tile per
