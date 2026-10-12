@@ -74,23 +74,17 @@ public static class PixelRpRooms
     }
 
     /// <summary>
-    /// The Room Tool's "Make PixelRP room": the room, its furni and its bots
-    /// (not pets) become PixelRP's. One way - there is no button back.
+    /// The Room Tool's "Set as public room": the room, its furni and its bots
+    /// (not pets) become PixelRP's. One way - there is no button back. Says
+    /// nothing either way: the Room Tool showing the owner is the answer.
     /// </summary>
     public static void MakePixelRpRoom(GameClient session, Room room)
     {
         var staff = session.GetHabbo();
         var accountId = AccountId;
-        if (accountId <= 0)
-        {
-            session.SendWhisper("The PixelRP account is missing.");
+        // No PixelRP account yet (migration 247), or the room is already its.
+        if (accountId <= 0 || room.OwnerId == accountId)
             return;
-        }
-        if (room.OwnerId == accountId)
-        {
-            session.SendWhisper("This room already belongs to PixelRP.");
-            return;
-        }
 
         var previousOwner = room.OwnerName;
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
@@ -138,7 +132,6 @@ public static class PixelRpRooms
         }
         room.SendPacket(new RoomInfoUpdatedComposer(room.Id));
         session.Send(new ModeratorRoomInfoComposer(room, room.GetRoomUserManager().GetRoomUserByHabbo(room.OwnerName) != null));
-        session.SendWhisper("This room now belongs to PixelRP.");
     }
 
     /// <summary>
