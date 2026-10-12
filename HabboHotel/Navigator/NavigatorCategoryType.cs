@@ -15,5 +15,10 @@ public enum NavigatorCategoryType
     MyFrequentHistory,
     TopPromotions,
     PromotionCategory,
-    MyRights
+    MyRights,
+
+    // pixelrp: the Public tab - the PixelRP rooms in one room category (the
+    // list's id is that category's id). Built in code, not read from
+    // `navigator_categories`: NavigatorManager.GetPixelRpPublicLists.
+    PixelRpCategory
 }

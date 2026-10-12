@@ -82,6 +82,50 @@ public sealed class NavigatorManager : INavigatorManager
 
     public IReadOnlyCollection<SearchResultList> GetResultByIdentifier(string category) => _searchResultLists.Where(cat => cat.Value.CategoryIdentifier == category).OrderBy(cat => cat.Value.OrderId).Select(cat => cat.Value).ToList();
 
+    /// <summary>pixelrp: the start of a Public tab list's identifier - "pixelrp_corporations".</summary>
+    public const string PixelRpListPrefix = "pixelrp_";
+
+    /// <summary>
+    /// pixelrp: the Public tab. The PixelRP rooms - the city's own, where the
+    /// gameplay is held - one list per room category: Corporations first, then
+    /// the All Rooms order. A category holding no PixelRP room is left out, so
+    /// the tab shows no empty headers. Given an identifier, just that list -
+    /// its "show more" - whether or not it holds a room yet.
+    ///
+    /// Built here from the room categories rather than stored: a new room
+    /// category shows up on the Public tab with nothing else to change.
+    /// </summary>
+    public List<SearchResultList> GetPixelRpPublicLists(string identifier = null)
+    {
+        var accountId = PixelRpRooms.AccountId;
+        if (accountId <= 0)
+            return new();
+        var lists = FlatCategories
+            .OrderBy(cat => cat.Id == RoomCategories.CorporationsId ? 0 : 1)
+            .ThenBy(cat => cat.OrderId)
+            .Select((cat, index) => new SearchResultList(cat.Id, "official_view", PixelRpListPrefix + cat.CategoryIdentifier, cat.PublicName, true, -1,
+                cat.RequiredRank, cat.ViewMode, "pixelrp_category", "SHOW_MORE", index))
+            .ToList();
+        if (identifier != null)
+            return lists.Where(list => list.CategoryIdentifier == identifier).ToList();
+        var filled = new HashSet<int>();
+        using (var dbClient = _database.GetQueryReactor())
+        {
+            dbClient.SetQuery("SELECT DISTINCT `category` FROM `rooms` WHERE `owner` = @owner AND `state` != 'invisible'");
+            dbClient.AddParameter("owner", accountId);
+            var table = dbClient.GetTable();
+            if (table != null)
+            {
+                foreach (DataRow row in table.Rows)
+                {
+                    if (int.TryParse(Convert.ToString(row["category"]), out var category))
+                        filled.Add(category);
+                }
+            }
+        }
+        return lists.Where(list => filled.Contains(list.Id)).ToList();
+    }
+
     public IReadOnlyCollection<SearchResultList> FlatCategories => _searchResultLists.Where(cat => cat.Value.CategoryType == NavigatorCategoryType.Category).OrderBy(cat => cat.Value.OrderId).Select(cat => cat.Value).ToList();
 
     public IReadOnlyCollection<SearchResultList> EventCategories => _searchResultLists.Where(cat => cat.Value.CategoryType == NavigatorCategoryType.PromotionCategory).OrderBy(cat => cat.Value.OrderId).Select(cat => cat.Value).ToList();

@@ -95,15 +95,20 @@ public static class RoomFactory
     /// Occupied rooms first, then by score, so a busy room still leads the
     /// category. Loaded rooms come back as their live instance, so counts are
     /// current rather than whatever was last persisted.
+    ///
+    /// pixelrp: <paramref name="ownerId"/> above 0 lists only that owner's
+    /// rooms - the navigator's Public tab, which is the PixelRP account's.
     /// </summary>
-    public static List<RoomData> GetRoomsDataByCategory(int categoryId, int limit)
+    public static List<RoomData> GetRoomsDataByCategory(int categoryId, int limit, int ownerId = 0)
     {
         var data = new List<RoomData>();
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         dbClient.SetQuery("SELECT `username`, `rooms`.* FROM `rooms` INNER JOIN `users` ON `rooms`.`owner` = `users`.`id` " +
                           "WHERE `rooms`.`category` = @category AND `rooms`.`state` != 'invisible' " +
+                          "AND (@owner = 0 OR `rooms`.`owner` = @owner) " +
                           "ORDER BY `rooms`.`users_now` DESC, `rooms`.`score` DESC LIMIT @limit;");
         dbClient.AddParameter("category", categoryId);
+        dbClient.AddParameter("owner", ownerId);
         dbClient.AddParameter("limit", limit);
         var rooms = dbClient.GetTable();
         if (rooms == null) return data;

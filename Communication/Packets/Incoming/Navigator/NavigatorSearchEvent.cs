@@ -25,6 +25,12 @@ internal class NavigatorSearchEvent : IPacketEvent
         {
             if (_navigatorManager.TryGetSearchResultList(0, out var queryResult)) categories.Add(queryResult);
         }
+        else if (category == "official_view")
+        {
+            // pixelrp: the Public tab is the PixelRP rooms, a list per room
+            // category, Corporations first (NavigatorManager).
+            categories = _navigatorManager.GetPixelRpPublicLists();
+        }
         else
         {
             categories = _navigatorManager.GetCategoriessForSearch(category);
@@ -32,6 +38,9 @@ internal class NavigatorSearchEvent : IPacketEvent
             {
                 //Are we going in deep?!
                 categories = _navigatorManager.GetResultByIdentifier(category).ToList();
+                // pixelrp: or into one of the Public tab's lists ("show more")
+                if (categories.Count == 0 && category.StartsWith(NavigatorManager.PixelRpListPrefix))
+                    categories = _navigatorManager.GetPixelRpPublicLists(category);
                 if (categories.Count > 0)
                 {
                     var deep = new NavigatorSearchResultSetComposer(category, search, categories, session, 2, 100);

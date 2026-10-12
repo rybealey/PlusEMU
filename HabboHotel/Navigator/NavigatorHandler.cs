@@ -149,6 +149,17 @@ internal static class NavigatorHandler
                 getRoomsByCategory = null;
                 break;
             }
+            case NavigatorCategoryType.PixelRpCategory:
+            {
+                // pixelrp: the Public tab - this category's PixelRP rooms. With
+                // no PixelRP account (migration 247 not run) there are none;
+                // an owner id of 0 would list every room instead.
+                var accountId = PixelRpRooms.AccountId;
+                var pixelRpRooms = accountId > 0 ? RoomFactory.GetRoomsDataByCategory(result.Id, limit, accountId) : new List<RoomData>();
+                packet.WriteInteger(pixelRpRooms.Count);
+                foreach (var data in pixelRpRooms) Write(packet, data, seen);
+                break;
+            }
             case NavigatorCategoryType.MyRooms:
             {
                 ICollection<RoomData> rooms = RoomFactory.GetRoomsDataByOwnerSortByName(session.GetHabbo().Id).OrderByDescending(x => x.UsersNow).ToList();

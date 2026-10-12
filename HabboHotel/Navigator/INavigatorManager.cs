@@ -8,6 +8,7 @@ public interface INavigatorManager
     void Init();
     List<SearchResultList> GetCategoriessForSearch(string category);
     IReadOnlyCollection<SearchResultList> GetResultByIdentifier(string category);
+    List<SearchResultList> GetPixelRpPublicLists(string identifier = null);
     IReadOnlyCollection<SearchResultList> FlatCategories { get; }
     IReadOnlyCollection<SearchResultList> EventCategories { get; }
     IReadOnlyCollection<TopLevelItem> TopLevelItems { get; }

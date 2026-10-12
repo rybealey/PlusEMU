@@ -35,6 +35,8 @@ public static class NavigatorCategoryTypeUtility
                 return NavigatorCategoryType.PromotionCategory;
             case "my_rights":
                 return NavigatorCategoryType.MyRights;
+            case "pixelrp_category":
+                return NavigatorCategoryType.PixelRpCategory;
         }
     }
 }
