@@ -263,6 +263,8 @@ public class Item
                     return new InteractorAlert();
                 case InteractionType.VendingMachine:
                     return new InteractorVendor();
+                case InteractionType.SnackDispenser:
+                    return new InteractorSnackDispenser();
                 case InteractionType.Scoreboard:
                     return new InteractorScoreboard();
                 case InteractionType.PuzzleBox:
@@ -818,6 +820,7 @@ public class Item
                         UpdateState(false, true);
                         break;
                     case InteractionType.Alert:
+                    case InteractionType.SnackDispenser:
                         if (LegacyDataString == "1")
                         {
                             LegacyDataString = "0";

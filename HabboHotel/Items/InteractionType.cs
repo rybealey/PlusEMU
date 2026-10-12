@@ -198,5 +198,10 @@ public enum InteractionType
     // trains that stat. On the treadmill and the crosstrainer by default
     // (migration 245); a behaviour, so any furni can be made one.
     GymStamina,
-    GymStrength
+    GymStrength,
+
+    // pixelrp: a vending machine that plays its dispense animation (state 1)
+    // for whoever uses it, then resets itself (InteractorSnackDispenser).
+    // Hands nothing out. The Muse Vending Machine (migration 249).
+    SnackDispenser
 }

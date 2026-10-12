@@ -258,6 +258,8 @@ public static class InteractionTypes
                 return InteractionType.GymStamina;
             case "gym_strength":
                 return InteractionType.GymStrength;
+            case "snack_dispenser":
+                return InteractionType.SnackDispenser;
             default:
             {
                 //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);
