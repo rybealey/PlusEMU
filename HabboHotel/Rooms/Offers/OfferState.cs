@@ -238,7 +238,7 @@ public static class OfferState
             return StartResult.SameAccount;
         if (!Catalogue.TryGetValue(itemKey ?? string.Empty, out var ware))
             return StartResult.UnknownItem;
-        if (!MedicalUtility.IsOnDutyHospitalStaff(seller.Id))
+        if (!MedicalUtility.CanActAsHospitalStaff(seller.Id))
             return StartResult.NotStaff;
         // The tool in hand. Checked against the ROOM user, because a handitem
         // is a thing about an avatar standing somewhere and not about an
@@ -456,7 +456,7 @@ public static class OfferState
         if (offer.IsTrade)
             return AcceptTrade(offer, room, buyerSession!, buyer, sellerSession!);
         var sellerUser = room.GetRoomUserManager()?.GetRoomUserByHabbo(seller.Id);
-        if (!MedicalUtility.IsOnDutyHospitalStaff(seller.Id) ||
+        if (!MedicalUtility.CanActAsHospitalStaff(seller.Id) ||
             (offer.Ware!.RequiredHandItem != 0 && sellerUser?.CarryItemId != offer.Ware.RequiredHandItem))
         {
             Live.TryRemove(offerId, out _);

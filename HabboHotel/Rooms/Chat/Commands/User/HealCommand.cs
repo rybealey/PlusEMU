@@ -162,6 +162,6 @@ internal class HealCommand : ITargetChatCommand
         if (mine != null && theirs != null && mine.GangId != 0 && mine.GangId == theirs.GangId)
             return true;
 
-        return PoliceUtility.IsOnDutyOfficer(habbo.Id) && (PoliceState.SuspectOf(habbo.Id) == target.Id);
+        return PoliceUtility.CanActAsOfficer(habbo.Id) && (PoliceState.SuspectOf(habbo.Id) == target.Id);
     }
 }

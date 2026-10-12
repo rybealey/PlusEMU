@@ -84,7 +84,7 @@ public class RpUseItemEvent : IPacketEvent
             // firing it (:stun) needs the shift. Putting one away is anyone's
             // business.
             if (slot != weaponSlot && item == RpWeapons.StunGunItem
-                && !Plus.HabboHotel.Corporations.PoliceUtility.IsOfficer(habbo.Id))
+                && !Plus.HabboHotel.Corporations.PoliceUtility.MayDrawStunGun(habbo.Id))
             {
                 session.SendWhisper("Only police officers can draw a stun gun.");
                 return;

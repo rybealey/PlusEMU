@@ -57,6 +57,26 @@ public static class PoliceUtility
     }
 
     /// <summary>
+    /// pixelrp: may this player USE police powers right now - an on-duty
+    /// officer, or on-duty staff (City Government), who hold every
+    /// corporation's commands while clocked in. Every police command's gate
+    /// (RequireOnDuty), the Wanted list's drop-charge and the Emergency Calls
+    /// window ask this. Who COUNTS as police - the officer a flashbang or
+    /// pepper spray never catches - is still IsOnDutyOfficer: staff gain the
+    /// powers, not the badge.
+    /// </summary>
+    public static bool CanActAsOfficer(int userId) =>
+        IsOnDutyOfficer(userId) || ShiftManager.IsStaffOnDuty(userId);
+
+    /// <summary>
+    /// pixelrp: may this player draw a stun gun - an officer (on duty or off,
+    /// only firing it needs the shift), or on-duty staff, who use the force's
+    /// gear by the force's rules.
+    /// </summary>
+    public static bool MayDrawStunGun(int userId) =>
+        IsOfficer(userId) || ShiftManager.IsStaffOnDuty(userId);
+
+    /// <summary>
     /// Employed by the force at all, on duty or not. What a charge needs to
     /// stay on the sheet when the officer who filed it clocks off.
     /// </summary>
@@ -90,7 +110,7 @@ public static class PoliceUtility
         var habbo = session?.GetHabbo();
         if (habbo == null)
             return;
-        var onDuty = IsOnDutyOfficer(habbo.Id);
+        var onDuty = CanActAsOfficer(habbo.Id);
         session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(onDuty));
         // The Emergency Calls window is open exactly while this is true.
         EmergencyCalls.PushWindow(session, onDuty);
@@ -101,7 +121,7 @@ public static class PoliceUtility
         var habbo = session.GetHabbo();
         if (habbo == null)
             return false;
-        if (IsOnDutyOfficer(habbo.Id))
+        if (CanActAsOfficer(habbo.Id))
             return true;
         session.SendWhisper(IsOfficer(habbo.Id)
             ? $"You have to be on duty to {verb}."

@@ -144,7 +144,7 @@ public static class EmergencyCalls
         var habbo = session.GetHabbo();
         if (habbo == null)
             return;
-        if (!PoliceUtility.IsOnDutyOfficer(habbo.Id))
+        if (!PoliceUtility.CanActAsOfficer(habbo.Id))
         {
             PushWindow(session, false);
             return;
@@ -270,8 +270,9 @@ public static class EmergencyCalls
     }
 
     /// <summary>
-    /// The queue to every on-duty officer; `noticeFor` alone is also told
-    /// `notice`. How many officers it reached.
+    /// The queue to every on-duty officer - and on-duty staff (City
+    /// Government), who take police calls too; `noticeFor` alone is also told
+    /// `notice`. How many it reached.
     /// </summary>
     public static int Broadcast(int noticeFor = 0, string notice = "")
     {
@@ -281,7 +282,7 @@ public static class EmergencyCalls
             officers = connection.Query<int>(
                 "SELECT e.`user_id` FROM `rp_corporation_employees` e " +
                 "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-                "WHERE e.`on_duty` = 1 AND c.`is_police` = 1").ToList();
+                "WHERE e.`on_duty` = 1 AND (c.`is_police` = 1 OR c.`service_type` = 'staff')").ToList();
         }
         var calls = Newest();
         var reached = 0;

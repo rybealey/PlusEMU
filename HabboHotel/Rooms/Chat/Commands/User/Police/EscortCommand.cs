@@ -70,6 +70,13 @@ internal class EscortCommand : ITargetChatCommand
             kind = PoliceState.EscortKind.Custody;
         else if (MedicalUtility.IsOnDutyParamedic(habbo.Id))
             kind = PoliceState.EscortKind.Medical;
+        // pixelrp: on-duty staff (City Government) hold both badges - a
+        // knocked-out player is carried as a patient, anybody else is taken
+        // into custody.
+        else if (ShiftManager.IsStaffOnDuty(habbo.Id))
+            kind = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id)?.RpKnockedOut == true
+                ? PoliceState.EscortKind.Medical
+                : PoliceState.EscortKind.Custody;
         // Letting go never needs a badge. A medic who clocks off mid-transport
         // is still holding somebody, and refusing them here would leave the
         // patient in the arms of someone the command no longer recognises -

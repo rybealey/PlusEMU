@@ -56,7 +56,7 @@ internal class RpMoveItemEvent : IPacketEvent
         // one away is anyone's business.
         var drawing = (to == weaponSlot) ? source.Item : ((from == weaponSlot && targetOccupied) ? target.Item : null);
         if (drawing == Plus.HabboHotel.Users.RpWeapons.StunGunItem
-            && !Plus.HabboHotel.Corporations.PoliceUtility.IsOfficer(habbo.Id))
+            && !Plus.HabboHotel.Corporations.PoliceUtility.MayDrawStunGun(habbo.Id))
         {
             session.SendWhisper("Only police officers can draw a stun gun.");
             return Task.CompletedTask;

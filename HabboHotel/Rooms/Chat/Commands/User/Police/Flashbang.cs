@@ -108,6 +108,10 @@ public static class Flashbang
             // A prisoner in custody is caught too (see the summary above).
             if (target.IsRpPassive || target.RpHealth <= 0)
                 continue;
+            // pixelrp: nor on-duty staff (City Government), who hold the
+            // police's powers - from memory, so before the database.
+            if (ShiftManager.IsStaffOnDuty(target.Id))
+                continue;
             // Last, because it is the one check that asks the database.
             if (PoliceUtility.IsOnDutyOfficer(target.Id))
                 continue;

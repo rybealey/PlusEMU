@@ -44,6 +44,21 @@ public static class MedicalUtility
     }
 
     /// <summary>
+    /// pixelrp: may this player USE a paramedic's powers right now - an
+    /// on-duty paramedic, or on-duty staff (City Government), who hold every
+    /// corporation's commands while clocked in (PoliceUtility.CanActAsOfficer).
+    /// </summary>
+    public static bool CanActAsParamedic(int userId) =>
+        IsOnDutyParamedic(userId) || ShiftManager.IsStaffOnDuty(userId);
+
+    /// <summary>
+    /// pixelrp: may this player sell or treat as the hospital right now -
+    /// on-duty hospital staff at any rank, or on-duty staff (City Government).
+    /// </summary>
+    public static bool CanActAsHospitalStaff(int userId) =>
+        IsOnDutyHospitalStaff(userId) || ShiftManager.IsStaffOnDuty(userId);
+
+    /// <summary>
     /// Cleared for emergency work, on duty or not. The off-duty half of
     /// <see cref="IsOnDutyParamedic"/>, so a paramedic at home is told to clock
     /// in rather than told they are not a paramedic.
@@ -113,7 +128,7 @@ public static class MedicalUtility
         var habbo = session.GetHabbo();
         if (habbo == null)
             return false;
-        if (IsOnDutyParamedic(habbo.Id))
+        if (CanActAsParamedic(habbo.Id))
             return true;
         if (IsParamedic(habbo.Id))
             session.SendWhisper($"You have to be on duty to {verb}.");

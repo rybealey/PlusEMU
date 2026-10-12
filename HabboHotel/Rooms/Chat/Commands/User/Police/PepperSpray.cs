@@ -129,11 +129,12 @@ public static class PepperSpray
             session.SendWhisper($"{target.Username} is already out cold.");
             return;
         }
-        // Not on a fellow officer at work - as a flashbang never catches one.
-        // Last, because it is the one check that asks the database.
-        if (PoliceUtility.IsOnDutyOfficer(target.Id))
+        // pixelrp: never on on-duty staff (City Government). An on-duty
+        // officer CAN be sprayed, by a fellow officer too (Twist) - unlike a
+        // flashbang, which never catches one.
+        if (ShiftManager.IsStaffOnDuty(target.Id))
         {
-            session.SendWhisper($"{target.Username} is an on-duty police officer.");
+            session.SendWhisper($"{target.Username} is an on-duty staff member.");
             return;
         }
 
