@@ -87,8 +87,9 @@ public sealed class NavigatorManager : INavigatorManager
 
     /// <summary>
     /// pixelrp: the Public tab. The PixelRP rooms - the city's own, where the
-    /// gameplay is held - one list per room category: Corporations first, then
-    /// the All Rooms order. A category holding no PixelRP room is left out, so
+    /// gameplay is held - one list per room category, in the All Rooms order
+    /// (`order_id`: Corporations, Commercial, Streets, ... - 248), so the two
+    /// tabs always agree. A category holding no PixelRP room is left out, so
     /// the tab shows no empty headers. Given an identifier, just that list -
     /// its "show more" - whether or not it holds a room yet.
     ///
@@ -101,8 +102,6 @@ public sealed class NavigatorManager : INavigatorManager
         if (accountId <= 0)
             return new();
         var lists = FlatCategories
-            .OrderBy(cat => cat.Id == RoomCategories.CorporationsId ? 0 : 1)
-            .ThenBy(cat => cat.OrderId)
             .Select((cat, index) => new SearchResultList(cat.Id, "official_view", PixelRpListPrefix + cat.CategoryIdentifier, cat.PublicName, true, -1,
                 cat.RequiredRank, cat.ViewMode, "pixelrp_category", "SHOW_MORE", index))
             .ToList();

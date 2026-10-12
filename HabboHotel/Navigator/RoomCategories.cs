@@ -9,7 +9,4 @@ public static class RoomCategories
     ///     and drops out of the navigator entirely.
     /// </summary>
     public const int FallbackId = 30; // Residential
-
-    /// <summary>pixelrp: Corporations - the first list on the navigator's Public tab.</summary>
-    public const int CorporationsId = 29;
 }
