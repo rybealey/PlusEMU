@@ -1387,7 +1387,12 @@ public class RoomUserManager
                         habboFed.RpEnergy = Math.Min(habboFed.RpEnergyMax, habboFed.RpEnergy + energyGained);
                     var energyDone = habboFed.RpEnergyRegen.Running && habboFed.RpEnergy >= habboFed.RpEnergyMax;
                     if (energyDone)
+                    {
                         habboFed.RpEnergyRegen.Stop();
+                        // The snack is finished: the Apple Crisps go down.
+                        if (user.CarryItemId == RoomUser.SnackHandItemId)
+                            user.CarryItem(0);
+                    }
 
                     var healthGained = habboFed.RpHealthRegen.Advance(regenNow);
                     if (healthGained > 0)

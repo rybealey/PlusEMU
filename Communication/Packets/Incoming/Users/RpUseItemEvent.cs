@@ -180,7 +180,12 @@ public class RpUseItemEvent : IPacketEvent
                 habbo.RpEnergyRegen.Start(habbo.RpEnergyMax);
                 var snackUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
                 if (snackUser != null)
+                {
                     snackUser.OnChat(4, "*eats a snack, slowly getting their energy back*", true);
+                    // Apple Crisps in hand while the bar fills, put down when it
+                    // is full. A drawn stun gun keeps the hand; they still eat.
+                    snackUser.CarryItem(Plus.HabboHotel.Rooms.RoomUser.SnackHandItemId);
+                }
                 else
                     session.SendWhisper("You eat the snack. Your energy comes back over the next minute.");
                 break;

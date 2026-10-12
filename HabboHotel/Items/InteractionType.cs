@@ -200,8 +200,8 @@ public enum InteractionType
     GymStamina,
     GymStrength,
 
-    // pixelrp: a vending machine that plays its dispense animation (state 1)
-    // for whoever uses it, then resets itself (InteractorSnackDispenser).
-    // Hands nothing out. The Muse Vending Machine (migration 249).
+    // pixelrp: a snack vending machine - puts a Snack in the backpack of
+    // whoever uses it and plays its dispense animation (state 1), then resets
+    // itself (InteractorSnackDispenser). The Muse Vending Machine (migration 249).
     SnackDispenser
 }

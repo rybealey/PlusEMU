@@ -956,6 +956,11 @@ public class RoomUser
     /// frame at all, which is why the client is patched not to raise it.</summary>
     public const int PhoneHandItemId = 244;
 
+    /// <summary>pixelrp: Apple Crisps - the hand item a player eats from while
+    /// a Snack refills their energy (RpUseItemEvent). Raised to the mouth like
+    /// a drink, and put down the moment the bar is full (RoomUserManager).</summary>
+    public const int SnackHandItemId = 404;
+
     /// <summary>
     /// pixelrp: the phone is open on screen, so it is in the player's hand.
     ///
