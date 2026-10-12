@@ -49,7 +49,9 @@ namespace Plus.HabboHotel.Rooms.Gym;
 /// Paused, off or gone, the effect they wore before comes back and the machine
 /// stops once nobody is training on it. Both ends are said in the blue action
 /// bubble - "*starts a stamina workout*", "*stops working out*" - except a
-/// stop by leaving the room or logging out.
+/// stop by leaving the room or logging out. So is a level gained: "*feels
+/// fitter and levels up their stamina*" / "*feels stronger and levels up
+/// their strength*".
 /// </summary>
 public static class GymState
 {
@@ -98,8 +100,6 @@ public static class GymState
     public static int LevelOf(Habbo habbo, Stat stat) => stat == Stat.Stamina ? habbo.RpStaminaLevel : habbo.RpStrengthLevel;
 
     private static int ProgressOf(Habbo habbo, Stat stat) => stat == Stat.Stamina ? habbo.RpStaminaSeconds : habbo.RpStrengthSeconds;
-
-    private static string NameOf(Stat stat) => stat == Stat.Stamina ? "Stamina" : "Strength";
 
     // ---- who is on a machine ----------------------------------------------
 
@@ -458,7 +458,10 @@ public static class GymState
             habbo.RpHealth = Math.Min(habbo.RpHealthMax, habbo.RpHealth + HealthPerLevel);
             SendStats(room, user, habbo);
         }
-        user.GetClient()?.SendWhisper($"Your {NameOf(stat)} is now level {level}.");
+        // Said out loud, like the start and stop of the workout.
+        room.SendPacket(new ChatComposer(user.VirtualId, stat == Stat.Stamina
+            ? "*feels fitter and levels up their stamina*"
+            : "*feels stronger and levels up their strength*", 0, ActionBubble));
         RoomTickWriter.QueueRpStats(habbo);
     }
 
@@ -512,11 +515,11 @@ public static class GymState
         var forLevel = level >= MaxLevel ? 0 : SecondsForLevel(level + 1);
         var left = forLevel == 0 ? 0 : Math.Max(0, forLevel - ProgressOf(habbo, session.Stat));
         return new RpGymComposer(true, session.Stat == Stat.Stamina ? "stamina" : "strength", session.Machine,
-            level, left, forLevel, MembershipLeft(habbo), pause);
+            level, left, forLevel, MembershipLeft(habbo), pause, session.Item?.Definition.SpriteId ?? 0);
     }
 
     private static RpGymComposer Hidden(Habbo habbo) =>
-        new(false, "", "", 0, 0, 0, MembershipLeft(habbo), "");
+        new(false, "", "", 0, 0, 0, MembershipLeft(habbo), "", 0);
 
     /// <summary>
     /// Off the machine: bank what was trained and take the panel down. `room`

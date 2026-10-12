@@ -8,8 +8,9 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// Showing (standing on a machine): the stat ("strength" / "stamina"), the
 /// machine's name, the level, the seconds left to the next level and how many
 /// that level takes in all (both 0 at level 10), the membership's online
-/// seconds left, and why training is paused ("" while it counts). Hidden: only
-/// the membership, which the Gym bot's menu shows.
+/// seconds left, why training is paused ("" while it counts), and the
+/// machine's furni sprite id, for its icon (appended last). Hidden: only the
+/// membership, which the Gym bot's menu shows.
 ///
 /// Sent on a change and every 30 seconds while showing - the client counts
 /// both clocks down by itself in between, the workout's only while unpaused.
@@ -24,11 +25,12 @@ public class RpGymComposer : IServerPacket
     private readonly int _secondsForLevel;
     private readonly int _membershipSeconds;
     private readonly string _pause;
+    private readonly int _spriteId;
 
     public uint MessageId => ServerPacketHeader.RpGymComposer;
 
     public RpGymComposer(bool showing, string stat, string machine, int level, int secondsLeft, int secondsForLevel,
-        int membershipSeconds, string pause)
+        int membershipSeconds, string pause, int spriteId)
     {
         _showing = showing;
         _stat = stat;
@@ -38,6 +40,7 @@ public class RpGymComposer : IServerPacket
         _secondsForLevel = secondsForLevel;
         _membershipSeconds = membershipSeconds;
         _pause = pause;
+        _spriteId = spriteId;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -50,5 +53,6 @@ public class RpGymComposer : IServerPacket
         packet.WriteInteger(_secondsForLevel);
         packet.WriteInteger(_membershipSeconds);
         packet.WriteString(_pause);
+        packet.WriteInteger(_spriteId);
     }
 }
