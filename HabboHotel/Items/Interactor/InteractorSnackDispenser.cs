@@ -89,7 +89,6 @@ public class InteractorSnackDispenser : IFurniInteractor
             return;
         }
         session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
-        session.SendWhisper("You have received a snack.");
         Dispense(item);
     }
 
