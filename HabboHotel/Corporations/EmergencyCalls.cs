@@ -52,8 +52,15 @@ public static class EmergencyCalls
     /// <summary>Coins paid for a call marked helpful.</summary>
     public const int HelpfulReward = 3;
 
-    /// <summary>How many of the newest calls the window holds.</summary>
-    public const int WindowSize = 50;
+    /// <summary>How many of the newest calls (and backup requests) 911 Dispatch holds.</summary>
+    public const int WindowSize = 20;
+
+    /// <summary>
+    /// How many the database keeps (Twist, 2026-10-13): the newest, older ones
+    /// deleted as new ones arrive (<see cref="Prune"/>). Nothing else reads
+    /// these tables - a 911 Abuse charge lives in rp_charges on its own.
+    /// </summary>
+    public const int StoredCalls = 100;
 
     public const int MaxMessageLength = 200;
 
@@ -120,6 +127,21 @@ public static class EmergencyCalls
         return call;
     }
 
+    /// <summary>
+    /// Down to the newest <see cref="StoredCalls"/>, after each one added. The
+    /// cut-off is the id of the last one kept: with fewer than that many it is
+    /// NULL, and nothing is deleted. The derived table is what lets MySQL read
+    /// the table it is deleting from. A pruned call's responders go with it.
+    /// </summary>
+    private static void Prune(System.Data.IDbConnection connection)
+    {
+        connection.Execute(
+            "DELETE FROM `rp_911_calls` WHERE `id` < (SELECT `id` FROM " +
+            $"(SELECT `id` FROM `rp_911_calls` ORDER BY `id` DESC LIMIT 1 OFFSET {StoredCalls - 1}) AS `keep`)");
+        connection.Execute(
+            "DELETE r FROM `rp_911_responders` r LEFT JOIN `rp_911_calls` c ON c.`id` = r.`call_id` WHERE c.`id` IS NULL");
+    }
+
     private static void AttachResponders(System.Data.IDbConnection connection, List<Call> calls)
     {
         var ids = calls.Where(call => call.Kind == KindBackup).Select(call => call.Id).ToList();
@@ -181,6 +203,7 @@ public static class EmergencyCalls
                     roomName = Truncate(room.Name ?? "", 64),
                     message
                 });
+            Prune(connection);
         }
 
         var officers = Broadcast();
@@ -225,6 +248,7 @@ public static class EmergencyCalls
                     roomId = (int)room.Id,
                     roomName = Truncate(room.Name ?? "", 64),
                 });
+            Prune(connection);
         }
 
         // Whoever asked is on duty, so the broadcast reached them too.
