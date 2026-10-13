@@ -39,7 +39,7 @@ public sealed class RpRegen
 
     /// <summary>
     /// Begin filling a bar over a stated number of seconds, for sources that
-    /// are not a snack.
+    /// do not take the minute (a snack takes twenty seconds).
     ///
     /// A medical bed heals slower than a medkit (two minutes, one for VIP)
     /// because it is a place you have to stay rather than something you carry,

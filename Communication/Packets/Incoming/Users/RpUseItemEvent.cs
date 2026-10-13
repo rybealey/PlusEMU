@@ -23,6 +23,11 @@ public class RpUseItemEvent : IPacketEvent
     private const string SpitTokenItem = "spit_token";
     private const string SpitCommandPermission = "command_spit";
 
+    // A snack fills an empty energy bar in twenty seconds of eating - the
+    // rate is the whole bar over this, so half a bar takes ten. A medkit
+    // keeps RpRegen's minute.
+    private const int SnackSecondsToFull = 20;
+
     private readonly IDiamondsStoreManager _storeManager;
     private readonly IPermissionManager _permissionManager;
     private readonly ISubscriptionManager _subscriptionManager;
@@ -159,8 +164,8 @@ public class RpUseItemEvent : IPacketEvent
                 if (roomUser != null && habbo.Effects != null)
                     habbo.Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
                 break;
-            // pixelrp consumables: a snack refills energy, a medkit refills
-            // health, each at the whole bar over a minute. Both refuse a full
+            // pixelrp consumables: a snack refills energy (the whole bar over
+            // twenty seconds), a medkit refills health (over a minute). Both refuse a full
             // bar rather than burning the item for nothing, and refuse to
             // stack with themselves - a second one would not fill any faster.
             case "snack":
@@ -177,7 +182,7 @@ public class RpUseItemEvent : IPacketEvent
                     return;
                 }
                 habbo.ConsumeRpItem(slot);
-                habbo.RpEnergyRegen.Start(habbo.RpEnergyMax);
+                habbo.RpEnergyRegen.Start(habbo.RpEnergyMax, SnackSecondsToFull);
                 var snackUser = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
                 if (snackUser != null)
                 {
@@ -187,7 +192,7 @@ public class RpUseItemEvent : IPacketEvent
                     snackUser.CarryItem(Plus.HabboHotel.Rooms.RoomUser.SnackHandItemId);
                 }
                 else
-                    session.SendWhisper("You eat the snack. Your energy comes back over the next minute.");
+                    session.SendWhisper("You eat the snack. Your energy comes back over the next 20 seconds.");
                 break;
             }
             // The Cop Medkit is a medkit in police colours: it heals the same.

@@ -1374,7 +1374,7 @@ public class RoomUserManager
                 //
                 // Energy and health advance independently - eating and
                 // bandaging at once is fine - and each stops itself the moment
-                // its bar is full rather than waiting out the minute.
+                // its bar is full rather than waiting out its time.
                 if (!user.IsBot && user.GetClient()?.GetHabbo() is { } habboFed &&
                     (habboFed.RpEnergyRegen.Running || habboFed.RpHealthRegen.Running))
                 {
@@ -1403,9 +1403,9 @@ public class RoomUserManager
 
                     if (habboFed.RpEnergy != beforeEnergy || habboFed.RpHealth != beforeHealth)
                     {
-                        // Written in steps, not per point: a full bar is sixty
-                        // seconds at 1.67 points a second, and a row per point
-                        // would be a hundred writes for one snack. Every tenth
+                        // Written in steps, not per point: a full bar is a
+                        // hundred points, and a row per point would be a
+                        // hundred writes for one snack. Every tenth
                         // point, and whenever a regen finishes, keeps a logout
                         // mid-heal from costing more than a few points.
                         if (energyDone || healthDone ||
