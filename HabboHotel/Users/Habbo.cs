@@ -234,6 +234,14 @@ public class Habbo
     public uint AuthorizedRoomEntryId { get; set; }
 
     /// <summary>
+    /// pixelrp :backup: the room an officer answering a backup request is on
+    /// their way to. Lets them through that room's lock, doorbell and user
+    /// limit, once - PrepareRoom spends it on the next entry, wherever it is
+    /// to (EmergencyCalls.GoToBackup).
+    /// </summary>
+    public uint BackupEntryRoomId { get; set; }
+
+    /// <summary>
     /// pixelrp: the room the server has already sent this client, unasked, on
     /// entering it (RoomEntry, from EnterRoom) - so the client's own
     /// GetRoomEntryData for it is not answered a second time. 0 when a send
@@ -826,6 +834,11 @@ public class Habbo
         // And the one door that opens for them whatever the room's settings:
         // a full or locked jail still takes a prisoner in.
         var jailEntry = Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailed(Id);
+        // pixelrp :backup: an officer answering a backup request gets into the
+        // requesting officer's room the same way. Spent on this entry, so it
+        // never outlives the one trip it was for.
+        var backupEntry = (BackupEntryRoomId != 0) && (BackupEntryRoomId == id);
+        BackupEntryRoomId = 0;
 
         // AUTHORISE THE ROOM THE SERVER IS SENDING THEM TO, or the client's own
         // answer to the RoomReadyComposer below is thrown away as an injected
@@ -879,7 +892,7 @@ public class Habbo
             Eject();
             return;
         }
-        if (room.GetRoomUserManager().UserCount >= room.UsersMax && !Client.GetHabbo().Permissions.HasRight("room_enter_full") && Client.GetHabbo().Id != room.OwnerId && !jailEntry)
+        if (room.GetRoomUserManager().UserCount >= room.UsersMax && !Client.GetHabbo().Permissions.HasRight("room_enter_full") && Client.GetHabbo().Id != room.OwnerId && !jailEntry && !backupEntry)
         {
             Client.Send(new CantConnectComposer(1));
             Eject();
@@ -894,7 +907,7 @@ public class Habbo
             return;
         }
         Client.Send(new OpenConnectionComposer());
-        if (!room.CheckRights(Client, true, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping && !jailEntry)
+        if (!room.CheckRights(Client, true, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping && !jailEntry && !backupEntry)
         {
             if (room.Access == RoomAccess.Doorbell && !Client.GetHabbo().Permissions.HasRight("room_enter_locked"))
             {

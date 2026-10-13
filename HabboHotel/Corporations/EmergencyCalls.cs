@@ -27,9 +27,19 @@ namespace Plus.HabboHotel.Corporations;
 ///   responded.
 /// Nobody may respond to, or mark, a call from one of their own characters,
 /// and a player with an open 911 Abuse charge cannot call until it is gone.
+///
+/// :backup (migration 251) puts a BACKUP REQUEST in the same queue: an
+/// on-duty officer (or on-duty staff) asking the others to come, every 3
+/// minutes at most.
+/// It carries no message and is never marked. Any number of officers respond
+/// to one, and responding takes them to the room it was called from, through
+/// its lock. It never closes.
 /// </summary>
 public static class EmergencyCalls
 {
+    public const int KindCall = 0;
+    public const int KindBackup = 1;
+
     public const int MarkNone = 0;
     public const int MarkHelpful = 1;
     public const int MarkAbuse = 2;
@@ -50,9 +60,21 @@ public static class EmergencyCalls
     /// <summary>Between two calls from one player.</summary>
     public const int CooldownSeconds = 60;
 
+    /// <summary>Between two backup requests from one officer.</summary>
+    public const int BackupCooldownSeconds = 180;
+
     private const string AbuseCrime = "911abuse";
 
     private static readonly ConcurrentDictionary<int, long> LastCall = new();
+    private static readonly ConcurrentDictionary<int, long> LastBackup = new();
+
+    /// <summary>An officer answering a backup request.</summary>
+    public sealed class Responder
+    {
+        public int CallId { get; set; }
+        public int OfficerId { get; set; }
+        public string OfficerName { get; set; } = "";
+    }
 
     public sealed class Call
     {
@@ -69,25 +91,48 @@ public static class EmergencyCalls
         public string ResponderName { get; set; } = "";
         public int Mark { get; set; }
         public string MarkedByName { get; set; } = "";
+        public int Kind { get; set; }
+        /// <summary>A backup request's responders, first to answer first; empty for a 911 call.</summary>
+        public List<Responder> Responders { get; set; } = new();
     }
 
     private const string CallColumns =
         "`id` AS Id, `caller_id` AS CallerId, `caller_name` AS CallerName, `caller_look` AS CallerLook, " +
         "`caller_gender` AS CallerGender, `room_id` AS RoomId, `room_name` AS RoomName, `message` AS Message, " +
         "`created_at` AS CreatedAt, `responder_id` AS ResponderId, `responder_name` AS ResponderName, " +
-        "CAST(`mark` AS SIGNED) AS Mark, `marked_by_name` AS MarkedByName";
+        "CAST(`mark` AS SIGNED) AS Mark, `marked_by_name` AS MarkedByName, CAST(`kind` AS SIGNED) AS Kind";
 
     /// <summary>The window's calls, newest first.</summary>
     public static List<Call> Newest()
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.Query<Call>($"SELECT {CallColumns} FROM `rp_911_calls` ORDER BY `id` DESC LIMIT {WindowSize}").ToList();
+        var calls = connection.Query<Call>($"SELECT {CallColumns} FROM `rp_911_calls` ORDER BY `id` DESC LIMIT {WindowSize}").ToList();
+        AttachResponders(connection, calls);
+        return calls;
     }
 
     private static Call? Load(int id)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.QueryFirstOrDefault<Call>($"SELECT {CallColumns} FROM `rp_911_calls` WHERE `id` = @id", new { id });
+        var call = connection.QueryFirstOrDefault<Call>($"SELECT {CallColumns} FROM `rp_911_calls` WHERE `id` = @id", new { id });
+        if (call != null)
+            AttachResponders(connection, new List<Call> { call });
+        return call;
+    }
+
+    private static void AttachResponders(System.Data.IDbConnection connection, List<Call> calls)
+    {
+        var ids = calls.Where(call => call.Kind == KindBackup).Select(call => call.Id).ToList();
+        if (ids.Count == 0)
+            return;
+        var byCall = connection.Query<Responder>(
+                "SELECT `call_id` AS CallId, `officer_id` AS OfficerId, `officer_name` AS OfficerName " +
+                "FROM `rp_911_responders` WHERE `call_id` IN @ids ORDER BY `responded_at`, `officer_id`", new { ids })
+            .GroupBy(responder => responder.CallId)
+            .ToDictionary(group => group.Key, group => group.ToList());
+        foreach (var call in calls)
+            if (byCall.TryGetValue(call.Id, out var responders))
+                call.Responders = responders;
     }
 
     /// <summary>:911 - a call from the room the player is in. What to whisper back.</summary>
@@ -97,6 +142,12 @@ public static class EmergencyCalls
         var room = habbo?.CurrentRoom;
         if (habbo == null || room == null)
             return "";
+
+        // An officer on duty answers 911 calls, not places them. Asked first,
+        // so a bare :911 from one gets this rather than the usage line.
+        if (PoliceUtility.IsOnDutyOfficer(habbo.Id))
+            return "You cannot call 911 while you are on duty.";
+
         message = (message ?? "").Trim();
         if (message.Length == 0)
             return "Usage: :911 <what is happening>";
@@ -138,6 +189,51 @@ public static class EmergencyCalls
             : "No officers are on duty right now. Your 911 call is in the queue for the next one.";
     }
 
+    /// <summary>
+    /// :backup - an on-duty officer, or on-duty staff (City Government), asks
+    /// the others to come to the room they are in - the same who may use every
+    /// other police command (CanActAsOfficer). What to whisper back.
+    /// </summary>
+    public static string SubmitBackup(GameClient session)
+    {
+        var habbo = session.GetHabbo();
+        var room = habbo?.CurrentRoom;
+        if (habbo == null || room == null)
+            return "";
+        if (!PoliceUtility.CanActAsOfficer(habbo.Id))
+            return PoliceUtility.IsOfficer(habbo.Id)
+                ? "You have to be on duty to call for backup."
+                : "Only police officers can call for backup.";
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (LastBackup.TryGetValue(habbo.Id, out var last) && now - last < BackupCooldownSeconds)
+            return $"You have just called for backup. Try again in {BackupCooldownSeconds - (now - last)} seconds.";
+        LastBackup[habbo.Id] = now;
+
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+        {
+            connection.Execute(
+                "INSERT INTO `rp_911_calls` (`kind`, `caller_id`, `caller_name`, `caller_look`, `caller_gender`, `room_id`, `room_name`, `message`, `created_at`) " +
+                "VALUES (@kind, @callerId, @callerName, @look, @gender, @roomId, @roomName, '', UNIX_TIMESTAMP())",
+                new
+                {
+                    kind = KindBackup,
+                    callerId = habbo.Id,
+                    callerName = habbo.Username,
+                    look = habbo.Look ?? "",
+                    gender = (habbo.Gender ?? "M").ToUpperInvariant().StartsWith("F") ? "F" : "M",
+                    roomId = (int)room.Id,
+                    roomName = Truncate(room.Name ?? "", 64),
+                });
+        }
+
+        // Whoever asked is on duty, so the broadcast reached them too.
+        var others = Broadcast() - 1;
+        return others > 0
+            ? "Your backup request has been sent."
+            : "No other officers are on duty right now. Your backup request is in the queue.";
+    }
+
     /// <summary>One of the window's buttons, from an officer.</summary>
     public static void Act(GameClient session, int callId, int action)
     {
@@ -156,16 +252,26 @@ public static class EmergencyCalls
             return;
         }
 
+        var backup = (call.Kind == KindBackup);
         switch (action)
         {
             case ActionRespond:
-                Respond(session, call);
+                if (backup)
+                    RespondBackup(session, call);
+                else
+                    Respond(session, call);
                 return;
             case ActionGoToRoom:
-                GoToRoom(session, call);
+                if (backup)
+                    GoToBackup(session, call);
+                else
+                    GoToRoom(session, call);
                 return;
             case ActionHelpful:
             case ActionAbuse:
+                // Helpful and Abuse judge a caller; a backup request has none.
+                if (backup)
+                    return;
                 MarkCall(session, call, action == ActionHelpful ? MarkHelpful : MarkAbuse);
                 return;
         }
@@ -176,7 +282,7 @@ public static class EmergencyCalls
         var habbo = session.GetHabbo();
         if (AccountUtility.SameAccount(habbo.Id, call.CallerId))
         {
-            Send(session, "That call is from one of your own characters.");
+            Send(session, "You cannot attend your own call.");
             return;
         }
         int claimed;
@@ -211,6 +317,92 @@ public static class EmergencyCalls
         habbo.PrepareRoom((uint)call.RoomId, "");
     }
 
+    /// <summary>
+    /// Respond on a backup request: join its responders (any number may) and
+    /// go. Pressed again by an officer already responding, it only goes.
+    /// </summary>
+    private static void RespondBackup(GameClient session, Call call)
+    {
+        var habbo = session.GetHabbo();
+        if (AccountUtility.SameAccount(habbo.Id, call.CallerId))
+        {
+            Send(session, "You cannot attend your own call.");
+            return;
+        }
+        // Refused before they are listed: a name on the card is an officer
+        // who is actually coming.
+        var cannot = CannotTravel(session);
+        if (cannot.Length > 0)
+        {
+            Send(session, cannot);
+            return;
+        }
+
+        int joined;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+        {
+            joined = connection.Execute(
+                "INSERT IGNORE INTO `rp_911_responders` (`call_id`, `officer_id`, `officer_name`, `responded_at`) " +
+                "VALUES (@id, @officerId, @officerName, UNIX_TIMESTAMP())",
+                new { id = call.Id, officerId = habbo.Id, officerName = habbo.Username });
+        }
+        if (joined > 0)
+        {
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(call.CallerId)?
+                .SendWhisper($"Officer {habbo.Username} is responding to your backup request.");
+            Broadcast(habbo.Id, $"You responded to {call.CallerName}'s backup request.");
+        }
+        GoToBackup(session, call);
+    }
+
+    /// <summary>
+    /// To the room a backup request was called from, at its door - through its
+    /// lock, doorbell and user limit (Habbo.BackupEntryRoomId).
+    /// </summary>
+    private static void GoToBackup(GameClient session, Call call)
+    {
+        var habbo = session.GetHabbo();
+        if (call.RoomId <= 0)
+            return;
+        if (habbo.CurrentRoom != null && habbo.CurrentRoom.Id == call.RoomId)
+        {
+            Send(session, "You are already there.");
+            return;
+        }
+        var cannot = CannotTravel(session);
+        if (cannot.Length > 0)
+        {
+            Send(session, cannot);
+            return;
+        }
+        habbo.BackupEntryRoomId = (uint)call.RoomId;
+        // From the hotel view there is no room to leave: the client is told to
+        // go, and its entry spends the pass (as :summon forwards somebody).
+        if (!habbo.InRoom)
+            session.SendRoomForward((uint)call.RoomId);
+        else
+            habbo.PrepareRoom((uint)call.RoomId, "");
+    }
+
+    /// <summary>
+    /// Why this officer cannot go anywhere right now, or "". Out cold, cuffed
+    /// or jailed they cannot move at all; escorting, they would leave their
+    /// prisoner behind.
+    /// </summary>
+    private static string CannotTravel(GameClient session)
+    {
+        var id = session.GetHabbo().Id;
+        if (Rooms.KnockedOut.Is(session))
+            return "You cannot respond while you are knocked out.";
+        if (PoliceState.IsCuffed(id))
+            return "You cannot respond while you are cuffed.";
+        if (JailState.IsJailed(id))
+            return "You cannot respond while you are in jail.";
+        if (PoliceState.IsEscorting(id))
+            return "You cannot respond while you are escorting someone.";
+        return "";
+    }
+
     private static void MarkCall(GameClient session, Call call, int mark)
     {
         var habbo = session.GetHabbo();
@@ -221,7 +413,7 @@ public static class EmergencyCalls
         }
         if (AccountUtility.SameAccount(habbo.Id, call.CallerId))
         {
-            Send(session, "That call is from one of your own characters.");
+            Send(session, "You cannot mark your own call.");
             return;
         }
         int marked;

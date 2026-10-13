@@ -9,8 +9,13 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// clock-out, and to every on-duty officer whenever a call comes in, is
 /// responded to or is marked. `notice` is what to tell this officer about
 /// their own last press. A call's age is sent in seconds, not as a time, so a
-/// client's clock cannot skew it. `reopen` (appended last) brings the window
-/// back up even if it was put away with its X - :calls.
+/// client's clock cannot skew it. `reopen` (appended) brings the window back
+/// up even if it was put away with its X - :calls.
+///
+/// After it, :backup's part (migration 251): for every call above, in the same
+/// order, its kind and - for a backup request - who is responding. Appended
+/// whole rather than threaded into each call, so a client from before it reads
+/// the calls it expects and stops.
 /// </summary>
 public class RpEmergencyCallsComposer : IServerPacket
 {
@@ -52,5 +57,17 @@ public class RpEmergencyCallsComposer : IServerPacket
         }
         packet.WriteString(_notice);
         packet.WriteBoolean(_reopen);
+
+        packet.WriteInteger(_calls.Count);
+        foreach (var call in _calls)
+        {
+            packet.WriteInteger(call.Kind);
+            packet.WriteInteger(call.Responders.Count);
+            foreach (var responder in call.Responders)
+            {
+                packet.WriteInteger(responder.OfficerId);
+                packet.WriteString(responder.OfficerName);
+            }
+        }
     }
 }
