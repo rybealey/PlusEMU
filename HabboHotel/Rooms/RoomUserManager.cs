@@ -176,6 +176,8 @@ public class RoomUserManager
             // The hospital's clock starts here: a few minutes for a paramedic
             // to come, and after that the hospital collects them itself.
             HospitalAdmission.OnKnockout(user);
+            // Down on duty is off duty - except City Government (ShiftManager).
+            Corporations.ShiftManager.InterruptForKnockout(user.GetClient());
         }
         else
         {

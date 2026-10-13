@@ -277,6 +277,25 @@ public static class ShiftManager
         PushRoomRights(client);
     }
 
+    // pixelrp: knocked out on duty ends the shift (Twist, 2026-10-13) - for
+    // every corporation but City Government, whose staff stay on the clock as
+    // they stay awake (no idle clock-off either). Paid up to now, uniform and
+    // motto off, police tools and room rights gone, exactly as a :stopwork;
+    // shown as one too. Called from RoomUserManager.ApplyRpKnockout, every
+    // way a player reaches zero health.
+    public static void InterruptForKnockout(GameClient client)
+    {
+        var userId = client?.GetHabbo()?.Id ?? 0;
+        if (userId == 0 || !Sessions.TryGetValue(userId, out var session) || session.IsStaffCorp) return;
+        lock (session)
+        {
+            if (!Sessions.TryRemove(userId, out _)) return;
+            EndSession(session, client);
+            RevertMotto(client);
+            InterruptForLeftWork(client, session);
+        }
+    }
+
     // pixelrp: clocked out because they're no longer in a room they may
     // work in (walked out, rank deauthorized mid-shift, or the room was
     // (re)assigned as a headquarters). Shown exactly like a normal :stopwork
