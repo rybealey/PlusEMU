@@ -16,11 +16,11 @@ internal class CallsCommand : IChatCommand
 
     public string Parameters => "";
 
-    public string Description => "Open the 911 Emergency Calls window.";
+    public string Description => "Open the 911 Dispatch window.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (!PoliceUtility.RequireOnDuty(session, "see the emergency calls"))
+        if (!PoliceUtility.RequireOnDuty(session, "see 911 Dispatch"))
             return;
         EmergencyCalls.Reopen(session);
     }
