@@ -93,8 +93,15 @@ internal class RpCatalogRenameFurniEvent : IPacketEvent
         if (publicName.Length > MaximumNameLength)
             publicName = publicName.Substring(0, MaximumNameLength);
 
+        // The shop shows catalog_name, not this - and the two need not agree
+        // (the stock catalog lists a furni by its classname). Typing the name
+        // the furni already carries still has to fix the listing, so only a
+        // rename that would change neither is nothing.
         var oldName = definition.PublicName ?? string.Empty;
-        if (oldName == publicName)
+        if (oldName == publicName && !_catalogManager.Pages
+                .Where(page => page?.Items != null)
+                .SelectMany(page => page.Items.Values)
+                .Any(catalogItem => catalogItem?.Definition?.Id == definition.Id && catalogItem.CatalogName != publicName))
             return Task.CompletedTask;
 
         using (var dbClient = _database.GetQueryReactor())
