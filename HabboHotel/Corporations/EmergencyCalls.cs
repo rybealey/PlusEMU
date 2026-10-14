@@ -268,11 +268,11 @@ public static class EmergencyCalls
         Broadcast();
 
         // pixelrp: the request also goes out like a :ca alert (Twist,
-        // 2026-10-15) - the corporation-alert bubble, to everyone who gets
-        // 911 Dispatch, the officer asking included - so it is seen even with
-        // the window shut.
+        // 2026-10-15) - the corporation-alert bubble, to on-duty police ONLY,
+        // the officer asking included, so it is seen even with the window
+        // shut. City Government staff still get the request in 911 Dispatch.
         var alert = $"{habbo.Username} is requesting backup at {room.Name}.";
-        foreach (var userId in OnDutyResponders())
+        foreach (var userId in OnDutyResponders(staff: false))
             PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.SendWhisper(alert, CorporationAlertBubble);
 
         // pixelrp: no whisper (Twist, 2026-10-15) - the room sees the request
@@ -537,14 +537,18 @@ public static class EmergencyCalls
         return reached;
     }
 
-    /// <summary>Everyone who takes police calls right now: on-duty officers and on-duty staff (City Government).</summary>
-    private static List<int> OnDutyResponders()
+    /// <summary>
+    /// Who is on duty right now: police officers, and with `staff` also City
+    /// Government, who take police calls too.
+    /// </summary>
+    private static List<int> OnDutyResponders(bool staff = true)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.Query<int>(
             "SELECT e.`user_id` FROM `rp_corporation_employees` e " +
             "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-            "WHERE e.`on_duty` = 1 AND (c.`is_police` = 1 OR c.`service_type` = 'staff')").Distinct().ToList();
+            "WHERE e.`on_duty` = 1 AND (c.`is_police` = 1 OR (@staff = 1 AND c.`service_type` = 'staff'))",
+            new { staff = staff ? 1 : 0 }).Distinct().ToList();
     }
 
     private static void Send(GameClient session, string notice) =>
