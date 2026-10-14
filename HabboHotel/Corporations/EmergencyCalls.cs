@@ -262,11 +262,15 @@ public static class EmergencyCalls
             Prune(connection);
         }
 
-        // Whoever asked is on duty, so the broadcast reached them too.
-        var others = Broadcast() - 1;
-        return others > 0
-            ? "Your backup request has been sent."
-            : "No other officers are on duty right now. Your backup request is in the queue.";
+        Broadcast();
+
+        // pixelrp: no whisper (Twist, 2026-10-15) - the room sees the request
+        // made, as it sees a 911 call: "*Twist calls for backup*". With no
+        // other officer on duty it waits in the queue for the next one.
+        var caller = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
+        if (caller != null)
+            room.SendPacket(new ChatComposer(caller.VirtualId, "*calls for backup*", 0, ActionBubble));
+        return "";
     }
 
     /// <summary>One of the window's buttons, from an officer.</summary>
