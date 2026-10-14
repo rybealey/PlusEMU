@@ -5,6 +5,7 @@ using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
 
@@ -30,15 +31,18 @@ namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
 /// server-only change would leave a tile the server paths to but that nobody
 /// can reach by clicking the furni.
 ///
-/// Size, sprite and floor/wall are deliberately NOT editable: those come from
-/// the furni's artwork, and changing them here would make the server block
-/// tiles the sprite never covers.
+/// Size - the squares a floor furni covers - IS editable, for furni whose
+/// `furniture` row disagrees with the artwork: the picture does not change, so
+/// a wrong size blocks squares the sprite never covers or leaves some of it
+/// walk-through. Every placed copy is re-laid from its anchor square. Sprite
+/// and floor/wall are not editable: those come from the artwork alone.
 /// </summary>
 internal class RpFurniFunctionEvent : IPacketEvent
 {
     private const int MaximumHeight = 4000; // hundredths; the stack-height widget's ceiling is 40
     private const int MaximumModes = 128;
     private const int MaximumNameLength = 56; // `furniture`.`public_name` is varchar(56)
+    private const int MaximumSize = 20; // squares per side; the biggest furni in the hotel is 15 x 8
 
     private readonly IDatabase _database;
     private readonly IRoomManager _roomManager;
@@ -80,6 +84,10 @@ internal class RpFurniFunctionEvent : IPacketEvent
         // parses. Such a client never sent it, so the furni keeps what it has
         // rather than being reset - resolved below, once the definition is.
         bool? layAcrossSent = packet.HasDataRemaining() ? packet.ReadBool() : null;
+        // pixelrp: after layAcross for the same reason. 0 (or a client that
+        // never sent them) keeps the size the furni has.
+        var widthSent = packet.HasDataRemaining() ? packet.ReadInt() : 0;
+        var lengthSent = packet.HasDataRemaining() ? packet.ReadInt() : 0;
 
         var habbo = session.GetHabbo();
         if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
@@ -93,9 +101,12 @@ internal class RpFurniFunctionEvent : IPacketEvent
         // cannot name an arbitrary definition id it never had in front of it.
         var item = room.GetRoomItemHandler().GetFloor.FirstOrDefault(x => x.Definition?.Id == (uint)definitionId)
                    ?? room.GetRoomItemHandler().GetWall.FirstOrDefault(x => x.Definition?.Id == (uint)definitionId);
-        var definition = item?.Definition;
-        if (definition == null)
+        if (item?.Definition == null)
             return Task.CompletedTask;
+        // The SHARED definition, not the item's own: a copy scoped with "This
+        // furni only" holds a private clone (ItemFunctionOverrides), and
+        // mutating that would change one copy while the database said all.
+        var definition = _itemDataManager.Items.TryGetValue(item.Definition.Id, out var shared) ? shared : item.Definition;
 
         // pixelrp: scoped to one item. Handled here, before any of the
         // definition-wide work below, because almost none of it applies: no
@@ -125,6 +136,21 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         var layAcross = layAcrossSent ?? definition.LayAcross;
         var height = heightHundredths / 100d;
+
+        // Wall furni have no squares to cover, so they keep what they have.
+        var width = definition.Width;
+        var length = definition.Length;
+        if (definition.Type == ItemType.Floor && widthSent > 0 && lengthSent > 0)
+        {
+            width = Math.Min(widthSent, MaximumSize);
+            length = Math.Min(lengthSent, MaximumSize);
+        }
+        var sizeChanged = width != definition.Width || length != definition.Length;
+        // The mask is one character per square of the footprint, so one drawn
+        // for the old size means nothing on the new one. A mask drawn for the
+        // new size in the same edit is kept.
+        if (sizeChanged && walkMask.Length != width * length)
+            walkMask = string.Empty;
         var changes = new List<(string Field, string Old, string New)>();
         void Track(string field, string oldValue, string newValue)
         {
@@ -133,6 +159,8 @@ internal class RpFurniFunctionEvent : IPacketEvent
         }
 
         Track("public_name", definition.PublicName ?? string.Empty, publicName);
+        Track("width", definition.Width.ToString(), width.ToString());
+        Track("length", definition.Length.ToString(), length.ToString());
         Track("is_walkable", Bit(definition.Walkable), Bit(walkable));
         Track("walk_mask", definition.WalkMask ?? string.Empty, walkMask);
         Track("can_sit", Bit(definition.IsSeat), Bit(seat));
@@ -152,12 +180,14 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         using (var dbClient = _database.GetQueryReactor())
         {
-            dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
+            dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `width` = @width, `length` = @length, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
                               "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, `lay_across` = @layAcross, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
             dbClient.AddParameter("publicName", publicName);
+            dbClient.AddParameter("width", width);
+            dbClient.AddParameter("length", length);
             dbClient.AddParameter("walkable", Bit(walkable));
             dbClient.AddParameter("walkMask", walkMask);
             dbClient.AddParameter("seat", Bit(seat));
@@ -212,6 +242,8 @@ internal class RpFurniFunctionEvent : IPacketEvent
 
         // In place, not a reload - see the class note.
         definition.PublicName = publicName;
+        definition.Width = width;
+        definition.Length = length;
         definition.Walkable = walkable;
         definition.WalkMask = walkMask;
         definition.IsSeat = seat;
@@ -266,6 +298,24 @@ internal class RpFurniFunctionEvent : IPacketEvent
             if (!handler.GetFloor.Any(x => x.Definition?.Id == definition.Id) &&
                 !handler.GetWall.Any(x => x.Definition?.Id == definition.Id))
                 continue;
+            // A placed item keeps the squares it was laid out on when it was
+            // placed or the room loaded, so a new size reaches the map only
+            // once each copy is re-laid from its anchor. Rooms not loaded now
+            // lay theirs out from the new size when they load.
+            if (sizeChanged)
+                foreach (var placed in handler.GetFloor.Where(x => x.Definition?.Id == definition.Id).ToList())
+                {
+                    // A scoped copy's private clone was taken from the old
+                    // size, and only behaviour is scoped - so it follows.
+                    if (placed.HasOwnDefinition)
+                    {
+                        placed.Definition.Width = width;
+                        placed.Definition.Length = length;
+                        placed.Definition.WalkMask = walkMask;
+                    }
+                    placed.SetState(placed.GetX, placed.GetY, placed.GetZ,
+                        Gamemap.GetAffectedTiles(length, width, placed.GetX, placed.GetY, placed.Rotation));
+                }
             loaded.GetGameMap().GenerateMaps();
             // The music panel's "is there a jukebox here" flag is only rebroadcast
             // when one is placed or removed, so a furni that BECAME a jukebox - or
