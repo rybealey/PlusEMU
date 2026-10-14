@@ -25,8 +25,10 @@ internal class DanceEvent : RoomPacketEvent
         var danceId = packet.ReadInt();
         if (danceId < 0 || danceId > 4)
             danceId = 0;
-        if (danceId > 0 && user.CarryItemId > 0)
-            user.CarryItem(0);
+        // pixelrp: a dance keeps what is in the hand (Twist, 2026-10-15) - the
+        // drink, the weapon, the open phone. The client used to hide a carry
+        // while dancing (Dance prevented "cri" in HabboAvatarActions); the
+        // gamedata-override puts it back, so there is nothing to drop.
         if (session.GetHabbo().Effects.CurrentEffect > 0)
             room.SendPacket(new AvatarEffectComposer(user.VirtualId, 0));
         user.DanceId = danceId;

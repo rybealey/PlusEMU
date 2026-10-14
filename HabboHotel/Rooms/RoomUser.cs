@@ -927,8 +927,8 @@ public class RoomUser
         // on. Every "clear the hand" in the hotel - a drink running out, a
         // handitem given away, a tool spent on a sale, a dance - goes through
         // here, so an equipped weapon or an open phone comes back after all of
-        // them without each one knowing it exists. (A dance hides a carry on
-        // its own: the Dance action prevents CarryItem in the renderer.)
+        // them without each one knowing it exists. (A dance keeps the hand as
+        // it is: see DanceEvent.)
         if (item == 0 && RestingHandItemId > 0)
         {
             CarryItemId = RestingHandItemId;
