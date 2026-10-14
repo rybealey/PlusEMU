@@ -67,6 +67,7 @@ public class ItemDataManager : IItemDataManager
                                 : new(0),
                             HeightMarker = ToBool(row["height_marker"]),
                             LayAcross = ToBool(row["lay_across"]),
+                            SitRotation = Convert.ToInt32(row["sit_rotation"]),
                             EffectId = Convert.ToInt32(row["effect_id"]),
                             IsRare = row["is_rare"].ToString() == "1",
                             ExtraRot = row["extra_rot"].ToString() == "1",

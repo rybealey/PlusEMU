@@ -100,6 +100,13 @@ public class ItemDefinition
     /// see 162_FurniLayAcross.sql and RoomUserManager's lay case.
     /// </summary>
     public bool LayAcross { get; set; }
+
+    /// <summary>
+    /// pixelrp: the turn added to the furni's rotation for an avatar sitting on
+    /// it - 0, 2, 4 or 6, a quarter-turn right per 2. See 252_FurniSitRotation.sql
+    /// and RoomUserManager's seat case.
+    /// </summary>
+    public int SitRotation { get; set; }
     public int EffectId { get; set; }
 
     /// TODO @80O: Should be removed, use unique interaction name instead.

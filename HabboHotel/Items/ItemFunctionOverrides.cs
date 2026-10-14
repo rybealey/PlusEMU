@@ -197,6 +197,7 @@ public static class ItemFunctionOverrides
         AdjustableHeights = source.AdjustableHeights == null ? new List<double>() : new List<double>(source.AdjustableHeights),
         HeightMarker = source.HeightMarker,
         LayAcross = source.LayAcross,
+        SitRotation = source.SitRotation,
         EffectId = source.EffectId,
         WiredType = source.WiredType,
         IsRare = source.IsRare,

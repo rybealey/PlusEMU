@@ -1681,8 +1681,11 @@ public class RoomUserManager
                             user.Statusses.Add("sit", TextHandling.GetString(item.Definition.Height));
                     }
                     user.Z = item.GetZ;
-                    user.RotHead = item.Rotation;
-                    user.RotBody = item.Rotation;
+                    // pixelrp: plus the furni's Sit facing turn, for artwork
+                    // that faces a different way from its rotation number.
+                    var sitRotation = (item.Rotation + item.Definition.SitRotation) % 8;
+                    user.RotHead = sitRotation;
+                    user.RotBody = sitRotation;
                     user.UpdateNeeded = true;
                 }
                 switch (item.Definition.InteractionType)

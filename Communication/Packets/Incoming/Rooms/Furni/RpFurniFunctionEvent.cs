@@ -88,6 +88,8 @@ internal class RpFurniFunctionEvent : IPacketEvent
         // never sent them) keeps the size the furni has.
         var widthSent = packet.HasDataRemaining() ? packet.ReadInt() : 0;
         var lengthSent = packet.HasDataRemaining() ? packet.ReadInt() : 0;
+        // pixelrp: Sit facing, after the size. Null keeps what the furni has.
+        int? sitRotationSent = packet.HasDataRemaining() ? packet.ReadInt() : null;
 
         var habbo = session.GetHabbo();
         if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
@@ -151,6 +153,11 @@ internal class RpFurniFunctionEvent : IPacketEvent
         // new size in the same edit is kept.
         if (sizeChanged && walkMask.Length != width * length)
             walkMask = string.Empty;
+
+        // A quarter-turn is 2. An odd turn would sit people diagonally, which
+        // a seat never does, so it takes the even one below.
+        var sitRotation = sitRotationSent.HasValue ? ((sitRotationSent.Value % 8) + 8) % 8 / 2 * 2 : definition.SitRotation;
+        var sitRotationChanged = sitRotation != definition.SitRotation;
         var changes = new List<(string Field, string Old, string New)>();
         void Track(string field, string oldValue, string newValue)
         {
@@ -169,6 +176,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         Track("height_adjustable", Join(definition.AdjustableHeights), Join(adjustableHeights));
         Track("height_marker", Bit(definition.HeightMarker), Bit(heightMarker));
         Track("lay_across", Bit(definition.LayAcross), Bit(layAcross));
+        Track("sit_rotation", definition.SitRotation.ToString(), sitRotation.ToString());
         Track("interaction_type", definition.InteractionTypeName ?? "default", interactionName);
         Track("interaction_modes_count", definition.Modes.ToString(), modes.ToString());
         Track("effect_id", definition.EffectId.ToString(), effectId.ToString());
@@ -181,7 +189,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `width` = @width, `length` = @length, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
-                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, `lay_across` = @layAcross, " +
+                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, `lay_across` = @layAcross, `sit_rotation` = @sitRotation, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
@@ -196,6 +204,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
             dbClient.AddParameter("adjustable", adjustableHeights.Count > 0 ? Join(adjustableHeights) : "0");
             dbClient.AddParameter("heightMarker", Bit(heightMarker));
             dbClient.AddParameter("layAcross", Bit(layAcross));
+            dbClient.AddParameter("sitRotation", sitRotation);
             dbClient.AddParameter("interaction", interactionName);
             dbClient.AddParameter("modes", modes);
             dbClient.AddParameter("effect", effectId);
@@ -252,6 +261,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         definition.AdjustableHeights = adjustableHeights;
         definition.HeightMarker = heightMarker;
         definition.LayAcross = layAcross;
+        definition.SitRotation = sitRotation;
         definition.InteractionType = interactionType;
         definition.InteractionTypeName = interactionName;
         definition.Modes = modes;
@@ -302,21 +312,25 @@ internal class RpFurniFunctionEvent : IPacketEvent
             // placed or the room loaded, so a new size reaches the map only
             // once each copy is re-laid from its anchor. Rooms not loaded now
             // lay theirs out from the new size when they load.
-            if (sizeChanged)
-                foreach (var placed in handler.GetFloor.Where(x => x.Definition?.Id == definition.Id).ToList())
+            foreach (var placed in handler.GetFloor.Where(x => x.Definition?.Id == definition.Id).ToList())
+            {
+                // A scoped copy's private clone was taken before this edit,
+                // and only behaviour is scoped - so size and sit facing follow.
+                if (placed.HasOwnDefinition)
                 {
-                    // A scoped copy's private clone was taken from the old
-                    // size, and only behaviour is scoped - so it follows.
-                    if (placed.HasOwnDefinition)
-                    {
-                        placed.Definition.Width = width;
-                        placed.Definition.Length = length;
-                        placed.Definition.WalkMask = walkMask;
-                    }
+                    placed.Definition.Width = width;
+                    placed.Definition.Length = length;
+                    placed.Definition.WalkMask = walkMask;
+                    placed.Definition.SitRotation = sitRotation;
+                }
+                if (sizeChanged)
                     placed.SetState(placed.GetX, placed.GetY, placed.GetZ,
                         Gamemap.GetAffectedTiles(length, width, placed.GetX, placed.GetY, placed.Rotation));
-                }
+            }
             loaded.GetGameMap().GenerateMaps();
+            // Anyone already sitting turns now rather than on their next move.
+            if (sitRotationChanged)
+                loaded.GetRoomUserManager().UpdateUserStatusses();
             // The music panel's "is there a jukebox here" flag is only rebroadcast
             // when one is placed or removed, so a furni that BECAME a jukebox - or
             // stopped being one - would not show up until the next room entry.

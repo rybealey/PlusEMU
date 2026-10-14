@@ -77,5 +77,7 @@ public class RpFurniFunctionComposer : IServerPacket
         // Last, not beside the other flags, so a client from before it existed
         // reads the record it expects and leaves this byte alone.
         packet.WriteBoolean(_definition.LayAcross);
+        // After it for the same reason.
+        packet.WriteInteger(_definition.SitRotation);
     }
 }
