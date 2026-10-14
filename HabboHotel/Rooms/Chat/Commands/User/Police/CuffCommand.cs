@@ -52,7 +52,6 @@ internal class CuffCommand : ITargetChatCommand
 
     public string NoTargetMessage => "No target selected.";
 
-    private const int FightBubble = 4;
 
     /// <summary>
     /// pixelrp: the backpack item an officer must be carrying to cuff anyone.
@@ -137,7 +136,7 @@ internal class CuffCommand : ITargetChatCommand
         // reads as cuffed rather than as still being tased.
         PoliceState.CancelStun(targetUser);
 
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*takes out a pair of handcuffs and cuffs {target.Username}*", 0, FightBubble));
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*takes out a pair of handcuffs and cuffs {target.Username}*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
         return Task.CompletedTask;
     }
 }

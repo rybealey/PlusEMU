@@ -47,7 +47,6 @@ internal class ArrestCommand : ITargetChatCommand
     public string NoTargetMessage => "No target selected.";
 
     /// <summary>Blue bubble, the one every police action shares.</summary>
-    private const int PoliceBubble = 4;
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -143,7 +142,7 @@ internal class ArrestCommand : ITargetChatCommand
         // Wrapped in "*" so the client narrates it: "*Twist sends Kat to jail
         // for 12 minutes*". The name is never in the text or it prints twice.
         room.SendPacket(new ChatComposer(officerUser.VirtualId,
-            $"*sends {target.Username} to jail for {minutes} {unit}*", 0, PoliceBubble));
+            $"*sends {target.Username} to jail for {minutes} {unit}*", 0, PoliceUtility.ActionBubbleFor(officerUser.HabboId)));
 
         // Sentenced BEFORE the move: the jail's door lets a prisoner through
         // even when it is full or locked, and only a prisoner. They land on a

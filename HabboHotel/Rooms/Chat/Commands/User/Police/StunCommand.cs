@@ -45,7 +45,6 @@ internal class StunCommand : ITargetChatCommand
     public string NoTargetMessage => "No target selected.";
 
     /// <summary>Blue bubble, the one every combat action shares.</summary>
-    private const int FightBubble = 4;
 
     /// <summary>How far a shot carries along a row or column.</summary>
     private const int StraightReach = 2;
@@ -175,10 +174,10 @@ internal class StunCommand : ITargetChatCommand
         if (InReach(thisUser, targetUser))
         {
             PoliceState.Stun(room, targetUser, StunSeconds);
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*fires a stun using their stun gun at {target.Username}, stunning them*", 0, FightBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*fires a stun using their stun gun at {target.Username}, stunning them*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
         }
         else
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*fires a stun using their stun gun at {target.Username} but misses*", 0, FightBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*fires a stun using their stun gun at {target.Username} but misses*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
 
         if (shotsLeft == 0)
         {

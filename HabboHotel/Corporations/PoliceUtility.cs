@@ -43,6 +43,25 @@ public static class PoliceUtility
 
     public static bool IsPoliceGear(string item) => PoliceGear.Contains(item);
 
+    /// <summary>The plain blue action bubble every narrated action speaks in.</summary>
+    public const int ActionBubble = 4;
+
+    /// <summary>
+    /// pixelrp: the police action bubble (Twist, 2026-10-15) - the blue one
+    /// with the force's badge drawn into it. Every police action an on-duty
+    /// officer takes speaks in it: stun, flashbang, pepper spray, cuff and
+    /// uncuff, escort and unescort, arrest, charge, pardon, :heal, :backup.
+    /// </summary>
+    public const int PoliceActionBubble = 37;
+
+    /// <summary>
+    /// The bubble an action by this player speaks in: the badge bubble for an
+    /// on-duty officer, the plain one for anyone else doing the same thing - a
+    /// paramedic healing, on-duty staff using police powers. Staff gain the
+    /// powers, not the badge (see CanActAsOfficer).
+    /// </summary>
+    public static int ActionBubbleFor(int userId) => IsOnDutyOfficer(userId) ? PoliceActionBubble : ActionBubble;
+
     public static bool IsOnDutyOfficer(int userId)
     {
         if (userId <= 0)

@@ -45,7 +45,6 @@ internal class ChargeCommand : ITargetChatCommand
     public string NoTargetMessage => "No target selected.";
 
     /// <summary>Blue bubble, the one every police action shares.</summary>
-    private const int PoliceBubble = 4;
 
     private sealed class Crime
     {
@@ -121,7 +120,7 @@ internal class ChargeCommand : ITargetChatCommand
         File(target.Id, crime.Id, habbo.Id);
 
         room.SendPacket(new ChatComposer(officerUser.VirtualId,
-            $"*charges {target.Username} with {crime.Name}*", 0, PoliceBubble));
+            $"*charges {target.Username} with {crime.Name}*", 0, PoliceUtility.ActionBubbleFor(officerUser.HabboId)));
 
         // The wanted list is public and the HUD draws stars from it, so a new
         // charge is everyone's news - not just this room's.

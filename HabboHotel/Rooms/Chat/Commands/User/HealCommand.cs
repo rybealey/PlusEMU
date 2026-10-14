@@ -142,7 +142,9 @@ internal class HealCommand : ITargetChatCommand
 
         // Bubble 4, the one a medkit already speaks in when it is used on
         // yourself - this is the same act with somebody else on the end of it.
-        healer.OnChat(4, $"*opens a medkit and patches {target.Username} up*", true);
+        // An on-duty officer's heal is a police action, and takes the badge
+        // bubble (PoliceUtility.ActionBubbleFor).
+        healer.OnChat(PoliceUtility.ActionBubbleFor(healer.HabboId), $"*opens a medkit and patches {target.Username} up*", true);
         return Task.CompletedTask;
     }
 

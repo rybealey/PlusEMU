@@ -56,7 +56,6 @@ internal class EscortCommand : ITargetChatCommand
 
     public string NoTargetMessage => "No target selected.";
 
-    private const int FightBubble = 4;
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -170,7 +169,7 @@ internal class EscortCommand : ITargetChatCommand
             room.SendPacket(new ChatComposer(thisUser.VirtualId,
                 dropped == PoliceState.DropOffResult.LaidOnBed
                     ? $"*lays {target.Username} down on a bed*"
-                    : $"*lays {target.Username} down*", 0, FightBubble));
+                    : $"*lays {target.Username} down*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
             return Task.CompletedTask;
         }
 
@@ -231,7 +230,7 @@ internal class EscortCommand : ITargetChatCommand
 
         room.SendPacket(new ChatComposer(thisUser.VirtualId, kind == PoliceState.EscortKind.Medical
             ? $"*loads {target.Username} into an ambulance*"
-            : $"*starts escorting {target.Username}*", 0, FightBubble));
+            : $"*starts escorting {target.Username}*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
         return Task.CompletedTask;
     }
 }

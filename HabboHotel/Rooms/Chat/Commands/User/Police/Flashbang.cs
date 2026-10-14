@@ -33,7 +33,6 @@ public static class Flashbang
     public const string Item = "flashbang";
 
     /// <summary>The blue fight bubble :stun and :cuff use.</summary>
-    private const int FightBubble = 4;
 
     /// <summary>How far it reaches: one tile, in every direction, the officer's own included.</summary>
     private const int Reach = 1;
@@ -124,7 +123,7 @@ public static class Flashbang
             PoliceState.Stun(room, user, StunSeconds);
 
         // One bubble whoever it catches: the freeze on each of them says the rest.
-        room.SendPacket(new ChatComposer(thrower.VirtualId, "*throws a flashbang*", 0, FightBubble));
+        room.SendPacket(new ChatComposer(thrower.VirtualId, "*throws a flashbang*", 0, PoliceUtility.ActionBubbleFor(thrower.HabboId)));
 
         PoliceState.SendStats(room, thrower, habbo);
         session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));

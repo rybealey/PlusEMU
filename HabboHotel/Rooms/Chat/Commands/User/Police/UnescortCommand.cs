@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Corporations;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
@@ -24,7 +25,6 @@ internal class UnescortCommand : IChatCommand
 
     public string Description => "Stop escorting whoever you are moving.";
 
-    private const int FightBubble = 4;
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
@@ -52,6 +52,6 @@ internal class UnescortCommand : IChatCommand
         var name = suspectUser?.GetClient()?.GetHabbo()?.Username ?? (medical ? "their patient" : "their suspect");
         room.SendPacket(new ChatComposer(thisUser.VirtualId, medical
             ? $"*unloads {name} from the ambulance*"
-            : $"*unescorts {name}*", 0, FightBubble));
+            : $"*unescorts {name}*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
     }
 }

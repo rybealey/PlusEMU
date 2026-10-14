@@ -280,7 +280,7 @@ public static class EmergencyCalls
         // other officer on duty it waits in the queue for the next one.
         var caller = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
         if (caller != null)
-            room.SendPacket(new ChatComposer(caller.VirtualId, "*calls for backup*", 0, ActionBubble));
+            room.SendPacket(new ChatComposer(caller.VirtualId, "*calls for backup*", 0, PoliceUtility.ActionBubbleFor(habbo.Id)));
         return "";
     }
 

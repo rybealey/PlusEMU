@@ -49,7 +49,6 @@ public static class PepperSpray
     private const int DisorientMs = 4000;
 
     /// <summary>The blue fight bubble :stun and :cuff use.</summary>
-    private const int FightBubble = 4;
 
     /// <summary>What a spray sets the officer's aggression to - :stun's figure.</summary>
     private const int AggressionOnSpray = 100;
@@ -174,10 +173,10 @@ public static class PepperSpray
             PoliceState.Disorient(targetUser, DisorientMs);
             PoliceState.CancelStun(targetUser);
             MovementV2Bridge.Stumble(targetUser, awayX, awayY, StumbleBackSteps, StumbleRandomSteps, facing);
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*sprays their pepper spray at {target.Username}, disorienting them*", 0, FightBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*sprays their pepper spray at {target.Username}, disorienting them*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
         }
         else
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*sprays their pepper spray at {target.Username} but misses*", 0, FightBubble));
+            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*sprays their pepper spray at {target.Username} but misses*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
 
         PoliceState.SendStats(room, thisUser, habbo);
     }

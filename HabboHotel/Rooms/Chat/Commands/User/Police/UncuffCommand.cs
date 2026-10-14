@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Corporations;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
@@ -35,7 +36,6 @@ internal class UncuffCommand : ITargetChatCommand
 
     public string NoTargetMessage => "No target selected.";
 
-    private const int FightBubble = 4;
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -74,7 +74,7 @@ internal class UncuffCommand : ITargetChatCommand
         if (captorId != 0 && !PoliceState.IsMedicalEscort(captorId))
             PoliceState.EndEscort(room, captorId, targetUser);
 
-        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*unlocks {target.Username}'s cuffs*", 0, FightBubble));
+        room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*unlocks {target.Username}'s cuffs*", 0, PoliceUtility.ActionBubbleFor(thisUser.HabboId)));
         return Task.CompletedTask;
     }
 }

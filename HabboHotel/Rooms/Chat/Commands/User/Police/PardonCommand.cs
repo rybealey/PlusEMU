@@ -39,7 +39,6 @@ internal class PardonCommand : ITargetChatCommand
     public string NoTargetMessage => "No target selected.";
 
     /// <summary>Blue bubble, the one every police action shares.</summary>
-    private const int PoliceBubble = 4;
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -96,7 +95,7 @@ internal class PardonCommand : ITargetChatCommand
         // "*Yavn pardons twist, dropping all charges*". The name is never in
         // the text itself or it would print twice.
         room.SendPacket(new ChatComposer(officerUser.VirtualId,
-            $"*pardons {target.Username}, dropping all charges*", 0, PoliceBubble));
+            $"*pardons {target.Username}, dropping all charges*", 0, PoliceUtility.ActionBubbleFor(officerUser.HabboId)));
 
         // They may have been on the wanted list; they are not now.
         WantedUtility.Broadcast();
