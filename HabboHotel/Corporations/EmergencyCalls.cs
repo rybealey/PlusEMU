@@ -385,12 +385,11 @@ public static class EmergencyCalls
                 "VALUES (@id, @officerId, @officerName, UNIX_TIMESTAMP())",
                 new { id = call.Id, officerId = habbo.Id, officerName = habbo.Username });
         }
+        // The officer who asked is not whispered (Twist, 2026-10-15): their
+        // 911 Dispatch card names everyone responding, and this broadcast is
+        // what updates it.
         if (joined > 0)
-        {
-            PlusEnvironment.Game.ClientManager.GetClientByUserId(call.CallerId)?
-                .SendWhisper($"Officer {habbo.Username} is responding to your backup request.");
             Broadcast(habbo.Id, $"You responded to {call.CallerName}'s backup request.");
-        }
         GoToBackup(session, call);
     }
 
