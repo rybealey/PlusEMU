@@ -75,7 +75,7 @@ public static class Flashbang
         }
 
         habbo.EnsureRpStatsLoaded();
-        if (habbo.IsRpPassive)
+        if (habbo.CannotFight)
         {
             session.SendWhisper("You cannot fight while you are passive.");
             return;

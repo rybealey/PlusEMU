@@ -38,9 +38,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// dragged into a fight, and an aggressive player cannot walk in and start
 /// one.
 ///
-/// Passive players (a smoothie, or City Government on duty) neither hit nor
-/// get hit - the untouchable that IsRpPassive has always promised and that
-/// nothing could honour until damage existed.
+/// Passive players (a smoothie, or City Government on duty) cannot be hit -
+/// the untouchable that IsRpPassive has always promised and that nothing
+/// could honour until damage existed. A smoothie stops you hitting too; staff
+/// on duty may hit (Habbo.CannotFight).
 /// </summary>
 internal class HitCommand : ITargetChatCommand
 {
@@ -102,7 +103,7 @@ internal class HitCommand : ITargetChatCommand
         habbo.EnsureRpStatsLoaded();
         target.EnsureRpStatsLoaded();
 
-        if (habbo.IsRpPassive)
+        if (habbo.CannotFight)
         {
             session.SendWhisper("You cannot fight while you are passive.");
             return Task.CompletedTask;

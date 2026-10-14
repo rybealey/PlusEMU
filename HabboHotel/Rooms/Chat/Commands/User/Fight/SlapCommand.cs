@@ -115,7 +115,7 @@ internal class SlapCommand : ITargetChatCommand
             habbo.EnsureRpStatsLoaded();
             target.EnsureRpStatsLoaded();
 
-            if (habbo.IsRpPassive)
+            if (habbo.CannotFight)
             {
                 session.SendWhisper("You cannot fight while you are passive.");
                 return Task.CompletedTask;

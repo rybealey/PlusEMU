@@ -333,6 +333,13 @@ public class Habbo
     // passive check reads this so the two sources can never drift apart.
     public bool IsRpPassive => RpPassiveSeconds > 0 || ShiftManager.IsStaffOnDuty(Id);
 
+    // The attacking half of passive. A passive smoothie stops you fighting as
+    // well as being fought; City Government on duty may fight (Twist,
+    // 2026-10-15) - :hit, :slap, :spit, the stun gun, flashbangs, pepper spray -
+    // while staying untouchable (IsRpPassive). Every attacker check asks this,
+    // every target check asks IsRpPassive.
+    public bool CannotFight => RpPassiveSeconds > 0;
+
     // Passive status (consumable smoothie): remaining ONLINE seconds.
     // Persisted in user_rp_stats.passive_seconds; decremented by the room
     // tick while the player is in a room (see RoomUserManager.OnCycle).

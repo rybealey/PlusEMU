@@ -140,7 +140,7 @@ internal class SpitCommand : ITargetChatCommand
             habbo.EnsureRpStatsLoaded();
             target.EnsureRpStatsLoaded();
 
-            if (habbo.IsRpPassive)
+            if (habbo.CannotFight)
             {
                 session.SendWhisper("You cannot spit while you are passive.");
                 return Task.CompletedTask;
