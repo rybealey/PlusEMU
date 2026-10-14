@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Dapper;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.CityPanel;
 using Plus.HabboHotel.GameClients;
@@ -63,6 +64,9 @@ public static class EmergencyCalls
     public const int StoredCalls = 100;
 
     public const int MaxMessageLength = 200;
+
+    /// <summary>The blue action bubble every narrated action uses.</summary>
+    private const int ActionBubble = 4;
 
     /// <summary>Between two calls from one player.</summary>
     public const int CooldownSeconds = 60;
@@ -207,9 +211,17 @@ public static class EmergencyCalls
         }
 
         var officers = Broadcast();
-        return officers > 0
-            ? "Your 911 call has been sent to the police."
-            : "No officers are on duty right now. Your 911 call is in the queue for the next one.";
+        if (officers > 0)
+            return "Your 911 call has been sent to the police.";
+
+        // pixelrp: nobody on duty (Twist, 2026-10-15) - no whisper; the room
+        // sees the call made, the way it sees any other action. Wrapped in "*"
+        // so the client narrates it: "*Twist calls police for help*". The call
+        // still waits in the queue for the next officer.
+        var caller = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
+        if (caller != null)
+            room.SendPacket(new ChatComposer(caller.VirtualId, "*calls police for help*", 0, ActionBubble));
+        return "";
     }
 
     /// <summary>
