@@ -214,6 +214,7 @@ public static class ServerPacketHeader
     public const uint RpGymComposer = 4194;
     public const uint RpGymBotsComposer = 4195;
     public const uint RpGymLevelsComposer = 4198;
+    public const uint RpCatalogMoveFurniComposer = 4201;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

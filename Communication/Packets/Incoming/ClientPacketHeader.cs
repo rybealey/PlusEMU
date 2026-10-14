@@ -596,6 +596,8 @@ public static class ClientPacketHeader
     public const uint RpSitchSuppressTagEvent = 4141;
     // pixelrp: rename a furni from the shop, without owning one.
     public const uint RpCatalogRenameFurniEvent = 4142;
+    // pixelrp: move a furni to another shop category.
+    public const uint RpCatalogMoveFurniEvent = 4200;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
