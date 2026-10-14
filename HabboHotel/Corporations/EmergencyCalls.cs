@@ -68,6 +68,9 @@ public static class EmergencyCalls
     /// <summary>The blue action bubble every narrated action uses.</summary>
     private const int ActionBubble = 4;
 
+    /// <summary>The corporation-alert bubble :ca whispers in (CorporationAlertCommand).</summary>
+    private const int CorporationAlertBubble = 11;
+
     /// <summary>Between two calls from one player.</summary>
     public const int CooldownSeconds = 60;
 
@@ -263,6 +266,14 @@ public static class EmergencyCalls
         }
 
         Broadcast();
+
+        // pixelrp: the request also goes out like a :ca alert (Twist,
+        // 2026-10-15) - the corporation-alert bubble, to everyone who gets
+        // 911 Dispatch, the officer asking included - so it is seen even with
+        // the window shut.
+        var alert = $"{habbo.Username} is requesting backup at {room.Name}.";
+        foreach (var userId in OnDutyResponders())
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.SendWhisper(alert, CorporationAlertBubble);
 
         // pixelrp: no whisper (Twist, 2026-10-15) - the room sees the request
         // made, as it sees a 911 call: "*Twist calls for backup*". With no
@@ -513,17 +524,9 @@ public static class EmergencyCalls
     /// </summary>
     public static int Broadcast(int noticeFor = 0, string notice = "")
     {
-        List<int> officers;
-        using (var connection = PlusEnvironment.DatabaseManager.Connection())
-        {
-            officers = connection.Query<int>(
-                "SELECT e.`user_id` FROM `rp_corporation_employees` e " +
-                "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-                "WHERE e.`on_duty` = 1 AND (c.`is_police` = 1 OR c.`service_type` = 'staff')").ToList();
-        }
         var calls = Newest();
         var reached = 0;
-        foreach (var userId in officers.Distinct())
+        foreach (var userId in OnDutyResponders())
         {
             var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
             if (client?.GetHabbo() == null)
@@ -532,6 +535,16 @@ public static class EmergencyCalls
             reached++;
         }
         return reached;
+    }
+
+    /// <summary>Everyone who takes police calls right now: on-duty officers and on-duty staff (City Government).</summary>
+    private static List<int> OnDutyResponders()
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.Query<int>(
+            "SELECT e.`user_id` FROM `rp_corporation_employees` e " +
+            "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+            "WHERE e.`on_duty` = 1 AND (c.`is_police` = 1 OR c.`service_type` = 'staff')").Distinct().ToList();
     }
 
     private static void Send(GameClient session, string notice) =>
