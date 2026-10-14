@@ -425,7 +425,8 @@ internal class RpFurniFunctionEvent : IPacketEvent
         if (string.IsNullOrWhiteSpace(raw))
             return string.Empty;
         raw = raw.Trim();
-        if (raw.Length > 64 || raw.Any(c => c != '0' && c != '1') || raw.All(c => c == '0'))
+        // One character per tile of the biggest footprint; `walk_mask` is VARCHAR(400) (253).
+        if (raw.Length > MaximumSize * MaximumSize || raw.Any(c => c != '0' && c != '1') || raw.All(c => c == '0'))
             return string.Empty;
         return raw;
     }
