@@ -210,14 +210,13 @@ public static class EmergencyCalls
             Prune(connection);
         }
 
-        var officers = Broadcast();
-        if (officers > 0)
-            return "Your 911 call has been sent to the police.";
+        Broadcast();
 
-        // pixelrp: nobody on duty (Twist, 2026-10-15) - no whisper; the room
-        // sees the call made, the way it sees any other action. Wrapped in "*"
-        // so the client narrates it: "*Twist calls police for help*". The call
-        // still waits in the queue for the next officer.
+        // pixelrp: no whisper either way (Twist, 2026-10-15) - the room sees
+        // the call made, the way it sees any other action, whether or not an
+        // officer is on duty to take it. Wrapped in "*" so the client narrates
+        // it: "*Twist calls police for help*". With nobody on duty the call
+        // waits in the queue for the next officer.
         var caller = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
         if (caller != null)
             room.SendPacket(new ChatComposer(caller.VirtualId, "*calls police for help*", 0, ActionBubble));
