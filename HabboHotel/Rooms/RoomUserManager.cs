@@ -640,6 +640,10 @@ public class RoomUserManager
                 _room.GetGameMap().GameMap[user.X, user.Y] = user.SqState;
         }
         _room.GetGameMap().RemoveUserFromMap(user, new(user.X, user.Y));
+        // pixelrp: and out of any tent. Every leave comes through here - the
+        // room-leave path and the tick's sweeps of dead sessions alike - while
+        // RemoveUserFromRoom only ever reset the player's TentId.
+        _room.RemoveUserFromTents(user);
         _room.SendPacket(new UserRemoveComposer(user.VirtualId));
         RoomUser toRemove = null;
         if (_users.TryRemove(user.InternalRoomId, out toRemove))

@@ -773,6 +773,28 @@ public class Room : RoomData
         }
     }
 
+    /// <summary>
+    /// pixelrp: take a unit that is leaving the room out of every tent's list.
+    /// Walking off the tent (RemoveUserFromTent) was the only way out of one,
+    /// so a player who left the room from inside a tent stayed listed - the
+    /// list holding their RoomUser - until the room unloaded. Never throws:
+    /// it runs in the middle of a leave (RoomUserManager.RemoveRoomUser).
+    /// </summary>
+    public void RemoveUserFromTents(RoomUser user)
+    {
+        if (user == null || _tents.Count == 0)
+            return;
+        try
+        {
+            foreach (var members in _tents.Values.ToList())
+                members.Remove(user);
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+        }
+    }
+
     public void SendToTent(int id, uint tentId, IServerPacket packet)
     {
         if (!_tents.ContainsKey(tentId))
