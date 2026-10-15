@@ -21,7 +21,7 @@ namespace Plus.HabboHotel.Corporations;
 /// brings it back up (the client's doing - every change is broadcast anyway).
 ///
 /// On a call: Respond claims it (the first officer to press it; the caller is
-/// told), and after that the button is Go to room. Once responded, any officer
+/// not told), and after that the button is Go to room. Once responded, any officer
 /// may mark it - once, for good, no confirmation:
 /// - Helpful: the caller is paid <see cref="HelpfulReward"/> coins;
 /// - Abuse: the caller is charged with 911abuse, filed by the officer who
@@ -349,9 +349,9 @@ public static class EmergencyCalls
             Send(session, "Another officer has already responded to that call.");
             return;
         }
-        PlusEnvironment.Game.ClientManager.GetClientByUserId(call.CallerId)?
-            .SendWhisper($"Officer {habbo.Username} is responding to your 911 call.");
-        Broadcast(habbo.Id, $"You responded to {call.CallerName}'s call.");
+        // Nobody is told (Twist, 2026-10-15): not the caller, and not the
+        // officer, whose card now reads "Responded by you".
+        Broadcast();
     }
 
     private static void GoToRoom(GameClient session, Call call)
@@ -396,11 +396,11 @@ public static class EmergencyCalls
                 "VALUES (@id, @officerId, @officerName, UNIX_TIMESTAMP())",
                 new { id = call.Id, officerId = habbo.Id, officerName = habbo.Username });
         }
-        // The officer who asked is not whispered (Twist, 2026-10-15): their
-        // 911 Dispatch card names everyone responding, and this broadcast is
-        // what updates it.
+        // Nobody is told (Twist, 2026-10-15): not the officer who asked, and
+        // not the one responding - their 911 Dispatch cards name everyone
+        // responding, and this broadcast is what updates them.
         if (joined > 0)
-            Broadcast(habbo.Id, $"You responded to {call.CallerName}'s backup request.");
+            Broadcast();
         GoToBackup(session, call);
     }
 
