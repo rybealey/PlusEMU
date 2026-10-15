@@ -166,6 +166,8 @@ internal class SlapCommand : ITargetChatCommand
         // flavour and nobody loses health, so claiming damage there would be a
         // lie. Worded like :hit's hit line, which the same reader sees.
         _lastSlap[session.GetHabbo().Id] = DateTime.UtcNow;
+        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(_lastSlap, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
         room.SendPacket(new ChatComposer(thisUser.VirtualId, hurts
             ? $"*slaps {target.Username} across the face, causing {Damage} damage*"
             : $"*slaps {target.Username} across the face*", 0, FightBubble));

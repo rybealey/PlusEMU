@@ -194,6 +194,8 @@ public static class EmergencyCalls
         if (LastCall.TryGetValue(habbo.Id, out var last) && now - last < CooldownSeconds)
             return $"You have just called 911. Try again in {CooldownSeconds - (now - last)} seconds.";
         LastCall[habbo.Id] = now;
+        // pixelrp: pruned by age, never at logout - a relog must not skip the cooldown (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(LastCall, (_, at) => now - at >= CooldownSeconds);
 
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
@@ -246,6 +248,8 @@ public static class EmergencyCalls
         if (LastBackup.TryGetValue(habbo.Id, out var last) && now - last < BackupCooldownSeconds)
             return $"You have just called for backup. Try again in {BackupCooldownSeconds - (now - last)} seconds.";
         LastBackup[habbo.Id] = now;
+        // pixelrp: pruned by age, never at logout - a relog must not skip the cooldown (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(LastBackup, (_, at) => now - at >= BackupCooldownSeconds);
 
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {

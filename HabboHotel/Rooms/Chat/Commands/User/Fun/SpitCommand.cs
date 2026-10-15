@@ -176,6 +176,8 @@ internal class SpitCommand : ITargetChatCommand
         // free retry - otherwise the right move is to spam it from across the
         // room until somebody wanders into range.
         _lastSpit[habbo.Id] = DateTime.UtcNow;
+        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(_lastSpit, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
 
         // Where the mess ends up: their tile if it carried, the spitter's own
         // if it did not.

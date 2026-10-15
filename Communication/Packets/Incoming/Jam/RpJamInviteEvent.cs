@@ -82,6 +82,11 @@ internal class RpJamInviteEvent : IPacketEvent
         }
         _lastInvite[key] = DateTime.UtcNow;
         _invitesSent.AddOrUpdate(jam.Id, 1, (_, count) => count + 1);
+        // pixelrp: both maps are static, and only ever grew. A pair goes once
+        // its cooldown has run out, and a jam's count once the jam has ended -
+        // jam ids are never reused, so nothing reads that count again.
+        Plus.Utilities.StaleEntries.Sweep(_lastInvite, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= InviteCooldownSec);
+        Plus.Utilities.StaleEntries.Sweep(_invitesSent, (jamId, _) => JamManager.Get(jamId) == null);
         // The marker is what tells the client to draw a Join card instead of a
         // line of text. A client that does not know the marker still shows
         // something readable, which is the point of putting the words in it.

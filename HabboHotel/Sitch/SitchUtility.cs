@@ -600,6 +600,8 @@ public static class SitchUtility
 
         var now = Now();
         LastPost[userId] = now;
+        // pixelrp: pruned by age, never at logout - a relog must not skip the cooldown.
+        StaleEntries.Sweep(LastPost, (_, at) => now - at >= PostCooldownSeconds);
 
         var id = connection.ExecuteScalar<int>(
             "INSERT INTO `rp_sitch_posts` " +

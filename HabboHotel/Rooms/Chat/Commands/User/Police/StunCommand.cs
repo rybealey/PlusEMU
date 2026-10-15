@@ -168,6 +168,8 @@ internal class StunCommand : ITargetChatCommand
         // The trigger is pulled from here on, hit or miss - and a miss spends a
         // shot as surely as a hit does.
         _lastShot[habbo.Id] = DateTime.UtcNow;
+        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(_lastShot, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
         var shotsLeft = PoliceState.FireStunGun(habbo.Id);
         habbo.RpAggression = AggressionOnShot;
 

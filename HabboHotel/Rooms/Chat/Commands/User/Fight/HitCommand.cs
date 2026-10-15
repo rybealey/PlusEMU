@@ -160,6 +160,8 @@ internal class HitCommand : ITargetChatCommand
         // Past here the punch is thrown, so it costs the cooldown and makes the
         // attacker aggressive whether or not it connects.
         _lastHit[habbo.Id] = DateTime.UtcNow;
+        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(_lastHit, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
         habbo.RpAggression = AggressionOnSwing;
 
         // The attacker's own tile plus the four sharing an edge with it: at most

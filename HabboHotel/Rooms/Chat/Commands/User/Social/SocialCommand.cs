@@ -116,6 +116,8 @@ internal abstract class SocialCommand : ITargetChatCommand
         }
 
         _lastUse[session.GetHabbo().Id] = DateTime.UtcNow;
+        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
+        Plus.Utilities.StaleEntries.Sweep(_lastUse, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
         room.SendPacket(new ShoutComposer(thisUser.VirtualId, $"*{Action(target.Username)}*", 0, RelationshipBubble));
         if (OverlayExpression > 0)
         {
