@@ -206,7 +206,9 @@ public static class TurfManager
         if (user != null)
             room.SendPacket(new ChatComposer(user.VirtualId, $"*starts claiming this turf for {gang.Name}*", 0, ActionBubble));
 
-        GangAlert(gang.GangId, $"[Turf]: {gang.Name} has started claiming {room.Name}. Hold it for {Clock(CaptureSeconds())}.");
+        // pixelrp: the claimers are told it is their own gang; the owners
+        // (below) are told which gang it is.
+        GangAlert(gang.GangId, $"[Turf]: Your gang has started claiming {room.Name}. Hold it for {Clock(CaptureSeconds())}.");
         var owner = OwnerOf(room.RoomId);
         if (owner > 0 && owner != gang.GangId)
             GangAlert(owner, $"[Turf]: {gang.Name} has started claiming {room.Name}.");
