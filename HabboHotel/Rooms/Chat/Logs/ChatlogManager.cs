@@ -20,9 +20,18 @@ public sealed class ChatlogManager : IChatlogManager
     public void StoreChatlog(ChatlogEntry entry)
     {
         _lock.EnterUpgradeableReadLock();
-        _chatlogs.Add(entry);
-        OnChatlogStore();
-        _lock.ExitUpgradeableReadLock();
+        // pixelrp: released in a finally here and in FlushAndSave. A save that
+        // threw (a database pool timeout) used to leave the lock held for good,
+        // and every chat message after it, hotel-wide, then waited on it forever.
+        try
+        {
+            _chatlogs.Add(entry);
+            OnChatlogStore();
+        }
+        finally
+        {
+            _lock.ExitUpgradeableReadLock();
+        }
     }
 
     private void OnChatlogStore()
@@ -34,20 +43,30 @@ public sealed class ChatlogManager : IChatlogManager
     public void FlushAndSave()
     {
         _lock.EnterWriteLock();
-        if (_chatlogs.Count > 0)
+        try
         {
-            using var dbClient = _database.GetQueryReactor();
-            foreach (var entry in _chatlogs)
+            if (_chatlogs.Count > 0)
             {
-                dbClient.SetQuery("INSERT INTO chatlogs (`user_id`, `room_id`, `timestamp`, `message`) VALUES " + "(@uid, @rid, @time, @msg)");
-                dbClient.AddParameter("uid", entry.PlayerId);
-                dbClient.AddParameter("rid", entry.RoomId);
-                dbClient.AddParameter("time", entry.Timestamp);
-                dbClient.AddParameter("msg", entry.Message);
-                dbClient.RunQuery();
+                using var dbClient = _database.GetQueryReactor();
+                foreach (var entry in _chatlogs)
+                {
+                    dbClient.SetQuery("INSERT INTO chatlogs (`user_id`, `room_id`, `timestamp`, `message`) VALUES " + "(@uid, @rid, @time, @msg)");
+                    dbClient.AddParameter("uid", entry.PlayerId);
+                    dbClient.AddParameter("rid", entry.RoomId);
+                    dbClient.AddParameter("time", entry.Timestamp);
+                    dbClient.AddParameter("msg", entry.Message);
+                    dbClient.RunQuery();
+                }
             }
         }
-        _chatlogs.Clear();
-        _lock.ExitWriteLock();
+        finally
+        {
+            // pixelrp: cleared even when the save failed part way. Kept, the
+            // batch would be tried again with every chat message after it -
+            // growing without end while the database is down, and writing the
+            // lines that did get in a second time once it is back.
+            _chatlogs.Clear();
+            _lock.ExitWriteLock();
+        }
     }
 }
