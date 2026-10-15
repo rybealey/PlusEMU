@@ -46,7 +46,6 @@ internal class PickUpBotEvent : IPacketEvent
         }
         if (staffTakesIt)
             botUser.BotData.OwnerId = session.GetHabbo().Id;
-        room.GetGameMap().RemoveUserFromMap(botUser, new(botUser.X, botUser.Y));
         session.GetHabbo().Inventory.Bots.AddBot(new(Convert.ToInt32(botUser.BotData.Id), Convert.ToInt32(botUser.BotData.OwnerId), botUser.BotData.Name, botUser.BotData.Motto,
             botUser.BotData.Look, botUser.BotData.Gender));
         session.Send(new BotInventoryComposer(session.GetHabbo().Inventory.Bots.Bots.Values.ToList()));

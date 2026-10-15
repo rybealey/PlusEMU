@@ -145,6 +145,12 @@ public class RoomUserManager
         else
             _bots.TryRemove(user.BotData.Id, out var bot);
         user.BotAi.OnSelfLeaveRoom(kicked);
+        // pixelrp: off the tile map as well. OnRemove below is what does that
+        // for a player, but it returns early for anything without a session -
+        // so every bot and pet removed through here (:kickbots, :kickpets, a
+        // pet picked up, replaced, or sent home with its owner) stayed on the
+        // map, its tile occupied by nobody until the room unloaded.
+        _room.GetGameMap()?.RemoveUserFromMap(user, new(user.X, user.Y));
         _room.SendPacket(new UserRemoveComposer(user.VirtualId));
         if (_users != null)
             _users.TryRemove(user.InternalRoomId, out var toRemove);

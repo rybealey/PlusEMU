@@ -84,12 +84,8 @@ internal class ZombiesCommand : IChatCommand
             .ToList();
         foreach (var zombie in zombies)
         {
-            // RemoveBot alone leaves a phantom occupant behind: it ends in
-            // OnRemove(user), which early-returns for bots (no GetClient()),
-            // so RemoveUserFromMap never runs and the tile stays blocked
-            // until room unload. Clear the map entry ourselves first, same
-            // as PickUpBotEvent.cs does for player-picked-up bots.
-            room.GetGameMap().RemoveUserFromMap(zombie, new(zombie.X, zombie.Y));
+            // RemoveBot takes the zombie off the tile map itself now - it used
+            // to leave a phantom occupant behind, which this cleared by hand.
             room.GetRoomUserManager().RemoveBot(zombie.VirtualId, false);
         }
         // RemoveBot can silently no-op (e.g. the user vanished from
