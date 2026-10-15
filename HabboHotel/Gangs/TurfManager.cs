@@ -41,6 +41,13 @@ public static class TurfManager
     public const string NeutralColourA = "b8b8b8";
     public const string NeutralColourB = "444444";
 
+    /// <summary>
+    /// pixelrp: what an unclaimed turf's group furni shows - both colours
+    /// white, so the parts that take a gang's colours stand blank until a gang
+    /// holds it. The furni only; the turf panel keeps the neutral pair above.
+    /// </summary>
+    public const string UnclaimedFurniColour = "ffffff";
+
     /// <summary>Gang alerts' private green bubble (GangAlertCommand).</summary>
     private const int AlertBubble = 200;
 
@@ -507,16 +514,16 @@ public static class TurfManager
 
     /// <summary>
     /// For the item serializer: when this group furni stands in a turf, what it
-    /// shows - the owning gang's id, badge and colours, or the neutral pair
-    /// with no group while nobody holds it. False anywhere that is not a turf,
+    /// shows - the owning gang's id, badge and colours, or all white with no
+    /// group while nobody holds it. False anywhere that is not a turf,
     /// and for anything that is not turf-painted: the furni's own group applies.
     /// </summary>
     public static bool TryPaint(Item item, out string groupId, out string badge, out string colourA, out string colourB)
     {
         groupId = "0";
         badge = "";
-        colourA = NeutralColourA;
-        colourB = NeutralColourB;
+        colourA = UnclaimedFurniColour;
+        colourB = UnclaimedFurniColour;
         if (item == null || !IsPainted(item))
             return false;
         var room = item.GetRoom();
