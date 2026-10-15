@@ -23,6 +23,17 @@ public abstract class WebsocketGameServer<TGameServerOptions> : WsServer, IGameS
         // many tiny packets (per-step "mv" statuses, chat); letting the kernel
         // batch them adds tens of ms of latency and jitter to every update.
         OptionNoDelay = true;
+        // pixelrp: TCP keep-alive on accepted sessions. A connection whose far
+        // end vanished without closing it (a pulled cable, a phone changing
+        // networks, a laptop put to sleep) and that has nothing in flight is
+        // otherwise never noticed, and its player stays logged in. The kernel
+        // probes after 60 s of silence and drops the connection after 5
+        // unanswered probes 10 s apart. (Behind a proxy this checks the hop to
+        // the proxy.)
+        OptionKeepAlive = true;
+        OptionTcpKeepAliveTime = 60;
+        OptionTcpKeepAliveInterval = 10;
+        OptionTcpKeepAliveRetryCount = 5;
         _clientFactory = clientFactory;
         _packetManager = packetManager;
     }
