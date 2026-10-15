@@ -74,18 +74,23 @@ internal sealed class ProcessComponent
     /// <param name="state"></param>
     public void Run(object state)
     {
+        // pixelrp: the two early returns sit outside the try below, so they
+        // cannot reach its finally - that would tell a waiting Dispose this
+        // run had finished while an earlier one was still going.
+        if (_disabled)
+            return;
+        if (_timerRunning)
+        {
+            _timerLagging = true;
+            Log.Warn($"<Player {_player?.Id}> Server can't keep up, Player timer is lagging behind.");
+            return;
+        }
+        // pixelrp: nothing ever set this, so the guard above never fired and a
+        // run slower than the 60-second period overlapped the next one.
+        _timerRunning = true;
+        _resetEvent.Reset();
         try
         {
-            if (_disabled)
-                return;
-            if (_timerRunning)
-            {
-                _timerLagging = true;
-                Log.Warn($"<Player {_player.Id}> Server can't keep up, Player timer is lagging behind.");
-                return;
-            }
-            _resetEvent.Reset();
-
             // BEGIN CODE
             if (_player.TimeMuted > 0)
                 _player.TimeMuted -= 60;
@@ -136,13 +141,19 @@ internal sealed class ProcessComponent
             _vipWasActive = _player.IsVip;
 
             // END CODE
-
-            // Reset the values
+        }
+        catch { }
+        finally
+        {
+            // Reset the values - in a finally (pixelrp). A run that threw used
+            // to skip this, so the event stayed unset and this player's logout
+            // (Dispose) sat out its full five-minute wait before they were
+            // unregistered - and a relog inside that window had its new
+            // session unregistered instead.
             _timerRunning = false;
             _timerLagging = false;
             _resetEvent.Set();
         }
-        catch { }
     }
 
     /// <summary>
