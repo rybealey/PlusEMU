@@ -28,7 +28,9 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
         var usernameColor = packet.ReadString() ?? "";
         var icon = packet.ReadString() ?? "";
         var iconColor = packet.ReadString() ?? "";
-        if (header != "" && header != "orange" && header != "pink" && header != "purple")
+        // a header is one of the three preset keys, or any colour from the
+        // Settings > UI > Colours picker (#rrggbb).
+        if (header != "" && header != "orange" && header != "pink" && header != "purple" && !HexColor().IsMatch(header))
             return Task.CompletedTask;
         if (color != "" && !HexColor().IsMatch(color))
             return Task.CompletedTask;
