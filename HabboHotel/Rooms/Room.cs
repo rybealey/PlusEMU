@@ -930,6 +930,13 @@ public class Room : RoomData
 
     public void Dispose()
     {
+        // pixelrp: marked unloaded before anything else, so MovementRegistry.
+        // Attach refuses this room from here on - its user manager stays usable
+        // for a while below, and an entry or a bot deploy meanwhile would
+        // otherwise attach movement again after the Detach that follows.
+        // Nothing else needs it unset: RoomManager.TryLoadRoom, its only other
+        // reader, has already dropped this room from its list (UnloadRoom).
+        Unloaded = true;
         // pixelrp Movement V2 (A7): detach from the movement scheduler FIRST.
         // Below, _gamemap.Dispose() nulls _userMap, GameMap, EffectMap, Model
         // and more. The V2 scheduler is a SINGLE hotel-wide thread, so if it

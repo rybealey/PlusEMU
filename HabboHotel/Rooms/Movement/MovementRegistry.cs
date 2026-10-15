@@ -54,11 +54,33 @@ public static class MovementRegistry
     /// </summary>
     public static RoomMovement? Attach(Room room)
     {
-        if (room == null)
+        // pixelrp: never for a room that is being or has been unloaded.
+        // Room.Dispose detaches FIRST, but its user manager stays usable for a
+        // while after that, and an entry or a bot deploy in that window
+        // attached a fresh RoomMovement to the dying room - which the next
+        // load of the same room id then picked up and ran on a disposed map.
+        if (room == null || room.Unloaded)
             return null;
         EnsureStarted();
 
         var movement = Rooms.GetOrAdd(room.RoomId, _ => new RoomMovement(room));
+        // pixelrp: an entry left from an earlier load of this room id belongs
+        // to that Room instance, not this one: retire it and start afresh.
+        if (!ReferenceEquals(movement.Room, room))
+        {
+            if (Rooms.TryUpdate(room.RoomId, new RoomMovement(room), movement))
+                Retire(movement);
+            if (!Rooms.TryGetValue(room.RoomId, out movement) || !ReferenceEquals(movement.Room, room))
+                return null;
+        }
+        // pixelrp: and if the unload began while this ran, its Detach may
+        // already have been and gone - take back out what was just added.
+        if (room.Unloaded)
+        {
+            if (Rooms.TryRemove(new KeyValuePair<uint, RoomMovement>(room.RoomId, movement)))
+                Retire(movement);
+            return null;
+        }
         var now = MovementScheduler.Instance.Clock.NowMs;
         lock (movement.MovementLock)
         {
@@ -87,7 +109,16 @@ public static class MovementRegistry
     {
         if (!Rooms.TryRemove(roomId, out var movement))
             return;
+        Retire(movement);
+    }
 
+    /// <summary>
+    /// pixelrp: the A7 teardown of one RoomMovement already taken out of
+    /// <see cref="Rooms"/> - Detach's, and Attach's for an entry that belongs
+    /// to a dead Room.
+    /// </summary>
+    private static void Retire(RoomMovement movement)
+    {
         try
         {
             lock (movement.MovementLock)
