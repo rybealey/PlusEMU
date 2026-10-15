@@ -96,7 +96,20 @@ internal class Authenticator : IAuthenticator
 
     private async Task OnHabboDisconnected(Habbo habbo)
     {
+        // pixelrp: each task guarded on its own. This runs from an async void
+        // event handler (Habbo.Disconnected above), where nothing catches a
+        // throw - it would take the whole emulator down - and one failing task
+        // must not stop the others (friends still need telling you left).
         foreach (var task in _authenticationTasks)
-            await task.UserLoggedOut(habbo);
+        {
+            try
+            {
+                await task.UserLoggedOut(habbo);
+            }
+            catch (Exception e)
+            {
+                Plus.Core.ExceptionLogger.LogException(e);
+            }
+        }
     }
 }

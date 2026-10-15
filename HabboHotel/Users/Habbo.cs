@@ -670,79 +670,113 @@ public class Habbo
         if (_disconnected)
             return;
 
-        Corporations.ShiftManager.InterruptForDisconnect(this);
-        // pixelrp: a jam holds your place rather than dropping you. Reloading
-        // the client is a disconnect, and a jam you lose by refreshing the page
-        // is not a jam anybody can use - so this only marks you away, and the
-        // jam's own cycle gives up on you a minute and a half later.
-        Jam.JamManager.OnDisconnect(Id);
-        // pixelrp: drop this player from any shared note they had open
-        Notes.NotesUtility.ClearPresence(Id);
-        // pixelrp: and forget which support conversation they were reading -
-        // the registry is keyed by player id and outlives the session.
-        Support.SupportUtility.Forget(Id);
-        // pixelrp offers: and any sale they were half way through.
-        Rooms.Offers.OfferState.Forget(Id);
-        // pixelrp trading: and any trade - nothing changes hands.
-        Rooms.Trading.RpTrades.Forget(Id, true);
-        // pixelrp gym: the online clock stops here, and the training done
-        // since the last save is kept.
-        Rooms.Gym.GymState.OnLogout(this);
-        // pixelrp police: logging out in handcuffs is an arrest - charged with
-        // Logout and booked, the cuffs back to their officer. First, while the
-        // cuff is still on record: Forget below is what takes it off.
-        Plus.HabboHotel.Rooms.Chat.Commands.User.Police.ArrestCommand.OnCuffedLogout(this);
-        // pixelrp police: a cuff, a stun and an escort are all session state, and
-        // reloading the client ends the session - so the cuffs come off with it.
-        // Done here rather than left to the room-leave path below because that
-        // path is conditional (Dispose only runs it while CurrentRoom is set) and
-        // the registry is not: it is keyed by player id and lives as long as the
-        // emulator, so anything missed follows the player into their next session.
-        // CurrentRoom is still set at this point, which is what lets the escort
-        // unpair properly; a session that has already lost its room clears anyway.
-        Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.Forget(CurrentRoom, Id);
-        // pixelrp jail: a sentence is not session state - it waits for them.
-        // Only its clock stops, saved where it is.
-        Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.OnLogout(Id);
-
-        Disconnected?.Invoke(this, EventArgs.Empty);
-
+        // pixelrp: every step below runs on its own (LogoutStep). They used to
+        // run bare, one after another, so a single throw - a database pool
+        // timeout is enough - skipped everything after it: the player was never
+        // unregistered, their avatar stayed standing in the room, and the room
+        // never unloaded. Now a failing step is logged and the rest still run,
+        // and the finally makes sure the player always leaves the hotel.
         try
         {
-            if (Process != null)
-                Process.Dispose();
+            LogoutStep(() => Corporations.ShiftManager.InterruptForDisconnect(this));
+            // pixelrp: a jam holds your place rather than dropping you. Reloading
+            // the client is a disconnect, and a jam you lose by refreshing the page
+            // is not a jam anybody can use - so this only marks you away, and the
+            // jam's own cycle gives up on you a minute and a half later.
+            LogoutStep(() => Jam.JamManager.OnDisconnect(Id));
+            // pixelrp: drop this player from any shared note they had open
+            LogoutStep(() => Notes.NotesUtility.ClearPresence(Id));
+            // pixelrp: and forget which support conversation they were reading -
+            // the registry is keyed by player id and outlives the session.
+            LogoutStep(() => Support.SupportUtility.Forget(Id));
+            // pixelrp offers: and any sale they were half way through.
+            LogoutStep(() => Rooms.Offers.OfferState.Forget(Id));
+            // pixelrp trading: and any trade - nothing changes hands.
+            LogoutStep(() => Rooms.Trading.RpTrades.Forget(Id, true));
+            // pixelrp gym: the online clock stops here, and the training done
+            // since the last save is kept.
+            LogoutStep(() => Rooms.Gym.GymState.OnLogout(this));
+            // pixelrp police: logging out in handcuffs is an arrest - charged with
+            // Logout and booked, the cuffs back to their officer. First, while the
+            // cuff is still on record: Forget below is what takes it off.
+            LogoutStep(() => Plus.HabboHotel.Rooms.Chat.Commands.User.Police.ArrestCommand.OnCuffedLogout(this));
+            // pixelrp police: a cuff, a stun and an escort are all session state, and
+            // reloading the client ends the session - so the cuffs come off with it.
+            // Done here rather than left to the room-leave path below because that
+            // path is conditional (Dispose only runs it while CurrentRoom is set) and
+            // the registry is not: it is keyed by player id and lives as long as the
+            // emulator, so anything missed follows the player into their next session.
+            // CurrentRoom is still set at this point, which is what lets the escort
+            // unpair properly; a session that has already lost its room clears anyway.
+            LogoutStep(() => Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.Forget(CurrentRoom, Id));
+            // pixelrp jail: a sentence is not session state - it waits for them.
+            // Only its clock stops, saved where it is.
+            LogoutStep(() => Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.OnLogout(Id));
+
+            LogoutStep(() => Disconnected?.Invoke(this, EventArgs.Empty));
         }
-        catch { }
-        _disconnected = true;
-        PlusEnvironment.Game.ClientManager.UnregisterClient(Id, Username);
-        if (!_habboSaved)
+        finally
         {
-            _habboSaved = true;
-            using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-            dbClient.RunQuery(
-                $"UPDATE `users` SET `online` = false, `last_online` = '{(int)UnixTimestamp.GetNow()}', `activity_points` = '{Duckets}', `credits` = '{Credits}', `vip_points` = '{Diamonds}', `home_room` = '{HomeRoom}', `gotw_points` = '{GotwPoints}', `time_muted` = '{TimeMuted}',`friend_bar_state` = '{FriendBarStateUtility.GetInt(FriendbarState)}', `bubble_id` = '{CustomBubbleId}' WHERE id = '{Id}' LIMIT 1;UPDATE `user_statistics` SET `roomvisits` = '{HabboStats.RoomVisits}', `onlineTime` = '{OnlineTimeTotal}', `respect` = '{HabboStats.Respect}', `respectGiven` = '{HabboStats.RespectGiven}', `giftsGiven` = '{HabboStats.GiftsGiven}', `giftsReceived` = '{HabboStats.GiftsReceived}', `dailyRespectPoints` = '{HabboStats.DailyRespectPoints}', `dailyPetRespectPoints` = '{HabboStats.DailyPetRespectPoints}', `AchievementScore` = '{HabboStats.AchievementPoints}', `quest_id` = '{HabboStats.QuestId}', `quest_progress` = '{HabboStats.QuestProgress}', `groupid` = '{HabboStats.FavouriteGroupId}',`forum_posts` = '{HabboStats.ForumPosts}' WHERE `id` = '{Id}' LIMIT 1;");
-            if (Permissions.HasRight("mod_tickets"))
-                dbClient.RunQuery($"UPDATE `moderation_tickets` SET `status` = 'open', `moderator_id` = '0' WHERE `status` ='picked' AND `moderator_id` = '{Id}'");
+            try
+            {
+                if (Process != null)
+                    Process.Dispose();
+            }
+            catch { }
+            _disconnected = true;
+            LogoutStep(() => PlusEnvironment.Game.ClientManager.UnregisterClient(Id, Username));
+            if (!_habboSaved)
+            {
+                _habboSaved = true;
+                LogoutStep(() =>
+                {
+                    using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+                    dbClient.RunQuery(
+                        $"UPDATE `users` SET `online` = false, `last_online` = '{(int)UnixTimestamp.GetNow()}', `activity_points` = '{Duckets}', `credits` = '{Credits}', `vip_points` = '{Diamonds}', `home_room` = '{HomeRoom}', `gotw_points` = '{GotwPoints}', `time_muted` = '{TimeMuted}',`friend_bar_state` = '{FriendBarStateUtility.GetInt(FriendbarState)}', `bubble_id` = '{CustomBubbleId}' WHERE id = '{Id}' LIMIT 1;UPDATE `user_statistics` SET `roomvisits` = '{HabboStats.RoomVisits}', `onlineTime` = '{OnlineTimeTotal}', `respect` = '{HabboStats.Respect}', `respectGiven` = '{HabboStats.RespectGiven}', `giftsGiven` = '{HabboStats.GiftsGiven}', `giftsReceived` = '{HabboStats.GiftsReceived}', `dailyRespectPoints` = '{HabboStats.DailyRespectPoints}', `dailyPetRespectPoints` = '{HabboStats.DailyPetRespectPoints}', `AchievementScore` = '{HabboStats.AchievementPoints}', `quest_id` = '{HabboStats.QuestId}', `quest_progress` = '{HabboStats.QuestProgress}', `groupid` = '{HabboStats.FavouriteGroupId}',`forum_posts` = '{HabboStats.ForumPosts}' WHERE `id` = '{Id}' LIMIT 1;");
+                    if (Permissions.HasRight("mod_tickets"))
+                        dbClient.RunQuery($"UPDATE `moderation_tickets` SET `status` = 'open', `moderator_id` = '0' WHERE `status` ='picked' AND `moderator_id` = '{Id}'");
+                });
+            }
+            // pixelrp: the Wanted list only carries players who are HERE, so
+            // leaving has to be announced or the rest of the hotel keeps a row for
+            // somebody who has gone - and with the clock frozen it would sit there
+            // at a fixed number forever rather than counting itself off.
+            //
+            // AFTER UnregisterClient above, deliberately: the broadcast rebuilds
+            // the list from who is registered, so running it any earlier would
+            // send one that still had this player on it.
+            LogoutStep(() => Corporations.WantedUtility.Broadcast());
+            // pixelrp discord sync: drop the Online role shortly after logout.
+            LogoutStep(() => Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(Id, "logout"));
+            LogoutStep(() => Dispose());
+            Client = null;
         }
-        // pixelrp: the Wanted list only carries players who are HERE, so
-        // leaving has to be announced or the rest of the hotel keeps a row for
-        // somebody who has gone - and with the clock frozen it would sit there
-        // at a fixed number forever rather than counting itself off.
-        //
-        // AFTER UnregisterClient above, deliberately: the broadcast rebuilds
-        // the list from who is registered, so running it any earlier would
-        // send one that still had this player on it.
-        Corporations.WantedUtility.Broadcast();
-        // pixelrp discord sync: drop the Online role shortly after logout.
-        Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(Id, "logout");
-        Dispose();
-        Client = null;
+    }
+
+    /// <summary>
+    /// pixelrp: one step of <see cref="OnDisconnect"/>. A step that throws is
+    /// logged, and the logout carries on with the next one.
+    /// </summary>
+    private static void LogoutStep(Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception e)
+        {
+            Plus.Core.ExceptionLogger.LogException(e);
+        }
     }
 
     public void Dispose()
     {
+        // pixelrp: the room's user manager is null once the room has been
+        // unloaded with this player still inside it (Room.Dispose - :unload,
+        // a crashed room). There is nobody left to remove them from then, and
+        // calling through it threw out of the logout.
         if (InRoom && CurrentRoom != null)
-            CurrentRoom.GetRoomUserManager().RemoveUserFromRoom(Client, false);
+            CurrentRoom.GetRoomUserManager()?.RemoveUserFromRoom(Client, false);
         if (Effects != null)
             Effects.Dispose();
         if (Clothing != null)

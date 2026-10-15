@@ -45,7 +45,21 @@ public abstract class GameClient
         _server = server;
     }
 
-    internal void OnDisconnected() => _habbo?.OnDisconnect();
+    internal void OnDisconnected()
+    {
+        // pixelrp: NetCoreServer only unregisters the session after this
+        // returns, so a throw out of the logout left a dead session in its
+        // lists for good. The logout guards its own steps (Habbo.OnDisconnect);
+        // this is the last line behind them.
+        try
+        {
+            _habbo?.OnDisconnect();
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, $"Logout failed for session {Id}");
+        }
+    }
 
     /// <summary>
     /// Upper bound on a single incoming frame. Real client packets are a few hundred bytes at
