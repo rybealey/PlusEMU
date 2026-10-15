@@ -717,6 +717,9 @@ public class Habbo
             LogoutStep(() => Rooms.Offers.OfferState.Forget(Id));
             // pixelrp trading: and any trade - nothing changes hands.
             LogoutStep(() => Rooms.Trading.RpTrades.Forget(Id, true));
+            // pixelrp banking: and the ATM they were standing at - that is
+            // session state too, and nothing else ever took the entry out.
+            LogoutStep(() => Banking.AtmSessions.End(Id));
             // pixelrp gym: the online clock stops here, and the training done
             // since the last save is kept.
             LogoutStep(() => Rooms.Gym.GymState.OnLogout(this));
@@ -773,6 +776,12 @@ public class Habbo
             // pixelrp discord sync: drop the Online role shortly after logout.
             LogoutStep(() => Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(Id, "logout"));
             LogoutStep(() => Dispose());
+            // pixelrp hospital: a player who logs out while knocked out starts
+            // the clock again when they come back (HospitalAdmission's own
+            // rule) - but the old entry stayed, so the first tick after their
+            // return admitted them at once. After Dispose, which takes them
+            // out of the room, so its tick has nobody left to start one for.
+            LogoutStep(() => Rooms.HospitalAdmission.Forget(Id));
             Client = null;
         }
     }

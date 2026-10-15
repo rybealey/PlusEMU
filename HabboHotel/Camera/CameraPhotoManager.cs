@@ -143,4 +143,10 @@ public class CameraPhotoManager : ICameraPhotoManager
             return true;
         }
     }
+
+    public void Forget(int userId)
+    {
+        _pendingPhotos.TryRemove(userId, out _);
+        _pendingThumbnails.TryRemove(userId, out _);
+    }
 }

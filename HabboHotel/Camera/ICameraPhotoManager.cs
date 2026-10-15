@@ -53,4 +53,11 @@ public interface ICameraPhotoManager
     ///     (caller should still reply success but skip a second insert).
     /// </summary>
     bool TryMarkPublished(int userId);
+
+    /// <summary>
+    ///     pixelrp: drops the user's pending photo and thumbnail. Called at
+    ///     logout (CameraLogoutTask) - both are held per user, and nothing
+    ///     else ever let them go.
+    /// </summary>
+    void Forget(int userId);
 }
