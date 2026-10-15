@@ -36,6 +36,12 @@ public class Habbo
     public ClothingComponent Clothing { get; set; }
 
     private bool _disconnected;
+
+    // pixelrp: orders a logout against a login's InitProcess, which can run at
+    // the same moment on another thread - see InitProcess.
+    private readonly object _logoutLock = new();
+    private bool _logoutStarted;
+
     public EffectsComponent Effects { get; set; }
 
     private bool _habboSaved;
@@ -633,8 +639,19 @@ public class Habbo
 
     public bool InitProcess()
     {
-        Process = new();
-        return Process.Init(this);
+        // pixelrp: never once a logout has begun. A login carries on for a
+        // moment after its connection drops, and a timer started after the
+        // logout has been and gone is never stopped: it ticks for good and
+        // keeps this Habbo in memory with it. Under the lock OnDisconnect
+        // claims the logout with, so the timer is either started before that
+        // claim (and disposed by the logout) or not at all.
+        lock (_logoutLock)
+        {
+            if (_logoutStarted)
+                return false;
+            Process = new();
+            return Process.Init(this);
+        }
     }
 
     public bool InitFx()
@@ -669,6 +686,13 @@ public class Habbo
     {
         if (_disconnected)
             return;
+        // pixelrp: claimed under the lock InitProcess takes - see there.
+        lock (_logoutLock)
+        {
+            if (_logoutStarted)
+                return;
+            _logoutStarted = true;
+        }
 
         // pixelrp: every step below runs on its own (LogoutStep). They used to
         // run bare, one after another, so a single throw - a database pool

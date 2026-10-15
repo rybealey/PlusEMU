@@ -17,6 +17,25 @@ public abstract class GameClient
     private static readonly ILogger Log = LogManager.GetLogger("Plus.HabboHotel.GameClients.GameClient");
     private Habbo? _habbo;
 
+    // pixelrp: set once the connection has closed. Guarded by a lock that
+    // SetHabbo takes as well - see OnDisconnected.
+    private readonly object _disconnectLock = new();
+    private bool _disconnected;
+
+    /// <summary>
+    /// pixelrp: true once the connection has closed. A login is not stopped
+    /// by its connection dropping - its awaits just carry on - so the login
+    /// path asks this (Authenticator, SsoTicketEvent).
+    /// </summary>
+    public bool IsDisconnected
+    {
+        get
+        {
+            lock (_disconnectLock)
+                return _disconnected;
+        }
+    }
+
     public RecyclableMemoryStream? _incompleteStream;
     public Arc4? Rc4Client { get; set; }
 
@@ -47,13 +66,23 @@ public abstract class GameClient
 
     internal void OnDisconnected()
     {
+        // pixelrp: the flag is set and the Habbo read in one step, under the
+        // lock SetHabbo takes too. A login whose connection drops therefore
+        // either has its Habbo seen here and logged out, or finds the flag set
+        // itself straight after SetHabbo (Authenticator) - never neither.
+        Habbo? habbo;
+        lock (_disconnectLock)
+        {
+            _disconnected = true;
+            habbo = _habbo;
+        }
         // pixelrp: NetCoreServer only unregisters the session after this
         // returns, so a throw out of the logout left a dead session in its
         // lists for good. The logout guards its own steps (Habbo.OnDisconnect);
         // this is the last line behind them.
         try
         {
-            _habbo?.OnDisconnect();
+            habbo?.OnDisconnect();
         }
         catch (Exception e)
         {
@@ -144,8 +173,12 @@ public abstract class GameClient
 
     public void SetHabbo(Habbo habbo)
     {
-        if (_habbo != null) throw new InvalidOperationException();
-        _habbo = habbo;
+        // pixelrp: under the disconnect lock - see OnDisconnected.
+        lock (_disconnectLock)
+        {
+            if (_habbo != null) throw new InvalidOperationException();
+            _habbo = habbo;
+        }
     }
 
     /// <summary>

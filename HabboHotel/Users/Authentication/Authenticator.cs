@@ -48,6 +48,16 @@ internal class Authenticator : IAuthenticator
         habbo.Disconnected += async (_, _) => await OnHabboDisconnected(habbo);
 
         session.SetHabbo(habbo);
+        // pixelrp: the connection can close during the awaits above - a
+        // refresh on the loading screen, or PacketManager giving up on a slow
+        // login after 5 seconds - and then GameClient.OnDisconnected found no
+        // Habbo to log out. Carrying on registered a player nobody would ever
+        // log out: online for good, and kept in memory by its process timer.
+        // So stop here, before anything is registered: there is nothing to
+        // undo. (Closed after SetHabbo, OnDisconnected saw this Habbo and is
+        // logging it out itself.)
+        if (session.IsDisconnected)
+            return AuthenticationError.ConnectionClosed;
 
         // TODO @80O: Remove after splitting up
         habbo.Init(session);
@@ -57,6 +67,24 @@ internal class Authenticator : IAuthenticator
         // CMS online counter — read 0 regardless of live connections.
         await MarkOnline(habbo.Id);
         await RaiseHabboLoggedIn(habbo);
+        // pixelrp: closed since SetHabbo, so OnDisconnected is logging this
+        // Habbo out on its own thread - and that can finish before the three
+        // steps above, which then put a player who has gone back on the
+        // register, online, and into their friends' lists. Undo them, unless a
+        // newer session of the same player already holds the id (it owns all
+        // three then), and stop the login here.
+        if (session.IsDisconnected)
+        {
+            var current = _gameClientManager.GetClientByUserId(habbo.Id);
+            if (current == null || current == session)
+            {
+                if (current == session)
+                    _gameClientManager.UnregisterClient(habbo.Id, habbo.Username);
+                await MarkOffline(habbo.Id);
+                await OnHabboDisconnected(habbo);
+            }
+            return AuthenticationError.ConnectionClosed;
+        }
         return null;
     }
 
@@ -64,6 +92,12 @@ internal class Authenticator : IAuthenticator
     {
         using var connection = _database.Connection();
         await connection.ExecuteAsync("UPDATE users SET online = true WHERE id = @userId", new { userId });
+    }
+
+    private async Task MarkOffline(int userId)
+    {
+        using var connection = _database.Connection();
+        await connection.ExecuteAsync("UPDATE users SET online = false WHERE id = @userId", new { userId });
     }
 
     private async Task<int> GetUserIdFromSso(string sso)

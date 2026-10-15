@@ -255,6 +255,13 @@ public class SsoTicketEvent : IPacketEvent
                 _cacheManager.GenerateUser(session.GetHabbo().Id);
             // pixelrp: login never strips club parts (soft lapse) - only outfit saves validate club access.
             session.GetHabbo().Look = _figureManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().IsStaff);
+            // pixelrp: a connection that closed during the login above has
+            // been logged out already (GameClient.OnDisconnected). The process
+            // timer must not start for it - nothing would ever stop it, and it
+            // keeps the Habbo in memory - and the rest of the login is for
+            // nobody. (InitProcess refuses too, for a close landing between.)
+            if (session.IsDisconnected)
+                return;
             session.GetHabbo().InitProcess();
             if (session.GetHabbo().Permissions.HasRight("mod_tickets"))
             {
