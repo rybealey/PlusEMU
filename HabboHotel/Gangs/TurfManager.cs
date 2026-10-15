@@ -350,7 +350,9 @@ public static class TurfManager
         Recolour(room);
 
         room.SendPacket(new ChatComposer(claimer.VirtualId, $"*claims this turf for {capture.GangName}*", 0, ActionBubble));
-        GangAlert(capture.GangId, $"[Turf]: {capture.GangName} now holds {room.Name}.");
+        // pixelrp: the claimers are told it is their own gang; the gang it was
+        // taken from (below) is told which gang took it.
+        GangAlert(capture.GangId, $"[Turf]: Your gang has successfully claimed {room.Name}.");
         if (previous > 0 && previous != capture.GangId)
             GangAlert(previous, $"[Turf]: {capture.GangName} took {room.Name}.");
     }
