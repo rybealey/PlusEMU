@@ -254,11 +254,13 @@ public class RoomUserManager
             // wall), falls back to the door. The marker is single-use: cleared below on
             // ANY room entry.
             var restore = session.GetHabbo().PendingRestore;
+            Console.WriteLine($"[RESTORE] enter room={_room.RoomId} user={session.GetHabbo().Id} marker=" + (restore == null ? "null" : $"(room={restore.RoomId} x={restore.X} y={restore.Y} rot={restore.Rot} fresh={restore.IsFresh}) mapX={model.MapSizeX} mapY={model.MapSizeY}"));
             if (restore != null && restore.IsFresh && restore.RoomId == _room.RoomId
                 && restore.X >= 0 && restore.X < model.MapSizeX
                 && restore.Y >= 0 && restore.Y < model.MapSizeY
                 && model.SqState[restore.X, restore.Y] != SquareState.Blocked)
             {
+                Console.WriteLine($"[RESTORE] APPLIED user={session.GetHabbo().Id} -> ({restore.X},{restore.Y}) rot={restore.Rot}");
                 user.SetPos(restore.X, restore.Y, _room.GetGameMap().SqAbsoluteHeight(restore.X, restore.Y));
                 // Bypass SetRot's sit/head-turn heuristic (it can leave RotBody at 0 for
                 // some diffs, e.g. rotation 1) - assign body/head rotation directly,
@@ -269,6 +271,7 @@ public class RoomUserManager
             }
             else
             {
+                Console.WriteLine($"[RESTORE] DOOR user={session.GetHabbo().Id} room={_room.RoomId} notnull={restore != null} fresh={(restore?.IsFresh)} roommatch={(restore != null && restore.RoomId == _room.RoomId)} xob={(restore != null && restore.X >= 0 && restore.X < model.MapSizeX)} yob={(restore != null && restore.Y >= 0 && restore.Y < model.MapSizeY)} sq={((restore != null && restore.X >= 0 && restore.X < model.MapSizeX && restore.Y >= 0 && restore.Y < model.MapSizeY) ? model.SqState[restore.X, restore.Y].ToString() : "n/a")}");
                 user.SetPos(model.DoorX, model.DoorY, model.DoorZ);
                 user.SetRot(model.DoorOrientation, false);
             }
