@@ -318,7 +318,7 @@ public class SsoTicketEvent : IPacketEvent
                         new { userId = session.GetHabbo().Id });
                     if (last.RoomId > 0)
                     {
-                        session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot);
+                        session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot, ttlSeconds: 0);
                         session.SendRoomForward(last.RoomId);
                     }
                     else
