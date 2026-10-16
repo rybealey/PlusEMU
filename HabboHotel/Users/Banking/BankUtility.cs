@@ -583,6 +583,16 @@ public static class BankUtility
         {
             try
             {
+                // pixelrp: the "are you carrying that much?" check above runs
+                // outside the lock, so re-ask it in here before the hand is
+                // debited - otherwise two deposits that both passed it could
+                // each subtract and drive the hand negative.
+                if (amount > habbo.Credits)
+                {
+                    account = Get(habbo.Id);
+                    message = "You are not carrying that much.";
+                    return BankResult.InsufficientFunds;
+                }
                 using var connection = PlusEnvironment.DatabaseManager.Connection();
                 if (Load(connection, habbo.Id) == null)
                 {

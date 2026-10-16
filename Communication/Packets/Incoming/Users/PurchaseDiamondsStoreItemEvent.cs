@@ -24,13 +24,18 @@ internal class PurchaseDiamondsStoreItemEvent : IPacketEvent
             session.Send(new DiamondsStorePurchaseResultComposer(1, itemKey));
             return Task.CompletedTask;
         }
+        // pixelrp: charge first, then deliver, and give it back if delivery
+        // fails - so a backpack that turns out to be full (or a crash between
+        // the two) can never hand over the item without taking the diamonds,
+        // nor take them without handing it over.
+        habbo.Diamonds -= item.EffectivePrice;
         var slot = habbo.AddRpItem(item.ItemKey);
         if (slot == -1)
         {
+            habbo.Diamonds += item.EffectivePrice;
             session.Send(new DiamondsStorePurchaseResultComposer(2, itemKey));
             return Task.CompletedTask;
         }
-        habbo.Diamonds -= item.EffectivePrice;
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `users` SET `vip_points` = @diamonds WHERE `id` = @id LIMIT 1");

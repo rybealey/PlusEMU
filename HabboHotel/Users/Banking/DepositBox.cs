@@ -231,7 +231,7 @@ public static class DepositBox
     private static void RemoveOne(int userId, int slot)
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `count` = `count` - 1 WHERE `user_id` = @id AND `slot` = @slot");
+        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `count` = `count` - 1 WHERE `user_id` = @id AND `slot` = @slot AND `count` > 0");
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.RunQuery();
