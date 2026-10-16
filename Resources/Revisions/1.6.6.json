@@ -423,6 +423,7 @@
     "RpCatalogMoveFurniEvent": 4200,
     "RpCatalogFavouritesRequestEvent": 4202,
     "RpCatalogFavouriteEvent": 4204,
+    "RpMedicalCallClaimEvent": 4206,
     "RpSupportOpenEvent": 4046,
     "RpSupportStartEvent": 4047,
     "RpSupportSendEvent": 4048,

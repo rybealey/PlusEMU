@@ -889,6 +889,9 @@ public static class PoliceState
         EndEscort(room, captor.UserId, patient, restorePose: false);
         manager.UpdateUserStatus(patient, false);
         patient.UpdateNeeded = true;
+        // Paramedic Dispatch: the patient's call reads "Revived by" this medic,
+        // and frees whoever claimed it for the next one.
+        Corporations.MedicalCalls.OnDropOff(captor.GetClient(), patientId);
         return DropOffResult.LaidOnBed;
     }
 

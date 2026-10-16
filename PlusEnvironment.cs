@@ -146,6 +146,9 @@ public class PlusEnvironment : IPlusEnvironment
             // a 15 minute interval and purges past 90 days, which is the whole
             // history behind the phone's Stocks app.
             HabboHotel.Corporations.StockLedger.Init();
+            // pixelrp: Paramedic Dispatch - the beat that moves an unclaimed
+            // call on to the next paramedic after 10 seconds.
+            HabboHotel.Corporations.MedicalCalls.Init();
             // pixelrp: phone notifications - starts the sweep that spots an
             // event about to begin. Everything else is pushed as it happens.
             HabboHotel.Notifications.NotificationUtility.Init();
