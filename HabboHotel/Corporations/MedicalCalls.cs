@@ -1,4 +1,5 @@
 using Dapper;
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
@@ -55,7 +56,7 @@ public static class MedicalCalls
     public const int WindowSize = 20;
 
     /// <summary>How long one paramedic has to claim a call before it moves on.</summary>
-    public const int ClaimSeconds = 10;
+    public const int ClaimSeconds = 15;
 
     /// <summary>A claim pressed on the last beat still counts - the trip from the client takes time.</summary>
     private const double ClaimGraceSeconds = 1.0;
@@ -97,6 +98,8 @@ public static class MedicalCalls
         public DateTime OfferExpiresAt { get; set; }
         /// <summary>Whoever it was last offered to, so the turn moves on from them.</summary>
         public int LastOfferedId { get; set; }
+        /// <summary>Paramedics who were offered it and let it lapse: never offered it again.</summary>
+        public HashSet<int> MissedBy { get; init; } = new();
         /// <summary>
         /// Whoever claimed it, kept after it closes so it stays on their queue
         /// with how it ended; 0 while unclaimed, or after the claim was let go.
@@ -243,7 +246,8 @@ public static class MedicalCalls
                 call.ClaimedById = habbo.Id;
                 call.ActorName = habbo.Username;
                 claimed = call.Copy();
-                notice = $"You claimed {call.PatientName}'s call. They are in {(call.RoomName.Length > 0 ? call.RoomName : "an unknown room")}.";
+                // pixelrp: no "you claimed" notice - pressing Claim is confirmation enough (Twist).
+                notice = "";
             }
         }
 
@@ -328,8 +332,14 @@ public static class MedicalCalls
 
                     if (call.State == StateOffered && (now > call.OfferExpiresAt.AddSeconds(ClaimGraceSeconds) || !onDuty.Contains(call.ActorId)))
                     {
+                        // A paramedic who let their offer lapse (not one who just
+                        // clocked off): a blue action bubble over them, and they
+                        // never get THIS call again, even with nobody else free.
                         if (onDuty.Contains(call.ActorId))
-                            missed[call.ActorId] = $"You did not claim {call.PatientName}'s call in time - it went to the next paramedic.";
+                        {
+                            AnnounceMiss(call.ActorId);
+                            call.MissedBy.Add(call.ActorId);
+                        }
                         Release(call);
                         changed = true;
                     }
@@ -346,10 +356,6 @@ public static class MedicalCalls
                     var next = NextMedic(call, medics);
                     if (next == null)
                         continue;
-                    // Back to the paramedic who just missed it - the only one
-                    // free - is not "the next paramedic": no notice for that.
-                    if (next.Value.Id == call.LastOfferedId)
-                        missed.Remove(next.Value.Id);
                     call.State = StateOffered;
                     call.ActorId = next.Value.Id;
                     call.ActorName = next.Value.Name;
@@ -367,6 +373,15 @@ public static class MedicalCalls
         {
             Console.WriteLine($"[MedicalCalls] tick failed: {exception}");
         }
+    }
+
+    /// <summary>A blue action bubble over a paramedic who let their offer lapse.</summary>
+    private static void AnnounceMiss(int medicId)
+    {
+        var room = PlusEnvironment.Game.ClientManager.GetClientByUserId(medicId)?.GetHabbo()?.CurrentRoom;
+        var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(medicId);
+        if (user != null)
+            room!.SendPacket(new ChatComposer(user.VirtualId, "*has missed their call.*", 0, 4));
     }
 
     /// <summary>Back into the turn, from the paramedic after the one who had it.</summary>
@@ -417,7 +432,7 @@ public static class MedicalCalls
         var free = new List<(int Id, string Name)>();
         foreach (var medic in medics.OrderBy(medic => medic.UserId))
         {
-            if (busy.Contains(medic.UserId) || medic.UserId == call.PatientId || medic.Root == call.PatientRoot)
+            if (busy.Contains(medic.UserId) || call.MissedBy.Contains(medic.UserId) || medic.UserId == call.PatientId || medic.Root == call.PatientRoot)
                 continue;
             var habbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(medic.UserId)?.GetHabbo();
             if (habbo == null)

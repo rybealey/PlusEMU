@@ -112,6 +112,15 @@ public static class MedicalBed
             return;
         }
 
+        // Lay them ON the bed, not on the floor beside it. A patient carried or
+        // auto-admitted while knocked out arrives in the knockout's own floor
+        // lay (IsLying), which UpdateUserStatus leaves untouched - so the bed's
+        // own lay never goes on. Drop the floor lay here and let the bed supply
+        // its lay, the same end state a paramedic drop-off produces; and once
+        // they come round (the lift above strips the lay) it puts the bed's
+        // lay back, so they stay lying until they are discharged.
+        EnsureBedLay(room, user, bed);
+
         // Start a course, or pick one back up after fresh damage. An already
         // running regen is left alone - a medkit taken before lying down is
         // faster than the bed for anyone without VIP, and overriding it would
@@ -151,6 +160,28 @@ public static class MedicalBed
             user.CanWalk = false;
             user.UpdateNeeded = true;
         }
+    }
+
+    /// <summary>
+    /// Put the patient on the bed's own lay in place of the knockout floor lay
+    /// (or none, just after they come round). The bed lay is furni-owned and
+    /// keeps IsLying false, so once it is on, this is a no-op every later tick.
+    /// </summary>
+    private static void EnsureBedLay(Room room, RoomUser user, Item bed)
+    {
+        // Already on the bed's lay (furni lay, IsLying false): nothing to do.
+        if (!user.IsLying && user.Statusses.ContainsKey("lay"))
+            return;
+        // The knockout's floor lay carries IsLying; drop it so UpdateUserStatus
+        // does not bail early and can add the bed's lay in its place. It resets
+        // Z to the bed itself, so the 0.35 the floor lay took is undone there.
+        if (user.IsLying && user.Statusses.ContainsKey("lay"))
+        {
+            user.Statusses.Remove("lay");
+            user.IsLying = false;
+        }
+        room.GetRoomUserManager()?.UpdateUserStatus(user, false);
+        user.UpdateNeeded = true;
     }
 
     /// <summary>
