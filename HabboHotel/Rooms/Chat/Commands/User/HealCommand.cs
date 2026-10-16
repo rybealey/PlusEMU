@@ -18,7 +18,7 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 /// spent, it works exactly as a medkit does when you use it on yourself - the
 /// bar refills over a minute, with no instant jab - and it only reaches people
 /// you already have a reason to be patching up: your own gang, or, for an
-/// on-duty officer, the person they are walking in cuffs.
+/// on-duty officer, anyone who is not in cuffs (their own prisoner included).
 ///
 /// The second path does NOT ask permission, and that is deliberate. The card
 /// exists because a SALE has a price and a price needs consent; a medkit out
@@ -71,8 +71,9 @@ internal class HealCommand : ITargetChatCommand
     {
         if (!Entitled(habbo, target))
         {
-            session.SendWhisper(MedicalUtility.IsHospitalStaff(habbo.Id)
-                ? "You have to be on duty to treat somebody."
+            session.SendWhisper(
+                MedicalUtility.IsHospitalStaff(habbo.Id) ? "You have to be on duty to treat somebody."
+                : PoliceUtility.CanActAsOfficer(habbo.Id) ? "You can't patch up somebody who's in cuffs."
                 : "You can only patch up your own gang, or somebody you have in custody.");
             return Task.CompletedTask;
         }
@@ -151,11 +152,9 @@ internal class HealCommand : ITargetChatCommand
     /// <summary>
     /// Whether these two have any business doing first aid on each other.
     ///
-    /// Two ways in, and both are relationships the hotel already maintains
-    /// rather than anything this command invents: the same gang, or an on-duty
-    /// officer and the person they are currently escorting. Asked of the
-    /// ESCORT registry rather than of the cuffs, because escorting is the
-    /// state that means "this person is in my care right now".
+    /// Two ways in: the same gang, or an on-duty officer treating anyone who
+    /// is not in cuffs - plus their own escorted prisoner, who is. A cuffed
+    /// person is otherwise off limits; they are somebody's business already.
     /// </summary>
     private static bool Entitled(Habbo habbo, Habbo target)
     {
@@ -164,6 +163,9 @@ internal class HealCommand : ITargetChatCommand
         if (mine != null && theirs != null && mine.GangId != 0 && mine.GangId == theirs.GangId)
             return true;
 
-        return PoliceUtility.CanActAsOfficer(habbo.Id) && (PoliceState.SuspectOf(habbo.Id) == target.Id);
+        // An on-duty officer can patch up anyone who is NOT in cuffs, and
+        // still their own prisoner even though that person is cuffed.
+        return PoliceUtility.CanActAsOfficer(habbo.Id)
+            && (!PoliceState.IsCuffed(target.Id) || PoliceState.SuspectOf(habbo.Id) == target.Id);
     }
 }
