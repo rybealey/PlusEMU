@@ -12,11 +12,17 @@ namespace Plus.HabboHotel.Corporations;
 ///
 /// Nobody calls it: every time a player goes down (0 health, from
 /// RoomUserManager.ApplyRpKnockout) the queue gets an entry - who went down and
-/// the room they went down in. Every on-duty paramedic and above (the ranks
-/// <see cref="MedicalUtility.IsOnDutyParamedic"/> clears for emergency work)
-/// sees the whole queue. The window opens on clock-in and closes on clock-out
-/// (PushWindow, from PoliceUtility.PushPardonRights, which runs at exactly
-/// those moments); its X only puts it away, and :calls brings it back.
+/// the room they went down in - dispatched to on-duty paramedics and above
+/// (the ranks <see cref="MedicalUtility.IsOnDutyParamedic"/> clears for
+/// emergency work).
+///
+/// A paramedic sees ONLY their own dispatch calls (2026-10-16): the call
+/// offered to them, and the ones they claimed or dropped off, to the end -
+/// never another paramedic's (<see cref="IsTheirs"/>). The window is sent on
+/// clock-in and taken away on clock-out (PushWindow, from
+/// PoliceUtility.PushPardonRights, which runs at exactly those moments), but
+/// it only comes up on screen when a call is offered to them; its X puts it
+/// away, and :calls brings it back.
 ///
 /// ROUND ROBIN (2026-10-16). A death is offered to ONE paramedic at a time,
 /// whose window comes up on it with a Claim button. Unclaimed after
@@ -91,6 +97,11 @@ public static class MedicalCalls
         public DateTime OfferExpiresAt { get; set; }
         /// <summary>Whoever it was last offered to, so the turn moves on from them.</summary>
         public int LastOfferedId { get; set; }
+        /// <summary>
+        /// Whoever claimed it, kept after it closes so it stays on their queue
+        /// with how it ended; 0 while unclaimed, or after the claim was let go.
+        /// </summary>
+        public int ClaimedById { get; set; }
 
         public bool IsOpen => State is StateWaiting or StateOffered or StateClaimed;
 
@@ -119,12 +130,23 @@ public static class MedicalCalls
     /// <summary>The offer clock. Free while nothing is open: one scan of at most <see cref="WindowSize"/>.</summary>
     public static void Init() => _timer = new System.Threading.Timer(_ => Tick(), null, TickMs, TickMs);
 
-    /// <summary>The window's deaths, newest first, as they stand now.</summary>
-    public static List<Death> Newest()
+    /// <summary>Every death, newest first, as they stand now.</summary>
+    private static List<Death> Snapshot()
     {
         lock (Lock)
             return Deaths.Select(death => death.Copy()).ToList();
     }
+
+    /// <summary>One paramedic's window: their own dispatch calls, newest first.</summary>
+    public static List<Death> Newest(int userId) => Snapshot().Where(death => IsTheirs(death, userId)).ToList();
+
+    /// <summary>
+    /// Offered to them right now, claimed by them, or dropped off by them. A
+    /// call offered to somebody else, or one they let run out, is not theirs.
+    /// </summary>
+    private static bool IsTheirs(Death death, int userId) =>
+        userId > 0 && (death.ClaimedById == userId ||
+                       (death.ActorId == userId && death.State is StateOffered or StateRevived));
 
     /// <summary>A player has just gone down in `room`. Report it and offer it round.</summary>
     public static void OnDeath(Room room, RoomUser user)
@@ -218,6 +240,7 @@ public static class MedicalCalls
             else
             {
                 call.State = StateClaimed;
+                call.ClaimedById = habbo.Id;
                 call.ActorName = habbo.Username;
                 claimed = call.Copy();
                 notice = $"You claimed {call.PatientName}'s call. They are in {(call.RoomName.Length > 0 ? call.RoomName : "an unknown room")}.";
@@ -226,7 +249,7 @@ public static class MedicalCalls
 
         if (claimed == null)
         {
-            session.Send(new RpMedicalCallsComposer(true, Newest(), notice));
+            session.Send(new RpMedicalCallsComposer(true, Newest(habbo.Id), notice));
             return;
         }
         PlusEnvironment.Game.ClientManager.GetClientByUserId(claimed.PatientId)?
@@ -244,7 +267,7 @@ public static class MedicalCalls
     {
         if (session?.GetHabbo() == null)
             return;
-        session.Send(onDuty ? new RpMedicalCallsComposer(true, Newest()) : new RpMedicalCallsComposer(false, new List<Death>()));
+        session.Send(onDuty ? new RpMedicalCallsComposer(true, Newest(session.GetHabbo().Id)) : new RpMedicalCallsComposer(false, new List<Death>()));
         Tick();
     }
 
@@ -253,7 +276,7 @@ public static class MedicalCalls
     /// away with its X. The caller has checked the duty.
     /// </summary>
     public static void Reopen(GameClient session) =>
-        session.Send(new RpMedicalCallsComposer(true, Newest(), reopen: true));
+        session.Send(new RpMedicalCallsComposer(true, Newest(session.GetHabbo().Id), reopen: true));
 
     private static bool AnyOpen()
     {
@@ -352,6 +375,7 @@ public static class MedicalCalls
         call.State = StateWaiting;
         call.ActorId = 0;
         call.ActorName = "";
+        call.ClaimedById = 0;
     }
 
     /// <summary>
@@ -410,16 +434,18 @@ public static class MedicalCalls
     }
 
     /// <summary>
-    /// The queue to every on-duty paramedic and above; `noticeFor` alone is
-    /// also told `notice`, and each paramedic in `missed` is told theirs.
+    /// Every on-duty paramedic and above their own queue - so a call that
+    /// moved on leaves the window of the one who missed it; `noticeFor` alone
+    /// is also told `notice`, and each paramedic in `missed` is told theirs.
     /// </summary>
     private static void Broadcast(List<Medic> medics, int noticeFor, string notice, Dictionary<int, string> missed)
     {
-        var deaths = Newest();
+        var deaths = Snapshot();
         foreach (var medic in medics)
         {
             var told = medic.UserId == noticeFor ? notice : missed.GetValueOrDefault(medic.UserId, "");
-            PlusEnvironment.Game.ClientManager.GetClientByUserId(medic.UserId)?.Send(new RpMedicalCallsComposer(true, deaths, told));
+            var theirs = deaths.Where(death => IsTheirs(death, medic.UserId)).ToList();
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(medic.UserId)?.Send(new RpMedicalCallsComposer(true, theirs, told));
         }
     }
 
