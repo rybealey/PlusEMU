@@ -603,6 +603,8 @@ public static class ClientPacketHeader
     public const uint RpCatalogFavouriteEvent = 4204;
     // pixelrp: Paramedic Dispatch's Claim button (MedicalCalls).
     public const uint RpMedicalCallClaimEvent = 4206;
+    // pixelrp: the browser guard sending a player back to the website (BrowserGuardLog).
+    public const uint RpBrowserGuardEvent = 4207;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
