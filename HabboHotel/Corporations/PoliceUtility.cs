@@ -133,6 +133,10 @@ public static class PoliceUtility
         session.Send(new Communication.Packets.Outgoing.Users.RpPoliceComposer(onDuty));
         // The Emergency Calls window is open exactly while this is true.
         EmergencyCalls.PushWindow(session, onDuty);
+        // The hospital's queue follows the same clock, for paramedics and
+        // above - pushed from here because this already runs at every moment
+        // a shift starts or ends, and at login.
+        MedicalCalls.PushWindow(session, MedicalUtility.IsOnDutyParamedic(habbo.Id));
     }
 
     public static bool RequireOnDuty(GameClient session, string verb)

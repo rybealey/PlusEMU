@@ -166,6 +166,9 @@ public class RoomUserManager
     {
         if (user == null)
             return;
+        // Every hit on somebody already down lands here too; only the moment
+        // they go down is a death.
+        var wasOut = user.RpKnockedOut;
         lock (_cycleLock)
         {
             user.UpdateRpKnockoutState();
@@ -184,6 +187,11 @@ public class RoomUserManager
             HospitalAdmission.OnKnockout(user);
             // Down on duty is off duty - except City Government (ShiftManager).
             Corporations.ShiftManager.InterruptForKnockout(user.GetClient());
+            // The hospital hears about it: the paramedics' emergency queue.
+            // After the clock-off above, so a paramedic who went down is not
+            // sent their own death.
+            if (!wasOut)
+                Corporations.MedicalCalls.OnDeath(_room, user);
         }
         else
         {
