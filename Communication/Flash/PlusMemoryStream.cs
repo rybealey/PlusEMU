@@ -12,10 +12,8 @@ public static class PlusMemoryStream
     // 256 blocks: set well above what ordinary traffic should have in use at
     // once, so the pools still serve it and only a burst's surplus is shed.
     //
-    // The 128 KB block size is kept on purpose: GameClient.OnReceived reads a
-    // whole received frame out of the stream's first block, so a frame
-    // larger than one block cannot be read - a smaller block would make that
-    // happen to ordinary frames.
+    // Incoming bytes no longer go through these streams (GameClient keeps its
+    // own buffer), so the 128 KB block size only matters for outgoing packets.
     public static readonly RecyclableMemoryStreamManager Manager = new(
         maximumSmallPoolFreeBytes: 32L * 1024 * 1024,
         maximumLargePoolFreeBytes: 32L * 1024 * 1024);

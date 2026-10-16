@@ -18,6 +18,11 @@ public class WsSessionProxy : WsSession
     private readonly GameClient _client;
     private int _overLimit;
 
+    // pixelrp: bytes in since the last whole WebSocket message. The socket library puts a
+    // message back together in full before handing it over, so this holds a message to the
+    // same limit as a packet while it does. Only touched on this session's receive thread.
+    private long _bytesSinceMessage;
+
     public WsSessionProxy(WsServer server, GameClient client) : base(server)
     {
         _client = client;
@@ -55,5 +60,32 @@ public class WsSessionProxy : WsSession
 
     protected override void OnDisconnected() => _client.OnDisconnected();
 
-    public override void OnWsReceived(byte[] buffer, long offset, long size) => _client.OnReceived(buffer, offset, size);
+    // pixelrp: raw bytes off the socket, before the WebSocket layer. Held to the same limit
+    // as a packet (GameClient.MaxBufferedBytes), and nothing thrown in here may escape the
+    // receive thread.
+    protected override void OnReceived(byte[] buffer, long offset, long size)
+    {
+        try
+        {
+            _bytesSinceMessage += size;
+            if (_bytesSinceMessage > GameClient.MaxBufferedBytes)
+            {
+                Log.Warn($"Session {Id} sent {_bytesSinceMessage} bytes without finishing a WebSocket message - disconnecting.");
+                Disconnect();
+                return;
+            }
+            base.OnReceived(buffer, offset, size);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, $"WebSocket receive failed for session {Id} - disconnecting.");
+            Disconnect();
+        }
+    }
+
+    public override void OnWsReceived(byte[] buffer, long offset, long size)
+    {
+        _bytesSinceMessage = 0;
+        _client.OnReceived(buffer, offset, size);
+    }
 }

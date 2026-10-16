@@ -1,5 +1,4 @@
 ﻿using System.Net.Sockets;
-using Microsoft.IO;
 using NLog;
 using Plus.Communication.Encryption.Crypto.Prng;
 using Plus.Communication.Flash;
@@ -36,7 +35,6 @@ public abstract class GameClient
         }
     }
 
-    public RecyclableMemoryStream? _incompleteStream;
     public Arc4? Rc4Client { get; set; }
 
     public bool IsAuthenticated { get; set; } = false;
@@ -56,7 +54,16 @@ public abstract class GameClient
     public Guid Id { get; set; }
 
 
-    public void Disconnect() => DisconnectRequested?.Invoke();
+    // pixelrp: set the moment a disconnect is asked for, so the receive loop stops
+    // handling this connection's packets straight away, without waiting for the socket
+    // to report the close.
+    private volatile bool _disconnectRequested;
+
+    public void Disconnect()
+    {
+        _disconnectRequested = true;
+        DisconnectRequested?.Invoke();
+    }
 
     protected GameClient(IGameServer server, IPacketFactory packetFactory)
     {
@@ -92,80 +99,190 @@ public abstract class GameClient
 
     /// <summary>
     /// Upper bound on a single incoming frame. Real client packets are a few hundred bytes at
-    /// most; this only exists to bound what a hostile client can make us buffer.
+    /// most (a phone photo is the big exception); this only exists to bound what a hostile
+    /// client can make us buffer.
     /// </summary>
-    private const int MaxPacketLength = 1024 * 1024;
+    internal const int MaxPacketLength = 1024 * 1024;
+
+    /// <summary>
+    /// pixelrp: the most that may wait here unhandled - one packet at the limit above plus
+    /// room for what arrived behind it. Past this the connection is dropped. WsSessionProxy
+    /// holds a WebSocket message to the same limit while the socket library assembles it.
+    /// </summary>
+    internal const int MaxBufferedBytes = MaxPacketLength + 64 * 1024;
+
+    // pixelrp: what has arrived and not been handled yet - at most one unfinished packet
+    // plus whatever came in behind it. New bytes go on the end; packets are read off the
+    // front from _receivedStart. Guarded by _receiveLock, as is _handling: true while a
+    // HandleReceivedAsync loop is working through this connection's packets.
+    private readonly object _receiveLock = new();
+    private byte[] _received = Array.Empty<byte>();
+    private int _receivedStart;
+    private int _receivedEnd;
+    private bool _handling;
+
+    // A connection that once sent a photo would otherwise keep a megabyte buffer for good.
+    private const int KeptBufferBytes = 16 * 1024;
 
     internal abstract (bool Complete, uint MessageId, int HeaderLength, int Length) GetMessageIdAndPacketLength(ReadOnlyMemory<byte> buffer);
-    internal virtual async void OnReceived(byte[] buffer, long offset, long size)
+
+    /// <summary>
+    /// pixelrp: bytes in from the socket, on the socket library's receive thread. Nothing
+    /// thrown in here may escape that thread: anything unexpected drops this one connection.
+    ///
+    /// The bytes are copied before returning (the socket library reuses its buffer) and
+    /// handled by one loop per connection, so one player's packets run one at a time and in
+    /// the order they were sent.
+    /// </summary>
+    internal virtual void OnReceived(byte[] buffer, long offset, long size)
     {
-        if (size > int.MaxValue) throw new InvalidOperationException("");
-        await using var stream = PlusMemoryStream.GetStream(buffer.AsSpan().Slice((int) offset, (int) size));
-        var memory = stream.GetMemory().Slice(0, (int)stream.Length);
-
-        if (_incompleteStream != null)
+        try
         {
-            _incompleteStream.Write(memory.Span);
-            memory = _incompleteStream.GetMemory().Slice(0, (int)_incompleteStream.Length);
-        }
-
-        while (memory.Length > 0)
-        {
-            var (complete, messageId, headerLength, length) = GetMessageIdAndPacketLength(memory);
-
-            // The frame length comes straight off the wire, so an injection tool can send
-            // any value it likes. A negative one makes the slices below throw out of this
-            // async void method - an unhandled exception that takes the whole emulator down,
-            // not just this session. There is no way to resynchronise on a bad length either
-            // (we cannot find where the next frame starts), so drop the connection.
-            if (complete && (length < 0 || headerLength < 0 || length > MaxPacketLength))
-            {
-                Log.Warn($"Malformed packet frame from session {Id} (message {messageId}, length {length}) - disconnecting.");
-                Disconnect();
+            if (size <= 0 || _disconnectRequested || IsDisconnected)
                 return;
-            }
-
-            if (!complete)
+            var tooMuch = false;
+            var start = false;
+            lock (_receiveLock)
             {
-                // An oversized length is reported as "incomplete" (the bytes never arrive),
-                // so without this cap a client could claim a huge frame and grow this buffer
-                // until the process runs out of memory.
-                if (memory.Length > MaxPacketLength)
+                if (size > MaxBufferedBytes - (_receivedEnd - _receivedStart))
                 {
-                    Log.Warn($"Session {Id} buffered {memory.Length} bytes without completing a packet - disconnecting.");
-                    Disconnect();
-                    return;
-                }
-                _incompleteStream ??= PlusMemoryStream.GetStream(memory.Span);
-                break;
-            }
-
-            try
-            {
-                if (Revision.IncomingIdToInternalIdMapping.TryGetValue(messageId, out var internalMessageId))
-                {
-                    await _server.PacketReceived(this, internalMessageId, _packetFactory.CreateIncomingPacket(memory.Slice(headerLength, length)));
+                    tooMuch = true;
                 }
                 else
                 {
-                    // TODO @80O: Add logging unknown packet received.
+                    Append(buffer, (int)offset, (int)size);
+                    start = !_handling;
+                    _handling = true;
                 }
             }
-            catch (Exception e)
+            if (tooMuch)
             {
-                // Without this, any exception inside a packet handler is silently
-                // swallowed and the client waits forever for a reply (e.g. the
-                // navigator graying out) with nothing in the logs.
-                Log.Error(e, $"Unhandled exception while handling incoming packet {messageId}");
+                Log.Warn($"Session {Id} sent more than {MaxBufferedBytes} bytes without completing a packet - disconnecting.");
+                Disconnect();
+                return;
             }
-            memory = memory.Slice(headerLength + length);
-            _incompleteStream?.Advance(headerLength + length);
+            if (start)
+                _ = HandleReceivedAsync();
         }
-
-        if (memory.Length == 0)
+        catch (Exception e)
         {
-            _incompleteStream?.Dispose();
-            _incompleteStream = null;
+            Log.Error(e, $"Receive failed for session {Id} - disconnecting.");
+            Disconnect();
+        }
+    }
+
+    // Under _receiveLock. Copies the new bytes onto the end, first moving what is still
+    // unread to the front, then growing the buffer if that is not enough room.
+    private void Append(byte[] buffer, int offset, int size)
+    {
+        var unread = _receivedEnd - _receivedStart;
+        if (_receivedEnd + size > _received.Length)
+        {
+            var needed = unread + size;
+            var target = needed <= _received.Length
+                ? _received
+                : new byte[Math.Min(MaxBufferedBytes, Math.Max(needed, Math.Max(4096, _received.Length * 2)))];
+            if (unread > 0)
+                System.Buffer.BlockCopy(_received, _receivedStart, target, 0, unread);
+            _received = target;
+            _receivedStart = 0;
+            _receivedEnd = unread;
+        }
+        System.Buffer.BlockCopy(buffer, offset, _received, _receivedEnd, size);
+        _receivedEnd += size;
+    }
+
+    // One per connection at a time (_handling): takes whole packets off the front of the
+    // buffer and hands each to the packet manager, waiting for it to finish before the next.
+    // Stops when only an unfinished packet is left - the next bytes in start it again - or
+    // when the connection has closed.
+    private async Task HandleReceivedAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                uint messageId = 0;
+                byte[]? body = null;
+                var malformed = false;
+                var length = 0;
+                var closed = _disconnectRequested || IsDisconnected;
+                lock (_receiveLock)
+                {
+                    if (closed)
+                    {
+                        _receivedStart = _receivedEnd = 0;
+                        _received = Array.Empty<byte>();
+                        _handling = false;
+                        return;
+                    }
+                    var unread = new ReadOnlyMemory<byte>(_received, _receivedStart, _receivedEnd - _receivedStart);
+                    var (complete, id, headerLength, packetLength) = GetMessageIdAndPacketLength(unread);
+                    length = packetLength;
+                    messageId = id;
+                    if (!complete)
+                    {
+                        if (unread.Length == 0)
+                        {
+                            _receivedStart = _receivedEnd = 0;
+                            if (_received.Length > KeptBufferBytes)
+                                _received = Array.Empty<byte>();
+                        }
+                        _handling = false;
+                        return;
+                    }
+                    // The frame length comes straight off the wire, so an injection tool can
+                    // send any value it likes. There is no way to resynchronise on a bad length
+                    // either (we cannot find where the next frame starts), so drop the
+                    // connection.
+                    if (packetLength < 0 || headerLength < 0 || packetLength > MaxPacketLength || headerLength + packetLength > unread.Length)
+                    {
+                        malformed = true;
+                        _receivedStart = _receivedEnd = 0;
+                        _received = Array.Empty<byte>();
+                        _handling = false;
+                    }
+                    else
+                    {
+                        // A copy: the packet is the handler's to keep (one that outlives the
+                        // packet manager's time limit still reads it), and these bytes are
+                        // about to be reused.
+                        body = unread.Slice(headerLength, packetLength).ToArray();
+                        _receivedStart += headerLength + packetLength;
+                    }
+                }
+                if (malformed)
+                {
+                    Log.Warn($"Malformed packet frame from session {Id} (message {messageId}, length {length}) - disconnecting.");
+                    Disconnect();
+                    return;
+                }
+                try
+                {
+                    if (Revision.IncomingIdToInternalIdMapping.TryGetValue(messageId, out var internalMessageId))
+                    {
+                        await _server.PacketReceived(this, internalMessageId, _packetFactory.CreateIncomingPacket(body!));
+                    }
+                    else
+                    {
+                        // TODO @80O: Add logging unknown packet received.
+                    }
+                }
+                catch (Exception e)
+                {
+                    // Without this, any exception inside a packet handler is silently
+                    // swallowed and the client waits forever for a reply (e.g. the
+                    // navigator graying out) with nothing in the logs.
+                    Log.Error(e, $"Unhandled exception while handling incoming packet {messageId}");
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            lock (_receiveLock)
+                _handling = false;
+            Log.Error(e, $"Receive loop failed for session {Id} - disconnecting.");
+            Disconnect();
         }
     }
 

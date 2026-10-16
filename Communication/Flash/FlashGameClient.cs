@@ -36,7 +36,8 @@ public class FlashGameClient : GameClient
 
     internal override void OnReceived(byte[] buffer, long offset, long size)
     {
-        if (!_hasReceivedPolicy && buffer[offset] == (byte)'<')
+        // pixelrp: size first - an empty read has no first byte.
+        if (!_hasReceivedPolicy && size > 0 && buffer[offset] == (byte)'<')
         {
             _hasReceivedPolicy = true;
             SendPolicy();
@@ -62,9 +63,13 @@ public class FlashGameClient : GameClient
 
     internal override (bool Complete, uint MessageId, int HeaderLength, int Length) GetMessageIdAndPacketLength(ReadOnlyMemory<byte> buffer)
     {
-        if (buffer.Length < 6) return default;
+        if (buffer.Length < 4) return default;
         var length = DecodeInt32(buffer) - 2;
-        if (length + 6 > buffer.Length) return default;
+        // pixelrp: a length no real packet has is reported as soon as its four bytes are
+        // in, rather than waiting for bytes that never come. The caller drops the
+        // connection on it.
+        if (length < 0 || length > MaxPacketLength) return (true, 0, 6, length);
+        if (buffer.Length < 6 || length + 6 > buffer.Length) return default;
         buffer = buffer.Slice(4);
         var messageId = (uint)DecodeInt16(buffer);
         return (true, messageId, 6, length);
