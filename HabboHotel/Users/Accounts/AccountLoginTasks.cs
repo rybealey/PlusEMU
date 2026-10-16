@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Moderation;
 using Plus.HabboHotel.Users.Authentication;
@@ -62,7 +63,13 @@ internal class DisconnectSiblingCharacterTask : IAuthenticationTask
         {
             if (character.Id == userId)
                 continue;
-            _gameClientManager.GetClientByUserId(character.Id)?.Disconnect();
+            var sibling = _gameClientManager.GetClientByUserId(character.Id);
+            if (sibling == null)
+                continue;
+            // pixelrp: the old window's disconnected screen says "signed in elsewhere"
+            try { sibling.Send(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonReplaced, "sibling character login")); }
+            catch (Exception) { }
+            sibling.Disconnect();
         }
         return Task.FromResult(true);
     }

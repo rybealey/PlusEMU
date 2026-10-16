@@ -1,4 +1,5 @@
-﻿using Plus.HabboHotel.GameClients;
+﻿using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Users.Authentication.Tasks;
 
@@ -14,7 +15,13 @@ public class DisconnectCurrentOnlineHabboTask : IAuthenticationTask
     public Task<bool> CanLogin(int userId)
     {
         var existingSession = _gameClientManager.GetClientByUserId(userId);
-        existingSession?.Disconnect();
+        if (existingSession == null)
+            return Task.FromResult(true);
+        // pixelrp: tell the old window why before closing it, so its
+        // disconnected screen says "signed in elsewhere", not "connection lost".
+        try { existingSession.Send(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonReplaced, "duplicate login")); }
+        catch (Exception) { }
+        existingSession.Disconnect();
         return Task.FromResult(true);
     }
 }

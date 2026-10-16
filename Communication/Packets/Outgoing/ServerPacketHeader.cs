@@ -218,6 +218,8 @@ public static class ServerPacketHeader
     public const uint RpCatalogFavouritesComposer = 4203;
     // pixelrp: the hospital's emergency queue (MedicalCalls), open or closed.
     public const uint RpMedicalCallsComposer = 4205;
+    // pixelrp: why the connection is about to close (RpDisconnectReasonComposer)
+    public const uint RpDisconnectReasonComposer = 4208;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

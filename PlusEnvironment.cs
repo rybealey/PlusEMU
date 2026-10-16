@@ -10,6 +10,7 @@ using Plus.Communication.Flash;
 using Plus.Communication.Nitro;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
+using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Communication.RCON;
 using Plus.Core;
 using Plus.Core.FigureData;
@@ -350,6 +351,10 @@ public class PlusEnvironment : IPlusEnvironment
             { "display", "BUBBLE" },
             { "message", "A software update has been pushed. PixelRP is restarting in… %countdown:15% seconds." }
         }));
+        // pixelrp: every client learns the close that follows is a restart, so
+        // the website's disconnected screen says so instead of "connection lost".
+        try { Game.ClientManager.SendPacket(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonRestart, "shutdown")); }
+        catch (Exception e) { Log.Warn($"Shutdown: could not announce the restart to clients: {e.Message}"); }
         Thread.Sleep(15000);
         Game.StopGameLoop();
         Thread.Sleep(1000);
