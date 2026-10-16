@@ -319,7 +319,6 @@ public class SsoTicketEvent : IPacketEvent
                     if (last.RoomId > 0)
                     {
                         session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot, ttlSeconds: 0);
-                        Console.WriteLine($"[RESTORE] login user={session.GetHabbo().Id} set room={last.RoomId} x={last.X} y={last.Y} rot={last.Rot}; forwarding");
                         session.SendRoomForward(last.RoomId);
                     }
                     else

@@ -251,16 +251,15 @@ public class RoomUserManager
             // same thing for both: enter HERE, not at the door.
             // Furni-blocked/occupied Open squares are allowed (exact continuity); a tile
             // outside the current model, or a Blocked map square (room remodeled into a
-            // wall), falls back to the door. The marker is single-use: cleared below on
-            // ANY room entry.
+            // wall), falls back to the door. The marker survives repeated entries into
+            // its own room (the login forward loads it twice) and is cleared when the
+            // user next enters a different room, or on the door fallback.
             var restore = session.GetHabbo().PendingRestore;
-            Console.WriteLine($"[RESTORE] enter room={_room.RoomId} user={session.GetHabbo().Id} marker=" + (restore == null ? "null" : $"(room={restore.RoomId} x={restore.X} y={restore.Y} rot={restore.Rot} fresh={restore.IsFresh}) mapX={model.MapSizeX} mapY={model.MapSizeY}"));
             if (restore != null && restore.IsFresh && restore.RoomId == _room.RoomId
                 && restore.X >= 0 && restore.X < model.MapSizeX
                 && restore.Y >= 0 && restore.Y < model.MapSizeY
                 && model.SqState[restore.X, restore.Y] != SquareState.Blocked)
             {
-                Console.WriteLine($"[RESTORE] APPLIED user={session.GetHabbo().Id} -> ({restore.X},{restore.Y}) rot={restore.Rot}");
                 user.SetPos(restore.X, restore.Y, _room.GetGameMap().SqAbsoluteHeight(restore.X, restore.Y));
                 // Bypass SetRot's sit/head-turn heuristic (it can leave RotBody at 0 for
                 // some diffs, e.g. rotation 1) - assign body/head rotation directly,
@@ -268,14 +267,18 @@ public class RoomUserManager
                 var rot = ((restore.Rot % 8) + 8) % 8;
                 user.RotBody = rot;
                 user.RotHead = rot;
+                // Do NOT clear the marker here. The login forward enters this room
+                // TWICE in quick succession (a first load, then the real entry);
+                // clearing on the first let the second fall through to the door and
+                // clobber the restore. It is cleared in the else below the moment the
+                // user enters any OTHER room, so it still cannot re-snap them later.
             }
             else
             {
-                Console.WriteLine($"[RESTORE] DOOR user={session.GetHabbo().Id} room={_room.RoomId} notnull={restore != null} fresh={(restore?.IsFresh)} roommatch={(restore != null && restore.RoomId == _room.RoomId)} xob={(restore != null && restore.X >= 0 && restore.X < model.MapSizeX)} yob={(restore != null && restore.Y >= 0 && restore.Y < model.MapSizeY)} sq={((restore != null && restore.X >= 0 && restore.X < model.MapSizeX && restore.Y >= 0 && restore.Y < model.MapSizeY) ? model.SqState[restore.X, restore.Y].ToString() : "n/a")}");
                 user.SetPos(model.DoorX, model.DoorY, model.DoorZ);
                 user.SetRot(model.DoorOrientation, false);
+                session.GetHabbo().PendingRestore = null;
             }
-            session.GetHabbo().PendingRestore = null;
         }
         else if (!user.IsBot && (user.GetClient().GetHabbo().IsTeleporting || user.GetClient().GetHabbo().IsHopping))
         {
