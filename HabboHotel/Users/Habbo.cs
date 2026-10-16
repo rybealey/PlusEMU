@@ -751,7 +751,7 @@ public class Habbo
             }
             catch { }
             _disconnected = true;
-            LogoutStep(() => PlusEnvironment.Game.ClientManager.UnregisterClient(Id, Username));
+            LogoutStep(() => PlusEnvironment.Game.ClientManager.UnregisterClient(Id, Username, Client));
             if (!_habboSaved)
             {
                 _habboSaved = true;

@@ -21,5 +21,6 @@ public interface IGameClientManager
     void LogClonesOut(int userId);
     void RegisterClient(GameClient client, int userId, string username);
     void UnregisterClient(int userid, string username);
+    void UnregisterClient(int userid, string username, GameClient? client);
     void CloseAll();
 }

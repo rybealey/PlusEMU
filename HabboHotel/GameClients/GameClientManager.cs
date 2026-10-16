@@ -175,20 +175,33 @@ public class GameClientManager : IGameClientManager
 
     public void RegisterClient(GameClient client, int userId, string username)
     {
-        if (_usernameRegister.ContainsKey(username.ToLower()))
-            _usernameRegister[username.ToLower()] = client;
-        else
-            _usernameRegister.TryAdd(username.ToLower(), client);
-        if (_userIdRegister.ContainsKey(userId))
-            _userIdRegister[userId] = client;
-        else
-            _userIdRegister.TryAdd(userId, client);
+        // pixelrp: a second login for the same player replaces the first and
+        // the first is disconnected, so two live sessions can never share one
+        // id (each would carry its own copy of the wallet). The displaced
+        // session's own logout runs the conditional UnregisterClient below,
+        // which then leaves this new entry alone.
+        if (_userIdRegister.TryGetValue(userId, out var displaced) && displaced != client)
+            displaced.Disconnect();
+        _userIdRegister[userId] = client;
+        _usernameRegister[username.ToLower()] = client;
     }
 
-    public void UnregisterClient(int userid, string username)
+    public void UnregisterClient(int userid, string username) => UnregisterClient(userid, username, null);
+
+    // pixelrp: with a client, the entry is cleared only if it is still THIS
+    // client's - a ghost session logging out after a reconnect must not evict
+    // the live session that replaced it. Without one (the old call), it clears
+    // unconditionally, as before.
+    public void UnregisterClient(int userid, string username, GameClient? client)
     {
-        _userIdRegister.TryRemove(userid, out _);
-        _usernameRegister.TryRemove(username.ToLower(), out _);
+        if (client == null)
+        {
+            _userIdRegister.TryRemove(userid, out _);
+            _usernameRegister.TryRemove(username.ToLower(), out _);
+            return;
+        }
+        _userIdRegister.TryRemove(new KeyValuePair<int, GameClient>(userid, client));
+        _usernameRegister.TryRemove(new KeyValuePair<string, GameClient>(username.ToLower(), client));
     }
 
     public void CloseAll()
