@@ -21,6 +21,11 @@ internal class JoinGroupEvent : IPacketEvent
     {
         if (!_groupManager.TryGetGroup(packet.ReadInt(), out var group))
             return Task.CompletedTask;
+        // pixelrp: a gang is a group flagged is_gang, but it is run only through the
+        // gang window (the Rp* gang packets), which enforce roles, cost and turf. The
+        // stock group packets skip all of that, so they do nothing to a gang.
+        if (group.IsGang)
+            return Task.CompletedTask;
         if (group.IsMember(session.GetHabbo().Id) || group.IsAdmin(session.GetHabbo().Id) || group.HasRequest(session.GetHabbo().Id) && group.Type == GroupType.Private)
             return Task.CompletedTask;
         var groups = _groupManager.GetGroupsForUser(session.GetHabbo().Id);

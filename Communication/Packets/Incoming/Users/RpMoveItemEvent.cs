@@ -27,6 +27,14 @@ internal class RpMoveItemEvent : IPacketEvent
             return Task.CompletedTask;
         if (!IsSlot(from) || !IsSlot(to) || from == to)
             return Task.CompletedTask;
+        // pixelrp trading: the backpack is frozen while a trade is open, the
+        // same as use and discard. Rearranging slots was the one move that was
+        // not, which let an offered stack be shuffled out from under the swap.
+        if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
+        {
+            session.SendWhisper(Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
+            return Task.CompletedTask;
+        }
         var inventory = habbo.LoadRpInventory();
         var source = inventory.FirstOrDefault(entry => entry.Slot == from);
         if (string.IsNullOrEmpty(source.Item))

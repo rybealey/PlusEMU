@@ -16,6 +16,14 @@ internal class FindNewFriendsEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // pixelrp: this teleports you to a random room, so it is travel too -
+        // refused while cuffed, escorted, knocked out or jailed.
+        var cannot = Plus.HabboHotel.Users.TravelGuard.Refusal(session);
+        if (cannot != null)
+        {
+            session.Send(new FindFriendsProcessResultComposer(false));
+            return Task.CompletedTask;
+        }
         var instance = _roomManager.TryGetRandomLoadedRoom();
         if (instance != null)
         {

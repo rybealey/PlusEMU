@@ -19,6 +19,11 @@ internal class AcceptGroupMembershipEvent : IPacketEvent
         var userId = packet.ReadInt();
         if (!_groupManager.TryGetGroup(groupId, out var group))
             return Task.CompletedTask;
+        // pixelrp: a gang is a group flagged is_gang, but it is run only through the
+        // gang window (the Rp* gang packets), which enforce roles, cost and turf. The
+        // stock group packets skip all of that, so they do nothing to a gang.
+        if (group.IsGang)
+            return Task.CompletedTask;
         if (session.GetHabbo().Id != group.CreatorId && !group.IsAdmin(session.GetHabbo().Id) && !session.GetHabbo().Permissions.HasRight("fuse_group_accept_any"))
             return Task.CompletedTask;
         if (!group.HasRequest(userId))

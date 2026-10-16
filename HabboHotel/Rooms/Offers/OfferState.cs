@@ -435,8 +435,20 @@ public static class OfferState
     public static bool Accept(int offerId, GameClient buyerSession)
     {
         var buyer = buyerSession?.GetHabbo();
-        if (buyer == null || !Live.TryGetValue(offerId, out var offer) || offer.BuyerId != buyer.Id)
+        if (buyer == null)
             return false;
+        // pixelrp: claim the card up front. Two taps that landed together both
+        // passed a shared look-up and then each charged and delivered; now the
+        // first takes the card out and the second finds nothing. A card that is
+        // not this buyer's, or a step that asks them to try again (blocked, a
+        // failed charge), puts it back.
+        if (!Live.TryRemove(offerId, out var offer))
+            return false;
+        if (offer.BuyerId != buyer.Id)
+        {
+            Live[offerId] = offer;
+            return false;
+        }
 
         var sellerSession = PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId);
         var seller = sellerSession?.GetHabbo();
@@ -468,6 +480,8 @@ public static class OfferState
         var blocked = BlockedFor(offer, buyer);
         if (blocked != null)
         {
+            // the card stays up so they can sort it out and tap again
+            Live[offerId] = offer;
             Push(buyer.Id);
             buyerSession!.SendWhisper(blocked + ".");
             return false;
@@ -476,12 +490,12 @@ public static class OfferState
         // Money first: an item handed over before the payment fails is a gift.
         if (offer.Total > 0 && !Charge(buyer, seller, offer))
         {
+            Live[offerId] = offer;
             Push(buyer.Id);
             buyerSession!.SendWhisper("That payment could not be completed.");
             return false;
         }
 
-        Live.TryRemove(offerId, out _);
         Deliver(room, offer, buyerSession!, buyer);
         Push(buyer.Id);
 

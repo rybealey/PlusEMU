@@ -368,6 +368,14 @@ public static class EmergencyCalls
             Send(session, "You are already there.");
             return;
         }
+        // pixelrp: the plain "Go to room" skipped this, so a cuffed or escorting
+        // officer could leave custody by it. The backup path already checks.
+        var cannot = CannotTravel(session);
+        if (!string.IsNullOrEmpty(cannot))
+        {
+            Send(session, cannot);
+            return;
+        }
         habbo.PrepareRoom((uint)call.RoomId, "");
     }
 

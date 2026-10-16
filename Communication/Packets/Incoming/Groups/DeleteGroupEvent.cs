@@ -28,6 +28,11 @@ internal class DeleteGroupEvent : IPacketEvent
             session.SendNotification("Oops, we couldn't find that group!");
             return Task.CompletedTask;
         }
+        // pixelrp: a gang is a group flagged is_gang, but it is run only through the
+        // gang window (the Rp* gang packets), which enforce roles, cost and turf. The
+        // stock group packets skip all of that, so they do nothing to a gang.
+        if (group.IsGang)
+            return Task.CompletedTask;
         if (group.CreatorId != session.GetHabbo().Id && !session.GetHabbo().Permissions.HasRight("group_delete_override")) //Maybe a FUSE check for staff override?
         {
             session.SendNotification("Oops, only the group owner can delete a group!");

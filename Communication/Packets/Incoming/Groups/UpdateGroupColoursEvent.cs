@@ -25,6 +25,11 @@ internal class UpdateGroupColoursEvent : IPacketEvent
         var secondaryColour = packet.ReadInt();
         if (!_groupManager.TryGetGroup(groupId, out var group))
             return Task.CompletedTask;
+        // pixelrp: a gang is a group flagged is_gang, but it is run only through the
+        // gang window (the Rp* gang packets), which enforce roles, cost and turf. The
+        // stock group packets skip all of that, so they do nothing to a gang.
+        if (group.IsGang)
+            return Task.CompletedTask;
         if (group.CreatorId != session.GetHabbo().Id)
             return Task.CompletedTask;
         using (var connection = _database.Connection())

@@ -19,6 +19,18 @@ internal class FollowFriendEvent : IPacketEvent
         var buddyId = packet.ReadInt();
         if (buddyId == 0 || buddyId == session.GetHabbo().Id)
             return Task.CompletedTask;
+        // pixelrp: you can only follow an actual friend. The id came off the
+        // wire, so without this it would walk you to anyone online by id.
+        if (!session.GetHabbo().Messenger.FriendshipExists(buddyId))
+            return Task.CompletedTask;
+        // pixelrp: and not while something is meant to be holding you in place -
+        // following a friend was a way out of handcuffs and out of jail.
+        var cannot = Plus.HabboHotel.Users.TravelGuard.Refusal(session);
+        if (cannot != null)
+        {
+            session.SendWhisper(cannot);
+            return Task.CompletedTask;
+        }
         var client = _clientManager.GetClientByUserId(buddyId);
         if (client == null || client.GetHabbo() == null)
             return Task.CompletedTask;

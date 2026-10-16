@@ -42,6 +42,9 @@ internal class RpSaveScreenshotEvent : IPacketEvent
         var habbo = session.GetHabbo();
         if (habbo == null)
             return;
+        // pixelrp: each save writes a file; cap the rate so it can't fill the disk.
+        if (!Plus.HabboHotel.Camera.CameraQuota.TryTake(habbo.Id))
+            return;
 
         var url = _cameraPhotoManager.StoreEditedPhoto(bytes);
         using (var connection = _database.Connection())
