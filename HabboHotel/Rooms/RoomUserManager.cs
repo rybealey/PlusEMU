@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Avatar;
+using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
@@ -1296,7 +1297,15 @@ public class RoomUserManager
                     }
                     if (user.NeedsIdleDisconnect)
                     {
-                        user.GetClient()?.Disconnect();
+                        var idleClient = user.GetClient();
+                        if (idleClient != null)
+                        {
+                            // pixelrp: say why first, so the website's disconnected
+                            // screen reads "you were away", not "connection lost"
+                            try { idleClient.Send(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonIdle, "idle")); }
+                            catch (Exception) { }
+                            idleClient.Disconnect();
+                        }
                         continue;
                     }
                     user.IdleTime++;
