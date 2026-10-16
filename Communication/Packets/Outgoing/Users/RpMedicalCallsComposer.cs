@@ -53,6 +53,7 @@ public class RpMedicalCallsComposer : IServerPacket
             packet.WriteInteger(death.State == MedicalCalls.StateOffered
                 ? Math.Max(0, (int)Math.Ceiling((death.OfferExpiresAt - utcNow).TotalSeconds))
                 : 0);
+            packet.WriteBoolean(death.MissedByViewer);
         }
         packet.WriteString(_notice);
         packet.WriteBoolean(_reopen);

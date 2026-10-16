@@ -105,6 +105,10 @@ public static class MedicalCalls
         /// with how it ended; 0 while unclaimed, or after the claim was let go.
         /// </summary>
         public int ClaimedById { get; set; }
+        /// <summary>Set per recipient when their window is built: this call
+        /// is one THIS paramedic let lapse. Not persisted - stamped on the
+        /// copy sent to them, so their card can show it greyed as missed.</summary>
+        public bool MissedByViewer { get; set; }
 
         public bool IsOpen => State is StateWaiting or StateOffered or StateClaimed;
 
@@ -141,7 +145,13 @@ public static class MedicalCalls
     }
 
     /// <summary>One paramedic's window: their own dispatch calls, newest first.</summary>
-    public static List<Death> Newest(int userId) => Snapshot().Where(death => IsTheirs(death, userId)).ToList();
+    public static List<Death> Newest(int userId)
+    {
+        var window = Snapshot().Where(death => IsTheirs(death, userId)).ToList();
+        foreach (var death in window)
+            death.MissedByViewer = death.MissedBy.Contains(userId);
+        return window;
+    }
 
     /// <summary>
     /// Offered to them right now, claimed by them, or dropped off by them. A
@@ -149,7 +159,8 @@ public static class MedicalCalls
     /// </summary>
     private static bool IsTheirs(Death death, int userId) =>
         userId > 0 && (death.ClaimedById == userId ||
-                       (death.ActorId == userId && death.State is StateOffered or StateRevived));
+                       (death.ActorId == userId && death.State is StateOffered or StateRevived) ||
+                       death.MissedBy.Contains(userId));
 
     /// <summary>A player has just gone down in `room`. Report it and offer it round.</summary>
     public static void OnDeath(Room room, RoomUser user)
@@ -381,7 +392,7 @@ public static class MedicalCalls
         var room = PlusEnvironment.Game.ClientManager.GetClientByUserId(medicId)?.GetHabbo()?.CurrentRoom;
         var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(medicId);
         if (user != null)
-            room!.SendPacket(new ChatComposer(user.VirtualId, "*has missed their call.*", 0, 4));
+            room!.SendPacket(new ChatComposer(user.VirtualId, "*has missed their call*", 0, 4));
     }
 
     /// <summary>Back into the turn, from the paramedic after the one who had it.</summary>
@@ -455,11 +466,12 @@ public static class MedicalCalls
     /// </summary>
     private static void Broadcast(List<Medic> medics, int noticeFor, string notice, Dictionary<int, string> missed)
     {
-        var deaths = Snapshot();
         foreach (var medic in medics)
         {
             var told = medic.UserId == noticeFor ? notice : missed.GetValueOrDefault(medic.UserId, "");
-            var theirs = deaths.Where(death => IsTheirs(death, medic.UserId)).ToList();
+            // Newest takes its own snapshot per medic, so the per-viewer
+            // MissedByViewer flag is never aliased across recipients.
+            var theirs = Newest(medic.UserId);
             PlusEnvironment.Game.ClientManager.GetClientByUserId(medic.UserId)?.Send(new RpMedicalCallsComposer(true, theirs, told));
         }
     }
