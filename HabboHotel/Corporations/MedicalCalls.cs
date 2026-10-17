@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.CityPanel;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
@@ -73,9 +74,14 @@ public static class MedicalCalls
     /// <summary>How long before that the paramedic is reminded, if they have not picked the patient up.</summary>
     private const int ReminderSeconds = 30;
 
+    /// <summary>Coins a paramedic is tipped for laying a patient on a hospital bed.</summary>
+    public const int DropOffTip = 3;
+
     private const string ReminderWhisper = "You have 30 seconds to retrieve the patient!";
 
     private const string LapsedWhisper = "You took too long to accept the call. It will be assigned to another paramedic.";
+
+    private const string CollectedWhisper = "You took too long to retrieve your patient. They have been auto-revived at the hospital.";
 
     private const int TickMs = 1000;
 
@@ -125,6 +131,11 @@ public static class MedicalCalls
         public DateTime ReviveBy { get; set; }
         /// <summary>The claimer has had their <see cref="ReminderSeconds"/> whisper.</summary>
         public bool Reminded { get; set; }
+        /// <summary>
+        /// Another paramedic had it first - offered and let go, or claimed and
+        /// dropped - so whoever accepts it now is taking it over.
+        /// </summary>
+        public bool PassedOn { get; set; }
         /// <summary>Set per recipient when their window is built: this call
         /// is one THIS paramedic let lapse. Not persisted - stamped on the
         /// copy sent to them, so their card can show it greyed as missed.</summary>
@@ -243,8 +254,17 @@ public static class MedicalCalls
                 changed = true;
             }
         }
-        if (changed)
-            Tick(forceBroadcast: true);
+        if (!changed)
+            return;
+        // Tipped once per knockout - the call closes here, so a second
+        // drop-off of the same patient finds nothing open - and never for a
+        // patient on the paramedic's own account.
+        if (!AccountUtility.SameAccount(habbo.Id, patientId))
+        {
+            CityPlayers.AdjustCreditsFor(habbo.Id, DropOffTip, "Hospital drop-off tip");
+            paramedic!.SendWhisper($"You just earned a ${DropOffTip} tip for escorting a patient to the hospital!");
+        }
+        Tick(forceBroadcast: true);
     }
 
     /// <summary>The Claim button, from the paramedic the call is offered to.</summary>
@@ -292,6 +312,14 @@ public static class MedicalCalls
         HospitalAdmission.CollectBy(claimed.PatientId, claimed.ReviveBy);
         PlusEnvironment.Game.ClientManager.GetClientByUserId(claimed.PatientId)?
             .SendWhisper($"Paramedic {habbo.Username} is on their way.");
+        // A call another paramedic had first: said out loud, and where to go.
+        // A first-time Accept stays quiet - pressing it is confirmation enough.
+        if (claimed.PassedOn)
+        {
+            var location = string.IsNullOrEmpty(claimed.RoomName) ? "the patient's location" : claimed.RoomName;
+            session.SendWhisper($"You have taken over {claimed.PatientName}'s call. Head to {location} to retrieve them!");
+            ActionBubble(habbo.Id, $"*takes over {claimed.PatientName}'s call*");
+        }
         Tick(forceBroadcast: true, noticeFor: habbo.Id, notice: notice);
     }
 
@@ -398,6 +426,12 @@ public static class MedicalCalls
                     var closed = Closed(call);
                     if (closed != StateWaiting)
                     {
+                        // Accepted, and the hospital came for the patient first:
+                        // only its ReviveSeconds deadline does that to a claimed
+                        // call (HospitalAdmission.CollectBy), so the claimer
+                        // never got to them.
+                        if (call.State == StateClaimed && closed == StateAdmitted)
+                            whispers.Add((call.ActorId, CollectedWhisper));
                         call.State = closed;
                         call.ActorId = 0;
                         call.ActorName = "";
@@ -464,12 +498,15 @@ public static class MedicalCalls
     }
 
     /// <summary>A blue action bubble over a paramedic who let their offer lapse or declined it.</summary>
-    private static void AnnounceMiss(int medicId)
+    private static void AnnounceMiss(int medicId) => ActionBubble(medicId, "*declines this call*");
+
+    /// <summary>A blue action bubble over a paramedic, in whatever room they are in.</summary>
+    private static void ActionBubble(int medicId, string text)
     {
         var room = PlusEnvironment.Game.ClientManager.GetClientByUserId(medicId)?.GetHabbo()?.CurrentRoom;
         var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(medicId);
         if (user != null)
-            room!.SendPacket(new ChatComposer(user.VirtualId, "*declines this call*", 0, 4));
+            room!.SendPacket(new ChatComposer(user.VirtualId, text, 0, 4));
     }
 
     /// <summary>Back into the turn, from the paramedic after the one who had it.</summary>
@@ -479,6 +516,7 @@ public static class MedicalCalls
         call.ActorId = 0;
         call.ActorName = "";
         call.ClaimedById = 0;
+        call.PassedOn = true;
     }
 
     /// <summary>
