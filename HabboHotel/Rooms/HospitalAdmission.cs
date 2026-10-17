@@ -20,6 +20,11 @@ namespace Plus.HabboHotel.Rooms;
 /// shift gets the call and the roleplay happens, short enough that being
 /// knocked out at 4am is not the end of the session.
 ///
+/// A paramedic who accepts the call in Paramedic Dispatch sets a deadline of
+/// their own in its place (<see cref="CollectBy"/>, MedicalCalls.ReviveSeconds
+/// from the Accept): earlier or later than the usual clock, that is when the
+/// hospital comes.
+///
 /// Held in memory and keyed by player id, like the police registries and for
 /// the same reason: being down is a moment, not a property of an account. A
 /// player who logs out and back in while down starts the clock again, which is
@@ -36,19 +41,34 @@ public static class HospitalAdmission
     /// <summary>Player id -> when they went down.</summary>
     private static readonly ConcurrentDictionary<int, DateTime> Downed = new();
 
+    /// <summary>Player id -> when the hospital collects them, set by an accepted call.</summary>
+    private static readonly ConcurrentDictionary<int, DateTime> CollectAt = new();
+
     /// <summary>Somebody has just hit zero. Start their clock.</summary>
     public static void OnKnockout(RoomUser user)
     {
         if (user == null || user.IsBot)
             return;
         Downed[user.UserId] = DateTime.UtcNow;
+        CollectAt.TryRemove(user.UserId, out _);
     }
 
     /// <summary>
     /// Stop tracking somebody - they are back up, or gone. Safe to call for a
     /// player who was never tracked.
     /// </summary>
-    public static void Forget(int habboId) => Downed.TryRemove(habboId, out _);
+    public static void Forget(int habboId)
+    {
+        Downed.TryRemove(habboId, out _);
+        CollectAt.TryRemove(habboId, out _);
+    }
+
+    /// <summary>
+    /// A paramedic has accepted this player's call: the hospital collects them
+    /// at `when` instead of on the usual clock. A later Accept (the call went
+    /// back round) sets it again.
+    /// </summary>
+    public static void CollectBy(int habboId, DateTime when) => CollectAt[habboId] = when;
 
     /// <summary>
     /// One room cycle for one player. Free for everybody while nobody in the
@@ -66,6 +86,8 @@ public static class HospitalAdmission
         {
             if (!Downed.IsEmpty)
                 Downed.TryRemove(id, out _);
+            if (!CollectAt.IsEmpty)
+                CollectAt.TryRemove(id, out _);
             return;
         }
 
@@ -98,11 +120,20 @@ public static class HospitalAdmission
         // tick after they are released.
         if (Chat.Commands.User.Police.JailState.IsJailed(id))
             return;
-        var limit = habbo.IsVip ? SecondsDownVip : SecondsDown;
-        if ((DateTime.UtcNow - since).TotalSeconds < limit)
-            return;
+        if (CollectAt.TryGetValue(id, out var due))
+        {
+            if (DateTime.UtcNow < due)
+                return;
+        }
+        else
+        {
+            var limit = habbo.IsVip ? SecondsDownVip : SecondsDown;
+            if ((DateTime.UtcNow - since).TotalSeconds < limit)
+                return;
+        }
 
         Downed.TryRemove(id, out _);
+        CollectAt.TryRemove(id, out _);
         Admit(room, user, habbo);
     }
 

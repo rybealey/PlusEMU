@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 using Plus.HabboHotel.Users.Accounts;
 
 namespace Plus.HabboHotel.Corporations;
@@ -39,6 +40,11 @@ namespace Plus.HabboHotel.Corporations;
 /// a bed (PoliceState.TryDropOff), and the card reads "Revived by" them. A
 /// claimer who clocks off, goes down or logs out lets the call go back round.
 ///
+/// Accepting gives the paramedic <see cref="ReviveSeconds"/> to get the
+/// patient: after that the hospital collects them itself (HospitalAdmission),
+/// whatever its usual clock says. <see cref="ReminderSeconds"/> before then,
+/// a paramedic who has not picked the patient up yet is whispered a reminder.
+///
 /// Every other way the patient stops needing a paramedic closes the call too:
 /// back on their feet (a medkit, :restore), collected by the hospital itself
 /// (HospitalAdmission), or gone from the hotel.
@@ -56,10 +62,20 @@ public static class MedicalCalls
     public const int WindowSize = 20;
 
     /// <summary>How long one paramedic has to claim a call before it moves on.</summary>
-    public const int ClaimSeconds = 15;
+    public const int ClaimSeconds = 30;
 
     /// <summary>A claim pressed on the last beat still counts - the trip from the client takes time.</summary>
     private const double ClaimGraceSeconds = 1.0;
+
+    /// <summary>From Accept, how long the paramedic has before the hospital collects the patient itself.</summary>
+    public const int ReviveSeconds = 120;
+
+    /// <summary>How long before that the paramedic is reminded, if they have not picked the patient up.</summary>
+    private const int ReminderSeconds = 30;
+
+    private const string ReminderWhisper = "You have 30 seconds to retrieve the patient!";
+
+    private const string LapsedWhisper = "You took too long to accept the call. It will be assigned to another paramedic.";
 
     private const int TickMs = 1000;
 
@@ -98,13 +114,17 @@ public static class MedicalCalls
         public DateTime OfferExpiresAt { get; set; }
         /// <summary>Whoever it was last offered to, so the turn moves on from them.</summary>
         public int LastOfferedId { get; set; }
-        /// <summary>Paramedics who were offered it and let it lapse: never offered it again.</summary>
+        /// <summary>Paramedics who were offered it and let it lapse or declined it: never offered it again.</summary>
         public HashSet<int> MissedBy { get; init; } = new();
         /// <summary>
         /// Whoever claimed it, kept after it closes so it stays on their queue
         /// with how it ended; 0 while unclaimed, or after the claim was let go.
         /// </summary>
         public int ClaimedById { get; set; }
+        /// <summary>While claimed: when the hospital collects the patient if the paramedic has not.</summary>
+        public DateTime ReviveBy { get; set; }
+        /// <summary>The claimer has had their <see cref="ReminderSeconds"/> whisper.</summary>
+        public bool Reminded { get; set; }
         /// <summary>Set per recipient when their window is built: this call
         /// is one THIS paramedic let lapse. Not persisted - stamped on the
         /// copy sent to them, so their card can show it greyed as missed.</summary>
@@ -256,6 +276,8 @@ public static class MedicalCalls
                 call.State = StateClaimed;
                 call.ClaimedById = habbo.Id;
                 call.ActorName = habbo.Username;
+                call.ReviveBy = DateTime.UtcNow.AddSeconds(ReviveSeconds);
+                call.Reminded = false;
                 claimed = call.Copy();
                 // pixelrp: no "you claimed" notice - pressing Claim is confirmation enough (Twist).
                 notice = "";
@@ -267,9 +289,49 @@ public static class MedicalCalls
             session.Send(new RpMedicalCallsComposer(true, Newest(habbo.Id), notice));
             return;
         }
+        HospitalAdmission.CollectBy(claimed.PatientId, claimed.ReviveBy);
         PlusEnvironment.Game.ClientManager.GetClientByUserId(claimed.PatientId)?
             .SendWhisper($"Paramedic {habbo.Username} is on their way.");
         Tick(forceBroadcast: true, noticeFor: habbo.Id, notice: notice);
+    }
+
+    /// <summary>
+    /// The Decline button, from the paramedic the call is offered to: the same
+    /// as letting the offer run out, only now - the blue bubble over them, the
+    /// call kept greyed in their window, never offered to them again, and on
+    /// to the next paramedic at once.
+    /// </summary>
+    public static void Decline(GameClient session, int callId)
+    {
+        var habbo = session.GetHabbo();
+        if (habbo == null)
+            return;
+        if (!MedicalUtility.IsOnDutyParamedic(habbo.Id))
+        {
+            PushWindow(session, false);
+            return;
+        }
+
+        var declined = false;
+        lock (Lock)
+        {
+            var call = Deaths.FirstOrDefault(death => death.Id == callId);
+            if (call != null && call.State == StateOffered && call.ActorId == habbo.Id)
+            {
+                call.MissedBy.Add(habbo.Id);
+                Release(call);
+                declined = true;
+            }
+        }
+
+        // Already claimed, moved on or over: just their window as it stands.
+        if (!declined)
+        {
+            session.Send(new RpMedicalCallsComposer(true, Newest(habbo.Id)));
+            return;
+        }
+        AnnounceMiss(habbo.Id);
+        Tick(forceBroadcast: true);
     }
 
     /// <summary>
@@ -324,6 +386,8 @@ public static class MedicalCalls
                 .Select(medic => medic.UserId)
                 .ToHashSet();
             var missed = new Dictionary<int, string>();
+            // Sent once the lock is let go: (paramedic, whisper).
+            var whispers = new List<(int UserId, string Text)>();
             var changed = false;
             var now = DateTime.UtcNow;
 
@@ -344,10 +408,12 @@ public static class MedicalCalls
                     if (call.State == StateOffered && (now > call.OfferExpiresAt.AddSeconds(ClaimGraceSeconds) || !onDuty.Contains(call.ActorId)))
                     {
                         // A paramedic who let their offer lapse (not one who just
-                        // clocked off): a blue action bubble over them, and they
-                        // never get THIS call again, even with nobody else free.
+                        // clocked off): a whisper and a blue action bubble over
+                        // them, and they never get THIS call again, even with
+                        // nobody else free.
                         if (onDuty.Contains(call.ActorId))
                         {
+                            whispers.Add((call.ActorId, LapsedWhisper));
                             AnnounceMiss(call.ActorId);
                             call.MissedBy.Add(call.ActorId);
                         }
@@ -358,6 +424,14 @@ public static class MedicalCalls
                     {
                         Release(call);
                         changed = true;
+                    }
+                    else if (call.State == StateClaimed && !call.Reminded && now >= call.ReviveBy.AddSeconds(-ReminderSeconds))
+                    {
+                        // Once per claim, and not to a paramedic already carrying
+                        // the patient - they have retrieved them.
+                        call.Reminded = true;
+                        if (PoliceState.CaptorOf(call.PatientId) != call.ActorId)
+                            whispers.Add((call.ActorId, ReminderWhisper));
                     }
                 }
 
@@ -377,6 +451,9 @@ public static class MedicalCalls
                 }
             }
 
+            foreach (var (userId, text) in whispers)
+                PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.SendWhisper(text);
+
             if (changed || forceBroadcast)
                 Broadcast(medics, noticeFor, notice, missed);
         }
@@ -386,13 +463,13 @@ public static class MedicalCalls
         }
     }
 
-    /// <summary>A blue action bubble over a paramedic who let their offer lapse.</summary>
+    /// <summary>A blue action bubble over a paramedic who let their offer lapse or declined it.</summary>
     private static void AnnounceMiss(int medicId)
     {
         var room = PlusEnvironment.Game.ClientManager.GetClientByUserId(medicId)?.GetHabbo()?.CurrentRoom;
         var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(medicId);
         if (user != null)
-            room!.SendPacket(new ChatComposer(user.VirtualId, "*declines the call*", 0, 4));
+            room!.SendPacket(new ChatComposer(user.VirtualId, "*declines this call*", 0, 4));
     }
 
     /// <summary>Back into the turn, from the paramedic after the one who had it.</summary>
