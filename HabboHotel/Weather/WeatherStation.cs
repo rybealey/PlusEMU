@@ -51,8 +51,9 @@ public static class WeatherStation
     // pixelrp City Panel: staff can hold the sky. A weather code (WMO, the same
     // numbers Open-Meteo sends) replaces the live one for everybody - the sky
     // behind the rooms and the phone's Weather app alike - and a pinned time
-    // of day (minutes after midnight) stops the sky's clock. -1 is "follow San
-    // Francisco". Kept in server_settings, so a restart keeps them.
+    // of day (minutes after midnight) stops the city's clock (GameClock) - the
+    // HUD clock and the sky. -1 lets it run. Kept in server_settings, so a
+    // restart keeps them.
     private const string WeatherPinnedKey = "city.weather.pinned";
     private const string WeatherCodeKey = "city.weather.code";
     private const string TimePinnedKey = "city.time.pinned";
@@ -116,6 +117,10 @@ public static class WeatherStation
             settings.Set(TimeMinutesKey, pinned.ToString());
         _pinnedMinutes = pinned;
         Broadcast();
+        // The city's clock stops (or starts again) with it - the HUD clock and
+        // the sky both run on GameClock.
+        try { PlusEnvironment.Game?.ClientManager?.SendPacket(GameClock.Compose()); }
+        catch (Exception e) { Log.Warn($"[clock] broadcast failed: {e.Message}"); }
     }
 
     public static RpWeatherComposer Compose()

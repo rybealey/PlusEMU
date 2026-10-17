@@ -220,6 +220,8 @@ public static class ServerPacketHeader
     public const uint RpMedicalCallsComposer = 4205;
     // pixelrp: why the connection is about to close (RpDisconnectReasonComposer)
     public const uint RpDisconnectReasonComposer = 4208;
+    // pixelrp: the city's clock (GameClock) - cycle offset, cycle length, staff pin
+    public const uint RpGameClockComposer = 4210;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

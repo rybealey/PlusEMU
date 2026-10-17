@@ -168,6 +168,8 @@ public class SsoTicketEvent : IPacketEvent
             Plus.HabboHotel.Weather.WeatherStation.Touch();
             // pixelrp: the sky behind rooms wants the reading before anyone opens the phone
             session.Send(Plus.HabboHotel.Weather.WeatherStation.Compose());
+            // pixelrp: the city's clock, which the client runs on from here
+            session.Send(Plus.HabboHotel.Weather.GameClock.Compose());
             // pixelrp: the hotel says happy birthday on the day (phone Settings >
             // Account; month + day only).
             var birthday = BirthdayUtility.GetBirthday(session.GetHabbo().Id);
