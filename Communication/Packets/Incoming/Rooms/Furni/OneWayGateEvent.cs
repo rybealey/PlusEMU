@@ -19,7 +19,8 @@ internal class OneWayGateEvent : IPacketEvent
         var hasRights = room.CheckRights(session);
         if (item.Definition.InteractionType is InteractionType.OneWayGate or InteractionType.JailExitGate)
         {
-            item.Interactor.OnTrigger(session, item, -1, hasRights);
+            // pixelrp: a door that walks them through is them walking off (OwnWalk).
+            OwnWalk.Use(session, room, () => item.Interactor.OnTrigger(session, item, -1, hasRights));
             return Task.CompletedTask;
         }
         return Task.CompletedTask;

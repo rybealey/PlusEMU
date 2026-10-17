@@ -30,10 +30,9 @@ internal class MoveAvatarEvent : IPacketEvent
         if (moveX == user.X && moveY == user.Y
             && !Plus.HabboHotel.Rooms.Movement.MovementV2Bridge.IsWalkingOrWaiting(user))
             return Task.CompletedTask;
-        // pixelrp trading: walking off ends an open trade, out loud.
-        Plus.HabboHotel.Rooms.Trading.RpTrades.CancelByWalking(session);
-        // pixelrp: and a bin search.
-        Plus.HabboHotel.Rooms.BinSearch.Interrupt(session.GetHabbo().Id);
+        // pixelrp: walking off ends an open trade (out loud), a trade request
+        // they sent and a bin search (OwnWalk).
+        Plus.HabboHotel.Rooms.OwnWalk.Started(session);
         if (user.RidingHorse)
         {
             var horse = room.GetRoomUserManager().GetRoomUserByVirtualId(user.HorseId);

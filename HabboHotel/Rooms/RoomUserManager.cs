@@ -419,8 +419,9 @@ public class RoomUserManager
         // pixelrp police: an escort survives a room change. After the enrol,
         // because putting the pair back needs both units known to V2.
         Chat.Commands.User.Police.PoliceState.OnRoomEntered(_room, user);
-        // pixelrp jail: a prisoner's countdown, shown in the cell.
-        Chat.Commands.User.Police.JailState.OnRoomEntered(user);
+        // pixelrp jail: a prisoner's countdown, shown in the cell, and who in
+        // the room is serving time.
+        Chat.Commands.User.Police.JailState.OnRoomEntered(_room, user);
         foreach (var bot in _bots.Values.ToList())
         {
             if (bot == null || bot.BotAi == null)

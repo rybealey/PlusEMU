@@ -336,6 +336,7 @@ public static class JailState
         prisoner.Client?.Send(new RpJailComposer(seconds, seconds));
         // The prisoner's uniform, from the booking on (UniformManager).
         UniformManager.Refresh(prisoner.Client);
+        SendPrisoners(prisoner.CurrentRoom);
     }
 
     /// <summary>
@@ -357,6 +358,7 @@ public static class JailState
         client?.SendWhisper("You have served your sentence.");
         // Out of the prisoner's uniform - into their rank's, if they are on duty.
         UniformManager.Refresh(client);
+        SendPrisoners((client ?? PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId))?.GetHabbo()?.CurrentRoom);
     }
 
     // ---- the session --------------------------------------------------------
@@ -416,16 +418,43 @@ public static class JailState
     }
 
     /// <summary>
-    /// A prisoner has arrived in a room - the jail after an arrest, or back in
-    /// it after a relog. Show them their countdown there: the login-time send
-    /// can land before the client is listening, and this one cannot.
+    /// Who in this room is serving time, as virtual ids
+    /// (RpRoomPrisonersComposer) - the avatar menu leaves Trade off them.
     /// </summary>
-    public static void OnRoomEntered(RoomUser user)
+    private static RpRoomPrisonersComposer PrisonersIn(Room room) =>
+        new(Serving.IsEmpty
+            ? new List<int>()
+            : room.GetRoomUserManager().GetRoomUsers()
+                .Where(unit => unit != null && !unit.IsBot && Serving.ContainsKey(unit.UserId))
+                .Select(unit => unit.VirtualId)
+                .ToList());
+
+    /// <summary>The room's prisoner list to everybody in it, after somebody in it is sentenced or let go.</summary>
+    public static void SendPrisoners(Room? room)
     {
-        if (Serving.IsEmpty || user == null || user.IsBot)
+        if (room != null)
+            room.SendPacket(PrisonersIn(room));
+    }
+
+    /// <summary>
+    /// Somebody has arrived in a room. Everybody in it learns the room's
+    /// prisoners when the newcomer is one; anybody else is sent the list for
+    /// themselves, which also replaces what they knew of the room they left.
+    ///
+    /// A prisoner - the jail after an arrest, or back in it after a relog - is
+    /// shown their countdown there too: the login-time send can land before
+    /// the client is listening, and this one cannot.
+    /// </summary>
+    public static void OnRoomEntered(Room room, RoomUser user)
+    {
+        if (room == null || user == null || user.IsBot)
             return;
         if (!Serving.TryGetValue(user.UserId, out var sentence))
+        {
+            user.GetClient()?.Send(PrisonersIn(room));
             return;
+        }
+        room.SendPacket(PrisonersIn(room));
         user.GetClient()?.Send(new RpJailComposer(sentence.SecondsLeft, sentence.SentenceSeconds));
         // Back in after a relog: the login set their own look, so dress them
         // again here, where the room is known.

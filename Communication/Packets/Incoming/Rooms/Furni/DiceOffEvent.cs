@@ -16,7 +16,8 @@ internal class DiceOffEvent : IPacketEvent
         if (KnockedOut.Refuse(session))
             return Task.CompletedTask;
         var hasRights = room.CheckRights(session);
-        item.Interactor.OnTrigger(session, item, -1, hasRights);
+        // pixelrp: furni that walks them up to it is them walking off (OwnWalk).
+        OwnWalk.Use(session, room, () => item.Interactor.OnTrigger(session, item, -1, hasRights));
         return Task.CompletedTask;
     }
 }

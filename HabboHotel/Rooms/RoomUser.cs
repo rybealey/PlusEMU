@@ -86,6 +86,12 @@ public class RoomUser
 
     public int GoalX; //byte
     public int GoalY; //byte
+    /// <summary>
+    /// pixelrp: how many walks MoveTo has set off for this unit. Read either
+    /// side of something the player did (OwnWalk.Use) to tell whether that
+    /// walked them anywhere.
+    /// </summary>
+    public int WalkRequests;
     public int HabboId;
     public int HorseId = 0;
     public int IdleTime; //byte
@@ -757,6 +763,7 @@ public class RoomUser
     {
         if (TeleportEnabled)
         {
+            WalkRequests++;
             UnIdle();
             GetRoom().SendPacket(GetRoom().GetRoomItemHandler().UpdateUserOnRoller(this, new(pX, pY), 0, GetRoom().GetGameMap().SqAbsoluteHeight(GoalX, GoalY)));
             if (Statusses.ContainsKey("sit"))
@@ -771,6 +778,7 @@ public class RoomUser
         // why standing on another player's tile "did nothing" for real players.
         if (GetRoom().GetGameMap().SquareHasUsers(pX, pY) && !pOverride && !GetRoom().RoomBlockingEnabled || Frozen)
             return;
+        WalkRequests++;
         UnIdle();
         FreezeInteracting = false;
         StandUpForWalk();

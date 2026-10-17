@@ -35,13 +35,50 @@ namespace Plus.HabboHotel.Rooms.Offers;
 ///
 /// NOTHING MOVES UNTIL THE BUYER TAPS. An offer is a promise, not an escrow -
 /// no money is held, no item is reserved. Everything is therefore checked
-/// TWICE: once to word the card, and once at the tap, because thirty seconds
-/// is long enough for any of it to stop being true.
+/// TWICE: once to word the card, and once at the tap, because the seconds a
+/// card stands are long enough for any of it to stop being true.
 /// </summary>
 public static class OfferState
 {
-    /// <summary>How long a card stands before it goes away by itself.</summary>
-    public const int LifetimeSeconds = 30;
+    /// <summary>
+    /// How long a card stands before it goes away by itself: ten seconds for a
+    /// sale (:offer, :sell) and a trade request alike (Twist, 2026-10-18; it
+    /// was thirty). A trade request goes quietly - no whisper, no bubble, the
+    /// card simply leaves; a sale still tells the seller.
+    /// </summary>
+    public const int LifetimeSeconds = 10;
+
+    /// <summary>A proposal keeps the thirty seconds every card used to have.</summary>
+    public const int ProposalLifetimeSeconds = 30;
+
+    /// <summary>
+    /// Five seconds between one card and the next from the same player - a
+    /// trade request, an :offer or a :sell alike (Twist, 2026-10-18). Counted
+    /// from a card that went up; one refused for any other reason does not
+    /// start it. :propose is not part of it.
+    /// </summary>
+    public const int CooldownSeconds = 5;
+
+    private static readonly ConcurrentDictionary<int, long> LastSent = new();
+
+    /// <summary>Whole seconds before this player may put up another card; 0 when they may now.</summary>
+    public static int CooldownLeft(int sellerId)
+    {
+        if (!LastSent.TryGetValue(sellerId, out var at))
+            return 0;
+        var left = (CooldownSeconds * 1000L) - (Environment.TickCount64 - at);
+        if (left > 0)
+            return (int)Math.Ceiling(left / 1000.0);
+        LastSent.TryRemove(new KeyValuePair<int, long>(sellerId, at));
+        return 0;
+    }
+
+    /// <summary>"Wait 3 more seconds before sending another offer." - for whoever is still cooling down.</summary>
+    public static string CooldownMessage(int secondsLeft, string what) =>
+        $"Wait {secondsLeft} more {(secondsLeft == 1 ? "second" : "seconds")} before sending another {what}.";
+
+    /// <summary>How long this card stands, from going up to going away.</summary>
+    public static int LifetimeOf(Offer offer) => offer.IsProposal ? ProposalLifetimeSeconds : LifetimeSeconds;
 
     /// <summary>Cards one buyer may have waiting. The oldest is the one shown.</summary>
     public const int MaxQueued = 3;
@@ -218,7 +255,7 @@ public static class OfferState
     public enum StartResult
     {
         Ok, UnknownItem, NotStaff, NoTool, BadQuantity, BuyerBusy, SellerBusy, Self, SameAccount,
-        TooFar, SellerPartnered, BuyerPartnered
+        TooFar, SellerPartnered, BuyerPartnered, TooSoon
     }
 
     /// <summary>
@@ -252,6 +289,8 @@ public static class OfferState
             return StartResult.BadQuantity;
         if (SellerHasOpen(seller.Id))
             return StartResult.SellerBusy;
+        if (CooldownLeft(seller.Id) > 0)
+            return StartResult.TooSoon;
         Showing(buyer.Id, out var queued);
         if (queued >= MaxQueued)
             return StartResult.BuyerBusy;
@@ -270,14 +309,16 @@ public static class OfferState
             ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
         };
         Live[offer.Id] = offer;
+        LastSent[seller.Id] = Environment.TickCount64;
         Push(buyer.Id);
         return StartResult.Ok;
     }
 
     /// <summary>
-    /// :propose - put a proposal on the other player's card. Same queue, same
-    /// thirty seconds and the same one-open-at-a-time rule as a sale, because a
-    /// proposal IS an offer; what it does not share is every rule about goods.
+    /// :propose - put a proposal on the other player's card. Same queue and the
+    /// same one-open-at-a-time rule as a sale, because a proposal IS an offer;
+    /// what it does not share is every rule about goods, or the sale's ten
+    /// seconds - it stands for thirty (ProposalLifetimeSeconds).
     ///
     /// Reach is the eight tiles around the proposer (Chebyshev 1, diagonals in),
     /// the same as :hug and :push - you propose to someone standing with you.
@@ -316,7 +357,7 @@ public static class OfferState
             BuyerName = buyer.Username,
             Quantity = 1,
             RoomId = room.RoomId,
-            ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
+            ExpiresAt = DateTime.UtcNow.AddSeconds(ProposalLifetimeSeconds)
         };
         Live[offer.Id] = offer;
         sellerUser.CarryItem(ProposalHandItem);
@@ -350,6 +391,9 @@ public static class OfferState
             return $"{buyer.Username} cannot trade right now.";
         if (SellerHasOpen(seller.Id))
             return "You already have an offer waiting to be answered.";
+        var cooldown = CooldownLeft(seller.Id);
+        if (cooldown > 0)
+            return CooldownMessage(cooldown, "trade request");
         Showing(buyer.Id, out var queued);
         if (queued >= MaxQueued)
             return $"{buyer.Username} has too many offers waiting.";
@@ -367,6 +411,7 @@ public static class OfferState
             ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
         };
         Live[offer.Id] = offer;
+        LastSent[seller.Id] = Environment.TickCount64;
         Announce(room, seller.Id, $"sends {buyer.Username} a trade request", TradeBubble);
         Push(buyer.Id);
         return null;
@@ -383,13 +428,14 @@ public static class OfferState
             buyerSession.SendWhisper(refusal);
             return false;
         }
-        if (Trading.RpTrades.Refusal(sellerSession) != null)
+        // Begin claims both players or neither: one of them taken by another
+        // trade in the meantime is a refusal like any other.
+        if (Trading.RpTrades.Refusal(sellerSession) != null || !Trading.RpTrades.Begin(sellerSession, buyerSession, room))
         {
             buyerSession.SendWhisper($"{offer.SellerName} cannot trade right now.");
             return false;
         }
         Announce(room, buyer.Id, $"accepts {offer.SellerName}'s trade request", TradeBubble);
-        Trading.RpTrades.Begin(sellerSession, buyerSession, room);
         return true;
     }
 
@@ -421,6 +467,22 @@ public static class OfferState
     }
 
     /// <summary>Everything either side of a player, for a room leave or a disconnect.</summary>
+    /// <summary>
+    /// The one asking for a trade walked off (Twist, 2026-10-18): their
+    /// request goes, as quietly as one left unanswered - the card leaves the
+    /// other player's screen and nobody is told. Only their own click to walk
+    /// (MoveAvatarEvent) does it: being pushed or pulled leaves the request
+    /// standing. A sale's card is not affected.
+    /// </summary>
+    public static void WithdrawTradeRequest(int sellerId)
+    {
+        foreach (var offer in Live.Values.Where(entry => entry.IsTrade && entry.SellerId == sellerId).ToList())
+        {
+            if (Live.TryRemove(offer.Id, out _))
+                Push(offer.BuyerId);
+        }
+    }
+
     public static void Forget(int userId)
     {
         foreach (var offer in Live.Values.Where(entry => entry.SellerId == userId || entry.BuyerId == userId).ToList())
@@ -454,7 +516,7 @@ public static class OfferState
         var seller = sellerSession?.GetHabbo();
         var room = buyer.CurrentRoom;
 
-        // EVERYTHING AGAIN. The card was worded thirty seconds ago.
+        // EVERYTHING AGAIN. The card was worded seconds ago, and seconds are enough.
         if (seller == null || room == null || room.RoomId != offer.RoomId || seller.CurrentRoom?.RoomId != offer.RoomId)
         {
             Live.TryRemove(offerId, out _);
@@ -731,8 +793,11 @@ public static class OfferState
                 continue;
             LowerHand(offer);
             Push(offer.BuyerId);
-            PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?
-                .SendWhisper($"Your {offer.Noun} to {offer.BuyerName} expired.");
+            // A trade request just goes; a sale or a proposal tells the one
+            // who made it.
+            if (!offer.IsTrade)
+                PlusEnvironment.Game.ClientManager.GetClientByUserId(offer.SellerId)?
+                    .SendWhisper($"Your {offer.Noun} to {offer.BuyerName} expired.");
         }
     }
 

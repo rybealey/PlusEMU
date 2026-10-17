@@ -226,6 +226,8 @@ public static class ServerPacketHeader
     public const uint RpCityBinRewardsComposer = 4212;
     // pixelrp: the searcher's bin search card (BinSearch) - on/off, icon, time left
     public const uint RpBinSearchComposer = 4215;
+    // pixelrp: who in the room is serving time (JailState) - their virtual ids
+    public const uint RpRoomPrisonersComposer = 4216;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

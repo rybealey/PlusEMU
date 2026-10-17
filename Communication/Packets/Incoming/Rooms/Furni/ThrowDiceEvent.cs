@@ -17,7 +17,8 @@ internal class ThrowDiceEvent : IPacketEvent
             return Task.CompletedTask;
         var hasRights = room.CheckRights(session, false, true);
         var request = packet.ReadInt();
-        item.Interactor.OnTrigger(session, item, request, hasRights);
+        // pixelrp: dice that walk them up to the table are them walking off (OwnWalk).
+        OwnWalk.Use(session, room, () => item.Interactor.OnTrigger(session, item, request, hasRights));
         return Task.CompletedTask;
     }
 }

@@ -24,7 +24,8 @@ internal class UseWallItemEvent : RoomPacketEvent
             return Task.CompletedTask;
         var hasRights = room.CheckRights(session, false, true);
         var request = packet.ReadInt();
-        item.Interactor.OnTrigger(session, item, request, hasRights);
+        // pixelrp: furni that walks them up to it is them walking off (OwnWalk).
+        OwnWalk.Use(session, room, () => item.Interactor.OnTrigger(session, item, request, hasRights));
         item.GetRoom().GetWired().TriggerEvent(WiredBoxType.TriggerStateChanges, session.GetHabbo(), item);
         _questManager.ProgressUserQuest(session, QuestType.ExploreFindItem, (int)item.Definition.Id);
         return Task.CompletedTask;

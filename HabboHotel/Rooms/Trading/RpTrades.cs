@@ -25,15 +25,33 @@ namespace Plus.HabboHotel.Rooms.Trading;
 /// NOTHING MOVES UNTIL BOTH CONFIRM. Offered items stay in the backpack and the
 /// backpack is frozen while a trade is open (IsTrading gates use, discard, the
 /// deposit box, :heal and :passive). Any change to either offer un-readies both
-/// sides; both Ready, then both Confirm, and the swap is checked in full
-/// against both backpacks before a single row is touched, so it happens whole
-/// or not at all. Every completed trade is logged (rp_trades, migration 244) -
-/// the City Panel's Trade History reads it.
+/// sides; both Ready, then both Confirm, and then the swap (Commit) is one
+/// database transaction: both backpacks locked and read, every offered item
+/// found and every incoming one given room from what was read under the lock,
+/// and only then the rows written - whole, or not at all. Every completed trade
+/// is logged (rp_trades, migration 244) - the City Panel's Trade History reads it.
 ///
-/// A trade ends when either side cancels, leaves the room or logs out.
+/// A player is in one trade at most (Begin claims both of them or neither). A
+/// trade ends when either side cancels, leaves the room or logs out - or when
+/// the swap cannot be written, in which case nothing changed hands.
 /// </summary>
 public static class RpTrades
 {
+    private static readonly NLog.ILogger Logger = NLog.LogManager.GetLogger("Plus.HabboHotel.Rooms.Trading.RpTrades");
+
+    /// <summary>The window's buttons, one at a time per player: a click every tenth of a second at most.</summary>
+    private const long ActionGapMs = 100;
+
+    private static readonly ConcurrentDictionary<int, long> LastAction = new();
+
+    private sealed class Row
+    {
+        public int UserId { get; set; }
+        public int Slot { get; set; }
+        public string Item { get; set; } = "";
+        public int Count { get; set; }
+    }
+
     public const int OfferSlots = 10;
 
     public const int ActionOffer = 1;
@@ -115,8 +133,12 @@ public static class RpTrades
 
     // ---- starting ------------------------------------------------------------
 
-    /// <summary>A trade request was accepted: open the window for both.</summary>
-    public static void Begin(GameClient first, GameClient second, Room room)
+    /// <summary>
+    /// A trade request was accepted: open the window for both. False when
+    /// either of them is already in a trade by now - each is claimed for this
+    /// one only if neither is taken, so nobody is ever in two at once.
+    /// </summary>
+    public static bool Begin(GameClient first, GameClient second, Room room)
     {
         var session = new Session
         {
@@ -126,13 +148,29 @@ public static class RpTrades
         };
         session.Sides[0] = new Side { UserId = first.GetHabbo().Id, Name = first.GetHabbo().Username };
         session.Sides[1] = new Side { UserId = second.GetHabbo().Id, Name = second.GetHabbo().Username };
-        ByUser[session.Sides[0].UserId] = session;
-        ByUser[session.Sides[1].UserId] = session;
+        if (!ByUser.TryAdd(session.Sides[0].UserId, session))
+            return false;
+        if (!ByUser.TryAdd(session.Sides[1].UserId, session))
+        {
+            Release(session);
+            return false;
+        }
         // The window shows the backpack beside the offers, and this is the one
         // moment it is certainly current.
         foreach (var client in new[] { first, second })
             client.Send(new RpInventoryComposer(client.GetHabbo().LoadRpInventory()));
         Push(session);
+        return true;
+    }
+
+    /// <summary>Let go of this trade's two players - only ever this trade's own claim on them.</summary>
+    private static void Release(Session session)
+    {
+        foreach (var side in session.Sides)
+        {
+            ByUser.TryRemove(new KeyValuePair<int, Session>(side.UserId, session));
+            LastAction.TryRemove(side.UserId, out _);
+        }
     }
 
     // ---- the window's buttons ---------------------------------------------
@@ -147,9 +185,18 @@ public static class RpTrades
         }
         if (action == ActionCancel)
         {
-            End(habbo.Id, $"{habbo.Username} cancelled the trade.", "You cancelled the trade.");
+            // The Cancel button, or the window's close: out loud over whoever
+            // pressed it, like walking off (Twist, 2026-10-18).
+            if (End(habbo.Id, $"{habbo.Username} cancelled the trade.", "You cancelled the trade."))
+                SayCancelled(habbo);
             return;
         }
+        // Every other button reads a backpack, so they are taken at a human
+        // pace: anything faster than ActionGapMs since the last is dropped.
+        var now = Environment.TickCount64;
+        if (LastAction.TryGetValue(habbo.Id, out var last) && (now - last) < ActionGapMs)
+            return;
+        LastAction[habbo.Id] = now;
         if (action == ActionConfirm)
         {
             Confirm(client, session);
@@ -184,13 +231,14 @@ public static class RpTrades
     {
         if (slot < 1 || slot > Habbo.RpCarrySlots)
             return "";
-        var entry = habbo.LoadRpInventory().FirstOrDefault(row => row.Slot == slot);
+        var inventory = habbo.LoadRpInventory();
+        var entry = inventory.FirstOrDefault(row => row.Slot == slot);
         if (string.IsNullOrEmpty(entry.Item))
             return "";
         if (!Tradeable(entry.Item))
             return "Police equipment cannot be traded.";
         mine.Offer.TryGetValue(entry.Item, out var offered);
-        var available = CarryCount(habbo.Id, entry.Item) - offered;
+        var available = Carried(inventory, entry.Item) - offered;
         if (available <= 0)
             return "You have already offered all of those.";
         var amount = all ? Math.Min(entry.Count, available) : 1;
@@ -273,21 +321,19 @@ public static class RpTrades
     private static void Swap(Session session)
     {
         string? why;
-        lock (SwapLock)
+        try
         {
-            why = Check(session);
-            if (why == null)
-            {
-                var a = session.Sides[0];
-                var b = session.Sides[1];
-                // Everything out first, then everything in - the order Check
-                // worked it out in.
-                Remove(a.UserId, a.Offer);
-                Remove(b.UserId, b.Offer);
-                Add(a.UserId, b.Offer);
-                Add(b.UserId, a.Offer);
-                Log(session);
-            }
+            lock (SwapLock)
+                why = Commit(session);
+        }
+        catch (Exception e)
+        {
+            // Rolled back - the transaction never committed - so nothing moved.
+            // Ended rather than left open: a swap that could not be written once
+            // is not tried again, and nobody is left with a frozen backpack.
+            Logger.Error(e, $"Trade {session.Id} ({session.Sides[0].Name} / {session.Sides[1].Name}) could not be written; ended with nothing changed.");
+            Abort(session, "The trade could not be completed.");
+            return;
         }
         if (why != null)
         {
@@ -297,20 +343,21 @@ public static class RpTrades
                 session.Closing = false;
             }
             // Somebody who left while the swap was being checked had their
-            // leaving put off by it: end the trade for them now.
+            // leaving put off by it: end the trade for them now - quietly,
+            // with no "left" line (Twist, 2026-10-18).
             var gone = session.Sides.FirstOrDefault(side =>
                 PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId)?.GetHabbo()?.CurrentRoom?.RoomId != session.RoomId);
             if (gone != null)
             {
-                End(gone.UserId, $"{gone.Name} left.");
+                End(gone.UserId, "");
                 return;
             }
             Push(session, 0, why);
             return;
         }
 
-        foreach (var side in session.Sides)
-            ByUser.TryRemove(side.UserId, out _);
+        Log(session);
+        Release(session);
         var room = PlusEnvironment.Game.RoomManager.TryGetRoom(session.RoomId, out var loaded) ? loaded : null;
         var announcer = room?.GetRoomUserManager()?.GetRoomUserByHabbo(session.Sides[0].UserId);
         announcer?.OnChat(OfferState.OfferBubble, $"*trades with {session.Sides[1].Name}*", true);
@@ -339,10 +386,27 @@ public static class RpTrades
     /// <summary>
     /// Everything that has to be true for the swap, or why not: both still
     /// here and able, every offered item still carried, and each side's
-    /// incoming items fitting once its outgoing ones have left.
+    /// incoming items fitting once its outgoing ones have left. What Ready
+    /// asks; Commit asks it all again under the lock, from the locked rows.
     /// </summary>
     private static string? Check(Session session)
     {
+        var why = Present(session, out var unlocked);
+        if (why != null)
+            return why;
+        foreach (var side in session.Sides)
+        {
+            var other = session.Theirs(side.UserId);
+            if (Plan(Slots(RpInventoryStore.Load(side.UserId)), side.Offer, other.Offer, unlocked[side.UserId], out var missing) == null)
+                return Shortfall(side, missing);
+        }
+        return null;
+    }
+
+    /// <summary>Both sides online, in the trade's room and able to trade - and how many slots each has open, read now.</summary>
+    private static string? Present(Session session, out Dictionary<int, int> unlocked)
+    {
+        unlocked = new Dictionary<int, int>();
         foreach (var side in session.Sides)
         {
             var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId);
@@ -352,22 +416,99 @@ public static class RpTrades
             var refusal = StateRefusal(client!);
             if (refusal != null)
                 return side.Name + ": " + refusal;
-        }
-        foreach (var side in session.Sides)
-        {
-            var other = session.Theirs(side.UserId);
-            var habbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId)!.GetHabbo();
-            var inventory = habbo.LoadRpInventory();
-            foreach (var (item, count) in side.Offer)
-                if (Carried(inventory, item) < count)
-                    return $"{side.Name} no longer has {count} × {ItemName(item)}.";
-            if (!Fits(inventory, side.Offer, other.Offer, habbo.RpUnlockedSlots))
-                return $"{side.Name}'s backpack cannot hold all of that.";
+            unlocked[side.UserId] = habbo.RpUnlockedSlots;
         }
         return null;
     }
 
-    private static int CarryCount(int userId, string item) => Carried(RpInventoryStore.Load(userId), item);
+    private static string Shortfall(Side side, string? missing) => missing != null
+        ? $"{side.Name} no longer has {side.Offer[missing]} × {ItemName(missing)}."
+        : $"{side.Name}'s backpack cannot hold all of that.";
+
+    /// <summary>
+    /// The swap itself, whole or not at all. Both backpacks are locked and
+    /// read in one transaction (SELECT ... FOR UPDATE); each side's offer must
+    /// be found in what was read there, and the other side's must fit into
+    /// it, before a row is written - and every write must land on exactly the
+    /// row that was read, or the transaction is thrown away. Null when done;
+    /// otherwise why not, with nothing written.
+    /// </summary>
+    private static string? Commit(Session session)
+    {
+        var why = Present(session, out var unlocked);
+        if (why != null)
+            return why;
+        var ids = session.Sides.Select(side => side.UserId).ToArray();
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var rows = connection.Query<Row>(
+            "SELECT `user_id` AS UserId, `slot` AS Slot, `item` AS Item, `count` AS `Count` FROM `user_rp_inventory` " +
+            "WHERE `user_id` IN @ids ORDER BY `user_id`, `slot` FOR UPDATE",
+            new { ids }, transaction).ToList();
+        var plans = new Dictionary<int, (Dictionary<int, (string Item, int Count)> Before, Dictionary<int, (string Item, int Count)> After)>();
+        foreach (var side in session.Sides)
+        {
+            var before = rows.Where(row => row.UserId == side.UserId).ToDictionary(row => row.Slot, row => (row.Item, row.Count));
+            var after = Plan(before, side.Offer, session.Theirs(side.UserId).Offer, unlocked[side.UserId], out var missing);
+            if (after == null)
+            {
+                transaction.Rollback();
+                // Ready found it all here a moment ago, and the backpack has
+                // been frozen since: worth a line in the log.
+                Logger.Warn($"Trade {session.Id}: {side.Name}'s backpack no longer matched the trade at the swap ({(missing != null ? "missing " + missing : "no room")}); nothing changed.");
+                return Shortfall(side, missing);
+            }
+            plans[side.UserId] = (before, after);
+        }
+        foreach (var (userId, (before, after)) in plans)
+            Write(connection, transaction, userId, before, after);
+        transaction.Commit();
+        return null;
+    }
+
+    /// <summary>One backpack from what was read to what it becomes, a row at a time, each write on exactly the row it expects.</summary>
+    private static void Write(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int userId,
+        Dictionary<int, (string Item, int Count)> before, Dictionary<int, (string Item, int Count)> after)
+    {
+        foreach (var (slot, was) in before)
+        {
+            if (!after.TryGetValue(slot, out var now))
+                Exactly(connection.Execute(
+                    "DELETE FROM `user_rp_inventory` WHERE `user_id` = @userId AND `slot` = @slot AND `item` = @item AND `count` = @count LIMIT 1",
+                    new { userId, slot, item = was.Item, count = was.Count }, transaction));
+            else if (now != was)
+                Exactly(connection.Execute(
+                    "UPDATE `user_rp_inventory` SET `item` = @item, `count` = @count " +
+                    "WHERE `user_id` = @userId AND `slot` = @slot AND `item` = @wasItem AND `count` = @wasCount LIMIT 1",
+                    new { userId, slot, item = now.Item, count = now.Count, wasItem = was.Item, wasCount = was.Count }, transaction));
+        }
+        foreach (var (slot, now) in after)
+            if (!before.ContainsKey(slot))
+                Exactly(connection.Execute(
+                    "INSERT INTO `user_rp_inventory` (`user_id`, `slot`, `item`, `count`) VALUES (@userId, @slot, @item, @count)",
+                    new { userId, slot, item = now.Item, count = now.Count }, transaction));
+    }
+
+    private static void Exactly(int affected)
+    {
+        if (affected != 1)
+            throw new InvalidOperationException($"A backpack row did not match what the trade read under its lock ({affected} rows).");
+    }
+
+    /// <summary>A swap that could not be written: the trade ends for both, nothing having moved.</summary>
+    private static void Abort(Session session, string text)
+    {
+        lock (session.Gate)
+            session.Closing = true;
+        Release(session);
+        foreach (var side in session.Sides)
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId)?
+                .Send(RpTradeComposer.Closed(ResultCancelled, text + " Nothing changed hands."));
+    }
+
+    private static Dictionary<int, (string Item, int Count)> Slots(List<(int Slot, string Item, int Count)> inventory) =>
+        inventory.GroupBy(row => row.Slot).ToDictionary(group => group.Key, group => (group.First().Item, group.First().Count));
 
     private static int Carried(List<(int Slot, string Item, int Count)> inventory, string item) =>
         inventory.Where(row => row.Item == item && row.Slot >= 1 && row.Slot <= Habbo.RpCarrySlots).Sum(row => row.Count);
@@ -376,19 +517,32 @@ public static class RpTrades
     public static int Cells(Dictionary<string, int> offer) =>
         offer.Sum(entry => RpWeapons.IsWeapon(entry.Key) ? entry.Value : (entry.Value + Habbo.RpStackCap - 1) / Habbo.RpStackCap);
 
-    /// <summary>
-    /// Whether `incoming` fits once `outgoing` has left - played out on a copy
-    /// of the carry slots exactly as Remove and RpInventoryStore.Add will do it.
-    /// </summary>
+    /// <summary>Whether `incoming` fits once `outgoing` has left (Plan).</summary>
     private static bool Fits(List<(int Slot, string Item, int Count)> inventory, Dictionary<string, int> outgoing,
-        Dictionary<string, int> incoming, int unlockedSlots)
+        Dictionary<string, int> incoming, int unlockedSlots) =>
+        Plan(Slots(inventory), outgoing, incoming, unlockedSlots, out _) != null;
+
+    /// <summary>
+    /// One backpack (every slot, the Weapon slot included) after the trade:
+    /// `outgoing` taken from the carry slots, highest first, then `incoming`
+    /// put in one at a time the way RpInventoryStore.Add places things - onto
+    /// the first part-used stack of the same thing if it is open, else the
+    /// first free slot; weapons never stack, and a one-per-player item already
+    /// held anywhere is refused. Null when it cannot be done, with `missing`
+    /// the offered item that is not all there (null when it is a matter of room).
+    /// The one rule for the window's fit, Ready and the swap itself.
+    /// </summary>
+    private static Dictionary<int, (string Item, int Count)>? Plan(Dictionary<int, (string Item, int Count)> before,
+        Dictionary<string, int> outgoing, Dictionary<string, int> incoming, int unlockedSlots, out string? missing)
     {
-        var slots = inventory.Where(row => row.Slot >= 1 && row.Slot <= Habbo.RpCarrySlots)
-            .ToDictionary(row => row.Slot, row => (row.Item, row.Count));
+        missing = null;
+        var slots = new Dictionary<int, (string Item, int Count)>(before);
+        bool IsCarry(int slot) => slot >= 1 && slot <= Habbo.RpCarrySlots;
         foreach (var (item, count) in outgoing)
         {
             var left = count;
-            foreach (var slot in slots.Where(pair => pair.Value.Item == item).Select(pair => pair.Key).OrderByDescending(slot => slot).ToList())
+            foreach (var slot in slots.Where(pair => IsCarry(pair.Key) && pair.Value.Item == item)
+                         .Select(pair => pair.Key).OrderByDescending(slot => slot).ToList())
             {
                 var take = Math.Min(left, slots[slot].Count);
                 left -= take;
@@ -400,18 +554,20 @@ public static class RpTrades
                     break;
             }
             if (left > 0)
-                return false;
+            {
+                missing = item;
+                return null;
+            }
         }
-        var all = inventory.Where(row => row.Slot > Habbo.RpCarrySlots).Select(row => row.Item).ToList();
         foreach (var (item, count) in incoming)
         {
             for (var i = 0; i < count; i++)
             {
-                if (RpInventoryStore.IsOnePerPlayer(item) && (slots.Values.Any(row => row.Item == item) || all.Contains(item)))
-                    return false;
+                if (RpInventoryStore.IsOnePerPlayer(item) && slots.Values.Any(row => row.Item == item))
+                    return null;
                 var stack = RpWeapons.IsWeapon(item)
                     ? 0
-                    : slots.Where(pair => pair.Value.Item == item && pair.Value.Count < Habbo.RpStackCap)
+                    : slots.Where(pair => IsCarry(pair.Key) && pair.Value.Item == item && pair.Value.Count < Habbo.RpStackCap)
                         .Select(pair => pair.Key).OrderBy(slot => slot).FirstOrDefault();
                 if (stack > 0 && stack <= unlockedSlots)
                 {
@@ -420,36 +576,11 @@ public static class RpTrades
                 }
                 var free = Enumerable.Range(1, unlockedSlots).FirstOrDefault(slot => !slots.ContainsKey(slot));
                 if (free == 0)
-                    return false;
+                    return null;
                 slots[free] = (item, 1);
             }
         }
-        return true;
-    }
-
-    private static void Remove(int userId, Dictionary<string, int> outgoing)
-    {
-        foreach (var (item, count) in outgoing)
-        {
-            var left = count;
-            var inventory = RpInventoryStore.Load(userId);
-            foreach (var row in inventory.Where(row => row.Item == item && row.Slot >= 1 && row.Slot <= Habbo.RpCarrySlots).OrderByDescending(row => row.Slot))
-            {
-                var (_, removed) = RpInventoryStore.Discard(userId, row.Slot, Math.Min(left, row.Count));
-                left -= removed;
-                if (left <= 0)
-                    break;
-            }
-        }
-    }
-
-    private static void Add(int userId, Dictionary<string, int> incoming)
-    {
-        var habbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.GetHabbo();
-        var unlocked = habbo?.RpUnlockedSlots ?? Habbo.RpCarrySlotsBase;
-        foreach (var (item, count) in incoming)
-            for (var i = 0; i < count; i++)
-                RpInventoryStore.Add(userId, item, unlocked);
+        return slots;
     }
 
     // ---- ending --------------------------------------------------------------
@@ -470,19 +601,21 @@ public static class RpTrades
                 return false;
             session.Closing = true;
         }
-        foreach (var side in session.Sides)
-            ByUser.TryRemove(side.UserId, out _);
+        Release(session);
+        // Nothing to say at all (a logout - Twist, 2026-10-18): the windows
+        // just close, with no line and no whisper.
+        var quiet = (toOthers.Length == 0) && (toThem.Length == 0);
         foreach (var side in session.Sides)
         {
             var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId);
             if (client?.GetHabbo() == null)
                 continue;
             var text = side.UserId == userId ? toThem : toOthers;
+            // No whisper to either side, whatever ended it (Twist, 2026-10-18):
+            // the window closing is the whole of it - and walking off has its
+            // "*cancels trade*" bubble (CancelByWalking).
             client.Send(RpTradeComposer.Closed(ResultCancelled,
-                (text.Length > 0 ? text + " " : "") + "Nothing changed hands."));
-            // The window just closes, so whoever did not end it is told why.
-            if (side.UserId != userId && toOthers.Length > 0)
-                client.SendWhisper(toOthers);
+                quiet ? "" : (text.Length > 0 ? text + " " : "") + "Nothing changed hands."));
         }
         return true;
     }
@@ -500,17 +633,28 @@ public static class RpTrades
             return;
         if (!End(habbo.Id, $"{habbo.Username} cancelled the trade.", "You cancelled the trade."))
             return;
-        habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?
-            .OnChat(OfferState.TradeBubble, "*cancels trade*", true);
+        SayCancelled(habbo);
     }
 
-    /// <summary>A player leaving the room or logging out.</summary>
+    /// <summary>The blue action bubble over whoever cancelled - the Cancel button, the window's close, or walking off.</summary>
+    private static void SayCancelled(Habbo habbo) =>
+        habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?
+            .OnChat(OfferState.TradeBubble, "*cancels trade*", true);
+
+    /// <summary>
+    /// A player leaving the room or logging out (Twist, 2026-10-18). A logout
+    /// ends the trade without a word - the other window just closes. Leaving
+    /// the room is cancelling it, and reads exactly like the Cancel button.
+    /// </summary>
     public static void Forget(int userId, bool loggedOut)
     {
         if (!ByUser.TryGetValue(userId, out var session))
             return;
         var name = session.Mine(userId).Name;
-        End(userId, loggedOut ? $"{name} logged out." : $"{name} left the room.");
+        if (loggedOut)
+            End(userId, "");
+        else
+            End(userId, $"{name} cancelled the trade.", "You cancelled the trade.");
     }
 
     // ---- telling the clients -----------------------------------------------
@@ -550,14 +694,18 @@ public static class RpTrades
         offer.Count == 0 ? "nothing" : string.Join(", ", offer.Select(entry => $"{entry.Value} × {ItemName(entry.Key)}"));
 
     /// <summary>
-    /// What a side got, for its room bubble: "Medkit ×2, Snack ×3 and Axe" -
-    /// the count only past one, as the trade window's own labels put it.
+    /// What a side got, for its room bubble: "Medkit ×2, Snack ×3 and an Axe" -
+    /// the count only past one, as the trade window's own labels put it, and
+    /// a single thing with its article (Twist, 2026-10-18): "a Passive Smoothie".
     /// </summary>
     private static string Received(Dictionary<string, int> offer)
     {
-        var names = offer.Select(entry => entry.Value > 1 ? $"{ItemName(entry.Key)} ×{entry.Value}" : ItemName(entry.Key)).ToList();
+        var names = offer.Select(entry => entry.Value > 1 ? $"{ItemName(entry.Key)} ×{entry.Value}" : WithArticle(ItemName(entry.Key))).ToList();
         return names.Count <= 1 ? string.Concat(names) : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
     }
+
+    private static string WithArticle(string name) =>
+        ("AEIOU".IndexOf(char.ToUpperInvariant(name.FirstOrDefault())) >= 0 ? "an " : "a ") + name;
 
     /// <summary>An item's name as :spawn lists it, "Clothing Token" for a Clothing Store token, else its key made readable.</summary>
     public static string ItemName(string item)

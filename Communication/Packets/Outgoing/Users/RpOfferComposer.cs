@@ -46,9 +46,12 @@ public class RpOfferComposer : IServerPacket
         packet.WriteInteger(_offer.Quantity);
         packet.WriteInteger(_offer.Total);
         // Seconds still to run, so the rail can drain without the client and
-        // the server disagreeing about when it started.
-        packet.WriteInteger(Math.Max(0, (int)(_offer.ExpiresAt - DateTime.UtcNow).TotalSeconds));
-        packet.WriteInteger(OfferState.LifetimeSeconds);
+        // the server disagreeing about when it started. Rounded up: a card
+        // just made has its whole lifetime left, not one second less - which
+        // is a tenth of a trade request's ten.
+        packet.WriteInteger(Math.Max(0, (int)Math.Ceiling((_offer.ExpiresAt - DateTime.UtcNow).TotalSeconds)));
+        // Each kind's own length: a trade request's is shorter.
+        packet.WriteInteger(OfferState.LifetimeOf(_offer));
         packet.WriteInteger(_queued);
         packet.WriteString(_blocked);
         // Last, so everything before it reads exactly as it did: what the card
