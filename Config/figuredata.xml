@@ -4350,6 +4350,14 @@
 <part id="1" type="lh" colorable="1" index="1" colorindex="1"/>
 <part id="1" type="rh" colorable="1" index="1" colorindex="1"/>
 </set>
+<set id="300762" gender="U" club="0" colorable="1" selectable="1" preselectable="0">
+<part id="301030" type="hd" colorable="1" index="0" colorindex="2"/>
+<part id="301030" type="ey" colorable="1" index="0" colorindex="2"/>
+<part id="301030" type="fc" colorable="1" index="0" colorindex="2"/>
+<part id="1" type="bd" colorable="1" index="1" colorindex="1"/>
+<part id="1" type="lh" colorable="1" index="1" colorindex="1"/>
+<part id="1" type="rh" colorable="1" index="1" colorindex="1"/>
+</set>
 </settype>
 <settype type="ch" paletteid="3" mand_m_0="1" mand_f_0="1" mand_m_1="0" mand_f_1="1">
 <set id="680" gender="F" club="0" colorable="1" selectable="1" preselectable="0">
