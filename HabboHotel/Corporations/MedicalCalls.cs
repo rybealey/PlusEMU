@@ -392,7 +392,7 @@ public static class MedicalCalls
         var room = PlusEnvironment.Game.ClientManager.GetClientByUserId(medicId)?.GetHabbo()?.CurrentRoom;
         var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(medicId);
         if (user != null)
-            room!.SendPacket(new ChatComposer(user.VirtualId, "*has missed their call*", 0, 4));
+            room!.SendPacket(new ChatComposer(user.VirtualId, "*declines the call*", 0, 4));
     }
 
     /// <summary>Back into the turn, from the paramedic after the one who had it.</summary>
