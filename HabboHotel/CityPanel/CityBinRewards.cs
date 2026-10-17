@@ -9,7 +9,7 @@ namespace Plus.HabboHotel.CityPanel;
 /// set in the City Panel's Economy tab, Bin Search. Each row is one possible
 /// find with a weight: a search picks one row, each row's chance being its
 /// weight over the total, and pays an amount between its min and max. A row
-/// is a backpack item, coins, or nothing at all.
+/// is coins, one of the Consumables, or nothing at all.
 ///
 /// Read fresh on every search, not cached: a search is ten seconds of
 /// somebody's time and one small query, and a change made in the panel - or
@@ -36,14 +36,23 @@ public static class BinRewards
     }
 
     /// <summary>
-    /// What a row can be, with its name: nothing, coins, then the items staff
-    /// can spawn - less the force's equipment, which only comes from the
-    /// police locker and must never turn up in a bin.
+    /// The consumables a bin may give besides coins - the basics only (Twist,
+    /// 2026-10-18). A consumable added to the game later goes on this list,
+    /// and from then on staff can put it in bins from the panel. Nothing off
+    /// it ever comes out of a bin - VIP tokens, weapons and police gear
+    /// included - however the table is edited.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Consumables = new[] { "medkit", "snack", "smoothie" };
+
+    /// <summary>
+    /// What a row can be, with its name: nothing, coins, then the consumables
+    /// above, named as staff spawn them.
     /// </summary>
     public static List<(string Key, string Name)> Options()
     {
         var options = new List<(string Key, string Name)> { (Nothing, "Nothing"), (Coins, "Coins") };
-        options.AddRange(SpawnCommand.Spawnable.Where(item => !PoliceUtility.IsPoliceGear(item.ItemKey)));
+        options.AddRange(SpawnCommand.Spawnable.Where(item =>
+            Consumables.Contains(item.ItemKey) && !PoliceUtility.IsPoliceGear(item.ItemKey)));
         return options;
     }
 

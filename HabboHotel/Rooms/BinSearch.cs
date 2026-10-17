@@ -63,6 +63,9 @@ public static class BinSearch
     private const int CapWindowSeconds = 24 * 60 * 60;
     // A search past this has lost its bin's tick (its room unloaded under it).
     private const long StaleMs = SearchMs + 5_000;
+    // One attempt per player in this long: a double-click is one attempt, and
+    // a flood of them gets no further than the first line of Start.
+    private const long AttemptGapMs = 500;
 
     private sealed class Search
     {
@@ -80,6 +83,7 @@ public static class BinSearch
     private static readonly ConcurrentDictionary<int, Search> ByUser = new();
     private static readonly ConcurrentDictionary<uint, int> SearcherOf = new();
     private static readonly ConcurrentDictionary<uint, long> SearchedAt = new();
+    private static readonly ConcurrentDictionary<int, long> LastAttempt = new();
 
     private static long Now => Environment.TickCount64;
 
@@ -108,6 +112,10 @@ public static class BinSearch
         var user = room?.GetRoomUserManager().GetRoomUserByHabbo(habbo?.Id ?? 0);
         if (session == null || habbo == null || room == null || user == null)
             return;
+        var now = Now;
+        if (LastAttempt.TryGetValue(habbo.Id, out var last) && (now - last) < AttemptGapMs)
+            return;
+        LastAttempt[habbo.Id] = now;
         // Like the vending machines: walk up to it first, then use it.
         if (!Gamemap.TilesTouching(user.X, user.Y, item.GetX, item.GetY))
         {
@@ -118,6 +126,26 @@ public static class BinSearch
         if (user.IsWalking)
             return;
         user.SetRot(Rotation.Calculate(user.X, user.Y, item.GetX, item.GetY), false);
+
+        // The answers that need nothing from the database first. All three are
+        // asked again under the Gate below, which is where they count.
+        if (ByUser.TryGetValue(habbo.Id, out var mine) && (now - mine.StartedAt) <= StaleMs)
+        {
+            if (mine.ItemId != item.Id)
+                session.SendWhisper("You're already searching a bin.");
+            return;
+        }
+        if (IsSearched(item.Id))
+        {
+            session.SendWhisper("This bin has already been searched.");
+            return;
+        }
+        if (SearcherOf.TryGetValue(item.Id, out var busy) && busy != habbo.Id
+            && ByUser.TryGetValue(busy, out var busyWith) && busyWith.ItemId == item.Id && (now - busyWith.StartedAt) <= StaleMs)
+        {
+            session.SendWhisper("Someone is already searching this bin.");
+            return;
+        }
 
         if (PoliceState.IsCuffed(habbo.Id))
         {
@@ -188,12 +216,14 @@ public static class BinSearch
                 return;
             }
 
-            SearcherOf[item.Id] = habbo.Id;
+            // The search before the bin's pointer to it: the tick reads them
+            // without the Gate, and must never find a searcher with no search.
             ByUser[habbo.Id] = new Search
             {
                 UserId = habbo.Id, AccountId = accountId, ItemId = item.Id, RoomId = room.Id, X = user.X, Y = user.Y,
                 StartedAt = Now, EffectBefore = habbo.Effects?.CurrentEffect ?? 0
             };
+            SearcherOf[item.Id] = habbo.Id;
         }
 
         user.ApplyEffect(FliesEffectId);
@@ -223,14 +253,28 @@ public static class BinSearch
             Stop(userId, true);
     }
 
-    /// <summary>The bin's own update tick: a search in progress, or the fifteen minutes running out.</summary>
+    /// <summary>
+    /// The bin's own update tick: a search in progress, or the fifteen minutes
+    /// running out. Called from inside the room's update pass
+    /// (Item.ProcessUpdates), so it re-arms with the counter alone - the pass
+    /// keeps an item with a count left for the next cycle. Queueing it again
+    /// from here would put it straight back into the pass that is running.
+    /// </summary>
     public static void Tick(Item item)
     {
         if (SearcherOf.TryGetValue(item.Id, out var userId))
         {
             if (!ByUser.TryGetValue(userId, out var search) || search.ItemId != item.Id)
             {
-                SearcherOf.TryRemove(new KeyValuePair<uint, int>(item.Id, userId));
+                lock (Gate)
+                {
+                    if (!ByUser.TryGetValue(userId, out var again) || again.ItemId != item.Id)
+                    {
+                        SearcherOf.TryRemove(new KeyValuePair<uint, int>(item.Id, userId));
+                        return;
+                    }
+                }
+                item.RequestUpdate(1, false);
                 return;
             }
             var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
@@ -253,7 +297,7 @@ public static class BinSearch
                 Finish(client, item, user, search);
                 return;
             }
-            item.RequestUpdate(1, true);
+            item.RequestUpdate(1, false);
             return;
         }
 
@@ -262,7 +306,7 @@ public static class BinSearch
         var left = ResetMs - (Now - at);
         if (left > 0)
         {
-            item.RequestUpdate((int)(left / CycleMs) + 1, true);
+            item.RequestUpdate((int)(left / CycleMs) + 1, false);
             return;
         }
         SearchedAt.TryRemove(item.Id, out _);
@@ -286,6 +330,10 @@ public static class BinSearch
         room ??= item.GetRoom();
         if (room == null || !IsSearchable(item, room))
             return;
+        // OnPlace comes on a move too, for a bin already in the room and
+        // already ticking: nothing about it has changed.
+        if (placed && room.GetRoomItemHandler().GetItem(item.Id) != null)
+            return;
         if (!IsSearched(item.Id))
         {
             if (item.LegacyDataString != "1")
@@ -305,8 +353,8 @@ public static class BinSearch
 
     /// <summary>
     /// Ten seconds up: the find. Done whole under the Gate - the bin marked
-    /// searched, the find paid and written to the log before anyone else can
-    /// start on the bin or count the account's searches.
+    /// searched, the find written to the log and then paid, before anyone
+    /// else can start on the bin or count the account's searches.
     /// </summary>
     private static void Finish(GameClient client, Item item, RoomUser user, Search search)
     {
@@ -315,31 +363,53 @@ public static class BinSearch
         string key;
         int amount;
         var given = 0;
+        var stopped = false;
 
         lock (Gate)
         {
             // Stopped in the same moment: it ended that way instead.
             if (!ByUser.TryGetValue(search.UserId, out var current) || current != search)
                 return;
-            SearchedAt[item.Id] = Now;
-            Release(search);
+            // What would have stopped it, asked once more at the moment of the
+            // find: a trade opened since the tick looked freezes the backpack.
+            if (RpTrades.IsTrading(search.UserId) || PoliceState.IsCuffed(search.UserId) || user.RpKnockedOut)
+            {
+                Release(search);
+                stopped = true;
+                key = BinRewards.Nothing;
+                amount = 0;
+            }
+            else
+            {
+                SearchedAt[item.Id] = Now;
+                Release(search);
 
-            (key, amount) = BinRewards.Payout(BinRewards.Roll());
-            if (key == BinRewards.Coins)
-            {
-                habbo.Credits += amount;
-                CoinLedger.Record(habbo, amount, "Searched a bin");
-                given = amount;
+                (key, amount) = BinRewards.Payout(BinRewards.Roll());
+                // Its row first: nothing is paid that the daily count and the
+                // log do not already hold.
+                var logId = Log(search, key, amount);
+                if (key == BinRewards.Coins)
+                {
+                    habbo.Credits += amount;
+                    CoinLedger.Record(habbo, amount, "Searched a bin");
+                    given = amount;
+                }
+                else if (key != BinRewards.Nothing)
+                {
+                    while (given < amount && habbo.AddRpItem(key) >= 0)
+                        given++;
+                }
+                if (given != amount)
+                    LogGiven(logId, given);
             }
-            else if (key != BinRewards.Nothing)
-            {
-                while (given < amount && habbo.AddRpItem(key) >= 0)
-                    given++;
-            }
-            Log(search, key, amount, given);
         }
 
         RestoreEffect(user, search);
+        if (stopped)
+        {
+            client.SendWhisper(StoppedMessage);
+            return;
+        }
         if (key == BinRewards.Nothing)
         {
             Say(room, user, "*finds nothing useful in the bin*");
@@ -362,7 +432,7 @@ public static class BinSearch
         }
 
         SetState(item, "1");
-        item.RequestUpdate((int)(ResetMs / CycleMs), true);
+        item.RequestUpdate((int)(ResetMs / CycleMs), false);
     }
 
     private static void Stop(int userId, bool tell)
@@ -400,15 +470,23 @@ public static class BinSearch
             new { accountId, window = CapWindowSeconds });
     }
 
-    // One row per finished search: what the bin gave, and how much of it was
-    // actually carried away.
-    private static void Log(Search search, string reward, int amount, int given)
+    // One row per finished search: what the bin gave, written as given in
+    // full before it is paid. The row's id comes back for LogGiven.
+    private static int Log(Search search, string reward, int amount)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        connection.Execute(
+        return connection.QuerySingle<int>(
             "INSERT INTO `rp_bin_search_log` (`user_id`, `account_id`, `item_id`, `room_id`, `reward`, `amount`, `given`, `created_at`) " +
-            "VALUES (@userId, @accountId, @itemId, @roomId, @reward, @amount, @given, UNIX_TIMESTAMP())",
-            new { userId = search.UserId, accountId = search.AccountId, itemId = search.ItemId, roomId = search.RoomId, reward, amount, given });
+            "VALUES (@userId, @accountId, @itemId, @roomId, @reward, @amount, @amount, UNIX_TIMESTAMP()); SELECT LAST_INSERT_ID();",
+            new { userId = search.UserId, accountId = search.AccountId, itemId = search.ItemId, roomId = search.RoomId, reward, amount });
+    }
+
+    // Less than all of it carried away: a full backpack, or a one-per-player
+    // item already held.
+    private static void LogGiven(int logId, int given)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Execute("UPDATE `rp_bin_search_log` SET `given` = @given WHERE `id` = @logId LIMIT 1", new { logId, given });
     }
 
     // Only while the flies are still what is on: something else may have
