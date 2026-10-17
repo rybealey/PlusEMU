@@ -166,7 +166,7 @@ public static class HospitalAdmission
         if (Warned.TryGetValue(id, out var told) && told <= minutes)
             return;
         Warned[id] = minutes;
-        user.GetClient()?.SendWhisper($"You'll be automatically transferred to the hospital in {minutes} minute{(minutes == 1 ? "" : "s")}.");
+        user.GetClient()?.SendWhisper($"You'll be automatically transported to the hospital in {minutes} minute{(minutes == 1 ? "" : "s")}.");
     }
 
     /// <summary>
@@ -185,7 +185,7 @@ public static class HospitalAdmission
         if (room.RoomId == hqId)
         {
             var bed = PickBed(room);
-            habbo.Client?.SendNotification("You were found unconscious and taken to the hospital.");
+            habbo.Client?.SendNotification("You have been automatically transported to the hospital.");
             if (bed == null)
                 return;
             room.GetGameMap().TeleportToItem(user, bed);
@@ -216,7 +216,7 @@ public static class HospitalAdmission
             return;
 
         var bed = PickBed(hq);
-        habbo.Client?.SendNotification("You were found unconscious and taken to the hospital.");
+        habbo.Client?.SendNotification("You have been automatically transported to the hospital.");
 
         // The arrival tile is set BEFORE the forward, the way :summon does it -
         // the marker is read as the room is entered, which begins the moment

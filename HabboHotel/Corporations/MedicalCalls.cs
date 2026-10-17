@@ -318,8 +318,7 @@ public static class MedicalCalls
         // taken over, with a whisper of where to go; a fresh one is accepted.
         if (claimed.PassedOn)
         {
-            var location = string.IsNullOrEmpty(claimed.RoomName) ? "the patient's location" : claimed.RoomName;
-            session.SendWhisper($"You have taken over {claimed.PatientName}'s call. Head to {location} to retrieve them!");
+            session.SendWhisper($"You have taken over {claimed.PatientName}'s call. Head to {Location(claimed)} to retrieve them!");
             ActionBubble(habbo.Id, $"*takes over {claimed.PatientName}'s call*");
         }
         else
@@ -484,6 +483,7 @@ public static class MedicalCalls
                     call.ActorName = next.Value.Name;
                     call.LastOfferedId = next.Value.Id;
                     call.OfferExpiresAt = now.AddSeconds(ClaimSeconds);
+                    whispers.Add((next.Value.Id, $"You have been assigned a call at {Location(call)}. You have {ClaimSeconds} seconds to accept."));
                     _lastOfferedId = next.Value.Id;
                     changed = true;
                 }
@@ -500,6 +500,10 @@ public static class MedicalCalls
             Console.WriteLine($"[MedicalCalls] tick failed: {exception}");
         }
     }
+
+    /// <summary>Where the patient went down, for a whisper: the room's name, or "the patient's location" without one.</summary>
+    private static string Location(Death call) =>
+        string.IsNullOrEmpty(call.RoomName) ? "the patient's location" : call.RoomName;
 
     /// <summary>A blue action bubble over a paramedic who let their offer lapse or declined it.</summary>
     private static void AnnounceMiss(int medicId) => ActionBubble(medicId, "*declines this call*");
