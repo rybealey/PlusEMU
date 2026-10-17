@@ -19,7 +19,8 @@ internal class RpGangInviteEvent : IPacketEvent
             return Task.CompletedTask;
 
         var target = CorporationUtility.ResolveUser(username);
-        if (target == null)
+        // A bot or the hotel's own account is not a player: as if nobody had that name.
+        if (target == null || Plus.HabboHotel.Users.Accounts.AccountUtility.IsSystemAccount(target.Id))
         {
             session.SendWhisper($"No player named '{username}' exists.");
             return Task.CompletedTask;

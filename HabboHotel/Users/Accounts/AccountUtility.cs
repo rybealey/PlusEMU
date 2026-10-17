@@ -43,6 +43,22 @@ public static class AccountUtility
     }
 
     /// <summary>
+    /// A hotel account that is not a player - the PixelRP account, and the
+    /// in-hotel AI bot's login (migration 247's `rp_system_account`, 269 for
+    /// the bots). Every player search already leaves these out; this is for a
+    /// name typed in full, which skips the search.
+    /// </summary>
+    public static bool IsSystemAccount(int userId)
+    {
+        if (userId <= 0)
+            return false;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `rp_system_account` FROM `users` WHERE `id` = @id LIMIT 1");
+        dbClient.AddParameter("id", userId);
+        return dbClient.GetInteger() == 1;
+    }
+
+    /// <summary>
     /// The one question every anti-abuse check asks. Two characters of one
     /// person must not trade, befriend, employ, gang up with or police each
     /// other - all of which is this, answered once.

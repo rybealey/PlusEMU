@@ -23,6 +23,16 @@ public class UsersComposer : IServerPacket
         foreach (var user in _users.ToList()) WriteUser(packet, user);
     }
 
+    /// <summary>
+    /// pixelrp: every bot shows in the room as "bot-Name" (Twist, 2026-10-18) -
+    /// over its head, on its chat and in its infostand, all of which read the
+    /// name sent here. Display only: the bots table, the rename box and every
+    /// lookup by name on the server keep the plain name. Not doubled for a bot
+    /// already named that way.
+    /// </summary>
+    private static string BotDisplayName(string name) =>
+        name.StartsWith("bot-", StringComparison.OrdinalIgnoreCase) ? name : $"bot-{name}";
+
     public UsersComposer(RoomUser user)
     {
         _users = new List<RoomUser>() { user };
@@ -143,7 +153,7 @@ public class UsersComposer : IServerPacket
         else if (user.IsBot)
         {
             packet.WriteInteger(user.BotAi.BaseId);
-            packet.WriteString(user.BotData.Name);
+            packet.WriteString(BotDisplayName(user.BotData.Name));
             packet.WriteString(user.BotData.Motto);
             packet.WriteString(user.BotData.Look.ToLower());
             packet.WriteInteger(user.VirtualId);
