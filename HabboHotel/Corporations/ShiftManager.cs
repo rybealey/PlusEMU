@@ -292,18 +292,40 @@ public static class ShiftManager
             if (!Sessions.TryRemove(userId, out _)) return;
             EndSession(session, client);
             RevertMotto(client);
-            InterruptForLeftWork(client, session);
+            InterruptForLeftWork(client, session, KnockoutAnnounceDelayMs);
         }
     }
+
+    // pixelrp: a knockout's "has ended their shift" waits a beat. Whatever
+    // knocked them out may speak once ApplyRpKnockout returns (:kill's
+    // lightning, :sethealth), and Twist wants the order: that bubble, then
+    // this one, then Paramedic Dispatch's "Your call has been sent!" whisper,
+    // which waits longer (MedicalCalls.AfterBubbleMs).
+    private const int KnockoutAnnounceDelayMs = 200;
 
     // pixelrp: clocked out because they're no longer in a room they may
     // work in (walked out, rank deauthorized mid-shift, or the room was
     // (re)assigned as a headquarters). Shown exactly like a normal :stopwork
     // - the same blue "has ended their shift" action shout - so it reads as
     // a clean end of shift rather than a special interruption.
-    private static void InterruptForLeftWork(GameClient client, ShiftSession session)
+    private static void InterruptForLeftWork(GameClient client, ShiftSession session, int announceDelayMs = 0)
     {
-        AnnounceShift(client, $"*has ended their shift at {session.CorpName}*");
+        var message = $"*has ended their shift at {session.CorpName}*";
+        if (announceDelayMs <= 0)
+            AnnounceShift(client, message);
+        else
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(announceDelayMs);
+                try
+                {
+                    AnnounceShift(client, message);
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine($"[ShiftManager] shift announcement failed: {exception}");
+                }
+            });
         PoliceUtility.PushPardonRights(client);
         PushRoomRights(client);
     }

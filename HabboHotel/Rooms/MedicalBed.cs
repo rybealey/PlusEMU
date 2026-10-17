@@ -1,4 +1,5 @@
 using System.Drawing;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
 namespace Plus.HabboHotel.Rooms;
@@ -198,6 +199,7 @@ public static class MedicalBed
         // to send them. A ward with no discharge point should leave somebody
         // free to get up, not pinned to the bed that healed them.
         ReleaseHold(user, habbo);
+        habbo?.Client?.SendNotification("You have been fully revived.");
 
         var exit = PickExit(room, bed);
         if (exit == null)

@@ -85,6 +85,12 @@ public static class MedicalCalls
 
     private const int TickMs = 1000;
 
+    /// <summary>
+    /// How long <see cref="WhisperAfterBubble"/> waits - longer than a
+    /// knockout's "has ended their shift" (ShiftManager), which comes first.
+    /// </summary>
+    private const int AfterBubbleMs = 500;
+
     /// <summary>Nobody free to offer it to yet.</summary>
     public const int StateWaiting = 0;
     /// <summary>Offered to <see cref="Death.ActorId"/> until <see cref="Death.OfferExpiresAt"/>.</summary>
@@ -227,7 +233,7 @@ public static class MedicalCalls
                 Deaths.RemoveRange(WindowSize, Deaths.Count - WindowSize);
         }
 
-        user.GetClient()?.SendWhisper("Your call has been sent! A paramedic will be assigned shortly.");
+        WhisperAfterBubble(user.GetClient(), "Your call has been sent! A paramedic will be assigned shortly.");
 
         // Offered at once rather than on the next beat, and broadcast even
         // with nobody free to take it, so it is on everyone's queue.
@@ -264,7 +270,7 @@ public static class MedicalCalls
         if (!AccountUtility.SameAccount(habbo.Id, patientId))
         {
             CityPlayers.AdjustCreditsFor(habbo.Id, DropOffTip, "Hospital drop-off tip");
-            paramedic!.SendWhisper($"You just earned a ${DropOffTip} tip for escorting a patient to the hospital!");
+            WhisperAfterBubble(paramedic, $"You just earned a {DropOffTip}c tip for escorting a patient to the hospital!");
         }
         Tick(forceBroadcast: true);
     }
@@ -499,6 +505,31 @@ public static class MedicalCalls
         {
             Console.WriteLine($"[MedicalCalls] tick failed: {exception}");
         }
+    }
+
+    /// <summary>
+    /// A whisper that has to land AFTER the action bubble of whatever caused
+    /// it, so it waits a beat. Its callers run in the middle of things whose
+    /// bubble comes once they return: :kill's lightning and :sethealth speak
+    /// after the knockout (OnDeath), and the drop-off pad's "moves X onto the
+    /// medical bed" after the drop (OnDropOff).
+    /// </summary>
+    private static void WhisperAfterBubble(GameClient? client, string text)
+    {
+        if (client == null)
+            return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(AfterBubbleMs);
+            try
+            {
+                client.SendWhisper(text);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine($"[MedicalCalls] whisper failed: {exception}");
+            }
+        });
     }
 
     /// <summary>Where the patient went down, for a whisper: the room's name, or "the patient's location" without one.</summary>
