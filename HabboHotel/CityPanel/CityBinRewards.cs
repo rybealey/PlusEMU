@@ -23,7 +23,10 @@ public static class BinRewards
     private static readonly NLog.ILogger Log = NLog.LogManager.GetLogger("Plus.HabboHotel.CityPanel.BinRewards");
 
     public const int MaxWeight = 1000;
-    public const int MaxCoins = 10_000;
+    // A coin find is always 3c to 20c (Twist, 2026-10-18): a row's range is
+    // held inside these when it is saved and again when it pays.
+    public const int MinCoins = 3;
+    public const int MaxCoins = 20;
     public const int MaxRows = 30;
 
     public sealed class Reward
@@ -106,7 +109,7 @@ public static class BinRewards
             return (Nothing, 0);
         }
         var cap = reward.Key == Coins ? MaxCoins : Users.Habbo.RpStackCap;
-        var floor = reward.Key == Coins ? 0 : 1;
+        var floor = reward.Key == Coins ? MinCoins : 1;
         var min = Math.Clamp(reward.Min, floor, cap);
         var max = Math.Clamp(reward.Max, min, cap);
         var amount = Random.Shared.Next(min, max + 1);
@@ -114,8 +117,8 @@ public static class BinRewards
     }
 
     /// <summary>
-    /// Add a row (id 0) or change one, kept in bounds: coins up to MaxCoins,
-    /// items one stack at most, nothing without an amount. Null when saved,
+    /// Add a row (id 0) or change one, kept in bounds: coins MinCoins to
+    /// MaxCoins, items one stack at most, nothing without an amount. Null when saved,
     /// otherwise what to tell the staff member.
     /// </summary>
     public static string? Save(int id, string key, int weight, int min, int max, int staffId)
@@ -125,7 +128,7 @@ public static class BinRewards
             return "That reward isn't on the list.";
         weight = Math.Clamp(weight, 0, MaxWeight);
         var cap = key == Coins ? MaxCoins : (key == Nothing ? 0 : Users.Habbo.RpStackCap);
-        var floor = (key == Coins || key == Nothing) ? 0 : 1;
+        var floor = key == Coins ? MinCoins : (key == Nothing ? 0 : 1);
         min = Math.Clamp(min, floor, cap);
         max = Math.Clamp(max, min, cap);
 

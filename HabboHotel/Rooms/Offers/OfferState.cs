@@ -73,9 +73,11 @@ public static class OfferState
         return 0;
     }
 
-    /// <summary>"Wait 3 more seconds before sending another offer." - for whoever is still cooling down.</summary>
-    public static string CooldownMessage(int secondsLeft, string what) =>
-        $"Wait {secondsLeft} more {(secondsLeft == 1 ? "second" : "seconds")} before sending another {what}.";
+    /// <summary>
+    /// The hotel's one cooldown whisper, as :hit and the gym say it (Twist,
+    /// 2026-10-18): seconds still to wait over the whole, [5/5] down to [1/5].
+    /// </summary>
+    public static string CooldownMessage(int secondsLeft) => $"Cooldown [{secondsLeft}/{CooldownSeconds}]";
 
     /// <summary>How long this card stands, from going up to going away.</summary>
     public static int LifetimeOf(Offer offer) => offer.IsProposal ? ProposalLifetimeSeconds : LifetimeSeconds;
@@ -393,7 +395,7 @@ public static class OfferState
             return "You already have an offer waiting to be answered.";
         var cooldown = CooldownLeft(seller.Id);
         if (cooldown > 0)
-            return CooldownMessage(cooldown, "trade request");
+            return CooldownMessage(cooldown);
         Showing(buyer.Id, out var queued);
         if (queued >= MaxQueued)
             return $"{buyer.Username} has too many offers waiting.";

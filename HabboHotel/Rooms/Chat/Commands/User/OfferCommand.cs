@@ -112,7 +112,7 @@ internal class OfferCommand : ITargetChatCommand
                 session.SendWhisper("You already have an offer waiting to be answered.");
                 return Task.CompletedTask;
             case OfferState.StartResult.TooSoon:
-                session.SendWhisper(OfferState.CooldownMessage(OfferState.CooldownLeft(seller.Id), "offer"));
+                session.SendWhisper(OfferState.CooldownMessage(OfferState.CooldownLeft(seller.Id)));
                 return Task.CompletedTask;
             case OfferState.StartResult.BuyerBusy:
                 session.SendWhisper($"{target.Username} has too many offers waiting.");

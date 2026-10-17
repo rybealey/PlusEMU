@@ -66,6 +66,9 @@ public static class BinSearch
     // One attempt per player in this long: a double-click is one attempt, and
     // a flood of them gets no further than the first line of Start.
     private const long AttemptGapMs = 500;
+    // Five seconds after a search ends - found or stopped - before the same
+    // player can start another (Twist, 2026-10-18).
+    public const long CooldownMs = 5_000;
 
     private sealed class Search
     {
@@ -84,6 +87,19 @@ public static class BinSearch
     private static readonly ConcurrentDictionary<uint, int> SearcherOf = new();
     private static readonly ConcurrentDictionary<uint, long> SearchedAt = new();
     private static readonly ConcurrentDictionary<int, long> LastAttempt = new();
+    private static readonly ConcurrentDictionary<int, long> LastEnded = new();
+
+    /// <summary>Whole seconds before this player may start another search; 0 when they may now.</summary>
+    private static int CooldownLeft(int userId)
+    {
+        if (!LastEnded.TryGetValue(userId, out var at))
+            return 0;
+        var left = CooldownMs - (Now - at);
+        if (left > 0)
+            return (int)Math.Ceiling(left / 1000.0);
+        LastEnded.TryRemove(new KeyValuePair<int, long>(userId, at));
+        return 0;
+    }
 
     private static long Now => Environment.TickCount64;
 
@@ -133,6 +149,14 @@ public static class BinSearch
         {
             if (mine.ItemId != item.Id)
                 session.SendWhisper("You're already searching a bin.");
+            return;
+        }
+        // The hotel's one cooldown whisper, as :hit and the gym say it (Twist,
+        // 2026-10-18): seconds still to wait over the whole, [5/5] down to [1/5].
+        var cooldown = CooldownLeft(habbo.Id);
+        if (cooldown > 0)
+        {
+            session.SendWhisper($"Cooldown [{cooldown}/{CooldownMs / 1000}]");
             return;
         }
         if (IsSearched(item.Id))
@@ -370,6 +394,7 @@ public static class BinSearch
             // Stopped in the same moment: it ended that way instead.
             if (!ByUser.TryGetValue(search.UserId, out var current) || current != search)
                 return;
+            LastEnded[search.UserId] = Now;
             // What would have stopped it, asked once more at the moment of the
             // find: a trade opened since the tick looked freezes the backpack.
             if (RpTrades.IsTrading(search.UserId) || PoliceState.IsCuffed(search.UserId) || user.RpKnockedOut)
@@ -443,6 +468,7 @@ public static class BinSearch
             if (!ByUser.TryGetValue(userId, out search))
                 return;
             Release(search);
+            LastEnded[userId] = Now;
         }
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
         var user = client?.GetHabbo()?.CurrentRoom?.GetRoomUserManager().GetRoomUserByHabbo(userId);
