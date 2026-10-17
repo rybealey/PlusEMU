@@ -367,7 +367,7 @@ public static class OfferState
             ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
         };
         Live[offer.Id] = offer;
-        Announce(room, seller.Id, $"sends {buyer.Username} a trade request");
+        Announce(room, seller.Id, $"sends {buyer.Username} a trade request", TradeBubble);
         Push(buyer.Id);
         return null;
     }
@@ -388,7 +388,7 @@ public static class OfferState
             buyerSession.SendWhisper($"{offer.SellerName} cannot trade right now.");
             return false;
         }
-        Announce(room, buyer.Id, $"accepts the trade request from {offer.SellerName}");
+        Announce(room, buyer.Id, $"accepts {offer.SellerName}'s trade request", TradeBubble);
         Trading.RpTrades.Begin(sellerSession, buyerSession, room);
         return true;
     }
@@ -597,8 +597,9 @@ public static class OfferState
     /// opening marker ahead of the speaker's name, so this renders as
     /// "*Twist takes 3 Medkits from Ryan*".
     ///
-    /// An accepted proposal is the one answer in another bubble: 16, the
+    /// An accepted proposal is answered in another bubble: 16, the
     /// relationship bubble :hug and :kiss use, matching the :propose that asked.
+    /// A trade request and its yes are the blue action bubble, 4.
     /// </summary>
     private static void Announce(Room? room, int habboId, string text, int bubble = OfferBubble)
     {
@@ -611,6 +612,9 @@ public static class OfferState
 
     /// <summary>Bubble 16, the relationship bubble - :hug, :kiss, :propose and a yes to it.</summary>
     public const int RelationshipBubble = 16;
+
+    /// <summary>Bubble 4, the blue action bubble - a trade request and the yes to it (Twist, 2026-10-17).</summary>
+    public const int TradeBubble = 4;
 
     // ---- the money -----------------------------------------------------------
 

@@ -45,6 +45,14 @@ public static class RpTrades
     public const int ResultCancelled = 0;
     public const int ResultComplete = 1;
 
+    /// <summary>
+    /// Once both sides are Ready, Confirm only counts this long afterwards
+    /// (Twist, 2026-10-17): a moment to look at the final offers before they
+    /// can be swapped. The window counts it down on the button; this is the
+    /// rule a hand-made Confirm cannot skip.
+    /// </summary>
+    public const int ConfirmDelaySeconds = 3;
+
     public sealed class Side
     {
         public int UserId;
@@ -63,6 +71,8 @@ public static class RpTrades
         public readonly object Gate = new();
         /// <summary>The swap has started (or the trade has ended): nothing more is taken from either side.</summary>
         public bool Closing;
+        /// <summary>When both sides last became Ready; Confirm waits <see cref="ConfirmDelaySeconds"/> from it.</summary>
+        public DateTime BothReadyAt;
 
         public Side Mine(int userId) => Sides[0].UserId == userId ? Sides[0] : Sides[1];
         public Side Theirs(int userId) => Sides[0].UserId == userId ? Sides[1] : Sides[0];
@@ -211,7 +221,11 @@ public static class RpTrades
         var why = Check(session);
         if (why != null)
             return why;
+        if (mine.Ready)
+            return "";
         mine.Ready = true;
+        if (session.Sides.All(side => side.Ready))
+            session.BothReadyAt = DateTime.UtcNow;
         return "";
     }
 
@@ -232,6 +246,10 @@ public static class RpTrades
         lock (session.Gate)
         {
             if (session.Closing || !session.Sides.All(side => side.Ready))
+                return;
+            // Too soon after both went Ready: the window's button is still
+            // counting down, so only a hand-made Confirm lands here.
+            if (DateTime.UtcNow < session.BothReadyAt.AddSeconds(ConfirmDelaySeconds))
                 return;
             session.Mine(habbo.Id).Confirmed = true;
             swap = session.Sides.All(side => side.Confirmed);
@@ -296,6 +314,16 @@ public static class RpTrades
         var room = PlusEnvironment.Game.RoomManager.TryGetRoom(session.RoomId, out var loaded) ? loaded : null;
         var announcer = room?.GetRoomUserManager()?.GetRoomUserByHabbo(session.Sides[0].UserId);
         announcer?.OnChat(OfferState.OfferBubble, $"*trades with {session.Sides[1].Name}*", true);
+        // Then what each side got, out loud in the blue action bubble, from
+        // the one who got it (Twist, 2026-10-17). A side given nothing says
+        // nothing.
+        foreach (var side in session.Sides)
+        {
+            var incoming = session.Theirs(side.UserId).Offer;
+            if (incoming.Count > 0)
+                room?.GetRoomUserManager()?.GetRoomUserByHabbo(side.UserId)?
+                    .OnChat(OfferState.TradeBubble, $"*receives {Received(incoming)}*", true);
+        }
         foreach (var side in session.Sides)
         {
             var other = session.Theirs(side.UserId);
@@ -430,15 +458,16 @@ public static class RpTrades
     /// End this player's trade, if they are in one: `toOthers` is what the
     /// other side is told, `toThem` what this player is (empty: nothing).
     /// </summary>
-    public static void End(int userId, string toOthers, string toThem = "")
+    /// <summary>End `userId`'s trade for both sides; false when there was none to end (or a swap is under way).</summary>
+    public static bool End(int userId, string toOthers, string toThem = "")
     {
         if (!ByUser.TryGetValue(userId, out var session))
-            return;
+            return false;
         lock (session.Gate)
         {
             // A swap under way finishes; leaving mid-swap does not undo it.
             if (session.Closing)
-                return;
+                return false;
             session.Closing = true;
         }
         foreach (var side in session.Sides)
@@ -455,6 +484,24 @@ public static class RpTrades
             if (side.UserId != userId && toOthers.Length > 0)
                 client.SendWhisper(toOthers);
         }
+        return true;
+    }
+
+    /// <summary>
+    /// A trader clicked to walk (MoveAvatarEvent): walking off ends the trade
+    /// for both, and the room sees it in the blue action bubble (Twist,
+    /// 2026-10-17). Only the player's own click - a push or a pull from
+    /// somebody else does not end their trade for them.
+    /// </summary>
+    public static void CancelByWalking(GameClient client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null || !IsTrading(habbo.Id))
+            return;
+        if (!End(habbo.Id, $"{habbo.Username} cancelled the trade.", "You cancelled the trade."))
+            return;
+        habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?
+            .OnChat(OfferState.TradeBubble, "*cancels trade*", true);
     }
 
     /// <summary>A player leaving the room or logging out.</summary>
@@ -502,9 +549,21 @@ public static class RpTrades
     private static string Describe(Dictionary<string, int> offer) =>
         offer.Count == 0 ? "nothing" : string.Join(", ", offer.Select(entry => $"{entry.Value} × {ItemName(entry.Key)}"));
 
-    /// <summary>An item's name as :spawn lists it, else its key made readable (a clothing token).</summary>
+    /// <summary>
+    /// What a side got, for its room bubble: "Medkit ×2, Snack ×3 and Axe" -
+    /// the count only past one, as the trade window's own labels put it.
+    /// </summary>
+    private static string Received(Dictionary<string, int> offer)
+    {
+        var names = offer.Select(entry => entry.Value > 1 ? $"{ItemName(entry.Key)} ×{entry.Value}" : ItemName(entry.Key)).ToList();
+        return names.Count <= 1 ? string.Concat(names) : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
+    }
+
+    /// <summary>An item's name as :spawn lists it, "Clothing Token" for a Clothing Store token, else its key made readable.</summary>
     public static string ItemName(string item)
     {
+        if (item.StartsWith(Communication.Packets.Incoming.Users.RpBuyClothingEvent.TokenPrefix))
+            return "Clothing Token";
         var known = Chat.Commands.Moderator.SpawnCommand.Spawnable.FirstOrDefault(entry => entry.ItemKey == item);
         return string.IsNullOrEmpty(known.Name) ? item.Replace('_', ' ') : known.Name;
     }
