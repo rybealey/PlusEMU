@@ -227,6 +227,8 @@ public static class MedicalCalls
                 Deaths.RemoveRange(WindowSize, Deaths.Count - WindowSize);
         }
 
+        user.GetClient()?.SendWhisper("Your call has been sent! A paramedic will be assigned shortly.");
+
         // Offered at once rather than on the next beat, and broadcast even
         // with nobody free to take it, so it is on everyone's queue.
         Tick(forceBroadcast: true);
@@ -312,14 +314,16 @@ public static class MedicalCalls
         HospitalAdmission.CollectBy(claimed.PatientId, claimed.ReviveBy);
         PlusEnvironment.Game.ClientManager.GetClientByUserId(claimed.PatientId)?
             .SendWhisper($"Paramedic {habbo.Username} is on their way.");
-        // A call another paramedic had first: said out loud, and where to go.
-        // A first-time Accept stays quiet - pressing it is confirmation enough.
+        // Said out loud either way: a call another paramedic had first is
+        // taken over, with a whisper of where to go; a fresh one is accepted.
         if (claimed.PassedOn)
         {
             var location = string.IsNullOrEmpty(claimed.RoomName) ? "the patient's location" : claimed.RoomName;
             session.SendWhisper($"You have taken over {claimed.PatientName}'s call. Head to {location} to retrieve them!");
             ActionBubble(habbo.Id, $"*takes over {claimed.PatientName}'s call*");
         }
+        else
+            ActionBubble(habbo.Id, $"*accepts {claimed.PatientName}'s call*");
         Tick(forceBroadcast: true, noticeFor: habbo.Id, notice: notice);
     }
 

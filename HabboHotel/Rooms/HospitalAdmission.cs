@@ -44,6 +44,12 @@ public static class HospitalAdmission
     /// <summary>Player id -> when the hospital collects them, set by an accepted call.</summary>
     private static readonly ConcurrentDictionary<int, DateTime> CollectAt = new();
 
+    /// <summary>The patient's countdown whispers start this many minutes out - just the one, "in 1 minute" (Twist).</summary>
+    private const int WarnFromMinutes = 1;
+
+    /// <summary>Player id -> the minutes left they were last told.</summary>
+    private static readonly ConcurrentDictionary<int, int> Warned = new();
+
     /// <summary>Somebody has just hit zero. Start their clock.</summary>
     public static void OnKnockout(RoomUser user)
     {
@@ -51,6 +57,7 @@ public static class HospitalAdmission
             return;
         Downed[user.UserId] = DateTime.UtcNow;
         CollectAt.TryRemove(user.UserId, out _);
+        Warned.TryRemove(user.UserId, out _);
     }
 
     /// <summary>
@@ -61,14 +68,20 @@ public static class HospitalAdmission
     {
         Downed.TryRemove(habboId, out _);
         CollectAt.TryRemove(habboId, out _);
+        Warned.TryRemove(habboId, out _);
     }
 
     /// <summary>
     /// A paramedic has accepted this player's call: the hospital collects them
     /// at `when` instead of on the usual clock. A later Accept (the call went
-    /// back round) sets it again.
+    /// back round) sets it again. The countdown starts over with it, so the
+    /// patient is warned against the new time.
     /// </summary>
-    public static void CollectBy(int habboId, DateTime when) => CollectAt[habboId] = when;
+    public static void CollectBy(int habboId, DateTime when)
+    {
+        CollectAt[habboId] = when;
+        Warned.TryRemove(habboId, out _);
+    }
 
     /// <summary>
     /// One room cycle for one player. Free for everybody while nobody in the
@@ -88,6 +101,8 @@ public static class HospitalAdmission
                 Downed.TryRemove(id, out _);
             if (!CollectAt.IsEmpty)
                 CollectAt.TryRemove(id, out _);
+            if (!Warned.IsEmpty)
+                Warned.TryRemove(id, out _);
             return;
         }
 
@@ -100,6 +115,7 @@ public static class HospitalAdmission
         if (!Downed.TryGetValue(id, out var since))
         {
             Downed[id] = DateTime.UtcNow;
+            Warned.TryRemove(id, out _);
             return;
         }
 
@@ -120,21 +136,37 @@ public static class HospitalAdmission
         // tick after they are released.
         if (Chat.Commands.User.Police.JailState.IsJailed(id))
             return;
-        if (CollectAt.TryGetValue(id, out var due))
+        var due = CollectAt.TryGetValue(id, out var collectAt)
+            ? collectAt
+            : since.AddSeconds(habbo.IsVip ? SecondsDownVip : SecondsDown);
+        var left = (due - DateTime.UtcNow).TotalSeconds;
+        if (left > 0)
         {
-            if (DateTime.UtcNow < due)
-                return;
-        }
-        else
-        {
-            var limit = habbo.IsVip ? SecondsDownVip : SecondsDown;
-            if ((DateTime.UtcNow - since).TotalSeconds < limit)
-                return;
+            Warn(user, id, left);
+            return;
         }
 
         Downed.TryRemove(id, out _);
         CollectAt.TryRemove(id, out _);
+        Warned.TryRemove(id, out _);
         Admit(room, user, habbo);
+    }
+
+    /// <summary>
+    /// Tell the patient when the hospital is coming, once a minute from
+    /// <see cref="WarnFromMinutes"/> down - today only "in 1 minute".
+    /// Only while the clock is really running for them - nobody carrying them,
+    /// not on a bed, not in jail - since those all hold the trip back.
+    /// </summary>
+    private static void Warn(RoomUser user, int id, double secondsLeft)
+    {
+        var minutes = (int)Math.Ceiling(secondsLeft / 60);
+        if (minutes > WarnFromMinutes)
+            return;
+        if (Warned.TryGetValue(id, out var told) && told <= minutes)
+            return;
+        Warned[id] = minutes;
+        user.GetClient()?.SendWhisper($"You'll be automatically transferred to the hospital in {minutes} minute{(minutes == 1 ? "" : "s")}.");
     }
 
     /// <summary>
