@@ -454,6 +454,13 @@ public class RoomItemHandling
 
     public bool SetFloorItem(GameClient session, Item item, int newX, int newY, int newRot, bool newItem, bool onRoller, bool sendMessage, bool updateRoomUserStatuses = false, double height = -1)
     {
+        // pixelrp: only staff put a searchable bin down in a PixelRP room -
+        // from the inventory or out of a gift alike, since both land here.
+        if (newItem && !BinSearch.MayPlace(_room, item, session))
+        {
+            session?.SendWhisper("Only staff can place this here.");
+            return false;
+        }
         // Items placed from inventory arrive via ToRoomObject() with RoomId 0 and no
         // room reference, so Item.GetRoom() resolves to null until the next room
         // reload — walking on/off such an item NRE'd the tick (and the crash repeated
@@ -816,6 +823,12 @@ public class RoomItemHandling
     {
         if (!item.IsWallItem || _wallItems.ContainsKey(item.Id))
             return false;
+        // pixelrp: the same rule as floor furni, for anything made a bin.
+        if (!BinSearch.MayPlace(_room, item, session))
+        {
+            session?.SendWhisper("Only staff can place this here.");
+            return false;
+        }
         if (_floorItems.ContainsKey(item.Id))
         {
             session.SendNotification(PlusEnvironment.LanguageManager.TryGetValue("room.item.already_placed"));

@@ -760,6 +760,7 @@
     "RpDisconnectReasonComposer": 4208,
     "RpGameClockComposer": 4210,
     "RpCityBinRewardsComposer": 4212,
+    "RpBinSearchComposer": 4215,
     "RpNavigatorZonesComposer": 4182,
     "RpMessengerReceiptComposer": 3906,
     "RpMessengerFriendTypingComposer": 3932,

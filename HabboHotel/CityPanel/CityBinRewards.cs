@@ -20,6 +20,8 @@ public static class BinRewards
     public const string Nothing = "nothing";
     public const string Coins = "coins";
 
+    private static readonly NLog.ILogger Log = NLog.LogManager.GetLogger("Plus.HabboHotel.CityPanel.BinRewards");
+
     public const int MaxWeight = 1000;
     public const int MaxCoins = 10_000;
     public const int MaxRows = 30;
@@ -64,17 +66,42 @@ public static class BinRewards
     public static Reward? Roll()
     {
         var rows = All().Where(row => row.Weight > 0).ToList();
-        var total = rows.Sum(row => row.Weight);
+        var total = rows.Sum(row => (long)Math.Min(row.Weight, MaxWeight));
         if (total <= 0)
             return null;
-        var pick = Random.Shared.Next(total);
+        var pick = Random.Shared.NextInt64(total);
         foreach (var row in rows)
         {
-            if (pick < row.Weight)
+            var weight = Math.Min(row.Weight, MaxWeight);
+            if (pick < weight)
                 return row;
-            pick -= row.Weight;
+            pick -= weight;
         }
         return null;
+    }
+
+    /// <summary>
+    /// What a picked row actually pays, held to the same rules Save keeps:
+    /// only a reward on the list, never the force's equipment, and an amount
+    /// inside its bounds. The table can be written by hand as well as from
+    /// the panel, so the payout checks for itself rather than trusting the
+    /// row. Anything outside the rules pays nothing.
+    /// </summary>
+    public static (string Key, int Amount) Payout(Reward? reward)
+    {
+        if (reward == null || reward.Key == Nothing)
+            return (Nothing, 0);
+        if (PoliceUtility.IsPoliceGear(reward.Key) || !Options().Any(option => option.Key == reward.Key))
+        {
+            Log.Warn($"rp_bin_rewards row {reward.Id} has a reward that is not allowed ('{reward.Key}'); it paid nothing.");
+            return (Nothing, 0);
+        }
+        var cap = reward.Key == Coins ? MaxCoins : Users.Habbo.RpStackCap;
+        var floor = reward.Key == Coins ? 0 : 1;
+        var min = Math.Clamp(reward.Min, floor, cap);
+        var max = Math.Clamp(reward.Max, min, cap);
+        var amount = Random.Shared.Next(min, max + 1);
+        return amount > 0 ? (reward.Key, amount) : (Nothing, 0);
     }
 
     /// <summary>

@@ -224,6 +224,8 @@ public static class ServerPacketHeader
     public const uint RpGameClockComposer = 4210;
     // pixelrp: the City Panel's Bin Search rewards (BinRewards) - rows, choices, a notice
     public const uint RpCityBinRewardsComposer = 4212;
+    // pixelrp: the searcher's bin search card (BinSearch) - on/off, icon, time left
+    public const uint RpBinSearchComposer = 4215;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
