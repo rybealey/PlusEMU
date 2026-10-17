@@ -188,6 +188,8 @@ internal class HitCommand : ITargetChatCommand
             var (minDamage, maxDamage) = Gym.GymState.PunchDamage(habbo.RpStrengthLevel);
             var damage = Random.Shared.Next(minDamage, maxDamage + 1);
             target.RpHealth = Math.Max(0, target.RpHealth - damage);
+            // pixelrp: a punch ends a bin search.
+            BinSearch.Interrupt(target.Id);
 
             // pixelrp consumables: a punch that lands ruins a medkit. The
             // remaining health is not owed back - the kit is spent, and

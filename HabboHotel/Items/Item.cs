@@ -265,6 +265,8 @@ public class Item
                     return new InteractorVendor();
                 case InteractionType.SnackDispenser:
                     return new InteractorSnackDispenser();
+                case InteractionType.BinSearch:
+                    return new InteractorBinSearch();
                 case InteractionType.Scoreboard:
                     return new InteractorScoreboard();
                 case InteractionType.PuzzleBox:
@@ -826,6 +828,9 @@ public class Item
                             LegacyDataString = "0";
                             UpdateState(false, true);
                         }
+                        break;
+                    case InteractionType.BinSearch:
+                        Plus.HabboHotel.Rooms.BinSearch.Tick(this);
                         break;
                     case InteractionType.VendingMachine:
                         if (LegacyDataString == "1")

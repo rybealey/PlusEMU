@@ -32,6 +32,8 @@ internal class MoveAvatarEvent : IPacketEvent
             return Task.CompletedTask;
         // pixelrp trading: walking off ends an open trade, out loud.
         Plus.HabboHotel.Rooms.Trading.RpTrades.CancelByWalking(session);
+        // pixelrp: and a bin search.
+        Plus.HabboHotel.Rooms.BinSearch.Interrupt(session.GetHabbo().Id);
         if (user.RidingHorse)
         {
             var horse = room.GetRoomUserManager().GetRoomUserByVirtualId(user.HorseId);

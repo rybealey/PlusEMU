@@ -151,6 +151,10 @@ public class RoomItemHandling
                         item.GetX, item.GetY, item.Rotation));
                 if (!_floorItems.ContainsKey(item.Id))
                     _floorItems.TryAdd(item.Id, item);
+                // pixelrp: a searched bin stays shut for its full fifteen minutes
+                // across the room unloading and loading again.
+                if (item.Definition.InteractionType == InteractionType.BinSearch)
+                    BinSearch.OnLoaded(item, _room);
             }
             else if (item.IsWallItem)
             {

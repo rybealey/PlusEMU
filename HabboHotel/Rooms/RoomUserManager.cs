@@ -458,6 +458,9 @@ public class RoomUserManager
                 session.Send(new CloseConnectionComposer());
             if (session.GetHabbo().TentId > 0)
                 session.GetHabbo().TentId = 0;
+            // pixelrp: a bin search ends at the door - while the room is still
+            // theirs, so the flies come off here rather than follow them out.
+            BinSearch.Interrupt(session.GetHabbo().Id);
             session.GetHabbo().CurrentRoom = null;
             // pixelrp police: a stun and a cuff happen in a room and do not
             // follow anyone out of it - but an ESCORT does. OnRoomLeave keeps

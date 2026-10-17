@@ -180,6 +180,8 @@ public static class PoliceState
     {
         if (room == null || user == null || user.IsBot)
             return;
+        // A bin search ends first, so the birds below go over no flies.
+        BinSearch.Interrupt(user.UserId);
         Stunned[user.UserId] = DateTime.UtcNow.AddSeconds(seconds);
         // Halt an in-flight walk on the spot instead of letting it finish the
         // path, then block new clicks for the duration. ClearMovement is V1's;
@@ -279,6 +281,7 @@ public static class PoliceState
     {
         if (user == null || user.IsBot)
             return;
+        BinSearch.Interrupt(user.UserId);
         Disoriented[user.UserId] = DateTime.UtcNow.AddMilliseconds(milliseconds);
         user.CanWalk = false;
         // The stun's birds, for as long as it lasts (TickDisorient takes them
@@ -351,7 +354,13 @@ public static class PoliceState
         IsCuffed(habboId) && CuffedCannot.Contains(commandKey);
 
     /// <summary>Cuff a player with <paramref name="officerId"/>'s handcuffs. False when they already were.</summary>
-    public static bool Cuff(int habboId, int officerId) => Cuffed.TryAdd(habboId, officerId);
+    public static bool Cuff(int habboId, int officerId)
+    {
+        // Before TickCuffs keeps whatever effect is on to hand back at the
+        // uncuff: the flies of a bin search must not be it.
+        BinSearch.Interrupt(habboId);
+        return Cuffed.TryAdd(habboId, officerId);
+    }
 
     /// <summary>The officer whose handcuffs are on this player, or 0.</summary>
     public static int CufferOf(int habboId) => Cuffed.TryGetValue(habboId, out var officerId) ? officerId : 0;
@@ -949,6 +958,8 @@ public static class PoliceState
     {
         if (room == null || user == null)
             return;
+        if (!user.IsBot)
+            BinSearch.Interrupt(user.UserId);
         if (!EscortByCaptor.IsEmpty || !EscortBySuspect.IsEmpty)
             EndEscortsOnKnockout(room, user);
         if (!Cuffed.IsEmpty)

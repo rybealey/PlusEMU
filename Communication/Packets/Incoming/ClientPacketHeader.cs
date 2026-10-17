@@ -606,6 +606,10 @@ public static class ClientPacketHeader
     public const uint RpMedicalCallDeclineEvent = 4209;
     // pixelrp: the browser guard sending a player back to the website (BrowserGuardLog).
     public const uint RpBrowserGuardEvent = 4207;
+    // pixelrp: the City Panel's Bin Search rewards (BinRewards) - ask, save a row, take one out.
+    public const uint RpCityBinRewardsEvent = 4211;
+    public const uint RpCityBinRewardSaveEvent = 4213;
+    public const uint RpCityBinRewardDeleteEvent = 4214;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

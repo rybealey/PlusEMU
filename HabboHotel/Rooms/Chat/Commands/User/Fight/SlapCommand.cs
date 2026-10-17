@@ -176,6 +176,8 @@ internal class SlapCommand : ITargetChatCommand
             return Task.CompletedTask;
 
         target.RpHealth = Math.Max(0, target.RpHealth - Damage);
+        // pixelrp: so does a slap - it is a hit, if a light one.
+        BinSearch.Interrupt(target.Id);
         target.SaveRpStats();
         habbo.RpAggression = AggressionOnSlap;
         SendStats(room, targetUser, target);

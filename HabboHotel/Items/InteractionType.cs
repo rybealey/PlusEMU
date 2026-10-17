@@ -203,5 +203,10 @@ public enum InteractionType
     // pixelrp: a snack vending machine - puts a Snack in the backpack of
     // whoever uses it and plays its dispense animation (state 1), then resets
     // itself (InteractorSnackDispenser). The Muse Vending Machine (migration 249).
-    SnackDispenser
+    SnackDispenser,
+
+    // pixelrp: a bin to search through - 10 seconds, then one reward from the
+    // City Panel's table, and it stays searched (state 1) for 15 minutes
+    // (BinSearch). Only in PixelRP-owned rooms. The PixelRP Bin (migration 273).
+    BinSearch
 }

@@ -222,6 +222,8 @@ public static class ServerPacketHeader
     public const uint RpDisconnectReasonComposer = 4208;
     // pixelrp: the city's clock (GameClock) - cycle offset, cycle length, staff pin
     public const uint RpGameClockComposer = 4210;
+    // pixelrp: the City Panel's Bin Search rewards (BinRewards) - rows, choices, a notice
+    public const uint RpCityBinRewardsComposer = 4212;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;
