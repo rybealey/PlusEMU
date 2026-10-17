@@ -15,6 +15,8 @@ public class HabboSearchResultComposer : IServerPacket
         _otherUsers = otherUsers;
     }
 
+    // pixelrp: the look goes out for offline players too (it used to be
+    // blanked), so the gang Invite tab draws them instead of an empty avatar.
     public void Compose(IOutgoingPacket packet)
     {
         packet.WriteInteger(_friends.Count);
@@ -28,7 +30,7 @@ public class HabboSearchResultComposer : IServerPacket
             packet.WriteBoolean(false);
             packet.WriteString(string.Empty);
             packet.WriteInteger(0);
-            packet.WriteString(online ? friend.Figure : "");
+            packet.WriteString(friend.Figure);
             packet.WriteString(friend.LastOnline);
         }
         packet.WriteInteger(_otherUsers.Count);
@@ -42,7 +44,7 @@ public class HabboSearchResultComposer : IServerPacket
             packet.WriteBoolean(false);
             packet.WriteString(string.Empty);
             packet.WriteInteger(0);
-            packet.WriteString(online ? otherUser.Figure : "");
+            packet.WriteString(otherUser.Figure);
             packet.WriteString(otherUser.LastOnline);
         }
 
