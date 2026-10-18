@@ -109,7 +109,7 @@ internal class HealCommand : ITargetChatCommand
         }
         if (target.RpHealth >= target.RpHealthMax)
         {
-            session.SendWhisper($"{target.Username} is not injured.");
+            session.SendWhisper($"{target.Username} is full health.");
             return Task.CompletedTask;
         }
         if (target.RpHealthRegen.Running)

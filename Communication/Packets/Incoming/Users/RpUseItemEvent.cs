@@ -210,7 +210,7 @@ public class RpUseItemEvent : IPacketEvent
                 }
                 if (habbo.RpHealth >= habbo.RpHealthMax)
                 {
-                    session.SendWhisper("You are not injured.");
+                    session.SendWhisper("You are full health.");
                     return;
                 }
                 if (habbo.RpHealthRegen.Running)

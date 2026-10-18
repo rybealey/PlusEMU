@@ -44,6 +44,6 @@ internal class QuitJobCommand : IChatCommand
             PoliceUtility.RemovePoliceGear(userId, session);
 
         var roomUser = session.GetHabbo().CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(userId);
-        roomUser?.OnChat(4, $"*has resigned from their role at {employment.CorpName}*", true);
+        roomUser?.OnChat(4, $"*quits their job at {employment.CorpName}*", true);
     }
 }
