@@ -9,7 +9,7 @@ internal class GotoCommand : IChatCommand
 
     public string Parameters => "%room_id%";
 
-    public string Description => "";
+    public string Description => "Go to a room by its ID.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {

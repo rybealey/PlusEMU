@@ -1751,19 +1751,6 @@ public static class MovementController
         if (w.Route.Length - w.Route.Cursor <= 1)
             flags |= RpMovementV2Flags.FinalEdge;
 
-        // TEMPORARY DIAGNOSTIC - see RpMovementV2Flags.ForcedRedirect. THIS
-        // record is the one worth marking, of the two this redirect produces:
-        // it is the packet that races the client's lookahead, and the boundary
-        // beat's own record arrives afterwards, describing a rewrite the client
-        // has already been told about. Marking both would double-count a single
-        // forced redirect in the browser log.
-        var forcedMarginMs = 0;
-        if (w.ForcedRedirectMarginMs != MovementState.NotForced)
-        {
-            flags |= RpMovementV2Flags.ForcedRedirect;
-            forcedMarginMs = w.ForcedRedirectMarginMs;
-        }
-
         // LOOKAHEAD, OFF A CURSOR THAT HAS NOT MOVED - and that difference is
         // the whole reason this is not a copy of StageEdge's loop.
         //
@@ -1814,7 +1801,7 @@ public static class MovementController
         if (shadow != null)
         {
             shadowRecord = EscortShadowPublishRecord(
-                map, w, shadow, index, flags, to, facing, lookahead, lookCount, forcedMarginMs);
+                map, w, shadow, index, flags, to, facing, lookahead, lookCount);
 
             if (shadowRecord == null)
             {
@@ -1829,7 +1816,7 @@ public static class MovementController
             from.X, from.Y, MovementEdgeRecord.Z100(w.EdgeToZ),
             to.X, to.Y, MovementEdgeRecord.Z100(toZ),
             toZ, facing,
-            lookahead, lookCount, forcedMarginMs, publishOnly: true));
+            lookahead, lookCount, publishOnly: true));
 
         // Captor first, suspect second, in the same frame - the order StageEdge
         // and StageShadow use, and the order the client relies on to face the
@@ -1862,7 +1849,7 @@ public static class MovementController
     /// </summary>
     private static MovementEdgeRecord? EscortShadowPublishRecord(
         Gamemap map, MovementState w, MovementState s, int index, int flags,
-        Point to, byte facing, LookaheadTile[] captorLookahead, int captorLookCount, int forcedMarginMs)
+        Point to, byte facing, LookaheadTile[] captorLookahead, int captorLookCount)
     {
         var from = s.EdgeTo;
         var shadowTo = ShadowTile(map, to, facing, behind: false);
@@ -1893,7 +1880,7 @@ public static class MovementController
             w.IntervalMs, w.EdgeStartTick(index),
             from.X, from.Y, MovementEdgeRecord.Z100(fromZ),
             shadowTo.X, shadowTo.Y, MovementEdgeRecord.Z100(toZ),
-            toZ, facing, lookahead, lookahead.Length, forcedMarginMs,
+            toZ, facing, lookahead, lookahead.Length,
             publishOnly: true, shadowOfVirtualId: w.VirtualId);
     }
 

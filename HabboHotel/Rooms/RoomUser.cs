@@ -190,7 +190,6 @@ public class RoomUser
 
     public int LlPartner = 0;
     public int LockedTilesCount;
-    public bool MoonwalkEnabled = false;
 
     public Pet PetData;
 
@@ -225,7 +224,6 @@ public class RoomUser
     public bool ShieldActive;
     public int ShieldCounter;
     public byte SqState;
-    public bool SuperFastWalking = false;
     public Team Team;
     public int TeleDelay; //byte
     public bool TeleportEnabled;

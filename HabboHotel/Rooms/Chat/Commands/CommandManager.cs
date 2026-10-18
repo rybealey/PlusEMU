@@ -35,8 +35,8 @@ public class CommandManager : ICommandManager
     /// </summary>
     private static readonly HashSet<string> KnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
     {
-        "about", "stats",
-        "dnd", "disablegifts", "disablemimic", "flagme",
+        "stats",
+        "dnd", "disablemimic", "flagme",
         "ga", "ca"
     };
 
