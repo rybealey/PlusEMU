@@ -348,7 +348,7 @@ public static class EmergencyCalls
     private const int TripSeconds = 4;
 
     /// <summary>What the room sees as an officer sets off on a 911 call.</summary>
-    private const string EmergencyDeparture = "*hops into their police car, responding to an emergency*";
+    private const string EmergencyDeparture = "*switches on the siren and jumps into their police car, racing to an emergency*";
 
     /// <summary>What the room sees when an officer walks off during the wait.</summary>
     private const string TripCancelled = "*steps out of their police car*";
@@ -427,7 +427,7 @@ public static class EmergencyCalls
         user.ClearMovement(true);
         Rooms.Movement.MovementV2Bridge.Halt(user);
         PoliceBeacon.LightUp(habbo);
-        AnnounceDeparture(session, call.Kind == KindBackup ? $"*speeds off to back up {call.CallerName}*" : EmergencyDeparture);
+        AnnounceDeparture(session, call.Kind == KindBackup ? $"*switches on the siren and speeds off to back up {call.CallerName}*" : EmergencyDeparture);
         _ = Task.Run(async () =>
         {
             await Task.Delay(TripSeconds * 1000);
