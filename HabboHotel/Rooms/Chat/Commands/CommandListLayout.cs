@@ -12,9 +12,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands;
 /// The text keeps the old shape the client already reads - a marker line,
 /// then a "[Group]" line before each group's ":key params - description"
 /// lines - with staff groups written "[Staff: Group]" so the window can put
-/// them under its Staff heading (and offer "All"). Only staff are sent those:
-/// a player who can use a staff command anyway (VIP :wd, an unlocked command)
-/// finds it in a player group instead.
+/// them under its Staff heading, and a VIP command's description starting
+/// "[VIP] " for its tag. Only staff are sent staff groups: a player who can
+/// use a staff command anyway (an unlocked command) finds it in a player
+/// group instead.
 /// </summary>
 internal static class CommandListLayout
 {
@@ -53,11 +54,12 @@ internal static class CommandListLayout
         public string[] Keys { get; }
     }
 
+    // :wd is staff or VIP (277); it lists here, with the VIP tag, for both.
     private static readonly Group General = new("General", false, false,
-        "sit", "stand", "lay", "stats", "passive", "suicide", "flagme", "mutebots", "mutepets");
+        "sit", "stand", "lay", "stats", "passive", "suicide", "flagme", "mutebots", "mutepets", "wd");
 
     private static readonly Group JobsAndGangs = new("Jobs & gangs", false, false,
-        "startwork", "stopwork", "hire", "fire", "quitjob", "ca", "heal", "ga");
+        "startwork", "stopwork", "hire", "fire", "quitjob", "ca", "heal", "ga", "leavegang");
 
     private static readonly Group Trading = new("Trading", false, false, "give", "offer");
 
@@ -89,6 +91,14 @@ internal static class CommandListLayout
         General, JobsAndGangs, Trading, Fighting, Social, Police, RoomAndFurni,
         StaffRoomAndFurni, StaffFun, Moderator, Administrator
     };
+
+    /// <summary>
+    /// Commands a VIP membership unlocks (subscription_id 1 in
+    /// permissions_commands: 277 :wd, 278 :pull). Their description goes out
+    /// as "[VIP] ..." and the window shows a VIP tag. Keep in step with those
+    /// rows.
+    /// </summary>
+    private static readonly HashSet<string> Vip = new(StringComparer.OrdinalIgnoreCase) { "wd", "pull" };
 
     private static readonly Dictionary<string, Group> ByKey = Groups
         .SelectMany(group => group.Keys.Select(key => (key, group)))
@@ -140,7 +150,7 @@ internal static class CommandListLayout
                     .ThenBy(c => c.Key, StringComparer.Ordinal);
             text.Append(group.Staff ? $"[Staff: {group.Name}]\n" : $"[{group.Name}]\n");
             foreach (var command in ordered)
-                text.Append($":{command.Key} {command.Parameters} - {command.Description}\n");
+                text.Append($":{command.Key} {command.Parameters} - {(Vip.Contains(command.Key) ? "[VIP] " : string.Empty)}{command.Description}\n");
         }
         return text.ToString();
     }
