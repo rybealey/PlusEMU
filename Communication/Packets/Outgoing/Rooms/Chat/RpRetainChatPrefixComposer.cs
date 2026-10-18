@@ -20,7 +20,7 @@ public class RpRetainChatPrefixComposer : IServerPacket
 
     /// <summary>The commands whose prefix the chat box keeps - see the client's ChatInputView.</summary>
     public static bool Retains(string commandKey) =>
-        commandKey is "ga" or "ca" or "sa";
+        commandKey is "ga" or "ca" or "sa" or "pa";
 
     private readonly string _prefix;
 
