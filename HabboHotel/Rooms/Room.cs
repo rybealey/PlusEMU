@@ -454,7 +454,10 @@ public class Room : RoomData
                 IdleTime++;
             else if (IdleTime > 0)
                 IdleTime = 0;
-            if (IdleTime >= IdleUnloadTicks && !KeyRooms.StaysLoaded(this))
+            // Asked once, as the room reaches the unload time: a key room left
+            // loaded counts on past it, and is not asked (or its furni searched
+            // for an arrow) again every tick it stays empty.
+            if (IdleTime == IdleUnloadTicks && !KeyRooms.StaysLoaded(this))
             {
                 PlusEnvironment.Game.RoomManager.UnloadRoom(Id);
                 return;
