@@ -170,6 +170,9 @@ public class SsoTicketEvent : IPacketEvent
             session.Send(Plus.HabboHotel.Weather.WeatherStation.Compose());
             // pixelrp: the city's clock, which the client runs on from here
             session.Send(Plus.HabboHotel.Weather.GameClock.Compose());
+            // pixelrp: the city's furni, for the client to download in the
+            // background - first visits draw furni, not placeholders
+            session.Send(Plus.HabboHotel.Rooms.KeyRooms.CityFurni());
             // pixelrp: the hotel says happy birthday on the day (phone Settings >
             // Account; month + day only).
             var birthday = BirthdayUtility.GetBirthday(session.GetHabbo().Id);

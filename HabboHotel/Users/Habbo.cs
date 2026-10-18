@@ -1026,6 +1026,22 @@ public class Habbo
         // room the moment RoomReady reaches it, and that request must find the
         // room already marked as sent (RoomEntry, below), however fast it is.
         EntrySentRoomId = room.RoomId;
+        // pixelrp: RoomReady and the whole room behind it go as ONE message
+        // (GameClient.BeginBatch): the room arrives complete, in one piece.
+        Client.BeginBatch();
+        try
+        {
+            SendRoom(room);
+        }
+        finally
+        {
+            Client.EndBatch();
+        }
+        return true;
+    }
+
+    private void SendRoom(Room room)
+    {
         Client.Send(new RoomReadyComposer(room.RoomId, room.ModelName));
         if (room.Wallpaper != "0.0")
             Client.Send(new RoomPropertyComposer("wallpaper", room.Wallpaper));
@@ -1056,6 +1072,5 @@ public class Habbo
             EntrySentRoomId = 0;
             Core.ExceptionLogger.LogException(e);
         }
-        return true;
     }
 }

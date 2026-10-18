@@ -313,6 +313,8 @@ public abstract class GameClient
 
     public void Send(IServerPacket composer)
     {
+        if (_batch != null && HoldInBatch(composer))
+            return;
         // A composer whose header is 0, or one this revision doesn't map, used to throw
         // KeyNotFoundException straight out of whatever handler was sending it — losing
         // the rest of that handler's work rather than just the one packet. Name it in
@@ -381,9 +383,102 @@ public abstract class GameClient
     {
         if (framed == null || framed.Length == 0)
             return;
+        if (_batch != null && HoldInBatch(framed))
+            return;
+        SendNow(framed);
+    }
+
+    private void SendNow(byte[] framed)
+    {
         var args = new SocketAsyncEventArgs();
         args.SetBuffer(framed);
         SendCallback(args);
+    }
+
+    /// <summary>
+    /// pixelrp: packets held while a batch is open (<see cref="BeginBatch"/>),
+    /// framed and in the order they were sent, by any thread. Null when no
+    /// batch is open - read without the lock first, so a plain send pays for
+    /// nothing more than that read.
+    /// </summary>
+    private volatile List<byte[]>? _batch;
+    private int _batchDepth;
+    private readonly object _batchLock = new();
+
+    /// <summary>
+    /// pixelrp: hold everything sent to this client until the matching
+    /// <see cref="EndBatch"/>, which sends it as ONE message. For a room
+    /// entry: RoomReady, the room's shape, its furni and everyone in it used
+    /// to go as a hundred-odd messages, each its own frame for the browser to
+    /// read and hand over separately. The client's decoder splits a message by
+    /// each packet's length prefix, in order, so it is the same packets in the
+    /// same order. Nests: only the outermost EndBatch sends.
+    /// </summary>
+    public void BeginBatch()
+    {
+        lock (_batchLock)
+        {
+            _batchDepth++;
+            _batch ??= new List<byte[]>();
+        }
+    }
+
+    public void EndBatch()
+    {
+        lock (_batchLock)
+        {
+            if (_batchDepth == 0 || --_batchDepth > 0)
+                return;
+            var held = _batch;
+            if (held != null && held.Count > 0)
+            {
+                var framed = new byte[held.Sum(bytes => bytes.Length)];
+                var offset = 0;
+                foreach (var bytes in held)
+                {
+                    Buffer.BlockCopy(bytes, 0, framed, offset, bytes.Length);
+                    offset += bytes.Length;
+                }
+                SendNow(framed);
+            }
+            // Cleared after the send and inside the lock: a packet sent
+            // meanwhile waits for the lock, finds no batch, and goes out behind
+            // the batch - never ahead of it.
+            _batch = null;
+        }
+    }
+
+    private bool HoldInBatch(IServerPacket composer)
+    {
+        // Composed before taking the lock, never under it: a composer that
+        // takes a lock of its own (a room's, say) while another thread holds
+        // that lock and is sending to this client would deadlock the two. Null
+        // when this revision does not map the composer: dropped, as Send drops
+        // it.
+        var framed = Frame(composer);
+        lock (_batchLock)
+        {
+            if (framed == null)
+                return true;
+            // The batch closed while this was composed: it has gone already,
+            // so this goes now, behind it.
+            if (_batch == null)
+                SendNow(framed);
+            else
+                _batch.Add(framed);
+            return true;
+        }
+    }
+
+    private bool HoldInBatch(byte[] framed)
+    {
+        lock (_batchLock)
+        {
+            if (_batch == null)
+                return false;
+            _batch.Add(framed);
+            return true;
+        }
     }
 
     public abstract void CreateHeader(Memory<byte> memory, uint messageId);

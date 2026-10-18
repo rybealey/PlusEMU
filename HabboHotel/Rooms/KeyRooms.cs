@@ -1,5 +1,6 @@
 using System.Data;
 using NLog;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Core;
 using Plus.HabboHotel.Items;
 
@@ -34,6 +35,31 @@ public static class KeyRooms
     public static bool StaysLoaded(Room room) =>
         room.CorporationId > 0 || room.IsJailRoom
         || room.GetRoomItemHandler().GetFloor.Any(item => item.Definition?.InteractionType == InteractionType.Arrow);
+
+    /// <summary>
+    /// Every furni type in the loaded key rooms, for a player logging in to
+    /// download ahead (RpCityFurniComposer): these are the rooms they will be
+    /// sent to and walk through. Read from the rooms' furni, so it is what is
+    /// there now.
+    /// </summary>
+    public static RpCityFurniComposer CityFurni()
+    {
+        var floor = new HashSet<int>();
+        var wall = new HashSet<int>();
+        foreach (var room in PlusEnvironment.Game.RoomManager.GetRooms())
+        {
+            if (room.MDisposed || room.Unloaded || !StaysLoaded(room))
+                continue;
+            var items = room.GetRoomItemHandler();
+            foreach (var item in items.GetFloor)
+                if (item.Definition != null)
+                    floor.Add(item.Definition.SpriteId);
+            foreach (var item in items.GetWall)
+                if (item.Definition != null)
+                    wall.Add(item.Definition.SpriteId);
+        }
+        return new RpCityFurniComposer(floor, wall);
+    }
 
     /// <summary>
     /// Load every key room, one after another, on a thread of its own: startup

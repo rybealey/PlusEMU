@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
@@ -36,6 +37,10 @@ public static class RoomEntry
         // SendObjects sends after it change nothing: the client skips an avatar
         // it already has (RoomEngine.addRoomObjectUser).
         room.SendHeightmaps(session);
+        // Wall and floor thickness and hidden walls: straight behind the shape
+        // (the client drops it before the room exists), so the walls are drawn
+        // once, right - not drawn, then redrawn when this came last.
+        session.Send(new RoomVisualizationSettingsComposer(room.WallThickness, room.FloorThickness, Convert.ToBoolean(room.Hidewall)));
         // Only add the avatar on a genuine first entry. A duplicated entry - the
         // login room-forward processed twice by the client under network latency -
         // arrives with the user already in the room from the first one.
@@ -58,7 +63,10 @@ public static class RoomEntry
         if (session.GetHabbo().HabboStats.QuestId > 0)
             questManager.QuestReminder(session, session.GetHabbo().HabboStats.QuestId);
         session.Send(new RoomEntryInfoComposer(room.RoomId, room.CheckRights(session, true)));
-        session.Send(new RoomVisualizationSettingsComposer(room.WallThickness, room.FloorThickness, Convert.ToBoolean(room.Hidewall)));
+        // The room's details - its name for the title, chat settings, group -
+        // with the room. The client used to ask for them when RoomEntryInfo
+        // reached it, a round trip after everything else; it no longer asks.
+        session.Send(new GetGuestRoomResultComposer(session, room, true, false));
         var user = roomUserManager.GetRoomUserByHabbo(session.GetHabbo().Username);
         if (user != null && session.GetHabbo().PetId == 0) room.SendPacket(new UserChangeComposer(user, false));
         if (room.GetWired() != null)
