@@ -392,20 +392,20 @@ public class RoomUserManager
         // through ApplyEffect already.)
         else if (session.GetHabbo().Effects is { CurrentEffect: > 0 } worn)
             _room.SendPacket(new AvatarEffectComposer(user.VirtualId, worn.CurrentEffect));
-        // pixelrp: the one-shot RP-stats sends above (this user to the room, and
-        // SendObjects everyone to this user) can land before the React HUD has
-        // mounted its RpStatsEvent listener, so passive/aggression tags (and
-        // non-default HP/energy) silently vanish on a fresh login. Re-deliver
-        // this client's full room-stats view for the next few cycles, by which
-        // point the HUD is listening. See RpStatsResyncTicks in the room cycle.
-        user.RpStatsResyncTicks = 6;
+        // pixelrp: the RP-stats sends (this user to the room above, everyone to
+        // this user in SendObjects) are sent once. The client keeps them in a
+        // store whose listener is on from login (client RpStatsStore), not in
+        // the HUD, which mounts after they land - the reason they used to be
+        // sent again for six cycles after every entry.
         // pixelrp: the phone in hand, and the equipped weapon. A handitem is a
         // broadcast, not part of the user object everyone is sent on entry, so
-        // it is set here - which tells the players already in the room - and
-        // Room.SendObjects, right after, gives the entering player their own and
-        // everyone else's resting hand items once their client has the avatars
-        // to put them on. (A loop here used to send the others' too, but ahead
-        // of SendObjects, where the client had no avatars yet and dropped them.)
+        // it is set here - which tells the whole room, the entering player too
+        // (their own avatar is already drawn: RoomEntry sends the room's shape
+        // first) - and Room.SendObjects, right after, gives the entering player
+        // everyone else's resting hand items once their client has those
+        // avatars to put them on. (A loop here used to send the others' too, but
+        // ahead of SendObjects, where the client had no avatars yet and dropped
+        // them.)
         //
         // The weapon is set before the phone, so an open phone still wins the
         // hand and the weapon waits for it to close - except a stun gun, which
@@ -1580,11 +1580,6 @@ public class RoomUserManager
                         userCounter++;
                     UpdateUserEffect(user, user.X, user.Y);
                     UpdatePassiveEffect(user);
-                    if (user.RpStatsResyncTicks > 0)
-                    {
-                        user.RpStatsResyncTicks--;
-                        ResyncRoomStatsTo(user);
-                    }
                     if (IsPositionSaveDue(user))
                         (dirtyPositions ??= new List<RoomUser>()).Add(user);
                 }
@@ -2000,26 +1995,6 @@ public class RoomUserManager
         else if (cur == Habbo.PassiveEnableEffectId)
         {
             habbo.Effects.ApplyEffect(0);
-        }
-    }
-
-    // pixelrp: re-deliver every room member's RP stats to one freshly-entered
-    // viewer. The HUD stores stats by roomIndex from RpStatsEvent; the one-shot
-    // entry sends can arrive before its listener mounts, so we repeat them for a
-    // few cycles (RpStatsResyncTicks) until the tags reliably land.
-    private void ResyncRoomStatsTo(RoomUser viewer)
-    {
-        var session = viewer?.GetClient();
-        if (session == null)
-            return;
-        foreach (var other in _users.Values)
-        {
-            if (other == null || other.IsBot || other.IsPet)
-                continue;
-            var otherHabbo = other.GetClient()?.GetHabbo();
-            if (otherHabbo == null)
-                continue;
-            session.Send(new RpStatsComposer(other.VirtualId, otherHabbo.RpHealth, otherHabbo.RpHealthMax, otherHabbo.RpEnergy, otherHabbo.RpEnergyMax, (int)Math.Round(otherHabbo.RpAggression), otherHabbo.IsRpPassive ? 1 : 0, otherHabbo.Rank >= 5 ? 1 : 0));
         }
     }
 

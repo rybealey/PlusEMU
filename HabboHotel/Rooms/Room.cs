@@ -625,7 +625,11 @@ public class Room : RoomData
         session.Send(new FloorHeightMapComposer(GetGameMap().Model.GetRelativeHeightmap(), GetGameMap().StaticModel.WallHeight));
     }
 
-    public void SendObjects(GameClient session)
+    /// <param name="ownAvatarSent">pixelrp: the entering player was just added
+    /// (AddAvatarToRoom), which already sent the whole room - them included -
+    /// their avatar, stats, job, effect and hand item. Their own copies here
+    /// would only arrive again, so they are left out.</param>
+    public void SendObjects(GameClient session, bool ownAvatarSent = false)
     {
         var units = _roomUserManager.GetUserList().ToList();
         // pixelrp: everyone's employment in ONE query, not one per player in
@@ -637,7 +641,7 @@ public class Room : RoomData
             .ToDictionary(group => group.Key, group => group.First());
         foreach (var user in units)
         {
-            if (user == null)
+            if (user == null || (ownAvatarSent && user.GetClient() == session))
                 continue;
             session.Send(new UsersComposer(user));
             // pixelrp RP stats: the entering client learns every player's

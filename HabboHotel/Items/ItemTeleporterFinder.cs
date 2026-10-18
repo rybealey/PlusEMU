@@ -1,22 +1,48 @@
-﻿using Plus.HabboHotel.Rooms;
+﻿using System.Collections.Concurrent;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.HabboHotel.Items;
 
 public static class ItemTeleporterFinder
 {
+    /// <summary>
+    /// pixelrp: every link looked up so far, teleporter id to twin id. A link
+    /// is written once, when the pair is bought (ItemFactory), and nothing
+    /// changes or deletes it, so the first answer is the answer for good - and
+    /// an arrow step no longer waits on the database, on the thread that sends
+    /// every room's walking. Only found links are kept: a lookup that finds
+    /// none asks again next time. A link edited by hand in the database is seen
+    /// after a restart.
+    /// </summary>
+    private static readonly ConcurrentDictionary<uint, uint> Links = new();
+
     public static uint GetLinkedTele(uint teleId)
     {
+        if (Links.TryGetValue(teleId, out var cached))
+            return cached;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         dbClient.SetQuery($"SELECT `tele_two_id` FROM `room_items_tele_links` WHERE `tele_one_id` = '{teleId}' LIMIT 1");
         var row = dbClient.GetRow();
         if (row == null) return 0;
-        return Convert.ToUInt32(row[0]);
+        var linkId = Convert.ToUInt32(row[0]);
+        Links[teleId] = linkId;
+        return linkId;
     }
 
     public static uint GetTeleRoomId(uint teleId, Room pRoom)
     {
         if (pRoom.GetRoomItemHandler().GetItem(teleId) != null)
             return pRoom.RoomId;
+        // pixelrp: the loaded rooms' furni before the database. Rooms with an
+        // arrow never unload (KeyRooms), so an arrow's twin is nearly always
+        // here, and a room's own furni is the fresher record of the two.
+        foreach (var room in PlusEnvironment.Game.RoomManager.GetRooms())
+        {
+            if (room.MDisposed || room.Unloaded)
+                continue;
+            if (room.GetRoomItemHandler().GetItem(teleId) != null)
+                return room.RoomId;
+        }
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         dbClient.SetQuery($"SELECT `room_id` FROM `items` WHERE `id` = {teleId} LIMIT 1");
         var row = dbClient.GetRow();

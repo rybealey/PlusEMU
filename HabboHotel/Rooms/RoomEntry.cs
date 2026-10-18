@@ -46,13 +46,13 @@ public static class RoomEntry
         // For the redundant entry, skip the add/remove but still send the full room
         // state so the client's rebuilt view renders the avatar. Genuine add failures
         // (broken room/model) still tear down as before.
-        if (roomUserManager.GetRoomUserByHabbo(session.GetHabbo().Id) == null
-            && !roomUserManager.AddAvatarToRoom(session))
+        var firstEntry = roomUserManager.GetRoomUserByHabbo(session.GetHabbo().Id) == null;
+        if (firstEntry && !roomUserManager.AddAvatarToRoom(session))
         {
             roomUserManager.RemoveUserFromRoom(session, false);
             return;
         }
-        room.SendObjects(session);
+        room.SendObjects(session, ownAvatarSent: firstEntry);
         if (session.GetHabbo().Messenger != null)
             session.GetHabbo().Messenger.NotifyChangesToFriends();
         if (session.GetHabbo().HabboStats.QuestId > 0)
