@@ -19,16 +19,31 @@ internal class MessengerEventSynchronizer : IAuthenticationTask
 
     public Task UserLoggedIn(Habbo habbo)
     {
-        habbo.Messenger.FriendRequestUpdated += async (_, args) => await OnFriendRequestUpdated(habbo, args);
+        habbo.Messenger.FriendRequestUpdated += (_, args) => Guarded(() => OnFriendRequestUpdated(habbo, args));
         habbo.Messenger.FriendStatusUpdated += (_, args) => OnFriendStatusUpdated(habbo, args);
-        habbo.Messenger.FriendUpdated += async (_, args) => await OnFriendUpdated(habbo, args);
-        habbo.Messenger.FriendsUpdated += async (_, args) => await OnFriendsUpdated(habbo, args);
-        habbo.Messenger.MessageSend += async (_, args) => await OnMessageSend(habbo, args);
+        habbo.Messenger.FriendUpdated += (_, args) => Guarded(() => OnFriendUpdated(habbo, args));
+        habbo.Messenger.FriendsUpdated += (_, args) => Guarded(() => OnFriendsUpdated(habbo, args));
+        habbo.Messenger.MessageSend += (_, args) => Guarded(() => OnMessageSend(habbo, args));
         habbo.Messenger.MessageReceived += (_, args) => OnMessageReceived(habbo, args);
         habbo.Messenger.RoomInviteReceived += (_, args) => OnRoomInviteReceived(habbo, args);
         habbo.Messenger.StatusUpdated += (_, _) => OnStatusUpdated(habbo);
         NotifyOnlineStatus(habbo);
         return Task.CompletedTask;
+    }
+
+    // pixelrp: these handlers run as async void, where nothing above them
+    // catches a throw (e.g. the player logging out mid-message leaves
+    // Client null), so each one logs its own errors.
+    private static async void Guarded(Func<Task> handler)
+    {
+        try
+        {
+            await handler();
+        }
+        catch (Exception e)
+        {
+            Plus.Core.ExceptionLogger.LogException(e);
+        }
     }
 
     private void OnStatusUpdated(Habbo habbo)

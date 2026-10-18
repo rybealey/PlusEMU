@@ -19,9 +19,23 @@ internal class IgnoresEventSynchronizer : IAuthenticationTask
 
     public Task UserLoggedIn(Habbo habbo)
     {
-        habbo.IgnoresComponent.UserIgnored += async (_, args) => await RegisterIgnore(habbo, args.UserId);
-        habbo.IgnoresComponent.UserUnignored += async (_, args) => await UnregisterIgnore(habbo, args.UserId);
+        habbo.IgnoresComponent.UserIgnored += (_, args) => Guarded(() => RegisterIgnore(habbo, args.UserId));
+        habbo.IgnoresComponent.UserUnignored += (_, args) => Guarded(() => UnregisterIgnore(habbo, args.UserId));
         return Task.CompletedTask;
+    }
+
+    // pixelrp: these handlers run as async void, where nothing above them
+    // catches a throw, so each one logs its own errors.
+    private static async void Guarded(Func<Task> handler)
+    {
+        try
+        {
+            await handler();
+        }
+        catch (Exception e)
+        {
+            Plus.Core.ExceptionLogger.LogException(e);
+        }
     }
 
     public async Task RegisterIgnore(Habbo habbo, int targetId)

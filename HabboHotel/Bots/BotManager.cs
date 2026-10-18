@@ -24,12 +24,21 @@ public class BotManager : IBotManager
     // Todo: Task
     public async void Init()
     {
-        _responses.Clear();
-        using var connection = _database.Connection();
-        var data = await connection.QueryAsync<(string BotAi, string Keywords, string ResponseText, string ResponseMode, string ResponseBeverage)>(
-            "SELECT `bot_ai`, `chat_keywords` as keywords, `response_text`,`response_mode`,`response_beverage` FROM `bots_responses`");
-        foreach (var row in data)
-            _responses.Add(new(row.BotAi, row.Keywords, row.ResponseText, row.ResponseMode, row.ResponseBeverage));
+        // pixelrp: async void (also re-run by :update bots), so a failed
+        // query is caught here rather than escaping unhandled.
+        try
+        {
+            _responses.Clear();
+            using var connection = _database.Connection();
+            var data = await connection.QueryAsync<(string BotAi, string Keywords, string ResponseText, string ResponseMode, string ResponseBeverage)>(
+                "SELECT `bot_ai`, `chat_keywords` as keywords, `response_text`,`response_mode`,`response_beverage` FROM `bots_responses`");
+            foreach (var row in data)
+                _responses.Add(new(row.BotAi, row.Keywords, row.ResponseText, row.ResponseMode, row.ResponseBeverage));
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Loading bot responses failed");
+        }
     }
 
     public BotResponse? GetResponse(BotAiType type, string message) => _responses.Where(x => x.AiType == type).FirstOrDefault(response => response.KeywordMatched(message));
