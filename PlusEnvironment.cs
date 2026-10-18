@@ -361,6 +361,10 @@ public class PlusEnvironment : IPlusEnvironment
         _flashServer.Stop();
         Game.ClientManager.CloseAll(); //Close all connections
         Game.RoomManager.Dispose(); //Stop the game loop.
+        // pixelrp: chat lines still waiting for their batch are saved too
+        // (ChatlogManager) - a restart used to lose up to nine.
+        try { Game.ChatManager.GetLogs().FlushAndSave(); }
+        catch (Exception e) { Log.Warn($"Shutdown: could not save the last chat lines: {e.Message}"); }
         // pixelrp: the writes the rooms queued instead of making on the spot -
         // positions, room visits, RP stats - are written before the server goes.
         if (!HabboHotel.Rooms.RoomTickWriter.Drain(TimeSpan.FromSeconds(15)))
