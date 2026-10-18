@@ -1281,6 +1281,12 @@ public class RoomUserManager
     {
         var userCounter = 0;
         List<RoomUser> dirtyPositions = null;
+        // pixelrp: work the tick decides on but must not do while it holds
+        // _cycleLock, because it waits on the database - an idle logout, a
+        // shift ending, a jail save or release. The movement sender takes this
+        // lock for every room, so one slow query here froze walkers hotel-wide.
+        // Run once the lock is let go, still on this room's tick, in order.
+        List<Action>? afterLock = null;
         try
         {
             lock (_cycleLock)
@@ -1310,11 +1316,16 @@ public class RoomUserManager
                         var idleClient = user.GetClient();
                         if (idleClient != null)
                         {
-                            // pixelrp: say why first, so the website's disconnected
-                            // screen reads "you were away", not "connection lost"
-                            try { idleClient.Send(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonIdle, "idle")); }
-                            catch (Exception) { }
-                            idleClient.Disconnect();
+                            // The logout runs inside Disconnect, so it waits for
+                            // the lock to be let go (afterLock).
+                            (afterLock ??= new()).Add(() =>
+                            {
+                                // pixelrp: say why first, so the website's disconnected
+                                // screen reads "you were away", not "connection lost"
+                                try { idleClient.Send(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonIdle, "idle")); }
+                                catch (Exception) { }
+                                idleClient.Disconnect();
+                            });
                         }
                         continue;
                     }
@@ -1475,8 +1486,10 @@ public class RoomUserManager
                     // pixelrp police: let go of anybody who could not follow
                     // their captor through a room change.
                     Chat.Commands.User.Police.PoliceState.TickTravel(_room, user);
-                    // pixelrp jail: let out anybody whose time is up.
-                    Chat.Commands.User.Police.JailState.Tick(user);
+                    // pixelrp jail: let out anybody whose time is up. The release
+                    // and the once-a-minute save write to the database (afterLock).
+                    if (Chat.Commands.User.Police.JailState.Tick(user) is { } jailWork)
+                        (afterLock ??= new()).Add(jailWork);
                     // pixelrp offers: drop what has run out. Memory only - no
                     // database, and packets only to the two people concerned -
                     // so the game loop can carry it.
@@ -1509,9 +1522,17 @@ public class RoomUserManager
                     {
                         user.IsAsleep = true;
                         _room.SendPacket(new SleepComposer(user, true));
-                        // pixelrp: going idle ends any active shift (progress banked)
-                        if (!user.IsBot && user.GetClient() != null)
-                            Corporations.ShiftManager.InterruptForIdle(user.GetClient());
+                        // pixelrp: going idle ends any active shift (progress banked).
+                        // Banking it writes to the database (afterLock).
+                        if (!user.IsBot && user.GetClient() is { } sleeper)
+                        {
+                            (afterLock ??= new()).Add(() =>
+                            {
+                                // Woken in between (UnIdle, from a packet): still on shift.
+                                if (user.IsAsleep)
+                                    Corporations.ShiftManager.InterruptForIdle(sleeper);
+                            });
+                        }
                     }
                     // pixelrp: only a TIMED carry counts down. The phone and an
                     // equipped weapon are resting items (CarryTimer 0) held for
@@ -1617,6 +1638,24 @@ public class RoomUserManager
         catch (Exception e)
         {
             ExceptionLogger.LogCriticalException(e);
+        }
+
+        // Even after a throw above: what was decided before it still happens
+        // (a player already shown asleep still has their shift ended).
+        if (afterLock != null)
+        {
+            foreach (var work in afterLock)
+            {
+                // One failure must not cost the rest.
+                try
+                {
+                    work();
+                }
+                catch (Exception e)
+                {
+                    ExceptionLogger.LogException(e);
+                }
+            }
         }
     }
 

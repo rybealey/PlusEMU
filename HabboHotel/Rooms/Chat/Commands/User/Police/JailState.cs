@@ -465,23 +465,38 @@ public static class JailState
     /// One room cycle for one player: release anybody whose time is up, and
     /// write a serving prisoner's clock back once a minute. Free for everybody
     /// while nobody is in jail - one emptiness check.
+    ///
+    /// Decides only. The release or save it returns writes to the database,
+    /// and the room tick calls this holding the lock the movement sender needs
+    /// for every room, so the tick runs it once that lock is let go. Null when
+    /// there is nothing to do.
     /// </summary>
-    public static void Tick(RoomUser user)
+    public static Action? Tick(RoomUser user)
     {
         if (Serving.IsEmpty || user == null || user.IsBot)
-            return;
+            return null;
         if (!Serving.TryGetValue(user.UserId, out var sentence))
-            return;
+            return null;
         var now = DateTime.UtcNow;
         if (now >= sentence.ReleaseAtUtc)
         {
-            Release(user.UserId, user.GetClient());
-            return;
+            // Release is safe from any thread and lets go only once, so a
+            // staff release or a logout landing first leaves this a no-op.
+            var userId = user.UserId;
+            var client = user.GetClient();
+            return () => Release(userId, client);
         }
         if ((now - sentence.LastSavedUtc).TotalSeconds < SaveEverySeconds)
-            return;
+            return null;
         sentence.LastSavedUtc = now;
-        Save(sentence);
+        var habboId = user.UserId;
+        return () =>
+        {
+            // Logged out in between: OnLogout has already written the clock
+            // where it stopped, and this must not land over it.
+            if (Serving.TryGetValue(habboId, out var current) && ReferenceEquals(current, sentence))
+                Save(sentence);
+        };
     }
 
     private static void Save(Sentence sentence)
