@@ -67,7 +67,7 @@ internal class ProposeCommand : ITargetChatCommand
                 session.SendWhisper($"{target.Username} is already in a partnership.");
                 return Task.CompletedTask;
             case OfferState.StartResult.SellerBusy:
-                session.SendWhisper("You already have an offer waiting to be answered.");
+                session.SendWhisper("You already have an offer pending.");
                 return Task.CompletedTask;
             case OfferState.StartResult.BuyerBusy:
                 session.SendWhisper($"{target.Username} has too many offers waiting.");

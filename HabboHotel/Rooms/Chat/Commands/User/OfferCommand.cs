@@ -109,7 +109,7 @@ internal class OfferCommand : ITargetChatCommand
                 session.SendWhisper($"Between 1 and {OfferState.MaxQuantity} at a time.");
                 return Task.CompletedTask;
             case OfferState.StartResult.SellerBusy:
-                session.SendWhisper("You already have an offer waiting to be answered.");
+                session.SendWhisper("You already have an offer pending.");
                 return Task.CompletedTask;
             case OfferState.StartResult.TooSoon:
                 session.SendWhisper(OfferState.CooldownMessage(OfferState.CooldownLeft(seller.Id)));

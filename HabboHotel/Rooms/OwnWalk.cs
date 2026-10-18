@@ -11,8 +11,8 @@ namespace Plus.HabboHotel.Rooms;
 /// not this, and ends none of it.
 ///
 /// What it ends is what walking away ends: an open trade (out loud, RpTrades),
-/// a trade request they sent that is still waiting (quietly, OfferState) and a
-/// bin search (BinSearch).
+/// a trade request, :offer or :sell they sent that is still waiting (quietly,
+/// OfferState) and a bin search (BinSearch).
 /// </summary>
 public static class OwnWalk
 {
@@ -22,7 +22,7 @@ public static class OwnWalk
         if (habbo == null)
             return;
         Trading.RpTrades.CancelByWalking(session!);
-        Offers.OfferState.WithdrawTradeRequest(habbo.Id);
+        Offers.OfferState.WithdrawOnWalkingOff(habbo.Id);
         BinSearch.Interrupt(habbo.Id);
     }
 

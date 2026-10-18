@@ -53,24 +53,43 @@ public static class OfferState
 
     /// <summary>
     /// Five seconds between one card and the next from the same player - a
-    /// trade request, an :offer or a :sell alike (Twist, 2026-10-18). Counted
-    /// from a card that went up; one refused for any other reason does not
-    /// start it. :propose is not part of it.
+    /// trade request, an :offer or a :sell alike (Twist, 2026-10-18). While a
+    /// card is up the answer is "You already have an offer pending."; the
+    /// five seconds start once it comes down - answered, withdrawn or run out
+    /// (TakeDown). One refused for any other reason never went up, so it
+    /// starts nothing. :propose is not part of it.
     /// </summary>
     public const int CooldownSeconds = 5;
 
-    private static readonly ConcurrentDictionary<int, long> LastSent = new();
+    /// <summary>When each player's last sale or trade request came down.</summary>
+    private static readonly ConcurrentDictionary<int, long> LastTakenDown = new();
 
     /// <summary>Whole seconds before this player may put up another card; 0 when they may now.</summary>
     public static int CooldownLeft(int sellerId)
     {
-        if (!LastSent.TryGetValue(sellerId, out var at))
+        if (!LastTakenDown.TryGetValue(sellerId, out var at))
             return 0;
         var left = (CooldownSeconds * 1000L) - (Environment.TickCount64 - at);
         if (left > 0)
             return (int)Math.Ceiling(left / 1000.0);
-        LastSent.TryRemove(new KeyValuePair<int, long>(sellerId, at));
+        LastTakenDown.TryRemove(new KeyValuePair<int, long>(sellerId, at));
         return 0;
+    }
+
+    /// <summary>
+    /// Every card comes down through here, whichever way it goes, and a sale's
+    /// or a trade request's seller starts their cooldown from this moment.
+    /// Accept takes a card down to claim it and may put it back; that is
+    /// harmless here - while it is back up the answer is "pending", and when it
+    /// finally comes down the cooldown starts again from then.
+    /// </summary>
+    private static bool TakeDown(int offerId, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Offer? offer)
+    {
+        if (!Live.TryRemove(offerId, out offer))
+            return false;
+        if (offer.Kind != OfferKind.Proposal)
+            LastTakenDown[offer.SellerId] = Environment.TickCount64;
+        return true;
     }
 
     /// <summary>
@@ -289,6 +308,8 @@ public static class OfferState
             quantity = 1;
         if (quantity < 1 || quantity > MaxQuantity)
             return StartResult.BadQuantity;
+        // Pending first, then the cooldown, which only starts once that card
+        // comes down (TakeDown).
         if (SellerHasOpen(seller.Id))
             return StartResult.SellerBusy;
         if (CooldownLeft(seller.Id) > 0)
@@ -311,7 +332,6 @@ public static class OfferState
             ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
         };
         Live[offer.Id] = offer;
-        LastSent[seller.Id] = Environment.TickCount64;
         Push(buyer.Id);
         return StartResult.Ok;
     }
@@ -391,8 +411,10 @@ public static class OfferState
             return refusal;
         if (Trading.RpTrades.Refusal(buyerSession) != null)
             return $"{buyer.Username} cannot trade right now.";
+        // Pending first, then the cooldown, which only starts once that request
+        // comes down (TakeDown).
         if (SellerHasOpen(seller.Id))
-            return "You already have an offer waiting to be answered.";
+            return "You already have an offer pending.";
         var cooldown = CooldownLeft(seller.Id);
         if (cooldown > 0)
             return CooldownMessage(cooldown);
@@ -413,7 +435,6 @@ public static class OfferState
             ExpiresAt = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
         };
         Live[offer.Id] = offer;
-        LastSent[seller.Id] = Environment.TickCount64;
         Announce(room, seller.Id, $"sends {buyer.Username} a trade request", TradeBubble);
         Push(buyer.Id);
         return null;
@@ -422,7 +443,7 @@ public static class OfferState
     /// <summary>A yes to a trade request: both still able, and the window opens for both.</summary>
     private static bool AcceptTrade(Offer offer, Room room, GameClient buyerSession, Habbo buyer, GameClient sellerSession)
     {
-        Live.TryRemove(offer.Id, out _);
+        TakeDown(offer.Id, out _);
         Push(buyer.Id);
         var refusal = Trading.RpTrades.Refusal(buyerSession);
         if (refusal != null)
@@ -447,7 +468,7 @@ public static class OfferState
     {
         if (buyer == null || !Live.TryGetValue(offerId, out var offer) || offer.BuyerId != buyer.Id)
             return;
-        Live.TryRemove(offerId, out _);
+        TakeDown(offerId, out _);
         LowerHand(offer);
         Push(buyer.Id);
         // Bubble 5 for a refused proposal as for a refused sale: a no is the
@@ -462,34 +483,35 @@ public static class OfferState
     {
         foreach (var offer in Live.Values.Where(entry => entry.SellerId == sellerId).ToList())
         {
-            Live.TryRemove(offer.Id, out _);
+            TakeDown(offer.Id, out _);
             LowerHand(offer);
             Push(offer.BuyerId);
         }
     }
 
-    /// <summary>Everything either side of a player, for a room leave or a disconnect.</summary>
     /// <summary>
-    /// The one asking for a trade walked off (Twist, 2026-10-18): their
-    /// request goes, as quietly as one left unanswered - the card leaves the
-    /// other player's screen and nobody is told. Only their own click to walk
-    /// (MoveAvatarEvent) does it: being pushed or pulled leaves the request
-    /// standing. A sale's card is not affected.
+    /// The one asking walked off (Twist, 2026-10-18): their trade request, and
+    /// their :offer or :sell, goes as quietly as one left unanswered - the card
+    /// leaves the other player's screen and nobody is told - and their
+    /// cooldown starts (TakeDown). Only their own click to walk, or furni that
+    /// walked them off (OwnWalk), does it: being pushed or pulled leaves the
+    /// card standing. A :propose is not affected.
     /// </summary>
-    public static void WithdrawTradeRequest(int sellerId)
+    public static void WithdrawOnWalkingOff(int sellerId)
     {
-        foreach (var offer in Live.Values.Where(entry => entry.IsTrade && entry.SellerId == sellerId).ToList())
+        foreach (var offer in Live.Values.Where(entry => !entry.IsProposal && entry.SellerId == sellerId).ToList())
         {
-            if (Live.TryRemove(offer.Id, out _))
+            if (TakeDown(offer.Id, out _))
                 Push(offer.BuyerId);
         }
     }
 
+    /// <summary>Everything either side of a player, for a room leave or a disconnect.</summary>
     public static void Forget(int userId)
     {
         foreach (var offer in Live.Values.Where(entry => entry.SellerId == userId || entry.BuyerId == userId).ToList())
         {
-            Live.TryRemove(offer.Id, out _);
+            TakeDown(offer.Id, out _);
             LowerHand(offer);
             if (offer.BuyerId != userId)
                 Push(offer.BuyerId);
@@ -506,7 +528,7 @@ public static class OfferState
         // first takes the card out and the second finds nothing. A card that is
         // not this buyer's, or a step that asks them to try again (blocked, a
         // failed charge), puts it back.
-        if (!Live.TryRemove(offerId, out var offer))
+        if (!TakeDown(offerId, out var offer))
             return false;
         if (offer.BuyerId != buyer.Id)
         {
@@ -521,7 +543,7 @@ public static class OfferState
         // EVERYTHING AGAIN. The card was worded seconds ago, and seconds are enough.
         if (seller == null || room == null || room.RoomId != offer.RoomId || seller.CurrentRoom?.RoomId != offer.RoomId)
         {
-            Live.TryRemove(offerId, out _);
+            TakeDown(offerId, out _);
             LowerHand(offer);
             Push(buyer.Id);
             buyerSession!.SendWhisper($"{offer.SellerName} is no longer here.");
@@ -535,7 +557,7 @@ public static class OfferState
         if (!MedicalUtility.CanActAsHospitalStaff(seller.Id) ||
             (offer.Ware!.RequiredHandItem != 0 && sellerUser?.CarryItemId != offer.Ware.RequiredHandItem))
         {
-            Live.TryRemove(offerId, out _);
+            TakeDown(offerId, out _);
             Push(buyer.Id);
             buyerSession!.SendWhisper($"{offer.SellerName} cannot complete that sale any more.");
             sellerSession?.SendWhisper($"Your offer to {buyer.Username} lapsed - you are no longer able to make it.");
@@ -592,7 +614,7 @@ public static class OfferState
     private static bool AcceptProposal(Offer offer, Room room, GameClient buyerSession, Habbo buyer,
         GameClient sellerSession, Habbo seller)
     {
-        Live.TryRemove(offer.Id, out _);
+        TakeDown(offer.Id, out _);
         LowerHand(offer);
         Push(buyer.Id);
 
@@ -630,7 +652,7 @@ public static class OfferState
         var dropped = false;
         foreach (var offer in Live.Values.Where(entry => entry.IsProposal && entry.BuyerId == buyerId).ToList())
         {
-            if (!Live.TryRemove(offer.Id, out _))
+            if (!TakeDown(offer.Id, out _))
                 continue;
             LowerHand(offer);
             dropped = true;
@@ -791,7 +813,7 @@ public static class OfferState
         var now = DateTime.UtcNow;
         foreach (var offer in Live.Values.Where(entry => entry.ExpiresAt <= now).ToList())
         {
-            if (!Live.TryRemove(offer.Id, out _))
+            if (!TakeDown(offer.Id, out _))
                 continue;
             LowerHand(offer);
             Push(offer.BuyerId);
