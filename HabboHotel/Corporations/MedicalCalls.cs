@@ -26,7 +26,9 @@ namespace Plus.HabboHotel.Corporations;
 /// and the window closes with it. It is sent on clock-in and taken away on
 /// clock-out (PushWindow, from PoliceUtility.PushPardonRights, which runs at
 /// exactly those moments), but it only comes up on screen when a call is
-/// offered to them; its X puts it away, and :calls brings it back.
+/// offered to them; its X puts it away until the next one is. There is no
+/// :calls for paramedics (Twist, 2026-10-18) - that is the police's 911
+/// Dispatch only.
 ///
 /// ROUND ROBIN (2026-10-16). A death is offered to ONE paramedic at a time,
 /// whose window comes up on it with a Claim button. Unclaimed after
@@ -400,13 +402,6 @@ public static class MedicalCalls
         session.Send(onDuty ? new RpMedicalCallsComposer(true, Newest(session.GetHabbo().Id)) : new RpMedicalCallsComposer(false, new List<Death>()));
         Tick();
     }
-
-    /// <summary>
-    /// :calls - the window back up for an on-duty paramedic, even if they put it
-    /// away with its X. The caller has checked the duty.
-    /// </summary>
-    public static void Reopen(GameClient session) =>
-        session.Send(new RpMedicalCallsComposer(true, Newest(session.GetHabbo().Id), reopen: true));
 
     private static bool AnyOpen()
     {

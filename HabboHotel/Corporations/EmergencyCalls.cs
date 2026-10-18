@@ -271,6 +271,14 @@ public static class EmergencyCalls
 
         Broadcast();
 
+        // pixelrp: no whisper (Twist, 2026-10-15) - the room sees the request
+        // made, as it sees a 911 call: "*Twist calls for backup*". With no
+        // other officer on duty it waits in the queue for the next one. Sent
+        // BEFORE the alert below, so the bubble comes first (Twist, 2026-10-18).
+        var caller = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
+        if (caller != null)
+            room.SendPacket(new ChatComposer(caller.VirtualId, "*calls for backup*", 0, PoliceUtility.ActionBubbleFor(habbo.Id)));
+
         // pixelrp: the request also goes out like a :ca alert (Twist,
         // 2026-10-15) - the corporation-alert bubble, to on-duty police ONLY,
         // the officer asking included, so it is seen even with the window
@@ -278,13 +286,6 @@ public static class EmergencyCalls
         var alert = $"{habbo.Username} is requesting backup at {room.Name}.";
         foreach (var userId in OnDutyResponders(staff: false))
             PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.SendWhisper(alert, CorporationAlertBubble);
-
-        // pixelrp: no whisper (Twist, 2026-10-15) - the room sees the request
-        // made, as it sees a 911 call: "*Twist calls for backup*". With no
-        // other officer on duty it waits in the queue for the next one.
-        var caller = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
-        if (caller != null)
-            room.SendPacket(new ChatComposer(caller.VirtualId, "*calls for backup*", 0, PoliceUtility.ActionBubbleFor(habbo.Id)));
         return "";
     }
 

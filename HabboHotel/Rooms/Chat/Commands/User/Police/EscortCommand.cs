@@ -190,17 +190,20 @@ internal class EscortCommand : ITargetChatCommand
         target.EnsureRpStatsLoaded();
         if (kind == PoliceState.EscortKind.Custody)
         {
-            if (!PoliceState.IsCuffed(target.Id))
-            {
-                session.SendWhisper($"{target.Username} has to be cuffed before you can escort them.");
-                return Task.CompletedTask;
-            }
-
             // A custody escort ends the moment its suspect is knocked out, so
-            // it cannot begin on one either - nobody marches lying down.
+            // it cannot begin on one either - nobody marches lying down. Asked
+            // BEFORE the cuffs: a knockout takes them off, so an officer would
+            // otherwise be told to cuff somebody they cannot (Twist, 2026-10-18:
+            // police cannot escort the knocked out).
             if (target.RpHealth <= 0)
             {
                 session.SendWhisper(KnockedOut.TargetRefusal);
+                return Task.CompletedTask;
+            }
+
+            if (!PoliceState.IsCuffed(target.Id))
+            {
+                session.SendWhisper($"{target.Username} has to be cuffed before you can escort them.");
                 return Task.CompletedTask;
             }
         }
