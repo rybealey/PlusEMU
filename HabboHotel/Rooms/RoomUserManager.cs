@@ -1316,24 +1316,12 @@ public class RoomUserManager
                         toRemove.Add(user);
                         continue;
                     }
-                    if (user.NeedsIdleDisconnect)
-                    {
-                        var idleClient = user.GetClient();
-                        if (idleClient != null)
-                        {
-                            // The logout runs inside Disconnect, so it waits for
-                            // the lock to be let go (afterLock).
-                            (afterLock ??= new()).Add(() =>
-                            {
-                                // pixelrp: say why first, so the website's disconnected
-                                // screen reads "you were away", not "connection lost"
-                                try { idleClient.Send(new RpDisconnectReasonComposer(RpDisconnectReasonComposer.ReasonIdle, "idle")); }
-                                catch (Exception) { }
-                                idleClient.Disconnect();
-                            });
-                        }
-                        continue;
-                    }
+                    // pixelrp: an idle player is never disconnected (it used to
+                    // happen at 60 minutes). Only walking, talking and a few
+                    // gestures count as activity, so a game left open in a
+                    // background tab - still someone playing - was always cut
+                    // at the hour. Idleness puts them to sleep (below) and no
+                    // more; the game stays connected until they close it.
                     user.IdleTime++;
                     user.HandleSpamTicks();
                     // pixelrp aggression decay: a full bar (100) drains over 45
