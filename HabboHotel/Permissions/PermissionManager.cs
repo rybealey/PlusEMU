@@ -134,7 +134,14 @@ public sealed class PermissionManager : IPermissionManager
 
     public List<string> GetCommandsForPlayer(Habbo player)
     {
-        var commands = _commands.Where(x => player.Rank >= x.Value.GroupId && player.VipRank >= x.Value.SubscriptionId).Select(x => x.Key).ToList();
+        // pixelrp: rank OR VIP (Twist, 2026-10-18). A row's group_id is the
+        // lowest rank that may use the command; a subscription_id above 0 is a
+        // second way in, for VIP members of any rank - :wd is 2 / 1, staff or
+        // VIP. It used to need both, which made "1 / 1" mean VIP only and left
+        // no way to say "staff or VIP".
+        var commands = _commands.Where(x => player.Rank >= x.Value.GroupId ||
+                                            (x.Value.SubscriptionId > 0 && player.VipRank >= x.Value.SubscriptionId))
+            .Select(x => x.Key).ToList();
         // pixelrp: commands a player has unlocked for themselves (a redeemed
         // token), on top of whatever their rank gives them. Only names still in
         // permissions_commands count, so dropping a command there retires every

@@ -11,7 +11,7 @@ internal class HotelAlertCommand : IChatCommand
 
     public string Parameters => "%message%";
 
-    public string Description => "Send a bubble notification to the entire hotel.";
+    public string Description => "Send a notification to the entire hotel. Links in it can be clicked.";
 
     public HotelAlertCommand(IGameClientManager gameClientManager)
     {
@@ -27,7 +27,10 @@ internal class HotelAlertCommand : IChatCommand
         }
         var message = CommandManager.MergeParams(parameters);
         // pixelrp: hotel alerts render as the client's INFO notification bubble
-        // (display=BUBBLE path in useNotification), not the modal popup.
+        // (display=BUBBLE path in useNotification), not the modal popup. Any
+        // http(s):// or www. address in the message is drawn as a link there
+        // (NotificationPlatformBubbleView), which is why :hal is gone (Twist,
+        // 2026-10-18).
         _gameClientManager.SendPacket(new RoomNotificationComposer("hotel.alert",
             new Dictionary<string, string> { { "display", "BUBBLE" }, { "message", message } }));
     }

@@ -17,8 +17,12 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 ///
 /// THE PURSE ONLY. Bank balances live in rp_bank_accounts and are never
 /// touched here - the bank is reached through a teller or an ATM, and money in
-/// hand is what changes hands in a room. Habbo.Credits and Habbo.Diamonds are
-/// that money in hand, and the logout save writes them back absolutely.
+/// hand is what changes hands in a room. Habbo.Credits is that money in hand,
+/// and the logout save writes it back absolutely.
+///
+/// CASH ONLY, and no currency to name: :give &lt;username&gt; &lt;amount&gt;
+/// (Twist, 2026-10-18). It used to take "cash" or "diamonds"; diamonds are the
+/// bought currency and no longer change hands.
 ///
 /// Which means both sides must be adjusted in the same breath, and they are:
 /// the debit and the credit sit together with nothing between them that can
@@ -40,12 +44,10 @@ internal class GiveCommand : ITargetChatCommand
     /// </summary>
     private const int MaxCash = 10000;
 
-    private const int MaxDiamonds = 100;
-
     public string Key => "give";
     public string PermissionRequired => "command_give";
 
-    public string Parameters => "%username% %currency% %amount%";
+    public string Parameters => "%username% %amount%";
 
     public string Description => "Hand another player money from your purse.";
 
@@ -59,10 +61,10 @@ internal class GiveCommand : ITargetChatCommand
             return Task.CompletedTask;
 
         // The manager has already taken the username off the front, so what is
-        // left is the currency and the amount.
-        if (parameters.Length < 2)
+        // left is the amount.
+        if (parameters.Length < 1)
         {
-            session.SendWhisper("Give what? :give <username> <cash|diamonds> <amount>");
+            session.SendWhisper("Give how much? :give <username> <amount>");
             return Task.CompletedTask;
         }
 
@@ -72,82 +74,36 @@ internal class GiveCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (!int.TryParse(parameters[1], out var amount) || amount <= 0)
+        if (!int.TryParse(parameters[0], out var amount) || amount <= 0)
         {
-            session.SendWhisper("That is not an amount. Whole numbers above zero only.");
+            session.SendWhisper("That is not an amount. Whole numbers above zero only: :give <username> <amount>");
             return Task.CompletedTask;
         }
 
-        var currency = parameters[0].ToLowerInvariant();
-        switch (currency)
+        if (amount > MaxCash)
         {
-            // "cash" is what it is called now; the old names still work,
-            // because a command somebody has typed a hundred times should not
-            // stop working over a rename.
-            case "cash":
-            case "money":
-            case "dollars":
-            case "coins":
-            case "credits":
-            {
-                if (amount > MaxCash)
-                {
-                    session.SendWhisper($"You can hand over at most {TextHandling.GetMoney(MaxCash)} at a time.");
-                    return Task.CompletedTask;
-                }
-                if (habbo.Credits < amount)
-                {
-                    session.SendWhisper($"You only have {TextHandling.GetMoney(habbo.Credits)} on you.");
-                    return Task.CompletedTask;
-                }
-                // Nobody can hold more than an int, and a purse that wrapped
-                // round to negative would be a far worse bug than a refusal.
-                if (target.Credits > int.MaxValue - amount)
-                {
-                    session.SendWhisper($"{target.Username} cannot carry that much.");
-                    return Task.CompletedTask;
-                }
-
-                habbo.Credits -= amount;
-                target.Credits += amount;
-                Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, -amount, $"Gave to {target.Username}"); Plus.HabboHotel.Users.Banking.CoinLedger.Record(target, amount, $"Given by {habbo.Username}");
-                session.Send(new CreditBalanceComposer(habbo.Credits));
-                target.Client?.Send(new CreditBalanceComposer(target.Credits));
-                Announce(room, habbo, target, TextHandling.GetMoney(amount));
-                break;
-            }
-            case "diamonds":
-            {
-                if (amount > MaxDiamonds)
-                {
-                    session.SendWhisper($"You can hand over at most {TextHandling.GetNumber(MaxDiamonds)} diamonds at a time.");
-                    return Task.CompletedTask;
-                }
-                if (habbo.Diamonds < amount)
-                {
-                    session.SendWhisper($"You only have {TextHandling.GetNumber(habbo.Diamonds)} diamonds on you.");
-                    return Task.CompletedTask;
-                }
-                if (target.Diamonds > int.MaxValue - amount)
-                {
-                    session.SendWhisper($"{target.Username} cannot carry that much.");
-                    return Task.CompletedTask;
-                }
-
-                habbo.Diamonds -= amount;
-                target.Diamonds += amount;
-                // Activity-point notifications carry the NEW total and the
-                // delta; 5 is the diamond currency type the purse renders.
-                session.Send(new HabboActivityPointNotificationComposer(habbo.Diamonds, -amount, 5));
-                target.Client?.Send(new HabboActivityPointNotificationComposer(target.Diamonds, amount, 5));
-                Announce(room, habbo, target, $"{TextHandling.GetNumber(amount)} {((amount == 1) ? "diamond" : "diamonds")}");
-                break;
-            }
-            default:
-                session.SendWhisper($"'{parameters[0]}' is not something you can hand over. Try cash or diamonds.");
-                break;
+            session.SendWhisper($"You can hand over at most {TextHandling.GetMoney(MaxCash)} at a time.");
+            return Task.CompletedTask;
+        }
+        if (habbo.Credits < amount)
+        {
+            session.SendWhisper($"You only have {TextHandling.GetMoney(habbo.Credits)} on you.");
+            return Task.CompletedTask;
+        }
+        // Nobody can hold more than an int, and a purse that wrapped round to
+        // negative would be a far worse bug than a refusal.
+        if (target.Credits > int.MaxValue - amount)
+        {
+            session.SendWhisper($"{target.Username} cannot carry that much.");
+            return Task.CompletedTask;
         }
 
+        habbo.Credits -= amount;
+        target.Credits += amount;
+        Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, -amount, $"Gave to {target.Username}"); Plus.HabboHotel.Users.Banking.CoinLedger.Record(target, amount, $"Given by {habbo.Username}");
+        session.Send(new CreditBalanceComposer(habbo.Credits));
+        target.Client?.Send(new CreditBalanceComposer(target.Credits));
+        Announce(room, habbo, target, TextHandling.GetMoney(amount));
         return Task.CompletedTask;
     }
 
@@ -157,12 +113,8 @@ internal class GiveCommand : ITargetChatCommand
     /// Leading AND trailing "*" matter: the client only reads a bubble as an
     /// action when the text is wrapped in them, and it then moves the opening
     /// marker ahead of the speaker's name - so this renders as
-    /// "*Yavn hands twist $7,500*" rather than repeating the name.
-    ///
-    /// The sum arrives already written, because the two currencies are not
-    /// written the same way: money is a symbol in front ("$7,500") and
-    /// diamonds are a counted noun after ("5 diamonds"). A shared "amount plus
-    /// label" would force one of them into the other's shape.
+    /// "*Yavn hands twist $7,500*" rather than repeating the name. The sum
+    /// arrives already written (TextHandling.GetMoney).
     /// </summary>
     private static void Announce(Room room, Habbo giver, Habbo target, string sum)
     {
