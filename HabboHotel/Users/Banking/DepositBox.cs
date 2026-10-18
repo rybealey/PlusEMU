@@ -89,6 +89,41 @@ public static class DepositBox
     }
 
     /// <summary>
+    /// <see cref="Open"/> for the step onto the furni. Stepping on fires on the
+    /// movement thread, under the room's _cycleLock, and Open reads the backpack
+    /// and the box from the database - so it runs on RoomTickWriter's thread
+    /// instead. In order with <see cref="CloseSoon"/>, and only for somebody
+    /// still standing on a box by then: a quick step on and off opens nothing.
+    /// </summary>
+    public static void OpenSoon(GameClient? client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+        RoomTickWriter.QueueOrdered(() =>
+        {
+            // Same session as the step - a relog in between is a new one.
+            if (client!.GetHabbo() != habbo)
+                return;
+            var room = habbo.CurrentRoom;
+            if (!IsAtBox(room, room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)))
+                return;
+            Open(client);
+        });
+    }
+
+    /// <summary>
+    /// <see cref="Close"/> for the step off. Through the same queue as
+    /// <see cref="OpenSoon"/>, so it can never overtake the open it follows.
+    /// </summary>
+    public static void CloseSoon(GameClient? client)
+    {
+        if (client?.GetHabbo() == null)
+            return;
+        RoomTickWriter.QueueOrdered(() => Close(client));
+    }
+
+    /// <summary>
     /// One move: store (backpack slot -> box) or withdraw (box slot -> backpack),
     /// one item or the whole stack. Returns what to tell the player.
     /// </summary>

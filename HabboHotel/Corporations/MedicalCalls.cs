@@ -264,15 +264,31 @@ public static class MedicalCalls
         }
         if (!changed)
             return;
-        // Tipped once per knockout - the call closes here, so a second
-        // drop-off of the same patient finds nothing open - and never for a
-        // patient on the paramedic's own account.
-        if (!AccountUtility.SameAccount(habbo.Id, patientId))
+        // The call is marked above, at once and in memory only: the patient is
+        // already on the bed, and the 1-second tick would otherwise close it as
+        // Admitted (Closed). The rest - the tip, and the broadcast that reads
+        // the on-duty paramedics - writes to and reads the database, and the
+        // drop-off pad fires on the movement thread (a tile effect, under the
+        // room's _cycleLock), so it runs on RoomTickWriter's thread instead.
+        RoomTickWriter.QueueOrdered(() =>
         {
-            CityPlayers.AdjustCreditsFor(habbo.Id, DropOffTip, "Hospital drop-off tip");
-            WhisperAfterBubble(paramedic, $"You just earned a {DropOffTip}c tip for escorting a patient to the hospital!");
-        }
-        Tick(forceBroadcast: true);
+            try
+            {
+                // Tipped once per knockout - the call closes here, so a second
+                // drop-off of the same patient finds nothing open - and never for
+                // a patient on the paramedic's own account.
+                if (!AccountUtility.SameAccount(habbo.Id, patientId))
+                {
+                    CityPlayers.AdjustCreditsFor(habbo.Id, DropOffTip, "Hospital drop-off tip");
+                    WhisperAfterBubble(paramedic, $"You just earned a {DropOffTip}c tip for escorting a patient to the hospital!");
+                }
+            }
+            finally
+            {
+                // The windows show the drop-off even if the tip could not be paid.
+                Tick(forceBroadcast: true);
+            }
+        });
     }
 
     /// <summary>The Claim button, from the paramedic the call is offered to.</summary>
