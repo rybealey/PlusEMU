@@ -4,7 +4,9 @@ using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.CityPanel;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
+using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
 
 namespace Plus.HabboHotel.Corporations;
@@ -20,8 +22,11 @@ namespace Plus.HabboHotel.Corporations;
 /// runs at exactly those moments). An officer may close it; the next new call
 /// brings it back up (the client's doing - every change is broadcast anyway).
 ///
-/// On a call: Respond claims it (the first officer to press it; the caller is
-/// not told), and after that the button is Go to room. Once responded, any officer
+/// On a call: Respond takes the officer to the room and claims it (the first
+/// officer to arrive; the caller is not told), and after that the button is
+/// Go to room for every officer. Respond and Go to room stop the officer and
+/// take them there after a few seconds' wait (see "the trip" below). Once
+/// responded, any officer
 /// may mark it - once, for good, no confirmation:
 /// - Helpful: the caller is paid <see cref="HelpfulReward"/> coins;
 /// - Abuse: the caller is charged with 911abuse, filed by the officer who
@@ -34,7 +39,7 @@ namespace Plus.HabboHotel.Corporations;
 /// minutes at most.
 /// It carries no message and is never marked. Any number of officers respond
 /// to one, and responding takes them to the room it was called from, through
-/// its lock. It never closes.
+/// its lock, after the same wait. It never closes.
 /// </summary>
 public static class EmergencyCalls
 {
@@ -311,16 +316,10 @@ public static class EmergencyCalls
         switch (action)
         {
             case ActionRespond:
-                if (backup)
-                    RespondBackup(session, call);
-                else
-                    Respond(session, call);
+                StartTrip(session, call, respond: true);
                 return;
             case ActionGoToRoom:
-                if (backup)
-                    GoToBackup(session, call);
-                else
-                    GoToRoom(session, call);
+                StartTrip(session, call, respond: false);
                 return;
             case ActionHelpful:
             case ActionAbuse:
@@ -332,118 +331,251 @@ public static class EmergencyCalls
         }
     }
 
-    private static void Respond(GameClient session, Call call)
+    // ---- the trip ------------------------------------------------------------
+    //
+    // Respond and Go to room - on a 911 call and on a backup request alike - do
+    // not move an officer at once (Twist, 2026-10-18). They stop where they
+    // stand, the room sees them set off, and TripSeconds later they are there.
+    // Walking or clicking away calls it off, and so does somebody else
+    // stopping them - hit, slapped, spat on, pushed, pulled, stunned, pepper
+    // sprayed or cuffed - each with "*steps out of their police car*". A
+    // knockout calls it off quietly, and so does leaving the room some other
+    // way first. Respond only lists them on arrival: a name on the card is an
+    // officer who actually went.
+
+    /// <summary>Seconds between the button and the arrival.</summary>
+    private const int TripSeconds = 4;
+
+    /// <summary>What the room sees as an officer sets off on a 911 call.</summary>
+    private const string EmergencyDeparture = "*hops into their police car, responding to an emergency*";
+
+    /// <summary>What the room sees when an officer walks off during the wait.</summary>
+    private const string TripCancelled = "*steps out of their police car*";
+
+    private sealed class Trip
+    {
+        public Trip(int callId, bool respond, Habbo habbo, RoomUser from)
+        {
+            CallId = callId;
+            Respond = respond;
+            Habbo = habbo;
+            From = from;
+        }
+
+        public int CallId { get; }
+        /// <summary>Respond (listed on arrival) rather than Go to room.</summary>
+        public bool Respond { get; }
+        /// <summary>The session they set off in - a relog is a new one.</summary>
+        public Habbo Habbo { get; }
+        /// <summary>The room user they set off as - leaving the room makes a new one.</summary>
+        public RoomUser From { get; }
+    }
+
+    /// <summary>Officers on their way, by user id: one trip each.</summary>
+    private static readonly ConcurrentDictionary<int, Trip> Trips = new();
+
+    /// <summary>
+    /// Respond or Go to room pressed: everything that would refuse the trip is
+    /// asked now, and then the officer waits out <see cref="TripSeconds"/>.
+    /// </summary>
+    private static void StartTrip(GameClient session, Call call, bool respond)
     {
         var habbo = session.GetHabbo();
-        if (AccountUtility.SameAccount(habbo.Id, call.CallerId))
+        if (respond && AccountUtility.SameAccount(habbo.Id, call.CallerId))
         {
             Send(session, "You cannot attend your own call.");
             return;
         }
-        int claimed;
-        using (var connection = PlusEnvironment.DatabaseManager.Connection())
-        {
-            // The WHERE is the race: two officers pressing at once, one wins.
-            claimed = connection.Execute(
-                "UPDATE `rp_911_calls` SET `responder_id` = @officerId, `responder_name` = @officerName, `responded_at` = UNIX_TIMESTAMP() " +
-                "WHERE `id` = @id AND `responder_id` = 0",
-                new { officerId = habbo.Id, officerName = habbo.Username, id = call.Id });
-        }
-        if (claimed == 0)
-        {
-            Send(session, "Another officer has already responded to that call.");
-            return;
-        }
-        // Nobody is told (Twist, 2026-10-15): not the caller, and not the
-        // officer, whose card now reads "Responded by you".
-        Broadcast();
-    }
-
-    private static void GoToRoom(GameClient session, Call call)
-    {
-        var habbo = session.GetHabbo();
         if (call.RoomId <= 0)
             return;
-        if (habbo.CurrentRoom != null && habbo.CurrentRoom.Id == call.RoomId)
-        {
-            Send(session, "You are already there.");
-            return;
-        }
-        // pixelrp: the plain "Go to room" skipped this, so a cuffed or escorting
-        // officer could leave custody by it. The backup path already checks.
         var cannot = CannotTravel(session);
-        if (!string.IsNullOrEmpty(cannot))
+        if (cannot.Length > 0)
         {
             Send(session, cannot);
             return;
+        }
+        // On the way already: a second press changes nothing.
+        if (Trips.ContainsKey(habbo.Id))
+            return;
+
+        var room = habbo.CurrentRoom;
+        // Already there: nothing to wait for. Respond lists them; Go to room
+        // has nothing to do.
+        if (room != null && room.Id == call.RoomId)
+        {
+            if (respond)
+                Arrive(session, call, respond: true, travel: false);
+            else
+                Send(session, "You are already there.");
+            return;
+        }
+        var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        // From the hotel view there is no avatar to stop and nobody to see it
+        // go: straight there, as before.
+        if (user == null)
+        {
+            Arrive(session, call, respond, travel: true);
+            return;
+        }
+
+        var trip = new Trip(call.Id, respond, habbo, user);
+        if (!Trips.TryAdd(habbo.Id, trip))
+            return;
+        // Stopped in their tracks - the way a stun stops a walker: on the tile
+        // they are stepping onto, never back to the one they left.
+        user.ClearMovement(true);
+        Rooms.Movement.MovementV2Bridge.Halt(user);
+        AnnounceDeparture(session, call.Kind == KindBackup ? $"*speeds off to back up {call.CallerName}*" : EmergencyDeparture);
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TripSeconds * 1000);
+            try
+            {
+                FinishTrip(habbo.Id, trip);
+            }
+            catch (Exception exception)
+            {
+                Plus.Core.ExceptionLogger.LogException(exception);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The wait is over: the trip happens if it is still this one, the officer
+    /// is still where they set off from, and nothing has stopped them since.
+    /// </summary>
+    private static void FinishTrip(int habboId, Trip trip)
+    {
+        // Called off, or already finished: only the trip that is still waiting.
+        if (!Trips.TryRemove(new KeyValuePair<int, Trip>(habboId, trip)))
+            return;
+        var session = trip.Habbo.Client;
+        if (session?.GetHabbo() != trip.Habbo)
+            return;
+        var user = trip.Habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habboId);
+        if (user == null || !ReferenceEquals(user, trip.From))
+            return;
+        if (!PoliceUtility.CanActAsOfficer(habboId) || CannotTravel(session).Length > 0 ||
+            PoliceState.IsStunned(habboId) || PoliceState.IsDisoriented(habboId))
+            return;
+        var call = Load(trip.CallId);
+        if (call == null)
+        {
+            Send(session, "That call is no longer in the queue.");
+            return;
+        }
+        Arrive(session, call, trip.Respond, travel: true);
+    }
+
+    /// <summary>
+    /// The officer walked or clicked away during the wait (OwnWalk): the trip
+    /// is off, and the room sees them get out of the car.
+    /// </summary>
+    public static void CancelTripByWalking(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null || Trips.IsEmpty || !Trips.TryRemove(habbo.Id, out _))
+            return;
+        AnnounceDeparture(session!, TripCancelled);
+    }
+
+    /// <summary>
+    /// Somebody else stopped the officer during the wait - hit, slapped, spat
+    /// on, pushed, pulled, stunned, pepper sprayed or cuffed: the trip is off,
+    /// and the room sees them get out of the car (Twist, 2026-10-18). A beat
+    /// later, so it comes after that action's own bubble, which the commands
+    /// send after calling this. A knockout calls it off quietly
+    /// (<paramref name="announce"/> false) - nobody steps anywhere out cold.
+    /// </summary>
+    public static void CancelTrip(int habboId, bool announce = true)
+    {
+        if (Trips.IsEmpty || !Trips.TryRemove(habboId, out var trip) || !announce)
+            return;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(CancelAfterBubbleMs);
+            try
+            {
+                // Still there to be seen, and on their feet: a hit that has
+                // since knocked them out, or a room they have since left, says
+                // nothing.
+                var session = trip.Habbo.Client;
+                if (session?.GetHabbo() != trip.Habbo)
+                    return;
+                var user = trip.Habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habboId);
+                if (user == null || !ReferenceEquals(user, trip.From) || user.RpKnockedOut)
+                    return;
+                AnnounceDeparture(session, TripCancelled);
+            }
+            catch (Exception exception)
+            {
+                Plus.Core.ExceptionLogger.LogException(exception);
+            }
+        });
+    }
+
+    /// <summary>How long the cancel bubble waits for the bubble of whatever stopped them.</summary>
+    private const int CancelAfterBubbleMs = 500;
+
+    /// <summary>
+    /// Respond lists the officer - a 911 call's one responder (the first to
+    /// arrive wins) or one more on a backup request - and then they go.
+    /// Nobody is told (Twist, 2026-10-15): their 911 Dispatch cards say it,
+    /// and the broadcast is what updates them.
+    /// </summary>
+    private static void Arrive(GameClient session, Call call, bool respond, bool travel)
+    {
+        var habbo = session.GetHabbo();
+        var backup = (call.Kind == KindBackup);
+        if (respond)
+        {
+            int listed;
+            using (var connection = PlusEnvironment.DatabaseManager.Connection())
+            {
+                listed = backup
+                    ? connection.Execute(
+                        "INSERT IGNORE INTO `rp_911_responders` (`call_id`, `officer_id`, `officer_name`, `responded_at`) " +
+                        "VALUES (@id, @officerId, @officerName, UNIX_TIMESTAMP())",
+                        new { id = call.Id, officerId = habbo.Id, officerName = habbo.Username })
+                    // The WHERE is the race: two officers arriving at once, one
+                    // is the responder. The other still goes.
+                    : connection.Execute(
+                        "UPDATE `rp_911_calls` SET `responder_id` = @officerId, `responder_name` = @officerName, `responded_at` = UNIX_TIMESTAMP() " +
+                        "WHERE `id` = @id AND `responder_id` = 0",
+                        new { officerId = habbo.Id, officerName = habbo.Username, id = call.Id });
+            }
+            if (listed > 0)
+                Broadcast();
+        }
+        if (!travel)
+            return;
+        if (backup)
+        {
+            // To the requesting officer's room at its door - through its lock,
+            // doorbell and user limit (Habbo.BackupEntryRoomId). From the hotel
+            // view there is no room to leave: the client is told to go, and its
+            // entry spends the pass (as :summon forwards somebody).
+            habbo.BackupEntryRoomId = (uint)call.RoomId;
+            if (!habbo.InRoom)
+            {
+                session.SendRoomForward((uint)call.RoomId);
+                return;
+            }
         }
         habbo.PrepareRoom((uint)call.RoomId, "");
     }
 
     /// <summary>
-    /// Respond on a backup request: join its responders (any number may) and
-    /// go. Pressed again by an officer already responding, it only goes.
+    /// The officer's action bubble in the room they are in - setting off, or
+    /// getting back out of the car.
     /// </summary>
-    private static void RespondBackup(GameClient session, Call call)
+    private static void AnnounceDeparture(GameClient session, string text)
     {
         var habbo = session.GetHabbo();
-        if (AccountUtility.SameAccount(habbo.Id, call.CallerId))
-        {
-            Send(session, "You cannot attend your own call.");
-            return;
-        }
-        // Refused before they are listed: a name on the card is an officer
-        // who is actually coming.
-        var cannot = CannotTravel(session);
-        if (cannot.Length > 0)
-        {
-            Send(session, cannot);
-            return;
-        }
-
-        int joined;
-        using (var connection = PlusEnvironment.DatabaseManager.Connection())
-        {
-            joined = connection.Execute(
-                "INSERT IGNORE INTO `rp_911_responders` (`call_id`, `officer_id`, `officer_name`, `responded_at`) " +
-                "VALUES (@id, @officerId, @officerName, UNIX_TIMESTAMP())",
-                new { id = call.Id, officerId = habbo.Id, officerName = habbo.Username });
-        }
-        // Nobody is told (Twist, 2026-10-15): not the officer who asked, and
-        // not the one responding - their 911 Dispatch cards name everyone
-        // responding, and this broadcast is what updates them.
-        if (joined > 0)
-            Broadcast();
-        GoToBackup(session, call);
-    }
-
-    /// <summary>
-    /// To the room a backup request was called from, at its door - through its
-    /// lock, doorbell and user limit (Habbo.BackupEntryRoomId).
-    /// </summary>
-    private static void GoToBackup(GameClient session, Call call)
-    {
-        var habbo = session.GetHabbo();
-        if (call.RoomId <= 0)
-            return;
-        if (habbo.CurrentRoom != null && habbo.CurrentRoom.Id == call.RoomId)
-        {
-            Send(session, "You are already there.");
-            return;
-        }
-        var cannot = CannotTravel(session);
-        if (cannot.Length > 0)
-        {
-            Send(session, cannot);
-            return;
-        }
-        habbo.BackupEntryRoomId = (uint)call.RoomId;
-        // From the hotel view there is no room to leave: the client is told to
-        // go, and its entry spends the pass (as :summon forwards somebody).
-        if (!habbo.InRoom)
-            session.SendRoomForward((uint)call.RoomId);
-        else
-            habbo.PrepareRoom((uint)call.RoomId, "");
+        var room = habbo?.CurrentRoom;
+        var user = room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo!.Id);
+        if (user != null)
+            room!.SendPacket(new ChatComposer(user.VirtualId, text, 0, PoliceUtility.ActionBubbleFor(habbo!.Id)));
     }
 
     /// <summary>
@@ -494,22 +626,32 @@ public static class EmergencyCalls
         }
 
         var caller = PlusEnvironment.Game.ClientManager.GetClientByUserId(call.CallerId);
-        string notice;
         if (mark == MarkHelpful)
         {
             CityPlayers.AdjustCreditsFor(call.CallerId, HelpfulReward, "Helpful 911 call");
-            caller?.SendWhisper($"Your 911 call was marked helpful. You have been tipped {HelpfulReward}c.");
-            notice = $"Marked helpful - {call.CallerName} was paid {HelpfulReward}c.";
+            // Names the officer who marked it, and the tip, in one (Twist, 2026-10-18).
+            caller?.SendWhisper($"Your call has been marked as helpful by {habbo.Username}. You have been tipped {HelpfulReward}c for your call.");
         }
         else if (ChargeCommand.FileAuto(call.CallerId, AbuseCrime, call.ResponderId))
         {
             WantedUtility.Broadcast();
             caller?.SendWhisper("Your 911 call was marked as abuse. You have been charged with 911 Abuse.");
-            notice = $"Marked as abuse - {call.CallerName} was charged with 911 Abuse.";
         }
         else
-            notice = $"Marked as abuse, but the 911 Abuse charge could not be filed - check the 911abuse crime in housekeeping.";
-        Broadcast(habbo.Id, notice);
+        {
+            // The 911abuse crime is always there (Twist, 2026-10-18), so this
+            // is only for the server log - no officer is shown anything.
+            Console.WriteLine($"[EmergencyCalls] call {call.Id} marked abuse but the {AbuseCrime} charge could not be filed");
+        }
+
+        // No notice for the marking officer (Twist, 2026-10-18): the force
+        // hears every mark in corporation chat - the same alert bubble, to
+        // on-duty police only, as a backup request - and an abuse mark stays
+        // on the call's card.
+        var alert = $"{habbo.Username} has marked {call.CallerName}'s call as {(mark == MarkHelpful ? "helpful" : "abuse")}.";
+        foreach (var userId in OnDutyResponders(staff: false))
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.SendWhisper(alert, CorporationAlertBubble);
+        Broadcast();
     }
 
     /// <summary>

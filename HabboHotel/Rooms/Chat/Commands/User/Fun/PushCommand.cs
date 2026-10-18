@@ -156,6 +156,8 @@ internal class PushCommand : ITargetChatCommand
         _lastPush[session.GetHabbo().Id] = DateTime.UtcNow;
         // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
         Plus.Utilities.StaleEntries.Sweep(_lastPush, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
+        // Pushed: an officer's trip to a call is off.
+        Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
         targetUser.MoveTo(destinationX, destinationY);
         // The wrapping asterisks are what make the client treat a style-4
         // bubble as an action, moving the opening marker ahead of the actor's

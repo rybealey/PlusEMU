@@ -182,6 +182,8 @@ public static class PoliceState
             return;
         // A bin search ends first, so the birds below go over no flies.
         BinSearch.Interrupt(user.UserId);
+        // An officer on their way to a call is stopped from going.
+        Corporations.EmergencyCalls.CancelTrip(user.UserId);
         Stunned[user.UserId] = DateTime.UtcNow.AddSeconds(seconds);
         // Halt an in-flight walk on the spot instead of letting it finish the
         // path, then block new clicks for the duration. ClearMovement is V1's;
@@ -282,6 +284,7 @@ public static class PoliceState
         if (user == null || user.IsBot)
             return;
         BinSearch.Interrupt(user.UserId);
+        Corporations.EmergencyCalls.CancelTrip(user.UserId);
         Disoriented[user.UserId] = DateTime.UtcNow.AddMilliseconds(milliseconds);
         user.CanWalk = false;
         // The stun's birds, for as long as it lasts (TickDisorient takes them
@@ -359,6 +362,7 @@ public static class PoliceState
         // Before TickCuffs keeps whatever effect is on to hand back at the
         // uncuff: the flies of a bin search must not be it.
         BinSearch.Interrupt(habboId);
+        Corporations.EmergencyCalls.CancelTrip(habboId);
         return Cuffed.TryAdd(habboId, officerId);
     }
 
@@ -959,7 +963,10 @@ public static class PoliceState
         if (room == null || user == null)
             return;
         if (!user.IsBot)
+        {
             BinSearch.Interrupt(user.UserId);
+            Corporations.EmergencyCalls.CancelTrip(user.UserId, announce: false);
+        }
         if (!EscortByCaptor.IsEmpty || !EscortBySuspect.IsEmpty)
             EndEscortsOnKnockout(room, user);
         if (!Cuffed.IsEmpty)

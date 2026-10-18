@@ -171,6 +171,9 @@ internal class SpitCommand : ITargetChatCommand
         }
 
         var landed = InReach(thisUser, targetUser);
+        // Spat on: an officer's trip to a call is off.
+        if (landed)
+            Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
 
         // The cooldown is spent either way. A miss is a turn taken, not a
         // free retry - otherwise the right move is to spam it from across the

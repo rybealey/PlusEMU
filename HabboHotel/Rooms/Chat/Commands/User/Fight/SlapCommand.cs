@@ -171,6 +171,8 @@ internal class SlapCommand : ITargetChatCommand
         room.SendPacket(new ChatComposer(thisUser.VirtualId, hurts
             ? $"*slaps {target.Username} across the face, causing {Damage} damage*"
             : $"*slaps {target.Username} across the face*", 0, FightBubble));
+        // Slapped, hurt or not: an officer's trip to a call is off.
+        Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
 
         if (!hurts)
             return Task.CompletedTask;

@@ -61,7 +61,9 @@ internal class PullCommand : ITargetChatCommand
             // the same message in style 0 reads "Actor: *pulls Target...*".
             // Matches :push, which this is the other half of.
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pulls {target.Username} to them*", 0, FightBubble));
-            if (thisUser.RotBody % 2 != 0) 
+            // Pulled: an officer's trip to a call is off.
+            Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
+            if (thisUser.RotBody % 2 != 0)
                 PullTarget(targetUser, thisUser.X, thisUser.Y, thisUser.RotBody - 1);
             else
                 PullTarget(targetUser, thisUser.X, thisUser.Y, thisUser.RotBody);

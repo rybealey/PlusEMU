@@ -58,6 +58,8 @@ internal class SuperPullCommand : ITargetChatCommand
             session.SendWhisper("Please don't pull that user out of the room :(!");
             return Task.CompletedTask;
         }
+        // Pulled: an officer's trip to a call is off.
+        Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
         if (thisUser.RotBody % 2 != 0)
             thisUser.RotBody--;
         if (thisUser.RotBody == 0)
