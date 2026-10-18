@@ -19,13 +19,14 @@ namespace Plus.HabboHotel.Corporations;
 /// (the ranks <see cref="MedicalUtility.IsOnDutyParamedic"/> clears for
 /// emergency work).
 ///
-/// A paramedic sees ONLY their own dispatch calls (2026-10-16): the call
-/// offered to them, and the ones they claimed or dropped off, to the end -
-/// never another paramedic's (<see cref="IsTheirs"/>). The window is sent on
-/// clock-in and taken away on clock-out (PushWindow, from
-/// PoliceUtility.PushPardonRights, which runs at exactly those moments), but
-/// it only comes up on screen when a call is offered to them; its X puts it
-/// away, and :calls brings it back.
+/// A paramedic sees ONLY their live call (2026-10-18, no history): the one
+/// offered to them, or the one they accepted until it ends - never another
+/// paramedic's, and nothing once it is over (<see cref="IsTheirs"/>). A call
+/// they decline or let run out, or one that ends, simply leaves their window,
+/// and the window closes with it. It is sent on clock-in and taken away on
+/// clock-out (PushWindow, from PoliceUtility.PushPardonRights, which runs at
+/// exactly those moments), but it only comes up on screen when a call is
+/// offered to them; its X puts it away, and :calls brings it back.
 ///
 /// ROUND ROBIN (2026-10-16). A death is offered to ONE paramedic at a time,
 /// whose window comes up on it with a Claim button. Unclaimed after
@@ -59,7 +60,7 @@ namespace Plus.HabboHotel.Corporations;
 /// </summary>
 public static class MedicalCalls
 {
-    /// <summary>How many of the newest deaths the window holds.</summary>
+    /// <summary>How many of the newest deaths the queue keeps.</summary>
     public const int WindowSize = 20;
 
     /// <summary>How long one paramedic has to claim a call before it moves on.</summary>
@@ -82,6 +83,12 @@ public static class MedicalCalls
     private const string LapsedWhisper = "You took too long to accept the call. It will be assigned to another paramedic.";
 
     private const string CollectedWhisper = "You took too long to retrieve your patient. They have been auto-revived at the hospital.";
+
+    // The accepted call ending without its paramedic's drop-off: the card
+    // leaves their window, so they are told why (Twist, 2026-10-18).
+    private const string RecoveredWhisper = "Your patient has been revived.";
+
+    private const string GoneWhisper = "Your patient has logged out.";
 
     private const int TickMs = 1000;
 
@@ -128,11 +135,6 @@ public static class MedicalCalls
         public int LastOfferedId { get; set; }
         /// <summary>Paramedics who were offered it and let it lapse or declined it: never offered it again.</summary>
         public HashSet<int> MissedBy { get; init; } = new();
-        /// <summary>
-        /// Whoever claimed it, kept after it closes so it stays on their queue
-        /// with how it ended; 0 while unclaimed, or after the claim was let go.
-        /// </summary>
-        public int ClaimedById { get; set; }
         /// <summary>While claimed: when the hospital collects the patient if the paramedic has not.</summary>
         public DateTime ReviveBy { get; set; }
         /// <summary>The claimer has had their <see cref="ReminderSeconds"/> whisper.</summary>
@@ -142,10 +144,6 @@ public static class MedicalCalls
         /// dropped - so whoever accepts it now is taking it over.
         /// </summary>
         public bool PassedOn { get; set; }
-        /// <summary>Set per recipient when their window is built: this call
-        /// is one THIS paramedic let lapse. Not persisted - stamped on the
-        /// copy sent to them, so their card can show it greyed as missed.</summary>
-        public bool MissedByViewer { get; set; }
 
         public bool IsOpen => State is StateWaiting or StateOffered or StateClaimed;
 
@@ -181,23 +179,18 @@ public static class MedicalCalls
             return Deaths.Select(death => death.Copy()).ToList();
     }
 
-    /// <summary>One paramedic's window: their own dispatch calls, newest first.</summary>
-    public static List<Death> Newest(int userId)
-    {
-        var window = Snapshot().Where(death => IsTheirs(death, userId)).ToList();
-        foreach (var death in window)
-            death.MissedByViewer = death.MissedBy.Contains(userId);
-        return window;
-    }
+    /// <summary>One paramedic's window: their live call, if they have one.</summary>
+    public static List<Death> Newest(int userId) =>
+        Snapshot().Where(death => IsTheirs(death, userId)).ToList();
 
     /// <summary>
-    /// Offered to them right now, claimed by them, or dropped off by them. A
-    /// call offered to somebody else, or one they let run out, is not theirs.
+    /// Offered to them right now, or accepted by them and not over yet. Nothing
+    /// else: a call they declined or let run out, one that has ended - dropped
+    /// off, back on their feet, collected by the hospital, logged out - and
+    /// anybody else's are not kept (no history, Twist 2026-10-18).
     /// </summary>
     private static bool IsTheirs(Death death, int userId) =>
-        userId > 0 && (death.ClaimedById == userId ||
-                       (death.ActorId == userId && death.State is StateOffered or StateRevived) ||
-                       death.MissedBy.Contains(userId));
+        userId > 0 && death.ActorId == userId && death.State is StateOffered or StateClaimed;
 
     /// <summary>A player has just gone down in `room`. Report it and offer it round.</summary>
     public static void OnDeath(Room room, RoomUser user)
@@ -242,8 +235,8 @@ public static class MedicalCalls
 
     /// <summary>
     /// A paramedic carrying `patientId` has laid them on a hospital bed from a
-    /// drop-off pad. Their call reads "Revived by" that paramedic, and whoever
-    /// claimed it is free for the next one.
+    /// drop-off pad. Their call closes as revived by that paramedic, its card
+    /// leaves the window, and whoever claimed it is free for the next one.
     /// </summary>
     public static void OnDropOff(GameClient? paramedic, int patientId)
     {
@@ -251,11 +244,16 @@ public static class MedicalCalls
         if (habbo == null || patientId <= 0)
             return;
         var changed = false;
+        // Another paramedic had accepted this call: their card goes with it,
+        // so they are told who dropped their patient off.
+        var claimerId = 0;
         lock (Lock)
         {
             var call = Deaths.FirstOrDefault(death => death.PatientId == patientId && death.IsOpen);
             if (call != null)
             {
+                if (call.State == StateClaimed && call.ActorId != habbo.Id)
+                    claimerId = call.ActorId;
                 call.State = StateRevived;
                 call.ActorId = habbo.Id;
                 call.ActorName = habbo.Username;
@@ -274,6 +272,9 @@ public static class MedicalCalls
         {
             try
             {
+                if (claimerId != 0)
+                    PlusEnvironment.Game.ClientManager.GetClientByUserId(claimerId)?
+                        .SendWhisper($"Your patient has been dropped off by {habbo.Username}.");
                 // Tipped once per knockout - the call closes here, so a second
                 // drop-off of the same patient finds nothing open - and never for
                 // a patient on the paramedic's own account.
@@ -318,7 +319,6 @@ public static class MedicalCalls
             else
             {
                 call.State = StateClaimed;
-                call.ClaimedById = habbo.Id;
                 call.ActorName = habbo.Username;
                 call.ReviveBy = DateTime.UtcNow.AddSeconds(ReviveSeconds);
                 call.Reminded = false;
@@ -351,8 +351,8 @@ public static class MedicalCalls
     /// <summary>
     /// The Decline button, from the paramedic the call is offered to: the same
     /// as letting the offer run out, only now - the blue bubble over them, the
-    /// call kept greyed in their window, never offered to them again, and on
-    /// to the next paramedic at once.
+    /// card gone from their window, never offered to them again, and on to the
+    /// next paramedic at once.
     /// </summary>
     public static void Decline(GameClient session, int callId)
     {
@@ -451,12 +451,23 @@ public static class MedicalCalls
                     var closed = Closed(call);
                     if (closed != StateWaiting)
                     {
-                        // Accepted, and the hospital came for the patient first:
-                        // only its ReviveSeconds deadline does that to a claimed
-                        // call (HospitalAdmission.CollectBy), so the claimer
+                        // An accepted call ending without its paramedic's
+                        // drop-off: their card goes, so they hear why. The
+                        // hospital coming first is only ever its ReviveSeconds
+                        // deadline (HospitalAdmission.CollectBy) - the claimer
                         // never got to them.
-                        if (call.State == StateClaimed && closed == StateAdmitted)
-                            whispers.Add((call.ActorId, CollectedWhisper));
+                        if (call.State == StateClaimed)
+                        {
+                            var why = closed switch
+                            {
+                                StateAdmitted => CollectedWhisper,
+                                StateRecovered => RecoveredWhisper,
+                                StateGone => GoneWhisper,
+                                _ => null
+                            };
+                            if (why != null)
+                                whispers.Add((call.ActorId, why));
+                        }
                         call.State = closed;
                         call.ActorId = 0;
                         call.ActorName = "";
@@ -570,7 +581,6 @@ public static class MedicalCalls
         call.State = StateWaiting;
         call.ActorId = 0;
         call.ActorName = "";
-        call.ClaimedById = 0;
         call.PassedOn = true;
     }
 
@@ -639,8 +649,6 @@ public static class MedicalCalls
         foreach (var medic in medics)
         {
             var told = medic.UserId == noticeFor ? notice : missed.GetValueOrDefault(medic.UserId, "");
-            // Newest takes its own snapshot per medic, so the per-viewer
-            // MissedByViewer flag is never aliased across recipients.
             var theirs = Newest(medic.UserId);
             PlusEnvironment.Game.ClientManager.GetClientByUserId(medic.UserId)?.Send(new RpMedicalCallsComposer(true, theirs, told));
         }
