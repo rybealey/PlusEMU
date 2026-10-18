@@ -44,7 +44,7 @@ internal class EnableCommand : IChatCommand
         // effect gracefully.
         if (effectId < 0)
             return;
-        if ((effectId == 102 || effectId == 187) && !session.GetHabbo().Permissions.HasRight("mod_tool"))
+        if ((effectId == 102 || effectId == 187 || effectId == Corporations.PoliceBeacon.EffectId) && !session.GetHabbo().Permissions.HasRight("mod_tool"))
         {
             session.SendWhisper("Sorry, only staff members can use this effects.");
             return;

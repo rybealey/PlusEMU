@@ -439,6 +439,9 @@ public static class ShiftManager
         // false and the revert sees the player as off duty
         if (session.IsStaffCorp)
             RevertStaffDuty(client);
+        // pixelrp: a police beacon goes out with the shift.
+        if (client?.GetHabbo() is { } habbo)
+            PoliceBeacon.PutOut(habbo.Id);
         return paySeconds;
     }
 

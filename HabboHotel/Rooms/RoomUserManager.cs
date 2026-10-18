@@ -381,6 +381,11 @@ public class RoomUserManager
         session.Send(Communication.Packets.Outgoing.Rooms.Settings.RpRoomTurfComposer.For(_room, session.GetHabbo().Id));
         if (ShiftManager.IsStaffOnDuty(session.GetHabbo().Id) && session.GetHabbo().Effects != null)
             session.GetHabbo().Effects.ApplyEffect(Habbo.StaffDutyEffectId);
+        else if (PoliceBeacon.EnteredRoom(session.GetHabbo(), _room, user))
+        {
+            // pixelrp: an officer arriving on a 911 call or a backup request
+            // walks in under the police beacon, for its last few seconds.
+        }
         else if (session.GetHabbo().RpPassiveSeconds > 0 && session.GetHabbo().Effects != null)
             session.GetHabbo().Effects.ApplyEffect(Habbo.PassiveEnableEffectId);
         // pixelrp: whatever else they are wearing - the escort's cuffs, an enable -

@@ -341,7 +341,8 @@ public static class EmergencyCalls
     // sprayed or cuffed - each with "*steps out of their police car*". A
     // knockout calls it off quietly, and so does leaving the room some other
     // way first. Respond only lists them on arrival: a name on the card is an
-    // officer who actually went.
+    // officer who actually went. On-duty police wear the blue beacon from the
+    // button until a few seconds after they walk in (PoliceBeacon).
 
     /// <summary>Seconds between the button and the arrival.</summary>
     private const int TripSeconds = 4;
@@ -425,6 +426,7 @@ public static class EmergencyCalls
         // they are stepping onto, never back to the one they left.
         user.ClearMovement(true);
         Rooms.Movement.MovementV2Bridge.Halt(user);
+        PoliceBeacon.LightUp(habbo);
         AnnounceDeparture(session, call.Kind == KindBackup ? $"*speeds off to back up {call.CallerName}*" : EmergencyDeparture);
         _ = Task.Run(async () =>
         {
@@ -449,22 +451,31 @@ public static class EmergencyCalls
         // Called off, or already finished: only the trip that is still waiting.
         if (!Trips.TryRemove(new KeyValuePair<int, Trip>(habboId, trip)))
             return;
+        // Whatever stops it here puts the beacon out; Arrive takes it along.
+        if (!Depart(habboId, trip))
+            PoliceBeacon.PutOut(habboId);
+    }
+
+    /// <summary>FinishTrip's last checks, then the arrival. False when the officer does not go.</summary>
+    private static bool Depart(int habboId, Trip trip)
+    {
         var session = trip.Habbo.Client;
         if (session?.GetHabbo() != trip.Habbo)
-            return;
+            return false;
         var user = trip.Habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habboId);
         if (user == null || !ReferenceEquals(user, trip.From))
-            return;
+            return false;
         if (!PoliceUtility.CanActAsOfficer(habboId) || CannotTravel(session).Length > 0 ||
             PoliceState.IsStunned(habboId) || PoliceState.IsDisoriented(habboId))
-            return;
+            return false;
         var call = Load(trip.CallId);
         if (call == null)
         {
             Send(session, "That call is no longer in the queue.");
-            return;
+            return false;
         }
         Arrive(session, call, trip.Respond, travel: true);
+        return true;
     }
 
     /// <summary>
@@ -476,6 +487,7 @@ public static class EmergencyCalls
         var habbo = session?.GetHabbo();
         if (habbo == null || Trips.IsEmpty || !Trips.TryRemove(habbo.Id, out _))
             return;
+        PoliceBeacon.PutOut(habbo.Id);
         AnnounceDeparture(session!, TripCancelled);
     }
 
@@ -489,7 +501,10 @@ public static class EmergencyCalls
     /// </summary>
     public static void CancelTrip(int habboId, bool announce = true)
     {
-        if (Trips.IsEmpty || !Trips.TryRemove(habboId, out var trip) || !announce)
+        if (Trips.IsEmpty || !Trips.TryRemove(habboId, out var trip))
+            return;
+        PoliceBeacon.PutOut(habboId);
+        if (!announce)
             return;
         _ = Task.Run(async () =>
         {
@@ -549,6 +564,8 @@ public static class EmergencyCalls
         }
         if (!travel)
             return;
+        // A beacon lit for the trip rides along into the caller's room.
+        PoliceBeacon.Arriving(habbo);
         if (backup)
         {
             // To the requesting officer's room at its door - through its lock,

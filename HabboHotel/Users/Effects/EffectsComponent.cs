@@ -91,6 +91,13 @@ public sealed class EffectsComponent
         var user = _habbo.CurrentRoom.GetRoomUserManager().GetRoomUserByHabbo(_habbo.Id);
         if (user == null)
             return;
+        // pixelrp: the police beacon is only worn while PoliceBeacon has it
+        // lit (or by staff, through :enable). Cuffs or an escort put on during
+        // its last seconds remember it as the effect underneath, and must not
+        // hand it back for good when they come off.
+        if (effectId == Corporations.PoliceBeacon.EffectId && !Corporations.PoliceBeacon.IsLit(_habbo.Id) &&
+            !_habbo.Permissions.HasRight("mod_tool"))
+            effectId = 0;
         CurrentEffect = effectId;
         if (user.IsDancing)
             _habbo.CurrentRoom.SendPacket(new DanceComposer(user, 0));
