@@ -40,6 +40,20 @@ public class CommandManager : ICommandManager
         "ga", "ca"
     };
 
+    /// <summary>
+    /// pixelrp: the other side of it - the player commands that still work ON
+    /// somebody who is out cold (Twist, 2026-10-18). Every other one is
+    /// refused with <see cref="KnockedOut.TargetRefusal"/>. :escort is how a
+    /// patient is carried and put down (a custody escort of somebody out cold
+    /// is refused by the command itself); :charge and :pardon are paperwork
+    /// that never touches the avatar. Staff commands are not player commands,
+    /// so they are never refused here.
+    /// </summary>
+    private static readonly HashSet<string> TargetKnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "escort", "charge", "pardon"
+    };
+
     private static bool IsPlayerCommand(ICommandBase command) =>
         (command.GetType().Namespace ?? string.Empty).Contains(".Commands.User", StringComparison.Ordinal);
 
@@ -207,6 +221,14 @@ public class CommandManager : ICommandManager
                 if (targetChatCommand.MustBeInSameRoom && session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom)
                 {
                     session.SendWhisper(targetChatCommand.IsRanged ? RangeMessages.NotInRoom : $"You must be in the same room as {targetHabbo.Username} to execute this command.");
+                    return true;
+                }
+
+                // pixelrp: a player command used ON somebody out cold - one
+                // check here and one sentence, as for being out cold yourself.
+                if (IsPlayerCommand(command) && !TargetKnockedOutCan.Contains(key) && KnockedOut.Is(target))
+                {
+                    session.SendWhisper(KnockedOut.TargetRefusal);
                     return true;
                 }
 

@@ -200,7 +200,7 @@ internal class EscortCommand : ITargetChatCommand
             // it cannot begin on one either - nobody marches lying down.
             if (target.RpHealth <= 0)
             {
-                session.SendWhisper($"{target.Username} is out cold and cannot be escorted.");
+                session.SendWhisper(KnockedOut.TargetRefusal);
                 return Task.CompletedTask;
             }
         }

@@ -142,7 +142,7 @@ internal class StunCommand : ITargetChatCommand
         // owns their ability to walk.
         if (target.RpHealth <= 0)
         {
-            session.SendWhisper($"{target.Username} is already out cold.");
+            session.SendWhisper(KnockedOut.TargetRefusal);
             return Task.CompletedTask;
         }
 

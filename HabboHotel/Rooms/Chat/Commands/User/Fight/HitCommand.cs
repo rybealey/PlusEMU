@@ -131,7 +131,7 @@ internal class HitCommand : ITargetChatCommand
 
         if (target.RpHealth <= 0)
         {
-            session.SendWhisper($"{target.Username} is already out cold.");
+            session.SendWhisper(KnockedOut.TargetRefusal);
             return Task.CompletedTask;
         }
 

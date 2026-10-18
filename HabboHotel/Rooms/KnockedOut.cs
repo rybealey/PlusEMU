@@ -20,6 +20,12 @@ public static class KnockedOut
 {
     public const string Refusal = "You cannot perform this action.";
 
+    /// <summary>
+    /// The other side: a command used ON somebody who is out cold, the one
+    /// sentence every command answers with (Twist, 2026-10-18).
+    /// </summary>
+    public const string TargetRefusal = "You cannot use this command on a knocked out player.";
+
     /// <summary>Out cold in the room they are in.</summary>
     public static bool Is(GameClient session)
     {

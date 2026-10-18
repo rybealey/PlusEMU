@@ -104,7 +104,7 @@ internal class HealCommand : ITargetChatCommand
         // pointless.
         if (target.RpHealth <= 0)
         {
-            session.SendWhisper($"{target.Username} is out cold. They need a paramedic.");
+            session.SendWhisper(KnockedOut.TargetRefusal);
             return Task.CompletedTask;
         }
         if (target.RpHealth >= target.RpHealthMax)
