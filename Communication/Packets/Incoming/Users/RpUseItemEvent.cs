@@ -246,6 +246,11 @@ public class RpUseItemEvent : IPacketEvent
                 session.SendWhisper("Spit Token redeemed - you can now use :spit <username>.");
                 break;
             }
+            // pixelrp: a hit from the vape - one of its seven. TakeHit resends
+            // the backpack itself when the last one uses it up.
+            case RpVape.Item:
+                RpVape.TakeHit(session, slot);
+                return;
             // pixelrp police: a flashbang is thrown from the backpack, the same
             // throw as :fb. Throw spends it and resends the backpack itself.
             case Plus.HabboHotel.Rooms.Chat.Commands.User.Police.Flashbang.Item:

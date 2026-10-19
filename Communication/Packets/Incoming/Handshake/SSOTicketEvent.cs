@@ -140,6 +140,8 @@ public class SsoTicketEvent : IPacketEvent
             session.Send(new RpStunGunChargeComposer(
                 Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.StunGunShotsLeft(session.GetHabbo().Id),
                 Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.StunGunShots));
+            // pixelrp: and the vape's hits left, for its bar.
+            session.Send(new RpVapeChargeComposer(Plus.HabboHotel.Users.RpVape.HitsLeft(session.GetHabbo().Id), Plus.HabboHotel.Users.RpVape.Hits));
             // pixelrp: every furni renamed or re-functioned since the gamedata
             // on disk was built. The client reads names out of that file, so a
             // rename from the shop or the Function tool reached only whoever was

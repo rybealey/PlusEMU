@@ -98,6 +98,9 @@ public sealed class EffectsComponent
         if (effectId == Corporations.PoliceBeacon.EffectId && !Corporations.PoliceBeacon.IsLit(_habbo.Id) &&
             !_habbo.Permissions.HasRight("mod_tool"))
             effectId = 0;
+        // The vape's puff likewise, only while RpVape has it showing.
+        if (effectId == RpVape.EffectId && !RpVape.IsPuffing(_habbo.Id) && !_habbo.Permissions.HasRight("mod_tool"))
+            effectId = 0;
         CurrentEffect = effectId;
         if (user.IsDancing)
             _habbo.CurrentRoom.SendPacket(new DanceComposer(user, 0));

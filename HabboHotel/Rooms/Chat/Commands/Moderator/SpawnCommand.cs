@@ -15,6 +15,7 @@ internal class SpawnCommand : ITargetChatCommand
     {
         { "smoothie", ("smoothie", "Passive Smoothie") },
         { "snack", ("snack", "Snack") },
+        { "vape", (RpVape.Item, "Vape") },
         { "medkit", ("medkit", "Medkit") },
         { "vip31", ("vip_token_31", "VIP Token (31 days)") },
         { "vip14", ("vip_token_14", "VIP Token (14 days)") },

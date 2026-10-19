@@ -64,6 +64,9 @@ public class RoomUser
     // pixelrp: the handitem of the equipped weapon (RpWeapons), 0 for none.
     // It is the hand's RESTING item: see CarryItem and SetWeaponHandItem.
     public int WeaponHandItemId;
+    // pixelrp: the vape's handitem while there is one in the backpack (RpVape),
+    // 0 for none - the resting item under all the others: see SetVapeHandItem.
+    public int VapeHandItemId;
     // pixelrp: >0 while an enable is paused for the "67" gesture; the room
     // cycle counts it down and reapplies the effect at zero.
     public int EffectReapplyTimer;
@@ -904,10 +907,11 @@ public class RoomUser
     /// <summary>
     /// What the hand holds when nothing is borrowing it: an equipped stun gun,
     /// which even the open phone does not displace; else the phone while it is
-    /// open; else the equipped weapon; else nothing. None of them runs a timer.
+    /// open; else the equipped weapon; else a vape from the backpack; else
+    /// nothing. None of them runs a timer.
     /// </summary>
     public int RestingHandItemId =>
-        (StunGunDrawn ? WeaponHandItemId : (PhoneInHand ? PhoneHandItemId : WeaponHandItemId));
+        (StunGunDrawn ? WeaponHandItemId : (PhoneInHand ? PhoneHandItemId : (WeaponHandItemId > 0 ? WeaponHandItemId : VapeHandItemId)));
 
     public void CarryItem(int item)
     {
@@ -1007,7 +1011,31 @@ public class RoomUser
             GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, handItemId));
         }
         else if (previous > 0 && CarryItemId == previous)
-            CarryItem(0);           // the phone, if it is open, else an empty hand
+            CarryItem(0);           // the phone, if it is open, else a vape or an empty hand
+    }
+
+    /// <summary>
+    /// pixelrp: a vape came into the backpack, or the last one left it
+    /// (RpVape.SyncHand).
+    ///
+    /// The vape rests in the hand under everything else: it takes only an
+    /// EMPTY hand. A weapon, the open phone or anything carried keeps the hand,
+    /// and putting that down brings the vape back (RestingHandItemId).
+    /// </summary>
+    public void SetVapeHandItem(int handItemId)
+    {
+        if (VapeHandItemId == handItemId)
+            return;
+        var previous = VapeHandItemId;
+        VapeHandItemId = handItemId;
+        if (handItemId > 0 && CarryItemId == 0)
+        {
+            CarryItemId = handItemId;
+            CarryTimer = 0;
+            GetRoom()?.SendPacket(new CarryObjectComposer(VirtualId, handItemId));
+        }
+        else if (previous > 0 && CarryItemId == previous)
+            CarryItem(0);
     }
 
 

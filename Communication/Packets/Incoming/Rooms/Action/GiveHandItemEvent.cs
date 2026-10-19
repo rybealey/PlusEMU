@@ -28,6 +28,13 @@ internal class GiveHandItemEvent : RoomPacketEvent
         {
             if (user.CarryItemId > 0 && user.CarryTimer > 0)
             {
+                // pixelrp: a vape lent the hand for a hit (RpVape) belongs to the
+                // backpack; it changes hands by trade, not like a coffee.
+                if (user.CarryItemId == Plus.HabboHotel.Users.RpVape.HandItem)
+                {
+                    session.SendWhisper("You can't hand over your vape.");
+                    return Task.CompletedTask;
+                }
                 // pixelrp: a hand holding a stun gun takes nothing, and a stun
                 // gun is never handed over (RoomUser.StunGunDrawn). Checked
                 // BEFORE anything moves, so the giver keeps what they hold.

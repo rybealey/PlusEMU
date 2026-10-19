@@ -414,8 +414,11 @@ public class RoomUserManager
         //
         // The weapon is set before the phone, so an open phone still wins the
         // hand and the weapon waits for it to close - except a stun gun, which
-        // is drawn over the phone (RoomUser.StunGunDrawn).
-        user.SetWeaponHandItem(RpWeapons.HandItemFor(RpWeapons.EquippedItem(session.GetHabbo().LoadRpInventory())));
+        // is drawn over the phone (RoomUser.StunGunDrawn). A vape in the
+        // backpack rests under both (RpVape).
+        var rpInventory = session.GetHabbo().LoadRpInventory();
+        user.SetVapeHandItem(RpVape.HandItemFor(rpInventory));
+        user.SetWeaponHandItem(RpWeapons.HandItemFor(RpWeapons.EquippedItem(rpInventory)));
         if (session.GetHabbo().PhoneOpen)
             user.SetPhoneInHand(true);
         // pixelrp Movement V2: enrol this user with the movement scheduler.

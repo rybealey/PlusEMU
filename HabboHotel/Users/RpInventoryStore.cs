@@ -70,11 +70,18 @@ public static class RpInventoryStore
         var slot = Enumerable.Range(1, unlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
         if (slot == 0)
             return -1;
+        // pixelrp: hits are counted per player (RpVape), so a vape coming into
+        // a backpack that holds none starts full - and goes into the hand.
+        var firstVape = item == RpVape.Item && !inventory.Any(entry => entry.Item == item);
+        if (firstVape)
+            RpVape.Refill(userId);
         dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.AddParameter("item", item);
         dbClient.RunQuery();
+        if (firstVape)
+            RpVape.SyncHand(userId);
         return slot;
     }
 
@@ -132,6 +139,8 @@ public static class RpInventoryStore
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.RunQuery();
+        if (entry.Item == RpVape.Item)
+            RpVape.SyncHand(userId);       // the last one gone empties the hand
         return entry.Item;
     }
 
@@ -156,6 +165,8 @@ public static class RpInventoryStore
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.RunQuery();
+        if (entry.Item == RpVape.Item)
+            RpVape.SyncHand(userId);
         return (entry.Item, removed);
     }
 
@@ -182,6 +193,8 @@ public static class RpInventoryStore
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.RunQuery();
+        if (entry.Item == RpVape.Item)
+            RpVape.SyncHand(userId);
         return true;
     }
 }

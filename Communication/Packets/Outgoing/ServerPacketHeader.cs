@@ -234,6 +234,8 @@ public static class ServerPacketHeader
     public const uint RpPrefsComposer = 4218;
     // pixelrp: a juror's vote card (JuryTrials)
     public const uint RpJuryVoteComposer = 4221;
+    // pixelrp: the vape's hits left (RpVape)
+    public const uint RpVapeChargeComposer = 4223;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

@@ -377,7 +377,9 @@ public static class RpTrades
             var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId);
             if (client?.GetHabbo() == null)
                 continue;
-            client.Send(new RpInventoryComposer(client.GetHabbo().LoadRpInventory()));
+            var inventory = client.GetHabbo().LoadRpInventory();
+            client.Send(new RpInventoryComposer(inventory));
+            RpVape.Traded(client.GetHabbo(), inventory, side.Offer.GetValueOrDefault(RpVape.Item), other.Offer.GetValueOrDefault(RpVape.Item));
             client.Send(RpTradeComposer.Closed(ResultComplete,
                 $"You gave {Describe(side.Offer)}. You received {Describe(other.Offer)}."));
         }
