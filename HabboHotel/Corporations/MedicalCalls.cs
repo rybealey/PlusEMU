@@ -95,7 +95,7 @@ public static class MedicalCalls
 
     private const string NoMedicWhisper = "You'll be automatically transported to the hospital in 1 minute.";
 
-    private const string NoMedicVipWhisper = "No paramedics are on duty, you will be automatically transported to the hospital.";
+    private const string NoMedicVipWhisper = "There are no paramedics on duty, you will be automatically transported to the hospital.";
 
     private const string ReminderWhisper = "You have 30 seconds to retrieve the patient!";
 
