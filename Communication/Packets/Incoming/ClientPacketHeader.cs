@@ -610,6 +610,8 @@ public static class ClientPacketHeader
     public const uint RpCityBinRewardsEvent = 4211;
     public const uint RpCityBinRewardSaveEvent = 4213;
     public const uint RpCityBinRewardDeleteEvent = 4214;
+    // pixelrp: the player's settings, saved to the account (279_UserPrefs.sql)
+    public const uint RpSavePrefsEvent = 4219;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

@@ -230,6 +230,8 @@ public static class ServerPacketHeader
     public const uint RpRoomPrisonersComposer = 4216;
     // pixelrp: the furni types in the city's always-loaded rooms (KeyRooms) - for the client to download ahead
     public const uint RpCityFurniComposer = 4217;
+    // pixelrp: the player's saved settings, at login (279_UserPrefs.sql)
+    public const uint RpPrefsComposer = 4218;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

@@ -507,6 +507,37 @@ public class Habbo
         dbClient.RunQuery();
     }
 
+    // pixelrp: the player's settings, kept on the account like the macros
+    // (279_UserPrefs.sql) - a JSON map from each setting's storage key to its
+    // value. Empty string = never saved, and the client then sends up what its
+    // browser had. Lazily loaded; pushed at login by RpPrefsComposer and
+    // written by RpSavePrefsEvent, which validates before this is ever set.
+    public bool RpPrefsLoaded { get; set; }
+    public string RpPrefs { get; set; } = "";
+
+    public void EnsureRpPrefsLoaded()
+    {
+        if (RpPrefsLoaded)
+            return;
+        RpPrefsLoaded = true;
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `data` FROM `user_prefs` WHERE `user_id` = @id LIMIT 1");
+        dbClient.AddParameter("id", Id);
+        var row = dbClient.GetRow();
+        if (row == null)
+            return;
+        RpPrefs = Convert.ToString(row["data"]) ?? "";
+    }
+
+    public void SaveRpPrefs()
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("REPLACE INTO `user_prefs` (`user_id`,`data`) VALUES (@id,@data)");
+        dbClient.AddParameter("id", Id);
+        dbClient.AddParameter("data", RpPrefs);
+        dbClient.RunQuery();
+    }
+
     // pixelrp phone: the two documents behind the phone - preferences and the
     // Notification Center's history - as JSON the client owns (91_PhoneState.sql).
     // Same shape as the macros: '' = never saved, lazily loaded, pushed at login
