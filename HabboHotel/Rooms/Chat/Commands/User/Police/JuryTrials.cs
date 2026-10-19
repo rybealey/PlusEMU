@@ -24,8 +24,8 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// left. The prisoner's clock keeps running meanwhile, in the jail.
 ///
 /// COURT starts the moment the two minutes end, with whichever picked players
-/// are in the Courthouse then - one is enough; nobody, and the trial is called
-/// off. Anybody else can walk in and watch; a latecomer is not a juror. The
+/// are in the Courthouse then and not in cuffs - one is enough; nobody, and
+/// the trial is called off, as it is when every juror has logged out. Anybody else can walk in and watch; a latecomer is not a juror. The
 /// prisoner is brought over (their clock stopping as they arrive) and the
 /// judge - whichever bot is in the Courthouse - opens the court and reads the
 /// charges, gives the defendant 15 seconds to speak, and puts it to the vote.
@@ -42,7 +42,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// CALLED OFF when the prisoner is let go (time served, staff) before the
 /// verdict, is not online when court starts, logs out or never arrives once it
 /// has, or nobody turns up - the jurors are told, nobody is paid, and the
-/// request is spent. A restart is the exception: the trial dies with the
+/// request is spent. The one paid cancellation is the prisoner logging out once
+/// court has started: the judge says so, and every juror in court is paid as at
+/// a verdict (Twist, 2026-10-20). Staff can't release a prisoner once court has
+/// started (<see cref="InCourtNow"/>). A restart is the exception: the trial dies with the
 /// process, so an unfinished request is given back (<see cref="Init"/>).
 ///
 /// Held in memory, like Paramedic Dispatch; the sentence's own record keeps
@@ -59,7 +62,7 @@ public static class JuryTrials
     /// <summary>The Courthouse (Twist, 2026-10-19).</summary>
     public const uint CourthouseRoomId = 26;
 
-    /// <summary>What each juror still in court at the verdict is paid.</summary>
+    /// <summary>What each juror still in court at the verdict (or when the prisoner logs out of it) is paid.</summary>
     public const int JuryPay = 25;
 
     public const int VoteGuilty = 1;
@@ -88,6 +91,7 @@ public static class JuryTrials
     private const string ReminderWhisper = "You have 30 seconds to attend jury duty.";
     private const string NoJurorsWhisper = "Your trial has been cancelled because there are no jurors in attendance.";
     private const string CancelledWhisper = "The trial has been cancelled.";
+    private const string DefendantLeftLine = "The defendant has left the court. This trial has been cancelled.";
 
     private enum Phase
     {
@@ -208,6 +212,26 @@ public static class JuryTrials
         }
     }
 
+    /// <summary>
+    /// True from the moment court starts until the prisoner is taken back to
+    /// the jail - staff can't release them in that time (Twist, 2026-10-20).
+    /// </summary>
+    public static bool InCourtNow(int prisonerId)
+    {
+        lock (Lock)
+            return _active is { } trial && trial.PrisonerId == prisonerId && trial.Phase >= Phase.Arriving;
+    }
+
+    /// <summary>
+    /// True from the moment the prisoner arrives in the Courthouse for their
+    /// trial until it is over - their trial card is hidden then (Twist, 2026-10-20).
+    /// </summary>
+    public static bool ArrivedInCourt(int prisonerId)
+    {
+        lock (Lock)
+            return _active is { } trial && trial.PrisonerId == prisonerId && trial.Phase >= Phase.Opening;
+    }
+
     /// <summary>A prisoner was let go (JailState.Release, a staff release): any trial of theirs still to come is off.</summary>
     public static void OnReleased(int habboId)
     {
@@ -222,9 +246,10 @@ public static class JuryTrials
     }
 
     /// <summary>
-    /// Somebody logged out. The prisoner, once court has started, calls it off;
-    /// in the summons they may still come back in time. A juror in court gives
-    /// up their vote and their pay.
+    /// Somebody logged out. The prisoner, once court has started, calls it off -
+    /// the judge says so and the jurors in court are still paid for coming; in
+    /// the summons they may still come back in time. A juror in court gives up
+    /// their vote and their pay; the last one gone, and there is no trial.
     /// </summary>
     public static void OnLogout(int habboId)
     {
@@ -234,9 +259,17 @@ public static class JuryTrials
             if (_active is { } trial && trial.Phase is >= Phase.Arriving and < Phase.Verdict)
             {
                 if (trial.PrisonerId == habboId)
-                    Cancel(trial, trial.Jurors, null, false, after);
+                {
+                    Say(DefendantLeftLine, after);
+                    Cancel(trial, trial.Jurors, null, false, after, payJurors: true);
+                }
                 else if (trial.Jurors.Remove(habboId))
+                {
                     trial.Votes.Remove(habboId);
+                    // Every juror logged out: called off (Twist, 2026-10-20).
+                    if (!trial.Jurors.Any(InCourt))
+                        Cancel(trial, Array.Empty<int>(), NoJurorsWhisper, true, after);
+                }
             }
         }
         Run(after);
@@ -410,7 +443,9 @@ public static class JuryTrials
             Cancel(trial, trial.Picked, null, false, after);
             return;
         }
-        var present = trial.Picked.Where(InCourt).ToList();
+        // In cuffs as court starts: off the jury - no vote, no pay, not told
+        // (Twist, 2026-10-20).
+        var present = trial.Picked.Where(id => InCourt(id) && !PoliceState.IsCuffed(id)).ToList();
         if (present.Count == 0)
         {
             Cancel(trial, Array.Empty<int>(), NoJurorsWhisper, false, after);
@@ -473,14 +508,7 @@ public static class JuryTrials
         var result = acquitted ? ResultNotGuilty : ResultGuilty;
         after.Add(() => JailState.MarkTrialDone(prisonerId, result));
         // Paid for staying to the verdict, voted or not (Twist, 2026-10-20).
-        foreach (var jurorId in present)
-        {
-            after.Add(() =>
-            {
-                CityPlayers.AdjustCreditsFor(jurorId, JuryPay, "Jury duty");
-                PlusEnvironment.Game.ClientManager.GetClientByUserId(jurorId)?.SendWhisper($"You have been paid {JuryPay}c for jury duty.");
-            });
-        }
+        Pay(present, after);
         trial.Phase = Phase.Verdict;
         trial.PhaseEndsUtc = now.AddSeconds(VerdictPauseSeconds);
     }
@@ -497,14 +525,17 @@ public static class JuryTrials
     /// Called off. Those in <paramref name="tell"/> are told; the prisoner is
     /// whispered <paramref name="prisonerWhisper"/> if there is one; the request
     /// is spent; and a prisoner already brought to court goes back to the jail
-    /// (<paramref name="moveBack"/> - not one logging out or let go).
+    /// (<paramref name="moveBack"/> - not one logging out or let go). With
+    /// <paramref name="payJurors"/>, every juror in court is paid as at a verdict.
     /// </summary>
-    private static void Cancel(Trial trial, IEnumerable<int> tell, string? prisonerWhisper, bool moveBack, List<Action> after)
+    private static void Cancel(Trial trial, IEnumerable<int> tell, string? prisonerWhisper, bool moveBack, List<Action> after, bool payJurors = false)
     {
         _active = null;
         CloseCards(trial, after);
         foreach (var id in tell.ToList())
             Whisper(id, CancelledWhisper, after);
+        if (payJurors)
+            Pay(trial.Jurors.Where(InCourt).ToList(), after);
         var prisonerId = trial.PrisonerId;
         if (prisonerWhisper != null)
             Whisper(prisonerId, prisonerWhisper, after);
@@ -516,6 +547,19 @@ public static class JuryTrials
             if (moveBack && brought)
                 BackToJail(prisonerId);
         });
+    }
+
+    /// <summary>Each of <paramref name="jurorIds"/> gets <see cref="JuryPay"/> coins and a whisper saying so.</summary>
+    private static void Pay(List<int> jurorIds, List<Action> after)
+    {
+        foreach (var jurorId in jurorIds)
+        {
+            after.Add(() =>
+            {
+                CityPlayers.AdjustCreditsFor(jurorId, JuryPay, "Jury duty");
+                PlusEnvironment.Game.ClientManager.GetClientByUserId(jurorId)?.SendWhisper($"You have been paid {JuryPay}c for jury duty.");
+            });
+        }
     }
 
     /// <summary>The prisoner, out of court: their clock runs again, and they are taken back to a jail bed.</summary>

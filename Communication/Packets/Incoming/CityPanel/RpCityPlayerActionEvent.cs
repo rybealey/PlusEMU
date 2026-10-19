@@ -101,6 +101,9 @@ internal class RpCityPlayerActionEvent : IPacketEvent
                 staff.PrepareRoom(target.CurrentRoom.RoomId, "");
                 return null;
             case Release:
+                // Not mid-trial (Twist, 2026-10-20).
+                if (JuryTrials.InCourtNow(userId))
+                    return "They are on trial.";
                 if (!JailState.StaffRelease(userId, targetClient))
                     return "They are not in jail.";
                 targetClient?.SendWhisper("A staff member has released you from jail.");

@@ -103,7 +103,8 @@ public static class JailState
 
     /// <summary>Where this prisoner stands on a trial now (Trial*).</summary>
     private static int TrialOf(int habboId, Sentence sentence) =>
-        sentence.TrialDone ? TrialNone
+        // In court for it: the card goes (Twist, 2026-10-20).
+        sentence.TrialDone || JuryTrials.ArrivedInCourt(habboId) ? TrialNone
         : sentence.TrialAsked ? TrialRequested
         : sentence.SentenceSeconds < TrialMinSentenceSeconds || sentence.SecondsLeft < TrialMinSecondsLeft ? TrialNone
         : JuryTrials.JurorsAvailable(habboId) >= JuryTrials.MinJurors ? TrialOpen
