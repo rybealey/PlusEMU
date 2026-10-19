@@ -30,8 +30,14 @@ internal class SaveBotActionEvent : IPacketEvent
             return Task.CompletedTask;
         if (!room.GetRoomUserManager().TryGetBot(botId, out var bot))
             return Task.CompletedTask;
+        // pixelrp: told rather than ignored (Twist, 2026-10-19). The bot menu
+        // offers these to anyone with room control, but only the bot's owner
+        // and holders of bot_edit_any_override may change it.
         if (bot.BotData.OwnerId != session.GetHabbo().Id && !session.GetHabbo().Permissions.HasRight("bot_edit_any_override"))
+        {
+            session.SendWhisper("You can't edit this bot.");
             return Task.CompletedTask;
+        }
         var roomBot = bot.BotData;
         if (roomBot == null)
             return Task.CompletedTask;
