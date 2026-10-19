@@ -53,8 +53,11 @@ namespace Plus.HabboHotel.Corporations;
 /// send - not counting the patient's own characters - is not left to the
 /// usual hospital clock: the hospital comes for a player in
 /// <see cref="NoMedicSeconds"/>, and for VIP and staff straight away, each told
-/// so instead of "Your call has been sent!". The call is still queued, so a
-/// paramedic who clocks in meanwhile is offered it.
+/// so instead of "Your call has been sent!". The same goes for a call left
+/// waiting when the last paramedic stops work - offered, accepted or still
+/// waiting for a turn - once each time it is left with nobody, and never
+/// later than the hospital was already coming. The call is still queued, so
+/// a paramedic who clocks in meanwhile is offered it.
 ///
 /// Every other way the patient stops needing a paramedic closes the call too:
 /// back on their feet (a medkit, :restore), collected by the hospital itself
@@ -163,6 +166,11 @@ public static class MedicalCalls
         /// dropped - so whoever accepts it now is taking it over.
         /// </summary>
         public bool PassedOn { get; set; }
+        /// <summary>
+        /// Nobody on duty to send, so the hospital was sent for sooner and the
+        /// patient told. Cleared when it is offered to a paramedic again.
+        /// </summary>
+        public bool HospitalSooner { get; set; }
 
         public bool IsOpen => State is StateWaiting or StateOffered or StateClaimed;
 
@@ -219,6 +227,10 @@ public static class MedicalCalls
             return;
 
         var root = AccountUtility.RootOf(habbo.Id);
+        // Nobody to send: the hospital comes sooner. Not for a prisoner - the
+        // hospital waits for their release (HospitalAdmission), so they would
+        // be told of a trip that is not coming.
+        var noMedic = !AnyMedicFor(habbo.Id, root) && !JailState.IsJailed(habbo.Id);
         lock (Lock)
         {
             // Down again before an old call closed (a relog, a restart of the
@@ -239,21 +251,15 @@ public static class MedicalCalls
                 PatientGender = (habbo.Gender ?? "M").ToUpperInvariant().StartsWith("F") ? "F" : "M",
                 RoomId = (int)room.Id,
                 RoomName = room.Name ?? "",
-                CreatedAt = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                CreatedAt = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                HospitalSooner = noMedic
             });
             if (Deaths.Count > WindowSize)
                 Deaths.RemoveRange(WindowSize, Deaths.Count - WindowSize);
         }
 
-        // Nobody to send: the hospital comes sooner. Not for a prisoner - the
-        // hospital waits for their release (HospitalAdmission), so they would
-        // be told of a trip that is not coming.
-        if (!AnyMedicFor(habbo.Id, root) && !JailState.IsJailed(habbo.Id))
-        {
-            var vip = habbo.IsVip || habbo.IsStaff;
-            HospitalAdmission.CollectBy(habbo.Id, DateTime.UtcNow.AddSeconds(vip ? NoMedicVipSeconds : NoMedicSeconds), told: true);
-            WhisperAfterBubble(user.GetClient(), vip ? NoMedicVipWhisper : NoMedicWhisper);
-        }
+        if (noMedic)
+            SendSooner(user.GetClient(), afterBubble: true);
         else
             WhisperAfterBubble(user.GetClient(), "Your call has been sent! A paramedic will be assigned shortly.");
 
@@ -463,6 +469,8 @@ public static class MedicalCalls
             var missed = new Dictionary<int, string>();
             // Sent once the lock is let go: (paramedic, whisper).
             var whispers = new List<(int UserId, string Text)>();
+            // Patients left with no paramedic on duty, sent for sooner once the lock is let go.
+            var sooner = new List<int>();
             var changed = false;
             var now = DateTime.UtcNow;
 
@@ -538,14 +546,32 @@ public static class MedicalCalls
                     call.ActorName = next.Value.Name;
                     call.LastOfferedId = next.Value.Id;
                     call.OfferExpiresAt = now.AddSeconds(ClaimSeconds);
+                    // A paramedic again: should they stop work too, the
+                    // patient is sent for sooner again.
+                    call.HospitalSooner = false;
                     whispers.Add((next.Value.Id, $"You have been assigned a call at {Location(call)}. You have {ClaimSeconds} seconds to accept."));
                     _lastOfferedId = next.Value.Id;
                     changed = true;
+                }
+
+                // Still waiting with nobody on duty to send - the last
+                // paramedic stopped work: the hospital comes sooner, as for a
+                // knockout with nobody on duty (OnDeath). Once each time.
+                foreach (var call in Deaths.Where(death => death.State == StateWaiting && !death.HospitalSooner))
+                {
+                    if (medics.Any(medic => onDuty.Contains(medic.UserId) && medic.UserId != call.PatientId && medic.Root != call.PatientRoot)
+                        || JailState.IsJailed(call.PatientId))
+                        continue;
+                    call.HospitalSooner = true;
+                    sooner.Add(call.PatientId);
                 }
             }
 
             foreach (var (userId, text) in whispers)
                 PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.SendWhisper(text);
+
+            foreach (var patientId in sooner)
+                SendSooner(PlusEnvironment.Game.ClientManager.GetClientByUserId(patientId), afterBubble: false);
 
             if (changed || forceBroadcast)
                 Broadcast(medics, noticeFor, notice, missed);
@@ -579,6 +605,27 @@ public static class MedicalCalls
                 Console.WriteLine($"[MedicalCalls] whisper failed: {exception}");
             }
         });
+    }
+
+    /// <summary>
+    /// No paramedic on duty for this patient: the hospital comes for them in
+    /// <see cref="NoMedicSeconds"/>, or at once for VIP and staff, and they are
+    /// told which. Nothing - not even the whisper - when it was coming sooner
+    /// already (HospitalAdmission.CollectSoon).
+    /// </summary>
+    private static void SendSooner(GameClient? client, bool afterBubble)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+        var vip = habbo.IsVip || habbo.IsStaff;
+        if (!HospitalAdmission.CollectSoon(habbo, DateTime.UtcNow.AddSeconds(vip ? NoMedicVipSeconds : NoMedicSeconds)))
+            return;
+        var text = vip ? NoMedicVipWhisper : NoMedicWhisper;
+        if (afterBubble)
+            WhisperAfterBubble(client, text);
+        else
+            client!.SendWhisper(text);
     }
 
     /// <summary>Where the patient went down, for a whisper: the room's name, or "the patient's location" without one.</summary>
