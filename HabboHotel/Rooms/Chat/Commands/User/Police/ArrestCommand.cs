@@ -128,7 +128,9 @@ internal class ArrestCommand : ITargetChatCommand
         var minutes = SentenceMinutes(jailSeconds);
         var unit = minutes == 1 ? "minute" : "minutes";
 
-        // Served, so off the sheet.
+        // Served, so off the sheet - but kept with the sentence first, for a
+        // jury trial's judge to read out.
+        var charges = ChargeSheet(target.Id);
         DropCharges(target.Id);
 
         // Out of the officer's hands, and out of the cuffs - read whose cuffs
@@ -147,7 +149,7 @@ internal class ArrestCommand : ITargetChatCommand
         // Sentenced BEFORE the move: the jail's door lets a prisoner through
         // even when it is full or locked, and only a prisoner. They land on a
         // bed there (JailState.SendToJail).
-        JailState.Start(target, habbo.Id, jailRoomId, minutes * 60);
+        JailState.Start(target, habbo.Id, jailRoomId, minutes * 60, charges);
         target.Client?.SendWhisper($"You have been sent to jail for {minutes} {unit}.");
         JailState.SendToJail(target, jailRoomId, forward: false);
 
@@ -197,8 +199,9 @@ internal class ArrestCommand : ITargetChatCommand
             if (jailSeconds > 0 && jailRoomId != 0)
             {
                 minutes = SentenceMinutes(jailSeconds);
+                var charges = ChargeSheet(prisoner.Id);
                 DropCharges(prisoner.Id);
-                JailState.Start(prisoner, officerId, jailRoomId, minutes * 60);
+                JailState.Start(prisoner, officerId, jailRoomId, minutes * 60, charges);
             }
         }
 
@@ -270,6 +273,26 @@ internal class ArrestCommand : ITargetChatCommand
         if (row == null)
             return (0, 0);
         return (Convert.ToInt32(row["open_count"]), Convert.ToInt64(row["jail"]));
+    }
+
+    /// <summary>
+    /// The open charges as JailState keeps them with a sentence: one
+    /// "count&lt;TAB&gt;crime name" line per crime, in the crime list's order.
+    /// </summary>
+    private static string ChargeSheet(int userId)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery(
+            "SELECT c.`name`, COUNT(*) AS n FROM `rp_charges` ch JOIN `rp_crimes` c ON c.`id` = ch.`crime_id` " +
+            "WHERE ch.`user_id` = @user AND ch.`dropped_at` = 0 GROUP BY c.`id`, c.`name` ORDER BY MIN(c.`sort_order`), c.`id`");
+        dbClient.AddParameter("user", userId);
+        var table = dbClient.GetTable();
+        if (table == null)
+            return "";
+        var lines = new List<string>();
+        foreach (System.Data.DataRow row in table.Rows)
+            lines.Add($"{Convert.ToInt32(row["n"])}\t{Convert.ToString(row["name"])}");
+        return string.Join("\n", lines);
     }
 
     /// <summary>Stamp every open charge as dropped - the same write :pardon makes.</summary>

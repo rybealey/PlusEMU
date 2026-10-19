@@ -68,7 +68,7 @@ internal static class CommandListLayout
     private static readonly Group Social = new("Social", false, false, "hug", "kiss", "bite", "propose", "divorce", "pa", "dance");
 
     private static readonly Group Police = new("Police", false, false,
-        "911", "backup", "calls", "stun", "ps", "fb", "cuff", "uncuff", "escort", "unescort", "charge", "pardon", "arrest");
+        "911", "backup", "calls", "stun", "ps", "fb", "cuff", "uncuff", "escort", "unescort", "charge", "pardon", "arrest", "trial");
 
     private static readonly Group RoomAndFurni = new("Room & Furni", false, false,
         "bh", "rot", "undo", "pickall", "kickpets");

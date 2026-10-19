@@ -232,6 +232,8 @@ public static class ServerPacketHeader
     public const uint RpCityFurniComposer = 4217;
     // pixelrp: the player's saved settings, at login (279_UserPrefs.sql)
     public const uint RpPrefsComposer = 4218;
+    // pixelrp: a juror's vote card (JuryTrials)
+    public const uint RpJuryVoteComposer = 4221;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

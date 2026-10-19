@@ -427,6 +427,8 @@ public class RoomUserManager
         // pixelrp jail: a prisoner's countdown, shown in the cell, and who in
         // the room is serving time.
         Chat.Commands.User.Police.JailState.OnRoomEntered(_room, user);
+        // pixelrp jury trials: the prisoner reaching the Courthouse opens court.
+        Chat.Commands.User.Police.JuryTrials.OnRoomEntered(_room, user);
         foreach (var bot in _bots.Values.ToList())
         {
             if (bot == null || bot.BotAi == null)

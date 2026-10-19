@@ -150,6 +150,9 @@ public class PlusEnvironment : IPlusEnvironment
             // pixelrp: Paramedic Dispatch - the beat that moves an unclaimed
             // call on to the next paramedic after 10 seconds.
             HabboHotel.Corporations.MedicalCalls.Init();
+            // pixelrp: jury trials - gives back requests a restart cut short,
+            // and starts the court's one-second clock.
+            HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.Init();
             // pixelrp: phone notifications - starts the sweep that spots an
             // event about to begin. Everything else is pushed as it happens.
             HabboHotel.Notifications.NotificationUtility.Init();

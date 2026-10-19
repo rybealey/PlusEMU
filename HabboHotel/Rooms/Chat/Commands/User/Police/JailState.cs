@@ -39,23 +39,81 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// pass into that one room (<see cref="AllowSummon"/>); their time keeps
 /// running there, and the moment they try to go anywhere else - or log out -
 /// the pass is gone and they are sent back to a bed in the jail.
+///
+/// A JURY TRIAL (Twist, 2026-10-19). A prisoner serving
+/// <see cref="TrialMinSentenceSeconds"/> or more may request one, once per
+/// sentence (<see cref="RequestTrial"/>), from the Request a Trial card or with
+/// :trial - and only while JuryTrials.MinJurors players could be called to a
+/// jury. The client shows the card from <see cref="Trial"/>, sent with the
+/// countdown and sent again when the number of players crosses that line. The
+/// request is recorded on the sentence; the jury side is not built yet.
 /// </summary>
 public static class JailState
 {
     /// <summary>No sentence is longer than this, however long the sheet (Twist, 2026-09-30).</summary>
     public const int MaxSentenceSeconds = 40 * 60;
 
+    /// <summary>The shortest sentence that may ask for a jury trial (Twist, 2026-10-19).</summary>
+    public const int TrialMinSentenceSeconds = 15 * 60;
+
+    /// <summary>
+    /// ...and the least time it must still have to run (Twist, 2026-10-20):
+    /// the 2-minute summons comes off it, so less would run out before court.
+    /// </summary>
+    public const int TrialMinSecondsLeft = 5 * 60;
+
+    /// <summary>Not serving, or a sentence too short for a trial: no card.</summary>
+    public const int TrialNone = 0;
+    /// <summary>May request a trial: the card with its Request a Trial button.</summary>
+    public const int TrialOpen = 1;
+    /// <summary>Asked already this sentence: the card reads "Waiting for a jury".</summary>
+    public const int TrialRequested = 2;
+
     /// <summary>How often a serving prisoner's clock is written back.</summary>
     private const int SaveEverySeconds = 60;
+
+    /// <summary>How often a prisoner who may still ask for a trial has the number of players online checked.</summary>
+    private const int TrialCheckSeconds = 5;
 
     private sealed class Sentence
     {
         public int RowId { get; init; }
         public int SentenceSeconds { get; init; }
-        public DateTime ReleaseAtUtc { get; init; }
+        public DateTime ReleaseAtUtc { get; set; }
         public DateTime LastSavedUtc { get; set; }
+        /// <summary>A jury trial has been requested for this sentence - its one request.</summary>
+        public bool TrialAsked { get; set; }
+        /// <summary>That trial is over - a verdict, or called off. Nothing more to ask.</summary>
+        public bool TrialDone { get; set; }
+        /// <summary>Found not guilty: let go on reaching the jail (<see cref="OnRoomEntered"/>).</summary>
+        public bool Acquitted { get; set; }
+        /// <summary>The trial state the prisoner was last sent - what their card shows.</summary>
+        public int LastSentTrial { get; set; } = TrialNone;
+        public DateTime LastTrialCheckUtc { get; set; }
+        /// <summary>The charge sheet the sentence was for ("count&lt;TAB&gt;crime" lines).</summary>
+        public string Charges { get; init; } = "";
+        /// <summary>
+        /// Stopped in the Courthouse (Twist, 2026-10-19): the seconds left when it
+        /// stopped; null while the clock runs.
+        /// </summary>
+        public int? PausedLeft { get; set; }
 
-        public int SecondsLeft => (int)Math.Max(0, Math.Ceiling((ReleaseAtUtc - DateTime.UtcNow).TotalSeconds));
+        public int SecondsLeft => PausedLeft ?? (int)Math.Max(0, Math.Ceiling((ReleaseAtUtc - DateTime.UtcNow).TotalSeconds));
+    }
+
+    /// <summary>Where this prisoner stands on a trial now (Trial*).</summary>
+    private static int TrialOf(int habboId, Sentence sentence) =>
+        sentence.TrialDone ? TrialNone
+        : sentence.TrialAsked ? TrialRequested
+        : sentence.SentenceSeconds < TrialMinSentenceSeconds || sentence.SecondsLeft < TrialMinSecondsLeft ? TrialNone
+        : JuryTrials.JurorsAvailable(habboId) >= JuryTrials.MinJurors ? TrialOpen
+        : TrialNone;
+
+    /// <summary>The prisoner's countdown, with where they stand on a trial - remembered as what their card now shows.</summary>
+    private static RpJailComposer PacketFor(int habboId, Sentence sentence)
+    {
+        sentence.LastSentTrial = TrialOf(habboId, sentence);
+        return new RpJailComposer(sentence.SecondsLeft, sentence.SentenceSeconds, sentence.LastSentTrial, sentence.PausedLeft != null);
     }
 
     /// <summary>Online prisoners: player id -> their sentence.</summary>
@@ -135,7 +193,69 @@ public static class JailState
         dbClient.SetQuery("UPDATE `rp_jail` SET `seconds_left` = 0, `released_at` = UNIX_TIMESTAMP() WHERE `user_id` = @user AND `released_at` = 0");
         dbClient.AddParameter("user", habboId);
         dbClient.RunQuery();
+        JuryTrials.OnReleased(habboId);
         return true;
+    }
+
+    /// <summary>Where an online prisoner stands on a jury trial (Trial*); <see cref="TrialNone"/> for anybody not serving.</summary>
+    public static int Trial(int habboId) => Serving.TryGetValue(habboId, out var sentence) ? TrialOf(habboId, sentence) : TrialNone;
+
+    /// <summary>
+    /// A request for a jury trial - the card's Request a Trial button, or
+    /// :trial (<paramref name="typed"/>). Recorded on the prisoner's sentence,
+    /// once, for a sentence of <see cref="TrialMinSentenceSeconds"/> or more,
+    /// while JuryTrials.MinJurors players could be called. The button stands
+    /// even if that number dropped the moment it was pressed - the card was
+    /// showing (Twist, 2026-10-20); typed, it is checked there and then. A
+    /// typed refusal is whispered; the button's card simply shows the truth.
+    /// Nothing else happens yet - the jury side is still to be designed - so
+    /// the card just reads "Waiting for a jury".
+    /// </summary>
+    public static void RequestTrial(GameClient session, bool typed)
+    {
+        var habbo = session?.GetHabbo();
+        if (session == null || habbo == null)
+            return;
+        if (!Serving.TryGetValue(habbo.Id, out var sentence))
+        {
+            if (typed)
+                session.SendWhisper("You can only request a trial while you are in jail.");
+            return;
+        }
+        var enoughJurors = JuryTrials.JurorsAvailable(habbo.Id) >= JuryTrials.MinJurors;
+        string? refusal = null;
+        var asked = false;
+        // Two presses in a row are one request.
+        lock (sentence)
+        {
+            if (sentence.TrialAsked)
+                refusal = "You have already requested a trial.";
+            else if (sentence.SentenceSeconds < TrialMinSentenceSeconds)
+                refusal = "Only a sentence of 15 minutes or more can go to trial.";
+            else if (sentence.SecondsLeft < TrialMinSecondsLeft && (typed || sentence.LastSentTrial != TrialOpen))
+                refusal = "You don't have enough time left on your sentence for a trial.";
+            else if (!enoughJurors && (typed || sentence.LastSentTrial != TrialOpen))
+                refusal = "There are not enough players online for a trial.";
+            else
+            {
+                sentence.TrialAsked = true;
+                asked = true;
+            }
+        }
+        if (asked)
+        {
+            using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+            dbClient.SetQuery("UPDATE `rp_jail` SET `trial_requested_at` = UNIX_TIMESTAMP() WHERE `id` = @id AND `trial_requested_at` = 0 LIMIT 1");
+            dbClient.AddParameter("id", sentence.RowId);
+            dbClient.RunQuery();
+            JuryTrials.Enqueue(habbo.Id);
+            // Typed, it is confirmed too (Twist, 2026-10-20); the card shows it anyway.
+            if (typed)
+                session.SendWhisper("Your trial has been requested.");
+        }
+        else if (typed && refusal != null)
+            session.SendWhisper(refusal);
+        session.Send(PacketFor(habbo.Id, sentence));
     }
 
     /// <summary>Whether being in jail stops this command. One gate in CommandManager.</summary>
@@ -307,9 +427,10 @@ public static class JailState
     /// <summary>
     /// Start a sentence of <paramref name="seconds"/> for somebody online. The
     /// caller moves them to <paramref name="jailRoomId"/>; this records it,
-    /// starts the clock and shows them the countdown.
+    /// starts the clock and shows them the countdown. <paramref name="charges"/>
+    /// is the sheet it was for (ArrestCommand.ChargeSheet), kept for a trial.
     /// </summary>
-    public static void Start(Habbo prisoner, int officerId, uint jailRoomId, int seconds)
+    public static void Start(Habbo prisoner, int officerId, uint jailRoomId, int seconds, string charges = "")
     {
         if (prisoner == null || seconds <= 0)
             return;
@@ -317,23 +438,26 @@ public static class JailState
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
             dbClient.SetQuery(
-                "INSERT INTO `rp_jail` (`user_id`, `officer_id`, `room_id`, `sentence_seconds`, `seconds_left`, `jailed_at`) " +
-                "VALUES (@user, @officer, @room, @seconds, @seconds, UNIX_TIMESTAMP())");
+                "INSERT INTO `rp_jail` (`user_id`, `officer_id`, `room_id`, `sentence_seconds`, `seconds_left`, `jailed_at`, `charges`) " +
+                "VALUES (@user, @officer, @room, @seconds, @seconds, UNIX_TIMESTAMP(), @charges)");
             dbClient.AddParameter("user", prisoner.Id);
             dbClient.AddParameter("officer", officerId);
             dbClient.AddParameter("room", (int)jailRoomId);
             dbClient.AddParameter("seconds", seconds);
+            dbClient.AddParameter("charges", charges ?? "");
             rowId = (int)dbClient.InsertQuery();
         }
         var now = DateTime.UtcNow;
-        Serving[prisoner.Id] = new Sentence
+        var sentence = new Sentence
         {
             RowId = rowId,
             SentenceSeconds = seconds,
             ReleaseAtUtc = now.AddSeconds(seconds),
-            LastSavedUtc = now
+            LastSavedUtc = now,
+            Charges = charges ?? ""
         };
-        prisoner.Client?.Send(new RpJailComposer(seconds, seconds));
+        Serving[prisoner.Id] = sentence;
+        prisoner.Client?.Send(PacketFor(prisoner.Id, sentence));
         // The prisoner's uniform, from the booking on (UniformManager).
         UniformManager.Refresh(prisoner.Client);
         SendPrisoners(prisoner.CurrentRoom);
@@ -342,8 +466,11 @@ public static class JailState
     /// <summary>
     /// Time served: stamp the record, let them go, and tell them. Safe from any
     /// thread and for somebody not serving - only the first caller releases.
+    /// A prisoner found not guilty is let go here too, told "You are free to
+    /// go." instead of the whisper (<paramref name="acquitted"/>). Any trial of
+    /// theirs still to come is called off (JuryTrials.OnReleased).
     /// </summary>
-    public static void Release(int habboId, GameClient? client)
+    public static void Release(int habboId, GameClient? client, bool acquitted = false)
     {
         SummonedTo.TryRemove(habboId, out _);
         if (!Serving.TryRemove(habboId, out var sentence))
@@ -355,10 +482,86 @@ public static class JailState
             dbClient.RunQuery();
         }
         client?.Send(new RpJailComposer(0, 0));
-        client?.SendWhisper("You have served your sentence.");
+        // Not guilty: a system message, not a whisper (Twist, 2026-10-20).
+        if (acquitted)
+            client?.SendNotification("You are free to go.");
+        else
+            client?.SendWhisper("You have served your sentence.");
         // Out of the prisoner's uniform - into their rank's, if they are on duty.
         UniformManager.Refresh(client);
         SendPrisoners((client ?? PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId))?.GetHabbo()?.CurrentRoom);
+        JuryTrials.OnReleased(habboId);
+    }
+
+    // ---- a jury trial (JuryTrials) -------------------------------------------
+
+    /// <summary>
+    /// The prisoner has walked into the Courthouse for their trial: their clock
+    /// stops there (Twist, 2026-10-19) and their countdown shows it stopped.
+    /// </summary>
+    public static void Pause(int habboId)
+    {
+        if (!Serving.TryGetValue(habboId, out var sentence))
+            return;
+        lock (sentence)
+            sentence.PausedLeft ??= sentence.SecondsLeft;
+        PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.Send(PacketFor(habboId, sentence));
+    }
+
+    /// <summary>Out of court: their clock runs again from where it stopped.</summary>
+    public static void Resume(int habboId)
+    {
+        if (!Serving.TryGetValue(habboId, out var sentence))
+            return;
+        lock (sentence)
+        {
+            if (sentence.PausedLeft is not { } left)
+                return;
+            sentence.ReleaseAtUtc = DateTime.UtcNow.AddSeconds(left);
+            sentence.PausedLeft = null;
+        }
+        PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.Send(PacketFor(habboId, sentence));
+    }
+
+    /// <summary>
+    /// The judge's lines for an online prisoner's charges - "1 count of
+    /// robbery", "3 counts of assault" - in the sheet's order. None for a
+    /// sentence booked before charges were kept.
+    /// </summary>
+    public static List<string> ChargeLines(int habboId)
+    {
+        var lines = new List<string>();
+        if (!Serving.TryGetValue(habboId, out var sentence) || string.IsNullOrEmpty(sentence.Charges))
+            return lines;
+        foreach (var line in sentence.Charges.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Split('\t', 2);
+            if (parts.Length != 2 || !int.TryParse(parts[0], out var count) || count <= 0)
+                continue;
+            lines.Add($"{count} {(count == 1 ? "count" : "counts")} of {parts[1].Trim().ToLowerInvariant()}");
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// The trial is over (JuryTrials.Result*): written to the sentence, its
+    /// card taken away, and - not guilty - marked to be let go in the jail.
+    /// Online or not.
+    /// </summary>
+    public static void MarkTrialDone(int habboId, int result)
+    {
+        using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
+        {
+            dbClient.SetQuery("UPDATE `rp_jail` SET `trial_result` = @result WHERE `user_id` = @user AND `released_at` = 0");
+            dbClient.AddParameter("result", result);
+            dbClient.AddParameter("user", habboId);
+            dbClient.RunQuery();
+        }
+        if (!Serving.TryGetValue(habboId, out var sentence))
+            return;
+        sentence.TrialDone = true;
+        sentence.Acquitted = result == JuryTrials.ResultNotGuilty;
+        PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.Send(PacketFor(habboId, sentence));
     }
 
     // ---- the session --------------------------------------------------------
@@ -377,7 +580,7 @@ public static class JailState
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
         {
             dbClient.SetQuery(
-                "SELECT `id`, `sentence_seconds`, `seconds_left` FROM `rp_jail` " +
+                "SELECT `id`, `sentence_seconds`, `seconds_left`, `trial_requested_at`, `trial_result`, `charges` FROM `rp_jail` " +
                 "WHERE `user_id` = @user AND `released_at` = 0 ORDER BY `id` DESC LIMIT 1");
             dbClient.AddParameter("user", habbo.Id);
             row = dbClient.GetRow();
@@ -392,7 +595,13 @@ public static class JailState
             RowId = rowId,
             SentenceSeconds = Convert.ToInt32(row["sentence_seconds"]),
             ReleaseAtUtc = now.AddSeconds(Math.Max(0, left)),
-            LastSavedUtc = now
+            LastSavedUtc = now,
+            TrialAsked = Convert.ToInt32(row["trial_requested_at"]) > 0,
+            TrialDone = Convert.ToInt32(row["trial_result"]) > 0,
+            // Found not guilty, then logged out before reaching the jail: let
+            // go when they get there - the login forward takes them.
+            Acquitted = Convert.ToInt32(row["trial_result"]) == JuryTrials.ResultNotGuilty,
+            Charges = Convert.ToString(row["charges"]) ?? ""
         };
         Serving[habbo.Id] = sentence;
         // Served already - the last save landed on zero. Let them go now
@@ -402,7 +611,7 @@ public static class JailState
             Release(habbo.Id, session);
             return;
         }
-        session.Send(new RpJailComposer(left, sentence.SentenceSeconds));
+        session.Send(PacketFor(habbo.Id, sentence));
     }
 
     /// <summary>
@@ -454,17 +663,29 @@ public static class JailState
             user.GetClient()?.Send(PrisonersIn(room));
             return;
         }
+        // Found not guilty and back in the jail: free (Twist, 2026-10-20).
+        // Off the room's thread - the release writes to the database.
+        if (sentence.Acquitted && IsJailRoom(room.RoomId))
+        {
+            var habboId = user.UserId;
+            var client = user.GetClient();
+            _ = Task.Run(() => Release(habboId, client, acquitted: true));
+            return;
+        }
         room.SendPacket(PrisonersIn(room));
-        user.GetClient()?.Send(new RpJailComposer(sentence.SecondsLeft, sentence.SentenceSeconds));
+        user.GetClient()?.Send(PacketFor(user.UserId, sentence));
         // Back in after a relog: the login set their own look, so dress them
         // again here, where the room is known.
         UniformManager.Refresh(user.GetClient());
     }
 
     /// <summary>
-    /// One room cycle for one player: release anybody whose time is up, and
-    /// write a serving prisoner's clock back once a minute. Free for everybody
-    /// while nobody is in jail - one emptiness check.
+    /// One room cycle for one player: release anybody whose time is up, write
+    /// a serving prisoner's clock back once a minute, and - for a prisoner who
+    /// may still ask for a trial - show or hide the Request a Trial card as the
+    /// number of players who could serve on a jury crosses
+    /// JuryTrials.MinJurors. Free for everybody while nobody is in jail - one
+    /// emptiness check.
     ///
     /// Decides only. The release or save it returns writes to the database,
     /// and the room tick calls this holding the lock the movement sender needs
@@ -478,7 +699,8 @@ public static class JailState
         if (!Serving.TryGetValue(user.UserId, out var sentence))
             return null;
         var now = DateTime.UtcNow;
-        if (now >= sentence.ReleaseAtUtc)
+        // Stopped in court: nothing runs out there.
+        if (sentence.PausedLeft == null && now >= sentence.ReleaseAtUtc)
         {
             // Release is safe from any thread and lets go only once, so a
             // staff release or a logout landing first leaves this a no-op.
@@ -486,16 +708,29 @@ public static class JailState
             var client = user.GetClient();
             return () => Release(userId, client);
         }
-        if ((now - sentence.LastSavedUtc).TotalSeconds < SaveEverySeconds)
+        var save = (now - sentence.LastSavedUtc).TotalSeconds >= SaveEverySeconds;
+        // Under TrialMinSecondsLeft with the card already gone, nothing can bring it back.
+        var checkTrial = !sentence.TrialAsked && sentence.SentenceSeconds >= TrialMinSentenceSeconds &&
+            (sentence.SecondsLeft >= TrialMinSecondsLeft || sentence.LastSentTrial != TrialNone) &&
+            (now - sentence.LastTrialCheckUtc).TotalSeconds >= TrialCheckSeconds;
+        if (!save && !checkTrial)
             return null;
-        sentence.LastSavedUtc = now;
+        if (save)
+            sentence.LastSavedUtc = now;
+        if (checkTrial)
+            sentence.LastTrialCheckUtc = now;
         var habboId = user.UserId;
+        var prisoner = user.GetClient();
         return () =>
         {
             // Logged out in between: OnLogout has already written the clock
             // where it stopped, and this must not land over it.
-            if (Serving.TryGetValue(habboId, out var current) && ReferenceEquals(current, sentence))
+            if (!Serving.TryGetValue(habboId, out var current) || !ReferenceEquals(current, sentence))
+                return;
+            if (save)
                 Save(sentence);
+            if (checkTrial && TrialOf(habboId, sentence) != sentence.LastSentTrial)
+                prisoner?.Send(PacketFor(habboId, sentence));
         };
     }
 

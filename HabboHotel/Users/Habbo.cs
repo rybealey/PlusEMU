@@ -769,6 +769,10 @@ public class Habbo
             // CurrentRoom is still set at this point, which is what lets the escort
             // unpair properly; a session that has already lost its room clears anyway.
             LogoutStep(() => Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.Forget(CurrentRoom, Id));
+            // pixelrp jury trials: a prisoner logging out once court has started
+            // calls it off; a juror gives up their vote. Before the jail's own
+            // step, while their sentence is still in memory.
+            LogoutStep(() => Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.OnLogout(Id));
             // pixelrp jail: a sentence is not session state - it waits for them.
             // Only its clock stops, saved where it is.
             LogoutStep(() => Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.OnLogout(Id));
@@ -917,6 +921,18 @@ public class Habbo
     {
         if (Client == null || Client.GetHabbo() == null)
             return;
+
+        // pixelrp jury trials: the jurors and the prisoner stay in the
+        // Courthouse while court is in session (JuryTrials) - short of logging
+        // out. Silently (Twist, 2026-10-20): they will be stood where they
+        // cannot walk, so this only catches a way out that is not on foot.
+        // Before the jail's door, which would send the prisoner back to their
+        // cell.
+        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.HeldInCourt(Id, id))
+        {
+            EndTeleport();
+            return;
+        }
 
         // pixelrp jail: a prisoner goes nowhere but the jail. Every way out of
         // a room ends up here - an arrow, a teleporter, :follow, an escort, the

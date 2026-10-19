@@ -612,6 +612,10 @@ public static class ClientPacketHeader
     public const uint RpCityBinRewardDeleteEvent = 4214;
     // pixelrp: the player's settings, saved to the account (279_UserPrefs.sql)
     public const uint RpSavePrefsEvent = 4219;
+    // pixelrp: a prisoner's Request a Trial button (JailState.RequestTrial, 281_JuryTrials.sql)
+    public const uint RpRequestTrialEvent = 4220;
+    // pixelrp: a juror's Guilty / Not Guilty (JuryTrials.Vote)
+    public const uint RpJuryVoteEvent = 4222;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
