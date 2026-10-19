@@ -23,7 +23,8 @@ namespace Plus.HabboHotel.Rooms;
 /// A paramedic who accepts the call in Paramedic Dispatch sets a deadline of
 /// their own in its place (<see cref="CollectBy"/>, MedicalCalls.ReviveSeconds
 /// from the Accept): earlier or later than the usual clock, that is when the
-/// hospital comes.
+/// hospital comes. So does a knockout with no paramedic on duty to send
+/// (MedicalCalls.OnDeath): a minute, or at once for VIP and staff.
 ///
 /// Held in memory and keyed by player id, like the police registries and for
 /// the same reason: being down is a moment, not a property of an account. A
@@ -75,12 +76,17 @@ public static class HospitalAdmission
     /// A paramedic has accepted this player's call: the hospital collects them
     /// at `when` instead of on the usual clock. A later Accept (the call went
     /// back round) sets it again. The countdown starts over with it, so the
-    /// patient is warned against the new time.
+    /// patient is warned against the new time - unless `told`: they have just
+    /// been told when themselves (no paramedic on duty, MedicalCalls.OnDeath),
+    /// and are not told again.
     /// </summary>
-    public static void CollectBy(int habboId, DateTime when)
+    public static void CollectBy(int habboId, DateTime when, bool told = false)
     {
         CollectAt[habboId] = when;
-        Warned.TryRemove(habboId, out _);
+        if (told)
+            Warned[habboId] = Math.Max(1, (int)Math.Ceiling((when - DateTime.UtcNow).TotalMinutes));
+        else
+            Warned.TryRemove(habboId, out _);
     }
 
     /// <summary>

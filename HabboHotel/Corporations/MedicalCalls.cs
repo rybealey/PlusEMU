@@ -49,6 +49,13 @@ namespace Plus.HabboHotel.Corporations;
 /// whatever its usual clock says. <see cref="ReminderSeconds"/> before then,
 /// a paramedic who has not picked the patient up yet is whispered a reminder.
 ///
+/// NO PARAMEDIC ON DUTY (Twist, 2026-10-19). A knockout with nobody on duty to
+/// send - not counting the patient's own characters - is not left to the
+/// usual hospital clock: the hospital comes for a player in
+/// <see cref="NoMedicSeconds"/>, and for VIP and staff straight away, each told
+/// so instead of "Your call has been sent!". The call is still queued, so a
+/// paramedic who clocks in meanwhile is offered it.
+///
 /// Every other way the patient stops needing a paramedic closes the call too:
 /// back on their feet (a medkit, :restore), collected by the hospital itself
 /// (HospitalAdmission), or gone from the hotel.
@@ -79,6 +86,16 @@ public static class MedicalCalls
 
     /// <summary>Coins a paramedic is tipped for laying a patient on a hospital bed.</summary>
     public const int DropOffTip = 3;
+
+    /// <summary>No paramedic on duty: how long until the hospital collects the patient.</summary>
+    private const int NoMedicSeconds = 60;
+
+    /// <summary>... and for VIP and staff - at once, but after their whisper (<see cref="AfterBubbleMs"/>).</summary>
+    private const int NoMedicVipSeconds = 2;
+
+    private const string NoMedicWhisper = "You'll be automatically transported to the hospital in 1 minute.";
+
+    private const string NoMedicVipWhisper = "No paramedics are on duty, you will be automatically transported to the hospital.";
 
     private const string ReminderWhisper = "You have 30 seconds to retrieve the patient!";
 
@@ -228,7 +245,17 @@ public static class MedicalCalls
                 Deaths.RemoveRange(WindowSize, Deaths.Count - WindowSize);
         }
 
-        WhisperAfterBubble(user.GetClient(), "Your call has been sent! A paramedic will be assigned shortly.");
+        // Nobody to send: the hospital comes sooner. Not for a prisoner - the
+        // hospital waits for their release (HospitalAdmission), so they would
+        // be told of a trip that is not coming.
+        if (!AnyMedicFor(habbo.Id, root) && !JailState.IsJailed(habbo.Id))
+        {
+            var vip = habbo.IsVip || habbo.IsStaff;
+            HospitalAdmission.CollectBy(habbo.Id, DateTime.UtcNow.AddSeconds(vip ? NoMedicVipSeconds : NoMedicSeconds), told: true);
+            WhisperAfterBubble(user.GetClient(), vip ? NoMedicVipWhisper : NoMedicWhisper);
+        }
+        else
+            WhisperAfterBubble(user.GetClient(), "Your call has been sent! A paramedic will be assigned shortly.");
 
         // Offered at once rather than on the next beat, and broadcast even
         // with nobody free to take it, so it is on everyone's queue.
@@ -633,6 +660,14 @@ public static class MedicalCalls
                 return medic;
         return free[0];
     }
+
+    /// <summary>
+    /// Is any paramedic on duty who could be sent to this patient: online, and
+    /// not the patient on any of their characters.
+    /// </summary>
+    private static bool AnyMedicFor(int patientId, int patientRoot) =>
+        OnDutyParamedics().Any(medic => medic.UserId != patientId && medic.Root != patientRoot &&
+            PlusEnvironment.Game.ClientManager.GetClientByUserId(medic.UserId)?.GetHabbo() != null);
 
     /// <summary>
     /// Every on-duty paramedic and above their own queue - so a call that

@@ -9,11 +9,14 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// closed. Sent to one paramedic on clock-in and clock-out,
 /// and to every on-duty paramedic whenever a call comes in, moves on to the
 /// next paramedic, is claimed or closes. A death's age, and the seconds left
-/// to claim it, are sent as seconds rather than times, so a client's clock
+/// on its countdown - to accept it while offered, to retrieve the patient once
+/// accepted - are sent as seconds rather than times, so a client's clock
 /// cannot skew them. Each death carries its state (MedicalCalls.State*) and
 /// who it is offered to, claimed by or revived by. `notice` is what to tell
 /// this paramedic about their own claim, or the one they missed. `reopen`
 /// brings the window back up even if it was put away with its X - :calls.
+/// Last, appended: how long each countdown is in full, for the bar under the
+/// call.
 /// </summary>
 public class RpMedicalCallsComposer : IServerPacket
 {
@@ -51,9 +54,12 @@ public class RpMedicalCallsComposer : IServerPacket
             packet.WriteInteger(death.State);
             packet.WriteInteger(death.ActorId);
             packet.WriteString(death.ActorName);
-            packet.WriteInteger(death.State == MedicalCalls.StateOffered
-                ? Math.Max(0, (int)Math.Ceiling((death.OfferExpiresAt - utcNow).TotalSeconds))
-                : 0);
+            packet.WriteInteger(death.State switch
+            {
+                MedicalCalls.StateOffered => SecondsUntil(death.OfferExpiresAt, utcNow),
+                MedicalCalls.StateClaimed => SecondsUntil(death.ReviveBy, utcNow),
+                _ => 0
+            });
             // Was "this paramedic let it lapse", from when the window kept
             // history. Always false now; still written so the packet keeps the
             // layout the client reads.
@@ -61,5 +67,10 @@ public class RpMedicalCallsComposer : IServerPacket
         }
         packet.WriteString(_notice);
         packet.WriteBoolean(_reopen);
+        packet.WriteInteger(MedicalCalls.ClaimSeconds);
+        packet.WriteInteger(MedicalCalls.ReviveSeconds);
     }
+
+    private static int SecondsUntil(DateTime when, DateTime utcNow) =>
+        Math.Max(0, (int)Math.Ceiling((when - utcNow).TotalSeconds));
 }
