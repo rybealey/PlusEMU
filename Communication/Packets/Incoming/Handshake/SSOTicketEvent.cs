@@ -326,19 +326,25 @@ public class SsoTicketEvent : IPacketEvent
                     var last = dbClient.QuerySingleOrDefault<(uint RoomId, int X, int Y, int Rot)>(
                         "SELECT `last_room_id`, `last_x`, `last_y`, `last_rot` FROM `users` WHERE `id` = @userId LIMIT 1",
                         new { userId = session.GetHabbo().Id });
+                    // No saved position (e.g. a brand-new user): spawn into the
+                    // default room (id 1) at the door. No PendingRestore, so normal
+                    // door placement applies. Entry validation still runs; on denial
+                    // the client stays on hotel view.
+                    var target = (last.RoomId > 0) ? last.RoomId : 1u;
                     if (last.RoomId > 0)
-                    {
                         session.GetHabbo().PendingRestore = new PendingRoomRestore(last.RoomId, last.X, last.Y, last.Rot, ttlSeconds: 0);
-                        session.SendRoomForward(last.RoomId);
-                    }
+
+                    // The NavigatorSettingsComposer above already told the client to
+                    // enter its home room, and it does, at once. home_room is saved
+                    // with last_room_id, and a new character starts with the hotel's
+                    // home room, so that is nearly always this same room - and a
+                    // forward on top of it made the client tear that first entry
+                    // down and load the whole room a second time on every login.
+                    // Authorise the room as the forward would, without sending it.
+                    if (target == session.GetHabbo().HomeRoom)
+                        session.GetHabbo().AuthorizedRoomEntryId = target;
                     else
-                    {
-                        // No saved position (e.g. a brand-new user): spawn into the
-                        // default room (id 1) at the door. No PendingRestore, so normal
-                        // door placement applies. Entry validation still runs; on denial
-                        // the client stays on hotel view.
-                        session.SendRoomForward(1);
-                    }
+                        session.SendRoomForward(target);
                 }
             }
             catch (Exception e)
