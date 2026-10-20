@@ -11,9 +11,10 @@ namespace Plus.HabboHotel.Corporations;
 /// on-duty says you are one right now. An officer at home in plain clothes has
 /// no more authority than anyone else.
 ///
-/// Read fresh on every use rather than cached. It is one indexed lookup on a
-/// two-row-per-player table, and the alternative is a cache that goes stale
-/// the moment someone clocks off, which is exactly the moment it matters.
+/// The on-duty half is read from the live shift (ShiftManager), which IS the
+/// clock - not a copy of it, so it cannot go stale the moment someone clocks
+/// off. Employment checks that ignore the clock (IsOfficer) still ask the
+/// database.
 /// </summary>
 public static class PoliceUtility
 {
@@ -62,18 +63,13 @@ public static class PoliceUtility
     /// </summary>
     public static int ActionBubbleFor(int userId) => IsOnDutyOfficer(userId) ? PoliceActionBubble : ActionBubble;
 
-    public static bool IsOnDutyOfficer(int userId)
-    {
-        if (userId <= 0)
-            return false;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery(
-            "SELECT 1 FROM `rp_corporation_employees` e " +
-            "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-            "WHERE e.`user_id` = @id AND e.`on_duty` = 1 AND c.`is_police` = 1 LIMIT 1");
-        dbClient.AddParameter("id", userId);
-        return dbClient.GetRow() != null;
-    }
+    /// <summary>
+    /// Clocked in for the force. Read from the live shift, not the database:
+    /// this runs on every action bubble and on every bystander a flashbang
+    /// reaches, and the shift is what `on_duty` only mirrors - it is set
+    /// before the row on clock-in and cleared before it on clock-off.
+    /// </summary>
+    public static bool IsOnDutyOfficer(int userId) => userId > 0 && ShiftManager.IsPoliceOnDuty(userId);
 
     /// <summary>
     /// pixelrp: may this player USE police powers right now - an on-duty

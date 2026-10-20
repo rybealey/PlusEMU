@@ -49,6 +49,39 @@ public static class ShiftManager
         // pixelrp: City Government (rp_corporations.service_type 'staff'):
         // passive, the staff enable and bubble 23 for the whole shift.
         public bool IsStaffCorp;
+        // pixelrp: what the job is, for the duty checks every action makes
+        // (IsPoliceOnDuty, IsMedicalOnDuty) - they used to ask the database
+        // each time. Read at clock-in and again on every employment change
+        // (RefreshSession), so a promotion to Paramedic counts at once. The
+        // flags behind them are only ever set by migrations, which come with
+        // a restart, and a restart ends every shift.
+        public bool IsPolice;
+        public bool IsMedical;
+        public bool EmergencyEligible;
+    }
+
+    private sealed class JobFlags
+    {
+        public bool IsPolice { get; set; }
+        public string ServiceType { get; set; }
+        public int EmergencyEligible { get; set; }
+    }
+
+    // is_police is TINYINT(1), so MySqlConnector hands it back as a bool.
+    private static JobFlags ReadJobFlags(System.Data.IDbConnection connection, int userId) =>
+        connection.QuerySingleOrDefault<JobFlags>(
+            "SELECT c.`is_police` AS IsPolice, c.`service_type` AS ServiceType, r.`emergency_eligible` AS EmergencyEligible " +
+            "FROM `rp_corporation_employees` e " +
+            "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
+            "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
+            "WHERE e.`user_id` = @userId LIMIT 1", new { userId });
+
+    // No row (the job is gone) reads as no job, as the old per-action query did.
+    private static void ApplyJobFlags(ShiftSession session, JobFlags flags)
+    {
+        session.IsPolice = flags?.IsPolice ?? false;
+        session.IsMedical = (flags?.ServiceType == "medical");
+        session.EmergencyEligible = ((flags?.EmergencyEligible ?? 0) == 1);
     }
 
     /// <summary>Chat bubble City Government wears while on duty - the staff bubble.</summary>
@@ -80,6 +113,17 @@ public static class ShiftManager
 
     /// <summary>On duty AND the corporation is City Government.</summary>
     public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
+
+    /// <summary>On duty for a corporation flagged is_police.</summary>
+    public static bool IsPoliceOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsPolice;
+
+    /// <summary>
+    /// On duty for the hospital (service_type 'medical'); with
+    /// <paramref name="emergencyRank"/>, also at a rank cleared for emergency
+    /// work (rp_corporation_ranks.emergency_eligible) - Paramedic and above.
+    /// </summary>
+    public static bool IsMedicalOnDuty(int userId, bool emergencyRank) =>
+        Sessions.TryGetValue(userId, out var session) && session.IsMedical && (!emergencyRank || session.EmergencyEligible);
 
     /// <summary>The bubble a chat line goes out in: 23 for City Government on duty, else the one chosen.</summary>
     /// <summary>
@@ -166,6 +210,7 @@ public static class ShiftManager
             return;
         }
         (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId, string ServiceType)? job;
+        JobFlags flags;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId, string ServiceType)?>(
@@ -180,6 +225,7 @@ public static class ShiftManager
                 client.SendWhisper("You don't have a job. Get hired by a corporation first.");
                 return;
             }
+            flags = ReadJobFlags(connection, userId);
             connection.Execute("UPDATE `rp_corporation_employees` SET `on_duty` = 1 WHERE `user_id` = @userId LIMIT 1", new { userId });
         }
         var session = new ShiftSession
@@ -193,6 +239,7 @@ public static class ShiftManager
             RankId = job.Value.RankId,
             IsStaffCorp = (job.Value.ServiceType == "staff")
         };
+        ApplyJobFlags(session, flags);
         session.WorkingMotto = BuildWorkingMotto(session.CorpName, job.Value.Acronym, job.Value.RankName, job.Value.Tier, job.Value.Tiers);
         Sessions[userId] = session;
         if (session.IsStaffCorp)
@@ -234,13 +281,20 @@ public static class ShiftManager
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
         if (client == null) return;
         (string CorpName, string Acronym, string RankName, int Tier, int Tiers, int Pay)? job;
+        JobFlags flags;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
+        {
             job = connection.QuerySingleOrDefault<(string CorpName, string Acronym, string RankName, int Tier, int Tiers, int Pay)?>(
                 "SELECT c.`name` AS CorpName, c.`acronym` AS Acronym, r.`name` AS RankName, e.`tier` AS Tier, r.`tiers` AS Tiers, r.`pay` AS Pay " +
                 "FROM `rp_corporation_employees` e " +
                 "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
                 "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
                 "WHERE e.`user_id` = @userId LIMIT 1", new { userId });
+            flags = ReadJobFlags(connection, userId);
+        }
+        // The duty checks follow the change even when the row is gone.
+        lock (session)
+            ApplyJobFlags(session, flags);
         if (job == null) return;
         lock (session)
         {

@@ -18,9 +18,9 @@ namespace Plus.HabboHotel.Corporations;
 /// it keeps "senior enough to respond" in ONE place rather than growing a
 /// second, quietly divergent definition of the same seniority.
 ///
-/// Read fresh on every use rather than cached, for the reason PoliceUtility
-/// gives: a cache goes stale the moment someone clocks off, which is exactly
-/// the moment it matters.
+/// The on-duty checks read the live shift (ShiftManager), for the reason
+/// PoliceUtility gives: it is the clock itself, so it cannot go stale the
+/// moment someone clocks off. The off-duty checks still ask the database.
 /// </summary>
 public static class MedicalUtility
 {
@@ -28,20 +28,7 @@ public static class MedicalUtility
     /// On the hospital's books at a rank cleared for emergency work, AND
     /// clocked in right now. All three halves are required.
     /// </summary>
-    public static bool IsOnDutyParamedic(int userId)
-    {
-        if (userId <= 0)
-            return false;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery(
-            "SELECT 1 FROM `rp_corporation_employees` e " +
-            "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-            "JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
-            "WHERE e.`user_id` = @id AND e.`on_duty` = 1 " +
-            "AND c.`service_type` = 'medical' AND r.`emergency_eligible` = 1 LIMIT 1");
-        dbClient.AddParameter("id", userId);
-        return dbClient.GetRow() != null;
-    }
+    public static bool IsOnDutyParamedic(int userId) => userId > 0 && ShiftManager.IsMedicalOnDuty(userId, emergencyRank: true);
 
     /// <summary>
     /// pixelrp: may this player USE a paramedic's powers right now - an
@@ -86,18 +73,7 @@ public static class MedicalUtility
     /// ambulance. What it does NOT drop is the clock - a sale is the hospital
     /// trading, and the hospital is only trading while somebody is at work.
     /// </summary>
-    public static bool IsOnDutyHospitalStaff(int userId)
-    {
-        if (userId <= 0)
-            return false;
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery(
-            "SELECT 1 FROM `rp_corporation_employees` e " +
-            "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-            "WHERE e.`user_id` = @id AND c.`service_type` = 'medical' AND e.`on_duty` = 1 LIMIT 1");
-        dbClient.AddParameter("id", userId);
-        return dbClient.GetRow() != null;
-    }
+    public static bool IsOnDutyHospitalStaff(int userId) => userId > 0 && ShiftManager.IsMedicalOnDuty(userId, emergencyRank: false);
 
     /// <summary>
     /// Employed at the hospital at ALL, at any rank. Only used to tell a junior
