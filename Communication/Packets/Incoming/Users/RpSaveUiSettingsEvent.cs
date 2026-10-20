@@ -46,7 +46,7 @@ public partial class RpSaveUiSettingsEvent : IPacketEvent
             return Task.CompletedTask;
         habbo.EnsureRpUiSettingsLoaded();
         habbo.RpUiChromeColor = color;
-        habbo.RpUiChromeOpacity = Math.Clamp(opacity, 40, 100);
+        habbo.RpUiChromeOpacity = Math.Clamp(opacity, 0, 100);
         habbo.RpUiHeaderColor = header;
         habbo.RpUiUsernameColor = usernameColor;
         habbo.RpUiUsernameIcon = icon;

@@ -439,7 +439,7 @@ public class Habbo
     public string RpUiChromeColor { get; set; } = "";
     // the HUD's surface opacity for a player with no saved settings - the
     // client's DEFAULT_CHROME_OPACITY (UiChrome.ts)
-    public int RpUiChromeOpacity { get; set; } = 95;
+    public int RpUiChromeOpacity { get; set; } = 90;
     public string RpUiHeaderColor { get; set; } = "";
     public string RpUiUsernameColor { get; set; } = "";
     public string RpUiUsernameIcon { get; set; } = "";
