@@ -1,0 +1,13 @@
+-- pixelrp: the HUD opacity default is 90% (Twist, 2026-10-20), for everyone.
+--
+-- Settings > UI > Opacity is now any percent 0-100, and the default for a
+-- player with no saved settings drops from 95 to 90 (Habbo.RpUiChromeOpacity,
+-- the client's DEFAULT_CHROME_OPACITY). Every UI save has always carried the
+-- opacity, so anyone who changed a colour, header, username colour or icon has
+-- the old default, 95, stored - this moves them to 90 too. Players on any
+-- other value (55, 65, 75 or 85 from the old five-stop slider) chose it, and
+-- keep it. Takes effect at each player's next login.
+--
+-- Run once only (the deploy records it by filename): with the 0-100 slider
+-- live, a later re-run would also move anyone who has since picked 95.
+UPDATE `user_ui_settings` SET `chrome_opacity` = 90 WHERE `chrome_opacity` = 95;

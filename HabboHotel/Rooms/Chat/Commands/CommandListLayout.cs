@@ -71,7 +71,7 @@ internal static class CommandListLayout
         "911", "backup", "calls", "stun", "ps", "fb", "cuff", "uncuff", "escort", "unescort", "charge", "pardon", "arrest", "trial");
 
     private static readonly Group RoomAndFurni = new("Room & Furni", false, false,
-        "bh", "rot", "undo", "pickall", "kickpets");
+        "bh", "sh", "rot", "undo", "pickall", "kickpets");
 
     // The room commands only staff can use: their own group under Staff, not
     // a tag inside the player one.

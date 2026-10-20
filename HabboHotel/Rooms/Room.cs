@@ -353,6 +353,21 @@ public class Room : RoomData
     public bool CanManageSettings(GameClient session) =>
         session?.GetHabbo() != null && session.GetHabbo().Rank >= SettingsStaffRank;
 
+    /// <summary>The lowest rank that may dress any mannequin (CanDressMannequin).</summary>
+    public const int MannequinStaffRank = 2;
+
+    /// <summary>
+    /// pixelrp: may this player save a mannequin's outfit or name here?
+    /// The room owner, as stock Plus had it, or any staff - every staff rank,
+    /// Trial Moderator (2) and up, as in the commands clean-up - on duty or
+    /// off (Twist, 2026-10-20). Owner-or-room_any_owner alone meant staff
+    /// could not dress a mannequin in a room they did not own unless they
+    /// were clocked in. FurnitureMannequinView offers the Save button on the
+    /// same rank.
+    /// </summary>
+    public bool CanDressMannequin(GameClient session) =>
+        CheckRights(session, true) || (session?.GetHabbo() != null && session.GetHabbo().Rank >= MannequinStaffRank);
+
     public bool CheckRights(GameClient session, bool requireOwnership, bool checkForGroups = false)
     {
         try

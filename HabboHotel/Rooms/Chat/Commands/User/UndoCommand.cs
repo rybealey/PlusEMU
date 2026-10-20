@@ -87,8 +87,11 @@ internal class UndoCommand : IChatCommand
             // The saved height is passed explicitly. Going through the normal
             // placement path would pick up the builder's CURRENT :bh instead, and
             // undo would put the piece back on the right tile at the wrong height.
+            // heightInPlace: undoing a change that never left the tile (a Tools
+            // panel height, a :bh drop in place) is still a change of height,
+            // which SetFloorItem otherwise keeps for a piece that stays put.
             if (!room.GetRoomItemHandler().SetFloorItem(session, item, state.X, state.Y, state.Rotation, false, false, true,
-                    height: state.Z))
+                    height: state.Z, heightInPlace: true))
             {
                 // A genuine obstruction, not a stale snapshot: something else is on
                 // that tile now, or someone is standing there. Keep the snapshot so
