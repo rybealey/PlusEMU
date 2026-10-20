@@ -8,7 +8,8 @@ internal class SetMannequinFigureEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var room = session.GetHabbo().CurrentRoom;
-        if (room == null || !room.CheckRights(session, true))
+        // pixelrp: the owner or any staff (Room.CanDressMannequin).
+        if (room == null || !room.CanDressMannequin(session))
             return Task.CompletedTask;
         var itemId = packet.ReadUInt();
         var item = session.GetHabbo().CurrentRoom.GetRoomItemHandler().GetItem(itemId);
