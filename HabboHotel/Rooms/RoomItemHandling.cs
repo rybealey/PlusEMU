@@ -452,7 +452,11 @@ public class RoomItemHandling
         }
     }
 
-    public bool SetFloorItem(GameClient session, Item item, int newX, int newY, int newRot, bool newItem, bool onRoller, bool sendMessage, bool updateRoomUserStatuses = false, double height = -1)
+    /// <param name="heightInPlace">
+    /// pixelrp: `height` applies even when the piece stays on its tile. Off,
+    /// a piece that does not move keeps the height it has (see inPlace below).
+    /// </param>
+    public bool SetFloorItem(GameClient session, Item item, int newX, int newY, int newRot, bool newItem, bool onRoller, bool sendMessage, bool updateRoomUserStatuses = false, double height = -1, bool heightInPlace = false)
     {
         // pixelrp: only staff put a searchable bin down in a PixelRP room -
         // from the inventory or out of a gift alike, since both land here.
@@ -623,7 +627,13 @@ public class RoomItemHandling
             // that did not move is not being re-placed, so nothing about its
             // level is up for recalculation; this is what keeps a raised piece
             // raised, and what stops a refused turn from bouncing it.
-            newZ = item.GetZ;
+            //
+            // Unless the caller says the height IS the point: a piece dropped
+            // back on its own tile while :bh is on, or :undo putting a height
+            // back. Both arrive looking exactly like a turn in place, and both
+            // kept the height they were there to change - a builder had to
+            // drag the piece off its tile and back to re-level it.
+            newZ = (heightInPlace && height >= 0) ? height : item.GetZ;
         }
         else if (height == -1)
         {

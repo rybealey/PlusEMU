@@ -64,13 +64,22 @@ internal class MoveObjectEvent : RoomPacketEvent
         // A TURN IN PLACE ignores all of it. SetFloorItem keeps a rotating piece
         // at exactly the height it already has - a turn is not a placement, so
         // neither the stack nor a build height gets to re-level it.
+        //
+        // Except a piece dragged and dropped back on its own tile while :bh is
+        // on: that is a placement, so it takes the build height like any other.
+        // The client sends it exactly as it sends a turn of a piece that only
+        // has one direction - same tile, same rotation - so the two cannot be
+        // told apart here, and with :bh on that turn re-levels too. A turn
+        // that does change the rotation still keeps its height.
         var buildHeight = room.GetRoomUserManager().BuildHeightFor(session.GetHabbo().Id);
+        var droppedInPlace = x == item.GetX && y == item.GetY && rotation == item.Rotation;
         // updateRoomUserStatuses: same reason as a fresh placement - a walkable
         // piece dragged under somebody leaves their height stale until they
         // step, so they appear sunk into it.
         if (!room.GetRoomItemHandler().SetFloorItem(session, item, x, y, rotation, false, false, true,
                 updateRoomUserStatuses: true,
-                height: (buildHeight >= 0) ? buildHeight : item.CustomHeight))
+                height: (buildHeight >= 0) ? buildHeight : item.CustomHeight,
+                heightInPlace: buildHeight >= 0 && droppedInPlace))
         {
             room.SendPacket(new ObjectUpdateComposer(item));
             return Task.CompletedTask;
