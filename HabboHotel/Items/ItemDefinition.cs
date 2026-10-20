@@ -83,6 +83,16 @@ public class ItemDefinition
     public List<double> AdjustableHeights { get; set; }
 
     /// <summary>
+    /// pixelrp: the states a double click goes through, in order, for art whose
+    /// looks are not all click states. Empty for nearly every furni, which
+    /// simply cycles 0, 1, ... Modes - 1. The Washing Machine draws three - door
+    /// open with its cats moving, the same cats still, door shut - and is
+    /// clicked between the first and the last: "0,2" in
+    /// `furniture`.`click_states`.
+    /// </summary>
+    public List<int> ClickStates { get; set; } = new();
+
+    /// <summary>
     /// pixelrp: whether the tile cursor may show its raised height ring over
     /// this furni. OFF for everything unless somebody opted this furni in -
     /// see 112_FurniHeightMarkerOffByDefault.sql.

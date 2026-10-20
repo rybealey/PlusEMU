@@ -65,6 +65,7 @@ public class ItemDataManager : IItemDataManager
                             AdjustableHeights = (!string.IsNullOrEmpty(Convert.ToString(row["height_adjustable"])) && Convert.ToString(row["height_adjustable"]) != "0")
                                 ? Convert.ToString(row["height_adjustable"]).Split(",").Select(double.Parse).ToList()
                                 : new(0),
+                            ClickStates = ToStateList(row, "click_states"),
                             HeightMarker = ToBool(row["height_marker"]),
                             LayAcross = ToBool(row["lay_across"]),
                             SitRotation = Convert.ToInt32(row["sit_rotation"]),
@@ -117,6 +118,24 @@ public class ItemDataManager : IItemDataManager
     // the same helper for the same reason (hide-walls).
     private static bool ToBool(object value) =>
         value is bool b ? b : Convert.ToString(value) == "1";
+
+    /// <summary>
+    /// A comma list of states, forgiving on purpose: a row that throws here is
+    /// caught by the loader's Console.ReadKey(), which stalls the whole boot,
+    /// so a typo or a missing column is an empty list instead.
+    /// </summary>
+    private static List<int> ToStateList(DataRow row, string column)
+    {
+        var states = new List<int>();
+        if (!row.Table.Columns.Contains(column))
+            return states;
+        foreach (var part in (Convert.ToString(row[column]) ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (int.TryParse(part, out var state) && state >= 0 && !states.Contains(state))
+                states.Add(state);
+        }
+        return states;
+    }
 
     public ItemDefinition GetItemByName(string name)
     {

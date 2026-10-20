@@ -195,6 +195,7 @@ public static class ItemFunctionOverrides
         Modes = source.Modes,
         VendingIds = source.VendingIds == null ? new List<int>() : new List<int>(source.VendingIds),
         AdjustableHeights = source.AdjustableHeights == null ? new List<double>() : new List<double>(source.AdjustableHeights),
+        ClickStates = source.ClickStates == null ? new List<int>() : new List<int>(source.ClickStates),
         HeightMarker = source.HeightMarker,
         LayAcross = source.LayAcross,
         SitRotation = source.SitRotation,
