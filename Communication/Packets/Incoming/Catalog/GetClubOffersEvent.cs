@@ -5,7 +5,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 internal class GetClubOffersEvent : IPacketEvent
 {
     private readonly ICatalogManager _catalogManager;

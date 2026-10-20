@@ -61,7 +61,7 @@ internal class ChangeUserNameEvent : IPacketEvent
         if (!session.GetHabbo().Permissions.HasRight("mod_tool") && newName.ToLower().Contains("mod") || newName.ToLower().Contains("adm") || newName.ToLower().Contains("admin")
             || newName.ToLower().Contains("m0d") || newName.ToLower().Contains("mob") || newName.ToLower().Contains("m0b"))
             return;
-        if (!newName.ToLower().Contains("mod") && (session.GetHabbo().Rank == 2 || session.GetHabbo().Rank == 3))
+        if (!newName.ToLower().Contains("mod") && (session.GetHabbo().Rank == 3 || session.GetHabbo().Rank == 4))
             return;
         if (newName.Length > 15)
             return;

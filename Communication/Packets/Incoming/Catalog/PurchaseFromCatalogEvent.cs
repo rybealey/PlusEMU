@@ -23,7 +23,7 @@ using Dapper;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 public class PurchaseFromCatalogEvent : IPacketEvent
 {
     private readonly ICatalogManager _catalogManager;
@@ -66,7 +66,9 @@ public class PurchaseFromCatalogEvent : IPacketEvent
         var amount = packet.ReadInt();
         if (!_catalogManager.TryGetPage(pageId, out var page))
             return;
-        if (!page.Enabled || !page.Visible || page.MinimumRank > session.GetHabbo().Rank || page.MinimumVip > session.GetHabbo().VipRank && session.GetHabbo().Rank == 1)
+        // pixelrp: the whole shelf rule, not just the page - below the staff
+        // line that includes every section above it (CatalogLookup.IsBuyable).
+        if (!CatalogLookup.IsBuyable(CatalogLookup.Index(_catalogManager.Pages), page, session.GetHabbo().Rank, session.GetHabbo().VipRank))
             return;
         if (!page.Items.TryGetValue(itemId, out var item))
         {

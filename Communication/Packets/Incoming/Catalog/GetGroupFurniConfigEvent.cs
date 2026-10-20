@@ -5,7 +5,7 @@ using Plus.HabboHotel.Groups;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 internal class GetGroupFurniConfigEvent : IPacketEvent
 {
     private readonly IGroupManager _groupManager;

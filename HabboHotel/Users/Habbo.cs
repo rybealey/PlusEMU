@@ -71,8 +71,19 @@ public class Habbo
     public int Rank { get; set; }
 
     // Staff cutoff mirrors the Nitro client's SecurityLevel.MODERATOR (isModerator),
-    // which the UI already uses to gate the rooms/catalog/inventory/camera icons.
-    public bool IsStaff => Rank >= 5;
+    // which the UI already uses to gate the rooms icon and the camera.
+    public bool IsStaff => Rank >= StaffRank;
+
+    /// <summary>Administrator: the staff line IsStaff draws.</summary>
+    public const int StaffRank = 5;
+
+    /// <summary>Builder, the lowest staff rank (migration 285).</summary>
+    public const int BuilderRank = 2;
+
+    // pixelrp: Builder or above. The Furni Shop and the furni inventory open
+    // from here rather than IsStaff, because Builders build (Twist, 2026-10-20).
+    // Client: RP_RANK_BUILDER in ToolbarView.
+    public bool IsBuilder => Rank >= BuilderRank;
 
     public bool IsAmbassador { get; set; }
 

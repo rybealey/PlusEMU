@@ -19,10 +19,11 @@ internal class RpCatalogLocateEvent : IPacketEvent
         var spriteId = packet.ReadInt();
         var wall = packet.ReadBool();
         var habbo = session.GetHabbo();
-        // The catalog and purchase handlers are staff-only. A negative result
-        // also lets the infostand hide Buy for furniture with no accessible shelf.
+        // The catalog and purchase handlers open from Builder (BuilderOnly). A
+        // negative result also lets the infostand hide Buy for furniture with no
+        // accessible shelf.
         var found = habbo != null
-            ? CatalogLookup.FindFurniture(_catalog.Pages, spriteId, wall, habbo.IsStaff, habbo.Rank, habbo.VipRank)
+            ? CatalogLookup.FindFurniture(_catalog.Pages, spriteId, wall, habbo.IsBuilder, habbo.Rank, habbo.VipRank)
             : new CatalogLocation(null, CatalogLocateStatus.NotPermitted);
 
         // The reason rides back so a missing Buy button can be read: silence

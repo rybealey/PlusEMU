@@ -93,7 +93,7 @@ public class GameClientManager : IGameClientManager
         {
             if (client == null || client.GetHabbo() == null)
                 continue;
-            if (client.GetHabbo().Rank < 2 || client.GetHabbo().Id == exclude)
+            if (client.GetHabbo().Rank < 3 || client.GetHabbo().Id == exclude)
                 continue;
             client.Send(message);
         }

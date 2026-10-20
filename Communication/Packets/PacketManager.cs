@@ -14,6 +14,7 @@ public sealed class PacketManager : IPacketManager, IDisposable
     private readonly Dictionary<uint, IPacketEvent> _incomingPackets = new();
     private readonly HashSet<Type> _handshakePackets = new();
     private readonly HashSet<Type> _staffOnlyPackets = new();
+    private readonly HashSet<Type> _builderOnlyPackets = new();
     private readonly HashSet<Type> _vipOnlyPackets = new();
     private readonly Dictionary<uint, string> _packetNames = new();
 
@@ -43,6 +44,8 @@ public sealed class PacketManager : IPacketManager, IDisposable
                 _handshakePackets.Add(packet.GetType());
             if (packet.GetType().GetCustomAttribute<StaffOnlyAttribute>() != null)
                 _staffOnlyPackets.Add(packet.GetType());
+            if (packet.GetType().GetCustomAttribute<BuilderOnlyAttribute>() != null)
+                _builderOnlyPackets.Add(packet.GetType());
             if (packet.GetType().GetCustomAttribute<VipOnlyAttribute>() != null)
                 _vipOnlyPackets.Add(packet.GetType());
         }
@@ -77,6 +80,16 @@ public sealed class PacketManager : IPacketManager, IDisposable
         if (_staffOnlyPackets.Contains(pak.GetType()) && !session.GetHabbo().IsStaff)
         {
             _logger.LogWarning("Blocked staff-only packet {packet} from {username} (id {userId}, rank {rank}) — likely packet injection.",
+                pak.GetType().Name, session.GetHabbo().Username, session.GetHabbo().Id, session.GetHabbo().Rank);
+            return;
+        }
+
+        // pixelrp: the Furni Shop opens from Builder (Habbo.IsBuilder), below the
+        // staff line, and is hidden client-side for everyone under it - so, as above,
+        // a lower session sending one forged the packet.
+        if (_builderOnlyPackets.Contains(pak.GetType()) && !session.GetHabbo().IsBuilder)
+        {
+            _logger.LogWarning("Blocked builder-only packet {packet} from {username} (id {userId}, rank {rank}) — likely packet injection.",
                 pak.GetType().Name, session.GetHabbo().Username, session.GetHabbo().Id, session.GetHabbo().Rank);
             return;
         }

@@ -6,7 +6,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 public class GetCatalogPageEvent : IPacketEvent
 {
     private readonly ICatalogManager _catalogManager;

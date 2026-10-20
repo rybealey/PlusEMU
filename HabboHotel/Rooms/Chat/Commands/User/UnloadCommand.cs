@@ -4,7 +4,7 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
 /// <summary>
 /// :unload - unload the room you are in; it takes no room id. Staff only
-/// (command_unload, Trial Moderator and up), and since it is, it no longer
+/// (command_unload, Builder and up), and since it is, it no longer
 /// also asks for room rights or room_unload_any (Developer+) - with them, a
 /// moderator in someone else's room was silently refused (Twist, 2026-10-18).
 /// </summary>

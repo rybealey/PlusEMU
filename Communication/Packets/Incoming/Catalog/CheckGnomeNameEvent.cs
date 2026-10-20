@@ -12,7 +12,7 @@ using Plus.HabboHotel.Rooms.AI.Speech;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 internal class CheckGnomeNameEvent : RoomPacketEvent
 {
     private readonly IDatabase _database;

@@ -115,7 +115,7 @@ public class WhisperEvent : IPacketEvent
             if (!user2.GetClient().GetHabbo().IgnoresComponent.IsIgnored(session.GetHabbo().Id))
                 user2.GetClient().Send(new WhisperComposer(user.VirtualId, message, 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));
         }
-        var toNotify = room.GetRoomUserManager().GetRoomUserByRank(2);
+        var toNotify = room.GetRoomUserManager().GetRoomUserByRank(3);
         if (toNotify.Count > 0)
         {
             foreach (var notifiable in toNotify)

@@ -6,7 +6,7 @@ using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 public class GetSellablePetPalettesEvent : IPacketEvent
 {
     private readonly IItemDataManager _itemDataManager;

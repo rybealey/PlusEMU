@@ -1,3 +1,5 @@
+using Plus.HabboHotel.Users;
+
 namespace Plus.HabboHotel.Catalog.Utilities;
 
 /// <summary>Why a furniture type has no Buy link, so "not for sale" can be
@@ -82,6 +84,43 @@ public static class CatalogLookup
         return true;
     }
 
+    /// <summary>pixelrp: can this player BUY from this shelf? Purchase,
+    /// gifting, the search box and the Buy link all ask this (2026-10-20, when
+    /// the shop opened below the staff line to Builders).
+    ///
+    /// Staff keep exactly the old answers: IsOpenable here, which is what
+    /// purchase, gifting and search asked before, and FindFurniture still adds
+    /// IsShoppable on top for a link. Their shop has shelves under sections
+    /// that are switched off and still sell (Staff > Wired).
+    ///
+    /// Below the staff line a shelf must be IsShoppable - every ancestor held
+    /// to rank and VIP - so stock left at rank 1 under the Staff tab (Sound,
+    /// Games, Bots...) stays staff stock, AND every ancestor must be switched
+    /// on, so a section the shop has turned off closes everything under it
+    /// (Marketplace held a free 50-coin gold bar, and credit furni cash in).
+    /// Without this a Builder could find those in the search box, or send for
+    /// them with a forged packet, though the shop never shows them.</summary>
+    public static bool IsBuyable(IReadOnlyDictionary<int, CatalogPage> pages, CatalogPage page, int rank, int vipRank)
+    {
+        if (rank >= Habbo.StaffRank)
+            return IsOpenable(page, rank, vipRank);
+
+        if (!IsShoppable(pages, page, rank, vipRank))
+            return false;
+
+        // IsShoppable has refused a cycle, so this walk ends: at the root, or
+        // at a parent row that does not exist.
+        var current = page;
+        while (pages.TryGetValue(current.ParentId, out var parent))
+        {
+            if (!parent.Enabled)
+                return false;
+            current = parent;
+        }
+
+        return true;
+    }
+
     public static CatalogLocation FindFurniture(ICollection<CatalogPage> catalog, int spriteId, bool wall,
         bool isStaff, int rank, int vipRank)
     {
@@ -105,7 +144,7 @@ public static class CatalogLookup
                 // difference between "not for sale" and "shop misconfigured".
                 sold = true;
 
-                if (IsShoppable(pages, page, rank, vipRank))
+                if (IsShoppable(pages, page, rank, vipRank) && IsBuyable(pages, page, rank, vipRank))
                     matches.Add(item);
             }
         }

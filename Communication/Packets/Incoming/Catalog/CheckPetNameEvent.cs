@@ -6,7 +6,7 @@ using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 public class CheckPetNameEvent : IPacketEvent
 {
     private readonly IWordFilterManager _wordFilterManager;

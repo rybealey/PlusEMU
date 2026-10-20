@@ -49,12 +49,12 @@ internal class SubmitBullyReportEvent : IPacketEvent
         }
 
         //Already reported, nope.
-        if (client.GetHabbo().AdvertisingReported && session.GetHabbo().Rank < 2)
+        if (client.GetHabbo().AdvertisingReported && session.GetHabbo().Rank < 3)
         {
             session.Send(new SubmitBullyReportComposer(3));
             return Task.CompletedTask;
         }
-        if (session.GetHabbo().Rank <= 1)
+        if (session.GetHabbo().Rank <= 2)
             session.GetHabbo().LastAdvertiseReport = UnixTimestamp.GetNow() + 300;
         else
             session.GetHabbo().LastAdvertiseReport = UnixTimestamp.GetNow();

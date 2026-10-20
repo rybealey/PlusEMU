@@ -8,7 +8,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 public class RedeemVoucherEvent : IPacketEvent
 {
     private readonly IVoucherManager _voucherManager;

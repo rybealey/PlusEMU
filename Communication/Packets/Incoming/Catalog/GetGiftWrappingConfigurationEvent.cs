@@ -4,7 +4,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Catalog;
 
-[StaffOnly]
+[BuilderOnly]
 public class GetGiftWrappingConfigurationEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)

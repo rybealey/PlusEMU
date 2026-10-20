@@ -22,7 +22,7 @@ internal static class CommandListLayout
     /// <summary>The client tells the :commands list from every other MOTD by this first line.</summary>
     public const string Marker = "This is the list of commands you have available:";
 
-    /// <summary>Trial Moderator: "all staff", as in the commands clean-up (275-277).</summary>
+    /// <summary>Builder, the lowest staff rank (285): Builders find their building commands under Staff too.</summary>
     public const int StaffRank = 2;
 
     private sealed class Group

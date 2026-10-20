@@ -15,12 +15,14 @@ namespace Plus.Communication.Packets.Incoming.Catalog;
 /// knowable: whether a piece is for sale is a fact about catalog_items, and the
 /// client is never sent more than the page it is looking at.
 ///
-/// VISIBILITY IS THE LEAF TEST - CatalogLookup.IsOpenable: enabled, visible,
-/// rank, VIP. Exactly the pages GetCatalogPageEvent will serve, so everything
-/// the box returns can be bought from it. Purchase re-checks it all anyway.
+/// VISIBILITY IS THE BUYING TEST - CatalogLookup.IsBuyable, which purchase
+/// asks too, so everything the box returns can be bought. For staff that is the
+/// leaf test, IsOpenable: enabled, visible, rank, VIP - exactly the pages
+/// GetCatalogPageEvent will serve. Below the staff line (Builders) it also
+/// walks the ancestors, so stock the shop hides from them stays out of the box.
 ///
-/// Deliberately NOT IsShoppable, the stricter test the infostand's Buy link
-/// uses. That one also walks the ancestors, because a LINK needs a page to
+/// For staff, deliberately NOT IsShoppable, the stricter test the infostand's
+/// Buy link uses. That one also walks the ancestors, because a LINK needs a page to
 /// land on, while a search hit only needs to be purchasable. They were briefly
 /// made identical and the box went empty: this catalog holds stock on pages
 /// whose chain to the root does not survive that walk. Searching found
@@ -90,9 +92,10 @@ internal class RpCatalogSearchEvent : IPacketEvent
             }
         }
 
+        var index = CatalogLookup.Index(_catalogManager.Pages);
         foreach (var page in _catalogManager.Pages)
         {
-            if (!CatalogLookup.IsOpenable(page, habbo.Rank, habbo.VipRank))
+            if (!CatalogLookup.IsBuyable(index, page, habbo.Rank, habbo.VipRank))
                 continue;
 
             if (tabId > 0 && !IsUnder(page, roots, inTab))
