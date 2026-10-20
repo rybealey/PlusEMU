@@ -19,7 +19,7 @@ internal class SaveFloorPlanModelEvent : RoomPacketEvent
 
     public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
     {
-        if (!room.CheckRights(session, true))
+        if (!room.CanEditFloorplan(session))
             return Task.CompletedTask;
         char[] validLetters =
         {

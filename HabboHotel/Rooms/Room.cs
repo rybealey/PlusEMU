@@ -368,6 +368,18 @@ public class Room : RoomData
     public bool CanDressMannequin(GameClient session) =>
         CheckRights(session, true) || (session?.GetHabbo() != null && session.GetHabbo().Rank >= MannequinStaffRank);
 
+    /// <summary>The lowest rank that may save any room's floor plan (CanEditFloorplan).</summary>
+    public const int FloorplanStaffRank = 2;
+
+    /// <summary>
+    /// pixelrp: may this player save a new floor plan for this room?
+    /// The room owner, as stock Plus had it, or any staff - every rank from
+    /// Builder (2) up - in any room, on duty or off (Twist, 2026-10-21).
+    /// :floorplan and :floor open the editor from the same rank (migration 286).
+    /// </summary>
+    public bool CanEditFloorplan(GameClient session) =>
+        CheckRights(session, true) || (session?.GetHabbo() != null && session.GetHabbo().Rank >= FloorplanStaffRank);
+
     public bool CheckRights(GameClient session, bool requireOwnership, bool checkForGroups = false)
     {
         try
