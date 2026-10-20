@@ -815,6 +815,59 @@ public class RoomItemHandling
 
     public List<Item> GetFurniObjects(int x, int y) => _room.GetGameMap().GetCoordinatedItems(new(x, y));
 
+    /// <summary>
+    /// pixelrp: the height a piece already standing in the room comes to rest
+    /// at on what is UNDER it - the Tools panel's "On top" and the stack tile's
+    /// own on-top button, both the -100 of UpdateMagicTileEvent.
+    ///
+    /// A drop stacks on everything on the tiles, which is right for a piece
+    /// arriving from elsewhere and wrong for one that is already there: a table
+    /// with a lamp on it would jump up over its own lamp. So only what is
+    /// beneath counts - a piece whose bottom is no higher than this one's, and
+    /// that is not sitting on it (a chair on a flat rug starts exactly where the
+    /// rug does, and pressing On top on the rug must not lift it over the
+    /// chair). A stack tile beneath sets the height outright, as it does for a
+    /// drop; with nothing beneath, it is the floor of the tile.
+    /// </summary>
+    public double RestingHeight(Item item)
+    {
+        // Heights are doubles off two-decimal wire values; "the same height"
+        // has to survive the rounding.
+        const double epsilon = 0.001;
+
+        var restZ = (double)_room.GetGameMap().Model.SqFloorHeight[item.GetX, item.GetY];
+        var seen = new HashSet<uint>();
+        // GetAffectedTiles holds only a multi-tile piece's EXTRA squares, so the
+        // anchor is asked for separately.
+        var tiles = new List<Point> { new(item.GetX, item.GetY) };
+        tiles.AddRange(item.GetAffectedTiles.Values.Select(tile => new Point(tile.X, tile.Y)));
+
+        foreach (var tile in tiles)
+        {
+            foreach (var other in GetFurniObjects(tile.X, tile.Y))
+            {
+                if (other?.Definition == null || other.Id == item.Id || !seen.Add(other.Id))
+                    continue;
+
+                var below = other.GetZ <= item.GetZ + epsilon;
+
+                // A stack tile is under whatever stands at its level, flat or
+                // not - that is how things get onto one.
+                if (other.Definition.InteractionType == InteractionType.Stacktool)
+                {
+                    if (below)
+                        return other.GetZ;
+                    continue;
+                }
+
+                if (below && other.GetZ < item.TotalHeight - epsilon && other.TotalHeight > restZ)
+                    restZ = other.TotalHeight;
+            }
+        }
+
+        return restZ;
+    }
+
     public bool SetFloorItem(Item item, int newX, int newY, double newZ)
     {
         if (_room == null)

@@ -55,19 +55,32 @@ internal class UpdateMagicTileEvent : IPacketEvent
         if (builder != null)
             builder.LastFurniUndo = FurniUndoState.Capture(item);
 
-        // Hundredths on the wire; the widget sends -100 for "sit on whatever is
-        // already there", which lands below zero and clears the stored height.
+        // Hundredths on the wire. The widgets send -100 for "sit on whatever is
+        // already there", which clears the stored height - and has to MOVE the
+        // piece there too: on its own it only forgot the height, so On top left
+        // the piece exactly where it was.
+        //
+        // 0 is the Floor button, and the floor of a raised tile is not 0: an
+        // absolute 0 sank the piece into it. 0 means the floor of the tile the
+        // piece stands on.
         var height = decimalHeight / 100.0;
-        var custom = (height < 0) ? -1 : Math.Min(height, MaximumHeight);
-
-        item.CustomHeight = custom;
-        if (custom >= 0)
-            item.GetZ = custom;
+        if (height < 0)
+        {
+            item.CustomHeight = -1;
+            item.GetZ = room.GetRoomItemHandler().RestingHeight(item);
+        }
+        else
+        {
+            item.CustomHeight = (decimalHeight == 0)
+                ? room.GetGameMap().Model.SqFloorHeight[item.GetX, item.GetY]
+                : Math.Min(height, MaximumHeight);
+            item.GetZ = item.CustomHeight;
+        }
 
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `items` SET `custom_height` = @height, `z` = @z WHERE `id` = @itemId LIMIT 1");
-            dbClient.AddParameter("height", custom);
+            dbClient.AddParameter("height", item.CustomHeight);
             dbClient.AddParameter("z", item.GetZ);
             dbClient.AddParameter("itemId", itemId);
             dbClient.RunQuery();
@@ -78,7 +91,10 @@ internal class UpdateMagicTileEvent : IPacketEvent
         room.GetGameMap().GenerateMaps();
 
         room.SendPacket(new ObjectUpdateComposer(item));
-        room.SendPacket(new UpdateMagicTileComposer(itemId, decimalHeight));
+        // The height the piece ended up at, not the one asked for: -100 and the
+        // floor are not heights, and a readout echoing them showed the wrong
+        // number (or 1.00, the stack widget's reading of -100).
+        room.SendPacket(new UpdateMagicTileComposer(itemId, (int)Math.Round(item.GetZ * 100)));
         return Task.CompletedTask;
     }
 }
