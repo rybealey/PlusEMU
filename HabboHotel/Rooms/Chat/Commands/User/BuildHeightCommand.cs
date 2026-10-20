@@ -22,12 +22,13 @@ internal class BuildHeightCommand : IChatCommand
     // what a legal height is.
     private const double MaximumHeight = 40;
 
-    public string Key => "bh";
+    public virtual string Key => "bh";
     public string PermissionRequired => "command_bh";
 
     public string Parameters => "%height%";
 
-    public string Description => "Places furniture at a fixed height instead of stacking it. Type :bh on its own to turn it off.";
+    // Every :bh in the wording below is :{Key}, so :sh answers as :sh.
+    public string Description => $"Places furniture at a fixed height instead of stacking it. Type :{Key} on its own to turn it off.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
@@ -56,7 +57,7 @@ internal class BuildHeightCommand : IChatCommand
         // the server's locale - `2.5` has to mean two and a half everywhere.
         if (!double.TryParse(parameters[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
         {
-            session.SendWhisper("That is not a height. Try :bh 2.5, or :bh on its own to turn it off.");
+            session.SendWhisper($"That is not a height. Try :{Key} 2.5, or :{Key} on its own to turn it off.");
             return;
         }
 
@@ -77,8 +78,18 @@ internal class BuildHeightCommand : IChatCommand
         }
 
         user.BuildHeight = height;
-        session.SendWhisper($"Build height set to {Format(height)}. Furniture you place or move will sit there until you type :bh.");
+        session.SendWhisper($"Build height set to {Format(height)}. Furniture you place or move will sit there until you type :{Key}.");
     }
 
     private static string Format(double height) => height.ToString("0.##", CultureInfo.InvariantCulture);
+}
+
+/// <summary>
+/// pixelrp: :sh, the same command as :bh under another word (Twist,
+/// 2026-10-20). Same permission row (command_bh), same height - the two share
+/// RoomUser.BuildHeight, so :sh 2 then :bh turns it off.
+/// </summary>
+internal class StackHeightCommand : BuildHeightCommand
+{
+    public override string Key => "sh";
 }
