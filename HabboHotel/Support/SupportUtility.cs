@@ -283,6 +283,21 @@ public static class SupportUtility
     private static readonly object _workerSync = new();
     private static readonly ManualResetEventSlim _wake = new(false);
 
+    /// <summary>
+    /// Whether any chat might still be unresolved. Every job the loop does -
+    /// lapsing an offer, rescuing an abandoned claim, offering a waiting chat -
+    /// needs an unresolved thread, and on most of the day there are none: the
+    /// loop used to ask the database two to four times a second anyway. True at
+    /// boot (threads outlive restarts), true again on every Wake, false only
+    /// once a quiet pass has seen there is nothing left. Loop thread only.
+    /// </summary>
+    private static bool _active = true;
+
+    /// <summary>While idle, look anyway this often - a net under a missed Wake.</summary>
+    private const int IdleRecheckSeconds = 60;
+
+    private static int _nextIdleCheck;
+
     /// <summary>Something happened that could give the rotation work; look now.</summary>
     private static void Wake() => _wake.Set();
 
@@ -319,11 +334,26 @@ public static class SupportUtility
         while (true)
         {
             // A second between passes, cut short when something has just been
-            // queued so a player is not left waiting on the clock.
-            _wake.Wait(1000);
-            _wake.Reset();
+            // queued so a player is not left waiting on the clock. Reset only
+            // after a wake: a Wake that lands just after a timed-out wait stays
+            // set and ends the next wait at once, instead of being wiped.
+            if (_wake.Wait(1000))
+            {
+                _wake.Reset();
+                _active = true;
+            }
             try
             {
+                if (!_active)
+                {
+                    if (Now() < _nextIdleCheck)
+                        continue;
+                    _nextIdleCheck = Now() + IdleRecheckSeconds;
+                    _active = AnyUnresolved();
+                    if (!_active)
+                        continue;
+                }
+
                 // The rotation moves chats between staff on a clock, with no
                 // packet to answer. Nothing pushed the result, so a chat was
                 // offered to somebody whose queue did not change until they
@@ -335,12 +365,25 @@ public static class SupportUtility
                 moved |= OfferWaiting();
                 if (moved)
                     PushToStaff();
+                else if (!AnyUnresolved())
+                {
+                    _active = false;
+                    _nextIdleCheck = Now() + IdleRecheckSeconds;
+                }
             }
             catch (Exception e)
             {
                 ExceptionLogger.LogException(e);
             }
         }
+    }
+
+    /// <summary>Is any chat waiting, offered or open? The `queue` index answers it.</summary>
+    private static bool AnyUnresolved()
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>(
+            "SELECT EXISTS(SELECT 1 FROM `rp_support_threads` WHERE `status` IN ('waiting','offered','open'))") == 1;
     }
 
     /// <summary>
