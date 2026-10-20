@@ -359,7 +359,7 @@ public class Room : RoomData
     /// <summary>
     /// pixelrp: may this player save a mannequin's outfit or name here?
     /// The room owner, as stock Plus had it, or any staff - every staff rank,
-    /// Trial Moderator (2) and up, as in the commands clean-up - on duty or
+    /// Builder (2) and up - Builders redecorate (migration 285) - on duty or
     /// off (Twist, 2026-10-20). Owner-or-room_any_owner alone meant staff
     /// could not dress a mannequin in a room they did not own unless they
     /// were clocked in. FurnitureMannequinView offers the Save button on the
