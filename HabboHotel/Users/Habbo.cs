@@ -81,9 +81,17 @@ public class Habbo
     public const int BuilderRank = 2;
 
     // pixelrp: Builder or above. The Furni Shop and the furni inventory open
-    // from here rather than IsStaff, because Builders build (Twist, 2026-10-20).
+    // from here rather than IsStaff, because Builders build (Twist, 2026-10-20),
+    // and so does the navigator - room creation included (Twist, 2026-10-21).
     // Client: RP_RANK_BUILDER in ToolbarView.
     public bool IsBuilder => Rank >= BuilderRank;
+
+    // pixelrp: renaming a furni and moving it to another category from the
+    // Furni Shop, from Builder (Twist, 2026-10-21). Below the staff line only on
+    // shelves that rank can buy from (RpCatalogRenameFurniEvent,
+    // RpCatalogMoveFurniEvent). The Function tool stays on rp_furni_function.
+    // Client: CanEditShop in RpRanks.
+    public bool CanEditShop => IsBuilder;
 
     public bool IsAmbassador { get; set; }
 
@@ -244,9 +252,9 @@ public class Habbo
     }
 
     /// <summary>
-    /// Last room the server told this client to enter (RoomForwardComposer). Non-staff
-    /// clients may only open a flat connection to a server-authorized target — anything
-    /// else is an injected packet bypassing the staff-only navigator.
+    /// Last room the server told this client to enter (RoomForwardComposer). Clients
+    /// below Builder may only open a flat connection to a server-authorized target —
+    /// anything else is an injected packet bypassing the navigator they don't have.
     /// </summary>
     public uint AuthorizedRoomEntryId { get; set; }
 

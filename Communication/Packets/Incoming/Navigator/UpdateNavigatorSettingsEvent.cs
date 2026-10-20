@@ -5,7 +5,7 @@ using Plus.HabboHotel.Navigator;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
-[StaffOnly]
+[BuilderOnly]
 internal class UpdateNavigatorSettingsEvent : IPacketEvent
 {
     private readonly INavigatorManager _navigatorManager;

@@ -301,8 +301,8 @@ public abstract class GameClient
     /// <summary>
     /// Forward this client to a room. Always use this instead of sending RoomForwardComposer
     /// directly: it records the target as a server-authorized entry, which OpenFlatConnectionEvent
-    /// requires from non-staff clients (the navigator is staff-only, so an unauthorized flat
-    /// connection is an injected packet).
+    /// requires from clients below Builder (the navigator opens from Builder, so an
+    /// unauthorized flat connection from them is an injected packet).
     /// </summary>
     public void SendRoomForward(uint roomId)
     {

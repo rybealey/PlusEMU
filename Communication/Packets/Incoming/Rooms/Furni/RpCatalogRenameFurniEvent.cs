@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Database;
 using Plus.HabboHotel.Catalog;
+using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
@@ -54,16 +55,20 @@ internal class RpCatalogRenameFurniEvent : IPacketEvent
         var publicName = (packet.ReadString() ?? string.Empty).Trim();
 
         var habbo = session.GetHabbo();
-        if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
+        if (habbo == null || !habbo.CanEditShop)
             return Task.CompletedTask;
 
         // Resolved through the catalog rather than trusted from the packet: an
         // offer that is not on any page is not something the sender was looking
-        // at.
+        // at. Below the staff line, nor on a page they cannot buy from - the
+        // Staff tab's stock is staff's to name.
+        var index = habbo.IsStaff ? null : CatalogLookup.Index(_catalogManager.Pages);
         ItemDefinition definition = null;
         foreach (var page in _catalogManager.Pages)
         {
             if (page?.Items == null)
+                continue;
+            if (index != null && !CatalogLookup.IsBuyable(index, page, habbo.Rank, habbo.VipRank))
                 continue;
             foreach (var catalogItem in page.Items.Values)
             {

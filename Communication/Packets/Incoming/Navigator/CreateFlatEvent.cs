@@ -8,7 +8,7 @@ using Plus.HabboHotel.Rooms.Chat.Filter;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
-[StaffOnly]
+[BuilderOnly]
 internal class CreateFlatEvent : IPacketEvent
 {
     private readonly IWordFilterManager _wordFilterManager;

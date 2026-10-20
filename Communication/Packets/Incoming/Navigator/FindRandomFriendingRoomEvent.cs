@@ -5,7 +5,7 @@ using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
-[StaffOnly]
+[BuilderOnly]
 internal class FindRandomFriendingRoomEvent : IPacketEvent
 {
     private readonly IRoomManager _roomManager;
@@ -17,6 +17,17 @@ internal class FindRandomFriendingRoomEvent : IPacketEvent
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
+        // pixelrp: the forward below is the server's own, which the entry gates
+        // wave through - so below the staff line this asks TravelGuard itself.
+        if (!session.GetHabbo().IsStaff)
+        {
+            var cannot = Plus.HabboHotel.Users.TravelGuard.Refusal(session);
+            if (cannot != null)
+            {
+                session.SendWhisper(cannot);
+                return Task.CompletedTask;
+            }
+        }
         var instance = _roomManager.TryGetRandomLoadedRoom();
         if (instance != null)
             session.SendRoomForward(instance.Id);

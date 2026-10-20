@@ -6,7 +6,7 @@ using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
-[StaffOnly]
+[BuilderOnly]
 public class AddFavouriteRoomEvent : IPacketEvent
 {
     private readonly IDatabase _database;

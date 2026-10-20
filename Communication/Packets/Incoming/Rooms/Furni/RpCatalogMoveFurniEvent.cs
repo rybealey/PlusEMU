@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Database;
 using Plus.HabboHotel.Catalog;
+using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
@@ -45,7 +46,7 @@ internal class RpCatalogMoveFurniEvent : IPacketEvent
         var targetPageId = packet.ReadInt();
 
         var habbo = session.GetHabbo();
-        if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
+        if (habbo == null || !habbo.CanEditShop)
             return Task.CompletedTask;
 
         CatalogPage source = null;
@@ -88,6 +89,24 @@ internal class RpCatalogMoveFurniEvent : IPacketEvent
         {
             Reply(false, "It is already in that category.");
             return Task.CompletedTask;
+        }
+        // Below the staff line, only between shelves that rank can buy from.
+        // Otherwise a Builder could carry staff stock (Staff > Wired, Bots...)
+        // out onto their own shelves and buy it, or bury a listing where
+        // nobody below staff can reach it.
+        if (!habbo.IsStaff)
+        {
+            var index = CatalogLookup.Index(_catalogManager.Pages);
+            if (!CatalogLookup.IsBuyable(index, source, habbo.Rank, habbo.VipRank))
+            {
+                Reply(false, "You can only move furni from categories you can shop in.");
+                return Task.CompletedTask;
+            }
+            if (!CatalogLookup.IsBuyable(index, target, habbo.Rank, habbo.VipRank))
+            {
+                Reply(false, "You can only move furni to categories you can shop in.");
+                return Task.CompletedTask;
+            }
         }
 
         using (var dbClient = _database.GetQueryReactor())

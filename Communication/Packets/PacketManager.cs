@@ -74,7 +74,7 @@ public sealed class PacketManager : IPacketManager, IDisposable
             return;
         }
 
-        // Staff-only surfaces (catalog, navigator, ...) are hidden client-side, so any
+        // Staff-only surfaces (marketplace, hotel view, ...) are hidden client-side, so any
         // non-staff session sending one forged the packet (G-Earth or similar). Drop it
         // here so no handler ever runs on an unauthorized session.
         if (_staffOnlyPackets.Contains(pak.GetType()) && !session.GetHabbo().IsStaff)
@@ -84,9 +84,9 @@ public sealed class PacketManager : IPacketManager, IDisposable
             return;
         }
 
-        // pixelrp: the Furni Shop opens from Builder (Habbo.IsBuilder), below the
-        // staff line, and is hidden client-side for everyone under it - so, as above,
-        // a lower session sending one forged the packet.
+        // pixelrp: the Furni Shop and the navigator open from Builder (Habbo.IsBuilder),
+        // below the staff line, and are hidden client-side for everyone under it - so,
+        // as above, a lower session sending one forged the packet.
         if (_builderOnlyPackets.Contains(pak.GetType()) && !session.GetHabbo().IsBuilder)
         {
             _logger.LogWarning("Blocked builder-only packet {packet} from {username} (id {userId}, rank {rank}) — likely packet injection.",

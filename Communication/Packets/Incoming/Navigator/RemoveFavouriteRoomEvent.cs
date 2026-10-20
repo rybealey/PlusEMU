@@ -5,7 +5,7 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Incoming.Navigator;
 
-[StaffOnly]
+[BuilderOnly]
 public class RemoveFavouriteRoomEvent : IPacketEvent
 {
     private readonly IDatabase _database;
