@@ -8,7 +8,9 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 /// (gangs store raw RGB ints in groups.colour1/colour2). gangCost rides
 /// along so the Gang window can price the Create button without a second
 /// packet. Sent on profile open / window open, and broadcast hotel-wide on
-/// every gang mutation so open profiles update in real-time.
+/// every gang mutation so open profiles update in real-time. The member's
+/// role name comes last, for the profile's gang card - last, so a client that
+/// predates it reads everything before it as it always did.
 /// </summary>
 public class RpUserGangComposer : IServerPacket
 {
@@ -19,10 +21,11 @@ public class RpUserGangComposer : IServerPacket
     private readonly string _colourB;
     private readonly bool _isOwner;
     private readonly int _gangCost;
+    private readonly string _roleName;
 
     public uint MessageId => ServerPacketHeader.RpUserGangComposer;
 
-    public RpUserGangComposer(int userId, int gangId, string name, string colourA, string colourB, bool isOwner, int gangCost)
+    public RpUserGangComposer(int userId, int gangId, string name, string colourA, string colourB, bool isOwner, int gangCost, string roleName = "")
     {
         _userId = userId;
         _gangId = gangId;
@@ -31,6 +34,7 @@ public class RpUserGangComposer : IServerPacket
         _colourB = colourB;
         _isOwner = isOwner;
         _gangCost = gangCost;
+        _roleName = roleName;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -42,5 +46,6 @@ public class RpUserGangComposer : IServerPacket
         packet.WriteString(_colourB ?? "");
         packet.WriteInteger(_isOwner ? 1 : 0);
         packet.WriteInteger(_gangCost);
+        packet.WriteString(_roleName ?? "");
     }
 }

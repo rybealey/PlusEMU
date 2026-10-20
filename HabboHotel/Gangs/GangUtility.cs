@@ -25,15 +25,20 @@ public static class GangUtility
         public int Colour1 { get; set; }
         public int Colour2 { get; set; }
         public int IsOwner { get; set; }
+        // the member's role in the gang ("Member", or whatever the owner named
+        // it) - what the profile's gang card shows; "" if they somehow have none
+        public string RoleName { get; set; } = "";
     }
 
     public static GangMembership GetGang(int userId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.QueryFirstOrDefault<GangMembership>(
-            "SELECT g.`id` AS GangId, g.`name` AS Name, g.`colour1` AS Colour1, g.`colour2` AS Colour2, (g.`owner_id` = @userId) AS IsOwner " +
+            "SELECT g.`id` AS GangId, g.`name` AS Name, g.`colour1` AS Colour1, g.`colour2` AS Colour2, (g.`owner_id` = @userId) AS IsOwner, COALESCE(r.`name`, '') AS RoleName " +
             "FROM `group_memberships` m " +
             "INNER JOIN `groups` g ON g.`id` = m.`group_id` " +
+            "LEFT JOIN `rp_gang_members` s ON s.`user_id` = m.`user_id` AND s.`gang_id` = m.`group_id` " +
+            "LEFT JOIN `rp_gang_roles` r ON r.`id` = s.`role_id` " +
             "WHERE m.`user_id` = @userId AND g.`is_gang` = '1' LIMIT 1", new { userId });
     }
 
@@ -49,7 +54,7 @@ public static class GangUtility
         var cost = GangCost();
         if (gang == null)
             return new RpUserGangComposer(userId, 0, "", "", "", false, cost);
-        return new RpUserGangComposer(userId, gang.GangId, gang.Name, ToHex(gang.Colour1), ToHex(gang.Colour2), gang.IsOwner == 1, cost);
+        return new RpUserGangComposer(userId, gang.GangId, gang.Name, ToHex(gang.Colour1), ToHex(gang.Colour2), gang.IsOwner == 1, cost, gang.RoleName);
     }
 
     private static string ToHex(int colour) => $"#{colour & 0xFFFFFF:x6}";
