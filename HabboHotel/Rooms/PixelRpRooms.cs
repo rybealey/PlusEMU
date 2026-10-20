@@ -13,9 +13,10 @@ namespace Plus.HabboHotel.Rooms;
 /// Staff turn a room into one from the Room Tool (RpMakePixelRpRoomEvent): the
 /// room, every furni in it and every bot in it are handed to PixelRP. After
 /// that, furni and bots put down in the room become PixelRP's as they land, so
-/// it never drifts back to mixed ownership. A staff member who picks up furni
-/// or a bot in one gets it as their own - into their inventory and owned by
-/// them - never sent off to PixelRP's inventory, where nobody could reach it.
+/// it never drifts back to mixed ownership. A Builder or above who picks up
+/// furni in one, or a staff member who picks up a bot, gets it as their own -
+/// into their inventory and owned by them - never sent off to PixelRP's
+/// inventory, where nobody could reach it.
 ///
 /// A room's owner has to be a real account (every room load joins `users` on
 /// `rooms`.`owner`), which is why PixelRP is one. Nobody can log in as it, and
@@ -151,10 +152,20 @@ public static class PixelRpRooms
     }
 
     /// <summary>
-    /// Does this pickup hand the furni or bot to the staff member who took it?
+    /// Does this furni pickup hand the piece to whoever picked it up? In a
+    /// PixelRP room, for Builders and up (Habbo.IsBuilder) - Builders build
+    /// the public rooms, and what they put down there became PixelRP's as it
+    /// landed, so picking it back up sent it off to PixelRP's inventory.
+    /// Asked only once the pickup is allowed at all (rights here - on duty, or
+    /// given); in anybody else's room furni still goes back to its owner.
+    /// </summary>
+    public static bool BuilderTakesFurni(Room room, GameClient session) =>
+        IsPixelRpRoom(room) && session?.GetHabbo()?.IsBuilder == true;
+
+    /// <summary>
+    /// Does this bot pickup hand the bot to the staff member who took it?
     /// Only in a PixelRP room, only for staff, and only where they may pick
-    /// things up at all (on duty, or given rights) - the same reach as
-    /// furni, so a bot is no easier to take than a chair.
+    /// things up at all (on duty, or given rights).
     /// </summary>
     public static bool StaffTakesIt(Room room, GameClient session) =>
         IsPixelRpRoom(room) && IsStaff(session?.GetHabbo()) && room.CheckRights(session, false);

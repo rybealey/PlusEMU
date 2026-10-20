@@ -42,10 +42,11 @@ internal class PickupObjectEvent : IPacketEvent
         // the button rather than to its owner. Off duty, neither answers.
         var canTakeAnyones = session.GetHabbo().Permissions.HasRight("room_item_take") &&
                              HabboHotel.Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id);
-        // pixelrp: in a PixelRP room, furni a staff member picks up becomes
+        // pixelrp: in a PixelRP room, furni a Builder or above picks up becomes
         // theirs - into their own inventory, never sent to PixelRP's, where
-        // nobody could reach it (PixelRpRooms).
-        var staffTakesIt = PixelRpRooms.StaffTakesIt(room, session);
+        // nobody could reach it (PixelRpRooms). Only used once itemRights
+        // below has said they may pick it up at all.
+        var builderTakesIt = PixelRpRooms.BuilderTakesFurni(room, session);
 
         var itemRights = false;
         if (item.UserId == session.GetHabbo().Id || room.CheckRights(session, false))
@@ -67,9 +68,9 @@ internal class PickupObjectEvent : IPacketEvent
             {
                 await connection.ExecuteAsync("DELETE FROM `room_items_toner` WHERE `id` = @id LIMIT 1", new { id = item.Id });
             }
-            if (item.UserId == session.GetHabbo().Id || canTakeAnyones || staffTakesIt)
+            if (item.UserId == session.GetHabbo().Id || canTakeAnyones || builderTakesIt)
             {
-                if (staffTakesIt)
+                if (builderTakesIt)
                     PixelRpRooms.SetItemOwner(item, session.GetHabbo().Id, session.GetHabbo().Username);
                 room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
                 session.GetHabbo().Inventory.Furniture.AddItem(item.ToInventoryItem());
@@ -90,7 +91,7 @@ internal class PickupObjectEvent : IPacketEvent
                 }
             }
 
-            if (staffTakesIt)
+            if (builderTakesIt)
                 await connection.ExecuteAsync("UPDATE `items` SET `room_id` = '0', `user_id` = @owner WHERE `id` = @id LIMIT 1",
                     new { id = item.Id, owner = session.GetHabbo().Id });
             else

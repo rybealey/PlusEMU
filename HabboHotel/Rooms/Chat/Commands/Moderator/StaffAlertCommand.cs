@@ -13,9 +13,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
 /// once dismissed; a bubble reads like a conversation and lands in its own
 /// Staff tab in Chat History.
 ///
-/// Both ends are rank 5: the permission row (migration 172) gates who can SEND,
-/// and <see cref="MinimumRank"/> gates who RECEIVES, so an alert never reaches
-/// somebody who could not have answered it.
+/// Both ends are every staff rank, Builder and up (Twist, 2026-10-21: "all
+/// staff get access to :sa"): the permission row (migration 290) gates who can
+/// SEND, and <see cref="MinimumRank"/> gates who RECEIVES, so an alert never
+/// reaches somebody who could not have answered it.
 /// </summary>
 internal class StaffAlertCommand : IChatCommand
 {
@@ -29,8 +30,11 @@ internal class StaffAlertCommand : IChatCommand
     /// </summary>
     private const int AlertBubble = 5;
 
-    /// <summary>The lowest rank an alert is sent to. Matches the permission.</summary>
-    private const int MinimumRank = 5;
+    /// <summary>
+    /// The lowest rank an alert is sent to - every staff rank. Matches the
+    /// permission, and the City Panel's staff alert goes to the same people.
+    /// </summary>
+    internal const int MinimumRank = Users.Habbo.BuilderRank;
 
     private readonly IGameClientManager _gameClientManager;
 

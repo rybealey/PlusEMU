@@ -70,11 +70,11 @@ public static class CityWorld
 
     public static void Alert(string message) => PlusEnvironment.Game.ClientManager.SendPacket(AlertComposer(message));
 
-    /// <summary>The alert, to staff only (rank 5+).</summary>
+    /// <summary>The alert, to staff only - the people :sa reaches (Builder and up).</summary>
     public static void AlertStaff(string message)
     {
         foreach (var client in PlusEnvironment.Game.ClientManager.GetClients.ToList())
-            if (client?.GetHabbo() != null && client.GetHabbo().Rank >= 5)
+            if (client?.GetHabbo() != null && client.GetHabbo().Rank >= Rooms.Chat.Commands.Moderator.StaffAlertCommand.MinimumRank)
                 client.Send(AlertComposer(message));
     }
 
