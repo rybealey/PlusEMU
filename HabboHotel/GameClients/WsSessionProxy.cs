@@ -53,9 +53,24 @@ public class WsSessionProxy : WsSession
         _client.DisconnectRequested = () => Disconnect();
     }
 
+    /// <summary>
+    /// pixelrp: how long a connection may stay open without logging in. The
+    /// client sends its ticket the moment the socket opens (NitroCommunicationDemo),
+    /// so only an idle or scripted connection is still waiting by then - and each
+    /// one held a socket, and the proxy's slot, for up to an hour.
+    /// </summary>
+    private static readonly TimeSpan LoginDeadline = TimeSpan.FromSeconds(30);
+
     protected override void OnConnected()
     {
         base.OnConnected();
+        _ = Task.Delay(LoginDeadline).ContinueWith(_ =>
+        {
+            if (!IsConnected || _client.GetHabbo() != null)
+                return;
+            Log.Info($"Session {Id} did not log in within {LoginDeadline.TotalSeconds}s - disconnecting.");
+            Disconnect();
+        });
     }
 
     protected override void OnDisconnected() => _client.OnDisconnected();

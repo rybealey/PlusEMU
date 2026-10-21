@@ -5,6 +5,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users.Accounts;
 using Plus.HabboHotel.Users.UserData;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace Plus.HabboHotel.Users.Authentication;
 
@@ -30,6 +31,15 @@ internal class Authenticator : IAuthenticator
             return AuthenticationError.EmptySSO;
 
         if (!Debugger.IsAttached && sso.Length < 15)
+            return AuthenticationError.InvalidSSO;
+
+        // pixelrp: a ticket from /game carries the time the CMS issued it
+        // (User::ssoTicket) and is refused once TicketLifetimeSeconds have
+        // passed, so one taken from the page and kept for later - by a bot, or
+        // past a browser guard pause - is soon worthless. Generous enough for a
+        // slow first load of the client. Tickets without the time (the bot's own
+        // logins, bot/src/sso.ts) are not timed.
+        if (!Debugger.IsAttached && IsExpired(sso))
             return AuthenticationError.InvalidSSO;
 
         // pixelrp: look up and clear the ticket in ONE step (ConsumeSso). Two
@@ -103,6 +113,17 @@ internal class Authenticator : IAuthenticator
         {
             gate.Release();
         }
+    }
+
+    private const int TicketLifetimeSeconds = 180;
+
+    // <hotel>-<unix time issued>-<uuid>, as User::ssoTicket writes it.
+    private static readonly Regex IssuedTicket = new(@"-(\d{10})-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$", RegexOptions.Compiled);
+
+    private static bool IsExpired(string sso)
+    {
+        var match = IssuedTicket.Match(sso);
+        return match.Success && DateTimeOffset.UtcNow.ToUnixTimeSeconds() - long.Parse(match.Groups[1].Value) > TicketLifetimeSeconds;
     }
 
     // pixelrp: one gate per account, so concurrent logins of an account's
