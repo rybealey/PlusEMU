@@ -614,6 +614,10 @@ public static class ClientPacketHeader
     public const uint RpRequestTrialEvent = 4220;
     // pixelrp: a juror's Guilty / Not Guilty (JuryTrials.Vote)
     public const uint RpJuryVoteEvent = 4222;
+    // pixelrp: is this player online? (:t / :lt, for a name not in the room)
+    public const uint RpUserPresenceEvent = 4224;
+    // pixelrp: your HUD target's bars while they are in another room
+    public const uint RpGetUserStatsEvent = 4226;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
