@@ -844,20 +844,19 @@ public class Room : RoomData
 
     public void SendPacket(IServerPacket packet, bool withRightsOnly = false)
     {
-        if (packet == null)
+        if (packet == null || _roomUserManager == null)
             return;
         try
         {
-            var users = _roomUserManager.GetUserList().ToList();
-            if (_roomUserManager == null || users == null)
-                return;
-            foreach (var user in users)
+            // pixelrp: composed once, not once per viewer (SharedFrame).
+            var frame = new SharedFrame(packet);
+            foreach (var user in _roomUserManager.GetUserList().ToList())
             {
-                if (user?.GetClient() == null || user.IsBot)
+                if (user?.GetClient() is not { } client || user.IsBot)
                     continue;
-                if (withRightsOnly && !CheckRights(user.GetClient()))
+                if (withRightsOnly && !CheckRights(client))
                     continue;
-                user.GetClient().Send(packet);
+                frame.SendTo(client);
             }
         }
         catch (Exception e)

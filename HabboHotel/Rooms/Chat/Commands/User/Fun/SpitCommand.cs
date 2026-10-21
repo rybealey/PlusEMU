@@ -203,7 +203,8 @@ internal class SpitCommand : ITargetChatCommand
             return Task.CompletedTask;
 
         target.RpHealth = Math.Max(0, target.RpHealth - Damage);
-        target.SaveRpStats();
+        // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.
+        RoomTickWriter.QueueRpStats(target);
         habbo.RpAggression = AggressionOnSpit;
         SendStats(room, targetUser, target);
         SendStats(room, thisUser, habbo);

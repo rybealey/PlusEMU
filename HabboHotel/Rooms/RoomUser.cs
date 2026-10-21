@@ -619,6 +619,10 @@ public class RoomUser
         }
         else
         {
+            // pixelrp: each bubble composed once for the room (SharedFrame),
+            // not once per listener.
+            var chatFrame = new SharedFrame(packet);
+            var mentionFrame = mentionPacket != null ? new SharedFrame(mentionPacket) : null;
             foreach (var user in _mRoom.GetRoomUserManager().GetRoomUsers().ToList())
             {
                 if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null || user.GetClient().GetHabbo().IgnoresComponent.IsIgnored(_mClient.GetHabbo().Id))
@@ -629,14 +633,14 @@ public class RoomUser
                 // pixelrp mention: everybody named sees this message in bubble
                 // style 25 so being addressed is unmissable. One packet, handed to
                 // each of them - it is the same bubble whoever is reading it.
-                if (mentionPacket != null && mentionedUsers.Contains(user))
+                if (mentionFrame != null && mentionedUsers.Contains(user))
                 {
-                    user.GetClient().Send(mentionPacket);
+                    mentionFrame.SendTo(user.GetClient());
                     // their quiet period starts here, where the alert really landed
                     user.GetClient().GetHabbo().MentionCooldownUntil = UnixTimestamp.GetNow() + MentionCooldownSeconds;
                     continue;
                 }
-                user.GetClient().Send((IServerPacket)packet);
+                chatFrame.SendTo(user.GetClient());
             }
         }
         if (shout)

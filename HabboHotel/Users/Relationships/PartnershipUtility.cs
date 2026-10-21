@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Dapper;
 using MySqlConnector;
 using Plus.Communication.Packets.Outgoing.Users;
@@ -31,15 +32,46 @@ public static class PartnershipUtility
     /// <summary>Relationship type 1 - the heart. See MessengerFriend on the client.</summary>
     public const int LoveRelationship = 1;
 
+    // pixelrp: each player's partner (0 = none), kept once read - the infostand
+    // asks for every player clicked. Every change goes through TryPartner and
+    // Divorce below (the CMS never writes the table), so it stays exact; an edit
+    // made straight in the database shows after a restart. The generation stops
+    // a read that raced a change from storing what it read before the change.
+    private static readonly ConcurrentDictionary<int, int> Partners = new();
+    private static readonly object PartnersLock = new();
+    private static long _partnersGeneration;
+
     /// <summary>This player's partner's id, or 0 when they have none.</summary>
     public static int PartnerOf(int userId)
     {
         if (userId <= 0)
             return 0;
-        using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.ExecuteScalar<int?>(
-            "SELECT `partner_id` FROM `rp_partnerships` WHERE `user_id` = @userId LIMIT 1",
-            new { userId }) ?? 0;
+        if (Partners.TryGetValue(userId, out var cached))
+            return cached;
+        var generation = Interlocked.Read(ref _partnersGeneration);
+        int partnerId;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+        {
+            partnerId = connection.ExecuteScalar<int?>(
+                "SELECT `partner_id` FROM `rp_partnerships` WHERE `user_id` = @userId LIMIT 1",
+                new { userId }) ?? 0;
+        }
+        lock (PartnersLock)
+        {
+            if (Interlocked.Read(ref _partnersGeneration) == generation)
+                Partners[userId] = partnerId;
+        }
+        return partnerId;
+    }
+
+    private static void RememberPartners(int a, int partnerOfA, int b, int partnerOfB)
+    {
+        lock (PartnersLock)
+        {
+            Interlocked.Increment(ref _partnersGeneration);
+            Partners[a] = partnerOfA;
+            Partners[b] = partnerOfB;
+        }
     }
 
     /// <summary>
@@ -59,6 +91,7 @@ public static class PartnershipUtility
             connection.Execute(
                 "INSERT INTO `rp_partnerships` (`user_id`,`partner_id`,`since`) VALUES (@a, @b, @since), (@b, @a, @since)",
                 new { a, b, since });
+            RememberPartners(a, b, b, a);
             return true;
         }
         catch (MySqlException e) when (e.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
@@ -81,6 +114,7 @@ public static class PartnershipUtility
         connection.Execute(
             "DELETE FROM `rp_partnerships` WHERE `user_id` IN (@userId, @partnerId)",
             new { userId, partnerId });
+        RememberPartners(userId, 0, partnerId, 0);
         return partnerId;
     }
 

@@ -1288,6 +1288,10 @@ public class RoomUserManager
         // lock for every room, so one slow query here froze walkers hotel-wide.
         // Run once the lock is let go, still on this room's tick, in order.
         List<Action>? afterLock = null;
+        // pixelrp: the players whose bars this tick moved. Their stats go to
+        // the room once the lock is let go (SendTickStats) - in a crowded fight
+        // they were most of what the tick sent while holding it.
+        List<RoomUser>? statsAfterLock = null;
         try
         {
             lock (_cycleLock)
@@ -1393,7 +1397,7 @@ public class RoomUserManager
                                 // Queued, not written here: this runs under _cycleLock, which
                                 // the movement sender needs for every room (RoomTickWriter).
                                 RoomTickWriter.QueueRpStats(habboPas);
-                                _room.SendPacket(new RpStatsComposer(user.VirtualId, habboPas.RpHealth, habboPas.RpHealthMax, habboPas.RpEnergy, habboPas.RpEnergyMax, (int)Math.Round(habboPas.RpAggression), 0, habboPas.Rank >= 5 ? 1 : 0));
+                                AddTickStats(ref statsAfterLock, user);
                                 // pixelrp: drop the passive enable if it is the shown effect.
                                 if (habboPas.Effects != null && habboPas.Effects.CurrentEffect == Habbo.PassiveEnableEffectId)
                                     habboPas.Effects.ApplyEffect(0);
@@ -1451,9 +1455,7 @@ public class RoomUserManager
                             habboFed.RpEnergy / 10 != beforeEnergy / 10 ||
                             habboFed.RpHealth / 10 != beforeHealth / 10)
                             RoomTickWriter.QueueRpStats(habboFed);
-                        _room.SendPacket(new RpStatsComposer(user.VirtualId, habboFed.RpHealth, habboFed.RpHealthMax,
-                            habboFed.RpEnergy, habboFed.RpEnergyMax, (int)Math.Round(habboFed.RpAggression),
-                            habboFed.IsRpPassive ? 1 : 0, habboFed.Rank >= 5 ? 1 : 0));
+                        AddTickStats(ref statsAfterLock, user);
                     }
                 }
                     // pixelrp hospital: a medical bed heals whoever is on it,
@@ -1486,20 +1488,18 @@ public class RoomUserManager
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         // The decay itself still runs every tick; only the
-                        // broadcast is limited, to once a second per player.
-                        // Each one goes to the whole room while this tick holds
-                        // _cycleLock - the lock the movement sender needs for
-                        // every room - so a crowded fight was sending twice a
-                        // second per aggressive player for a bar that moves one
-                        // notch. Reaching 0 is always sent at once, so the bar
-                        // never sticks on a last sliver. Hits and other changes
-                        // send their own update and are not throttled here.
+                        // broadcast is limited, to once a second per player -
+                        // a crowded fight was sending twice a second per
+                        // aggressive player for a bar that moves one notch.
+                        // Reaching 0 is always sent at once, so the bar never
+                        // sticks on a last sliver. Hits and other changes send
+                        // their own update and are not throttled here.
                         habboAgg.RpAggression = Math.Max(0, habboAgg.RpAggression - (100.0 / 90.0));
                         var aggNow = Environment.TickCount64;
                         if (habboAgg.RpAggression <= 0 || (aggNow - user.LastAggressionBroadcastMs) >= 1000)
                         {
                             user.LastAggressionBroadcastMs = aggNow;
-                            _room.SendPacket(new RpStatsComposer(user.VirtualId, habboAgg.RpHealth, habboAgg.RpHealthMax, habboAgg.RpEnergy, habboAgg.RpEnergyMax, (int)Math.Round(habboAgg.RpAggression), habboAgg.IsRpPassive ? 1 : 0, habboAgg.Rank >= 5 ? 1 : 0));
+                            AddTickStats(ref statsAfterLock, user);
                         }
                     }
                     // pixelrp: City Government on duty never falls asleep - staff
@@ -1624,6 +1624,9 @@ public class RoomUserManager
             ExceptionLogger.LogCriticalException(e);
         }
 
+        if (statsAfterLock != null)
+            SendTickStats(statsAfterLock);
+
         // Even after a throw above: what was decided before it still happens
         // (a player already shown asleep still has their shift ended).
         if (afterLock != null)
@@ -1639,6 +1642,36 @@ public class RoomUserManager
                 {
                     ExceptionLogger.LogException(e);
                 }
+            }
+        }
+    }
+
+    private static void AddTickStats(ref List<RoomUser>? users, RoomUser user)
+    {
+        users ??= new List<RoomUser>();
+        if (!users.Contains(user))
+            users.Add(user);
+    }
+
+    /// <summary>
+    /// pixelrp: each player's bars as they stand now, to the room. Read when
+    /// sent rather than when the tick moved them, so a hit landing in between
+    /// is never overwritten by the tick's older numbers.
+    /// </summary>
+    private void SendTickStats(List<RoomUser> users)
+    {
+        foreach (var user in users)
+        {
+            try
+            {
+                if (user.GetClient()?.GetHabbo() is not { } habbo || habbo.CurrentRoom != _room)
+                    continue;
+                _room.SendPacket(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
+                    (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
             }
         }
     }

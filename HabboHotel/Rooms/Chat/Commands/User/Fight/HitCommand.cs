@@ -208,7 +208,8 @@ internal class HitCommand : ITargetChatCommand
                 target.Client?.SendWhisper("Your medkit was ruined when you were hit.");
             }
 
-            target.SaveRpStats();
+            // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.
+            RoomTickWriter.QueueRpStats(target);
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
             // the only thing that moved on the target is their health
             SendStats(room, targetUser, target);

@@ -180,7 +180,8 @@ internal class SlapCommand : ITargetChatCommand
         target.RpHealth = Math.Max(0, target.RpHealth - Damage);
         // pixelrp: so does a slap - it is a hit, if a light one.
         BinSearch.Interrupt(target.Id);
-        target.SaveRpStats();
+        // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.
+        RoomTickWriter.QueueRpStats(target);
         habbo.RpAggression = AggressionOnSlap;
         SendStats(room, targetUser, target);
         SendStats(room, thisUser, habbo);
