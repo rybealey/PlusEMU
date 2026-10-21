@@ -82,6 +82,11 @@ public class GroupManager : IGroupManager
     public bool TryGetGroup(int id, out Group group)
     {
         group = null;
+        // pixelrp: no group has an id below 1 - and 0, "no favourite group",
+        // was looked for on every log in (LoadStatisticsLoginTask): a query
+        // under the global loading lock, never cached because it never exists.
+        if (id <= 0)
+            return false;
         if (_groups.ContainsKey(id))
             return _groups.TryGetValue(id, out group);
         lock (_groupLoadingSync)

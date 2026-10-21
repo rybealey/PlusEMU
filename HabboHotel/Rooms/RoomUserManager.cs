@@ -891,9 +891,11 @@ public class RoomUserManager
     private void UpdateBots()
     {
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        foreach (var user in GetRoomUsers().ToList())
+        // pixelrp: every unit in the room - GetRoomUsers() leaves bots out, so
+        // this loop never met one and no bot was ever saved (pets are UpdatePets').
+        foreach (var user in GetUserList().ToList())
         {
-            if (user == null || !user.IsBot)
+            if (user == null || !user.IsBot || user.IsPet)
                 continue;
             if (user.IsBot)
             {
