@@ -5,8 +5,6 @@ using System.Text;
 using Dapper;
 using Microsoft.Extensions.Options;
 using NLog;
-using Plus.Communication.Encryption;
-using Plus.Communication.Flash;
 using Plus.Communication.Nitro;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
@@ -40,7 +38,6 @@ public class PlusEnvironment : IPlusEnvironment
     private static ISettingsManager _settingsManager;
     private static IDatabase _database;
     private static IRconSocket _rcon;
-    private static IFlashServer _flashServer;
     private readonly INitroServer _nitroServer;
     private static IFigureDataManager _figureManager;
     private static IItemDataManager _itemDataManager;
@@ -76,7 +73,6 @@ public class PlusEnvironment : IPlusEnvironment
         IRconSocket rconSocket,
         IOptions<RconConfiguration> rconConfiguration,
         IItemDataManager itemDataManager,
-        IFlashServer flashServer,
         INitroServer nitroServer)
     {
         _database = database;
@@ -86,7 +82,6 @@ public class PlusEnvironment : IPlusEnvironment
         _game = game;
         _startableTasks = startableTasks;
         _rcon = rconSocket;
-        _flashServer = flashServer;
         _nitroServer = nitroServer;
         _rconConfiguration = rconConfiguration.Value;
         _itemDataManager = itemDataManager;
@@ -129,14 +124,10 @@ public class PlusEnvironment : IPlusEnvironment
             await _settingsManager.Reload();
             _figureManager.Init();
 
-            //Have our encryption ready.
-            HabboEncryptionV2.Initialize(new());
-
             //Make sure Rcon is connected before we allow clients to Connect.
             _rcon.Init(_rconConfiguration.Hostname, _rconConfiguration.Port, _rconConfiguration.AllowedAddresses);
 
             //Accept connections.
-            _flashServer.Start();
             _nitroServer.Start();
 
             _itemDataManager.Init();
@@ -361,7 +352,6 @@ public class PlusEnvironment : IPlusEnvironment
         Thread.Sleep(15000);
         Game.StopGameLoop();
         Thread.Sleep(1000);
-        _flashServer.Stop();
         Game.ClientManager.CloseAll(); //Close all connections
         Game.RoomManager.Dispose(); //Stop the game loop.
         // pixelrp: chat lines still waiting for their batch are saved too

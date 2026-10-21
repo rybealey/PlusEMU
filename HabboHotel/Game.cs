@@ -46,8 +46,7 @@ public class Game : IGame
     // pixelrp: 5ms poll so the 500ms room tick fires within ~5ms of due time
     // instead of up to 25ms late (walking bots and tick-paced movement stutter
     // by exactly that lateness). GameClientManager.OnCycle is safe at this
-    // rate: TestClientConnections self-gates on a 30s stopwatch and
-    // HandleTimeouts early-returns on an empty queue.
+    // rate: it does no work.
     private readonly int _cycleSleepTime = 5;
     private IGameDataManager _gameDataManager;
     private IServerStatusUpdater _globalUpdater;

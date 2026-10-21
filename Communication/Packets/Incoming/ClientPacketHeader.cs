@@ -3,8 +3,6 @@
 public static class ClientPacketHeader
 {
     // Handshake
-    public const uint InitDiffieHandshakeEvent = 3392; //316
-    public const uint GenerateSecretKeyEvent = 3622; //3847
     public const uint UniqueIdEvent = 3521; //1471
     public const uint SsoTicketEvent = 1989; //1778
     public const uint InfoRetrieveEvent = 2629; //186

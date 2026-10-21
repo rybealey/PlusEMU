@@ -20,10 +20,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="Dapper" Version="2.0.123" />
-		<PackageReference Include="Dapper.Contrib" Version="2.0.78" />
 		<PackageReference Include="Microsoft.Extensions.Configuration" Version="7.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="7.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="7.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="7.0.0" />
@@ -40,9 +38,6 @@
 	<ItemGroup>
 		<Reference Include="AStar">
 			<HintPath>Resources\libs\AStar.dll</HintPath>
-		</Reference>
-		<Reference Include="HabboEncryption">
-			<HintPath>Resources\libs\HabboEncryption.dll</HintPath>
 		</Reference>
 	</ItemGroup>
 
@@ -67,8 +62,5 @@
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition=" '$(OS)' == 'Windows_NT' ">
 		<Exec Command="powershell -Command '[Environment]::SetEnvironmentVariable(&quot;PLUS_EMULATOR_HOME&quot;, &quot;$([System.IO.Path]::GetFullPath('$(OutDir)'))&quot;, [System.EnvironmentVariableTarget]::Machine)'" />
-	</Target>
-	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-		<Exec Command="echo Configuration: $(Configuration)&#xD;&#xA;echo DevEnvDir: $(DevEnvDir)&#xD;&#xA;echo OutDir: $(OutDir)&#xD;&#xA;echo ProjectDir: $(ProjectDir)&#xD;&#xA;echo VisualStudioVersion: $(VisualStudioVersion)&#xD;&#xA;echo AssemblySearchPaths: $(AssemblySearchPaths)&#xD;&#xA;echo AssemblyName: $(AssemblyName)&#xD;&#xA;echo BaseIntermediateOutputPath: $(BaseIntermediateOutputPath)&#xD;&#xA;echo CscToolPath: $(CscToolPath)" />
 	</Target>
 </Project>

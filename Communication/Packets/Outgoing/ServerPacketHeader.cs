@@ -3,8 +3,6 @@
 public static class ServerPacketHeader
 {
     // Handshake
-    public const uint InitCryptoComposer = 3531; //675
-    public const uint SecretKeyComposer = 696; //3179
     public const uint AuthenticationOkComposer = 1079; //1442
     public const uint UserObjectComposer = 845; //1823
     public const uint UserPerksComposer = 1790; //2807

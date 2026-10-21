@@ -6,3 +6,8 @@ namespace Plus.Communication.Abstractions;
 public interface IGameClientFactory
 {
 }
+
+public interface IGameClientFactory<TGameClient, TServer> : IGameClientFactory
+{
+    TGameClient Create(TServer server);
+}

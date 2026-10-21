@@ -8,11 +8,6 @@
         "MinimumPoolSize": 5,
         "MaximumPoolSize": 65
     },
-    "Flash": {
-        "Hostname": "127.0.0.1",
-        "Port": 1232,
-        "Name": "Default Flash Server"
-    },
     "Nitro": {
         "Hostname": "127.0.0.1",
         "Port": 2096,

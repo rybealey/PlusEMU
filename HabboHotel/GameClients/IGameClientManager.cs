@@ -10,11 +10,9 @@ public interface IGameClientManager
     void OnCycle();
     GameClient? GetClientByUserId(int userId);
     GameClient? GetClientByUsername(string username);
-    bool TryGetClient(int clientId, out GameClient client);
     bool UpdateClientUsername(GameClient client, string oldUsername, string newUsername);
     Task<string> GetNameById(int id);
     IEnumerable<GameClient> GetClientsById(Dictionary<int, MessengerBuddy>.KeyCollection users);
-    void StaffAlert(IServerPacket message, int exclude = 0);
     void ModAlert(string message);
     void DoAdvertisingReport(GameClient reporter, GameClient target);
     void SendPacket(IServerPacket packet, string fuse = "");

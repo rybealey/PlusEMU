@@ -865,18 +865,7 @@ public class RoomUserManager
         {
             if (pet == null)
                 continue;
-            if (pet.DbState == PetDatabaseUpdateState.NeedsInsert)
-            {
-                dbClient.SetQuery($"INSERT INTO `bots` (`id`,`user_id`,`room_id`,`name`,`x`,`y`,`z`) VALUES ('{pet.PetId}','{pet.OwnerId}','{pet.RoomId}',@name,'0','0','0')");
-                dbClient.AddParameter("name", pet.Name);
-                dbClient.RunQuery();
-                dbClient.SetQuery(
-                    $"INSERT INTO `bots_petdata` (`type`,`race`,`color`,`experience`,`energy`,`createstamp`,`nutrition`,`respect`) VALUES ('{pet.Type}',@race,@color,'0','100','{pet.CreationStamp}','0','0')");
-                dbClient.AddParameter($"{pet.PetId}race", pet.Race);
-                dbClient.AddParameter($"{pet.PetId}color", pet.Color);
-                dbClient.RunQuery();
-            }
-            else if (pet.DbState == PetDatabaseUpdateState.NeedsUpdate)
+            if (pet.DbState == PetDatabaseUpdateState.NeedsUpdate)
             {
                 //Surely this can be *99 better? // TODO
                 var user = GetRoomUserByVirtualId(pet.VirtualId);

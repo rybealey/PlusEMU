@@ -1,6 +1,5 @@
 ﻿using System.Net.Sockets;
 using NLog;
-using Plus.Communication.Encryption.Crypto.Prng;
 using Plus.Communication.Flash;
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
@@ -34,8 +33,6 @@ public abstract class GameClient
                 return _disconnected;
         }
     }
-
-    public Arc4? Rc4Client { get; set; }
 
     public bool IsAuthenticated { get; set; } = false;
     public DateTime TimeConnected { get; set; }

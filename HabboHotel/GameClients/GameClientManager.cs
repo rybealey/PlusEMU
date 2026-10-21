@@ -1,12 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Data;
-using System.Diagnostics;
 using System.Text;
 using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Communication.Packets;
-using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.Database;
 using Plus.HabboHotel.Users.Messenger;
@@ -18,11 +15,6 @@ public class GameClientManager : IGameClientManager
     private readonly IDatabase _database;
     private readonly ILogger<GameClientManager> _logger;
 
-    private readonly Stopwatch _clientPingStopwatch;
-
-    private readonly ConcurrentDictionary<int, GameClient> _clients;
-
-    private readonly Queue _timedOutConnections;
     private readonly ConcurrentDictionary<int, GameClient> _userIdRegister;
     private readonly ConcurrentDictionary<string, GameClient> _usernameRegister;
 
@@ -30,34 +22,22 @@ public class GameClientManager : IGameClientManager
     {
         _database = database;
         _logger = logger;
-        _clients = new();
         _userIdRegister = new();
         _usernameRegister = new();
-        _timedOutConnections = new();
-        _clientPingStopwatch = new();
-        _clientPingStopwatch.Start();
     }
 
-    // pixelrp: _clients is never populated in this fork (the connection layer
-    // tracks sessions itself) — online count and hotel-wide client iteration
-    // must use the login register, same as SendPacket.
+    // pixelrp: the connection layer tracks sessions itself — online count and
+    // hotel-wide client iteration must use the login register, same as
+    // SendPacket.
     public int Count => _userIdRegister.Count;
 
     public ICollection<GameClient> GetClients => _userIdRegister.Values;
 
-    public void OnCycle()
-    {
-        TestClientConnections();
-        HandleTimeouts();
-    }
+    public void OnCycle() { }
 
     public GameClient? GetClientByUserId(int userId) => _userIdRegister.ContainsKey(userId) ? _userIdRegister[userId] : null;
 
     public GameClient? GetClientByUsername(string username) => _usernameRegister.ContainsKey(username.ToLower()) ? _usernameRegister[username.ToLower()] : null;
-
-    // pixelrp: keyed by connection id, which nothing registers in this fork —
-    // always false. No callers; kept only to satisfy IGameClientManager.
-    public bool TryGetClient(int clientId, out GameClient client) => _clients.TryGetValue(clientId, out client);
 
     public bool UpdateClientUsername(GameClient client, string oldUsername, string newUsername)
     {
@@ -84,18 +64,6 @@ public class GameClientManager : IGameClientManager
             var client = GetClientByUserId(id);
             if (client != null)
                 yield return client;
-        }
-    }
-
-    public void StaffAlert(IServerPacket message, int exclude = 0)
-    {
-        foreach (var client in GetClients.ToList())
-        {
-            if (client == null || client.GetHabbo() == null)
-                continue;
-            if (client.GetHabbo().Rank < 3 || client.GetHabbo().Id == exclude)
-                continue;
-            client.Send(message);
         }
     }
 
@@ -151,8 +119,8 @@ public class GameClientManager : IGameClientManager
 
     public void SendPacket(IServerPacket packet, string fuse = "")
     {
-        // pixelrp: _clients is never populated in this fork (the connection layer
-        // tracks sessions itself) — hotel-wide sends must use the login register.
+        // pixelrp: the connection layer tracks sessions itself — hotel-wide
+        // sends must use the login register.
         foreach (var client in _userIdRegister.Values.ToList())
         {
             if (client == null || client.GetHabbo() == null)
@@ -224,89 +192,8 @@ public class GameClientManager : IGameClientManager
         }
         _logger.LogInformation("Done saving users inventory!");
         _logger.LogInformation("Closing server connections...");
-        //try
-        //{
-        //    foreach (var client in GetClients.ToList())
-        //    {
-        //        try
-        //        {
-        //            client.Dispose();
-        //        }
-        //        catch { }
-        //        Console.Clear();
-        //        Log.Info("<<- SERVER SHUTDOWN ->> CLOSING CONNECTIONS");
-        //    }
-        //}
-        //catch (Exception e)
-        //{
-        //    ExceptionLogger.LogException(e);
-        //}
         _userIdRegister.Clear();
         _usernameRegister.Clear();
         _logger.LogInformation("Connections closed!");
-    }
-
-    private void TestClientConnections()
-    {
-        if (_clientPingStopwatch.ElapsedMilliseconds >= 30000)
-        {
-            _clientPingStopwatch.Restart();
-            try
-            {
-                var toPing = new List<GameClient>();
-                foreach (var client in _clients.Values.ToList())
-                {
-                    //if (client.PingCount < 6)
-                    //{
-                    //    client.PingCount++;
-                    //    toPing.Add(client);
-                    //}
-                    //else
-                    //{
-                    //    lock (_timedOutConnections.SyncRoot)
-                    //    {
-                    //        _timedOutConnections.Enqueue(client);
-                    //    }
-                    //}
-                }
-                var start = DateTime.Now;
-                foreach (var client in toPing.ToList())
-                {
-                    try
-                    {
-                        client.Send(new PongComposer());
-                    }
-                    catch
-                    {
-                        lock (_timedOutConnections.SyncRoot)
-                        {
-                            _timedOutConnections.Enqueue(client);
-                        }
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                //ignored
-            }
-        }
-    }
-
-    private void HandleTimeouts()
-    {
-        if (_timedOutConnections.Count > 0)
-        {
-            lock (_timedOutConnections.SyncRoot)
-            {
-                while (_timedOutConnections.Count > 0)
-                {
-                    GameClient client = null;
-                    if (_timedOutConnections.Count > 0)
-                        client = (GameClient)_timedOutConnections.Dequeue();
-                    if (client != null)
-                        client.Disconnect();
-                }
-            }
-        }
     }
 }
