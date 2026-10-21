@@ -78,7 +78,9 @@ public class CommandManager : ICommandManager
             return false;
         if (!message.StartsWith(_prefix))
             return false;
-        if (message == $"{_prefix}commands")
+        // pixelrp: any case and a stray trailing space, as every other command's
+        // key is read - ":Commands" (a capitalised first letter) went out as chat.
+        if (message.TrimEnd().Equals($"{_prefix}commands", StringComparison.OrdinalIgnoreCase))
         {
             // The caller's commands, grouped for the :commands window's side
             // rail (CommandListLayout). The client reads it as a MOTD that

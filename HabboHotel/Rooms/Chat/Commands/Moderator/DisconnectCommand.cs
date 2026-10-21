@@ -16,7 +16,10 @@ internal class DisconnectCommand : ITargetChatCommand
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
-        if (target.Permissions.HasRight("mod_tool") && !target.Permissions.HasRight("mod_disconnect_any"))
+        // pixelrp: staff can only be disconnected by someone holding
+        // mod_disconnect_any - the one typing it. This read the TARGET's right,
+        // so nobody could ever disconnect a staff member.
+        if (target.Permissions.HasRight("mod_tool") && !session.GetHabbo().Permissions.HasRight("mod_disconnect_any"))
         {
             session.SendWhisper("You are not allowed to Disconnect that user.");
             return Task.CompletedTask;
