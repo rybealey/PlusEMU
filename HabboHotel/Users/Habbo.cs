@@ -823,12 +823,13 @@ public class Habbo
             // pixelrp: the Wanted list only carries players who are HERE, so
             // leaving has to be announced or the rest of the hotel keeps a row for
             // somebody who has gone - and with the clock frozen it would sit there
-            // at a fixed number forever rather than counting itself off.
+            // at a fixed number forever rather than counting itself off. Only
+            // when they were on it, though: nobody else's list changes otherwise.
             //
             // AFTER UnregisterClient above, deliberately: the broadcast rebuilds
             // the list from who is registered, so running it any earlier would
             // send one that still had this player on it.
-            LogoutStep(() => Corporations.WantedUtility.Broadcast());
+            LogoutStep(() => Corporations.WantedUtility.BroadcastIfCharged(Id));
             // pixelrp discord sync: drop the Online role shortly after logout.
             LogoutStep(() => Plus.HabboHotel.Discord.DiscordSyncUtility.Enqueue(Id, "logout"));
             LogoutStep(() => Dispose());

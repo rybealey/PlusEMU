@@ -302,4 +302,22 @@ public static class WantedUtility
     {
         PlusEnvironment.Game.ClientManager.SendPacket(new RpWantedComposer(GetWanted()));
     }
+
+    /// <summary>
+    /// pixelrp: a player who has just left only changes the list for everyone
+    /// else if they were on it - open charges. Everybody else logging out used
+    /// to rebuild the list and send it to the whole hotel all the same (the
+    /// client drops lapsed rows by itself, so nothing waits on the broadcast).
+    /// </summary>
+    public static void BroadcastIfCharged(int userId)
+    {
+        using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
+        {
+            dbClient.SetQuery("SELECT 1 FROM `rp_charges` WHERE `user_id` = @userId AND `dropped_at` = 0 LIMIT 1");
+            dbClient.AddParameter("userId", userId);
+            if (dbClient.GetInteger() != 1)
+                return;
+        }
+        Broadcast();
+    }
 }

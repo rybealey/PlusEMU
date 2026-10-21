@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Plus.Database.Interfaces;
 
 namespace Plus.HabboHotel.Users.Accounts;
@@ -25,21 +26,37 @@ public static class AccountUtility
 
     public record Character(int Id, string Username, string Look, string Motto, string Gender);
 
+    /// <summary>
+    /// Every user's account root, once read. Which account a user belongs to
+    /// never changes - `parent_id` is written when a character is created
+    /// (Create) and never again - and a single log in asked it six times, so
+    /// each user's is asked of the database once per run. A user not found is
+    /// not remembered.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, int> Roots = new();
+
     /// <summary>The account a user belongs to: their root, or themselves.</summary>
     public static int RootOf(int userId)
     {
         if (userId <= 0)
             return 0;
+        if (Roots.TryGetValue(userId, out var known))
+            return known;
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         return RootOf(dbClient, userId);
     }
 
     private static int RootOf(IQueryAdapter dbClient, int userId)
     {
+        if (Roots.TryGetValue(userId, out var known))
+            return known;
         dbClient.SetQuery("SELECT COALESCE(`parent_id`, `id`) FROM `users` WHERE `id` = @id LIMIT 1");
         dbClient.AddParameter("id", userId);
         var root = dbClient.GetInteger();
-        return (root == 0) ? userId : root;
+        if (root == 0)
+            return userId;
+        Roots[userId] = root;
+        return root;
     }
 
     /// <summary>

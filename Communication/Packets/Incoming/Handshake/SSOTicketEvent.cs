@@ -207,10 +207,14 @@ public class SsoTicketEvent : IPacketEvent
             HabboHotel.Rooms.Chat.Commands.User.Police.JailState.OnLogin(session);
             // pixelrp: the wanted list, so the Wanted window has its rows and the
             // HUD can draw stars over whoever this player looks at.
-            session.Send(new RpWantedComposer(HabboHotel.Corporations.WantedUtility.GetWanted()));
-            // ...and to everyone else, since arriving is what puts this player
-            // BACK on a list they dropped off when they left.
-            HabboHotel.Corporations.WantedUtility.Broadcast();
+            var wanted = HabboHotel.Corporations.WantedUtility.GetWanted();
+            session.Send(new RpWantedComposer(wanted));
+            // ...and to everyone else when arriving puts this player BACK on a
+            // list they dropped off when they left - only then. Every log in
+            // used to rebuild it and send it to the whole hotel, which after a
+            // restart meant every player's arrival sent it to everyone.
+            if (wanted.Exists(player => player.UserId == session.GetHabbo().Id))
+                PlusEnvironment.Game.ClientManager.SendPacket(new RpWantedComposer(wanted));
             // pixelrp: whether this player's global room rights are live. Rank
             // alone is what opens the client's furni tools, and those rights
             // now follow the City Government clock - so the client has to be

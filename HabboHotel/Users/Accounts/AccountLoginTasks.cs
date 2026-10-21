@@ -13,8 +13,10 @@ namespace Plus.HabboHotel.Users.Accounts;
 /// later. Every character on the account is checked, so a ban on any of them
 /// locks the account out - which is what banning somebody is supposed to mean.
 ///
-/// The per-character check still runs (BanLoginCheckTask); this is the wider
-/// one, and both have to pass.
+/// The account's characters include the one logging in, so this is the only
+/// ban check at log in (the stock per-character BanLoginCheckTask asked the
+/// same of that one character again). An account whose characters can't be
+/// read is refused, as that task refused a user whose name couldn't be.
 /// </summary>
 internal class AccountBanCheckTask : IAuthenticationTask
 {
@@ -27,7 +29,10 @@ internal class AccountBanCheckTask : IAuthenticationTask
 
     public Task<bool> CanLogin(int userId)
     {
-        foreach (var character in AccountUtility.Characters(userId))
+        var characters = AccountUtility.Characters(userId);
+        if (characters.Count == 0)
+            return Task.FromResult(false);
+        foreach (var character in characters)
         {
             if (string.IsNullOrWhiteSpace(character.Username))
                 continue;

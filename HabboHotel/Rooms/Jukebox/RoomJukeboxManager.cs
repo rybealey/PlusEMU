@@ -17,6 +17,14 @@ public class RoomJukeboxManager
     private readonly Room _room;
     private readonly JukeboxStation _station;
 
+    // The playing state the jukebox furni were last brought in line with, and
+    // ticks since (see Cycle). Null until the first sync.
+    private bool? _syncedPlaying;
+    private int _ticksSinceSync;
+
+    // Ten seconds of 500ms room ticks.
+    private const int ResyncTicks = 20;
+
     public RoomJukeboxManager(Room room)
     {
         _room = room;
@@ -43,9 +51,17 @@ public class RoomJukeboxManager
 
     // Room cycle: advance this room's station if due (guarded inside) and keep
     // its jukebox furni in step with what the room is playing.
+    //
+    // pixelrp: the furni only need touching when the station starts or stops -
+    // placing or picking one up syncs on its own (OnJukeboxPlaced/Removed). The
+    // sync copies and scans every floor item, and ran twice a second in every
+    // busy room whether or not it had a jukebox; now on a flip, and every ten
+    // seconds in case something else set a jukebox's state.
     public void Cycle()
     {
         _station.Cycle();
+        if (_syncedPlaying == _station.IsPlaying && ++_ticksSinceSync < ResyncTicks)
+            return;
         SyncJukeboxItemState();
     }
 
@@ -59,6 +75,8 @@ public class RoomJukeboxManager
     // and idles ("0") otherwise. Idempotent; sends only on a flip.
     public void SyncJukeboxItemState()
     {
+        _syncedPlaying = _station.IsPlaying;
+        _ticksSinceSync = 0;
         var extraData = _station.IsPlaying ? "1" : "0";
         foreach (var item in _room.GetRoomItemHandler().GetFloor.Where(IsJukebox).ToList())
         {
