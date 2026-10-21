@@ -1,4 +1,3 @@
-using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.Catalog.Utilities;
@@ -28,11 +27,7 @@ namespace Plus.Communication.Packets.Incoming.Catalog;
 /// made identical and the box went empty: this catalog holds stock on pages
 /// whose chain to the root does not survive that walk. Searching found
 /// nothing, which is far worse than a hit whose category cannot be browsed to.
-///
-/// Each search scans the whole catalog, so it has its own budget: the client
-/// waits 300ms after typing stops (CatalogSearchView), so 3 a second at most.
 /// </summary>
-[RateLimit(4, 8)]
 internal class RpCatalogSearchEvent : IPacketEvent
 {
     /// <summary>Two characters is where a query stops being every item in the

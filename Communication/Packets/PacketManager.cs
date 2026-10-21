@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Incoming;
-using Plus.Communication.Packets.Incoming.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users.Security;
 using System.Diagnostics;
@@ -18,7 +17,7 @@ public sealed class PacketManager : IPacketManager, IDisposable
     private readonly HashSet<Type> _staffOnlyPackets = new();
     private readonly HashSet<Type> _builderOnlyPackets = new();
     private readonly HashSet<Type> _vipOnlyPackets = new();
-    private readonly Dictionary<Type, RateLimitAttribute> _rateLimits = new();
+    private readonly Dictionary<Type, PacketLimit> _rateLimits = new();
     private readonly Dictionary<uint, string> _packetNames = new();
 
     /// <summary>
@@ -51,10 +50,10 @@ public sealed class PacketManager : IPacketManager, IDisposable
                 _builderOnlyPackets.Add(packet.GetType());
             if (packet.GetType().GetCustomAttribute<VipOnlyAttribute>() != null)
                 _vipOnlyPackets.Add(packet.GetType());
-            // pixelrp: walking belongs to the movement system and is never
-            // budgeted here - not limited, and never counted towards a flood.
-            if (packet.GetType() != typeof(MoveAvatarEvent))
-                _rateLimits[packet.GetType()] = packet.GetType().GetCustomAttribute<RateLimitAttribute>() ?? RateLimitAttribute.Default;
+            // pixelrp: the packet's limit (PacketLimits). Walking has none - it
+            // is the movement system's, never limited or counted towards a flood.
+            if (PacketLimits.For(packet.GetType()) is { } limit)
+                _rateLimits[packet.GetType()] = limit;
         }
     }
 
@@ -76,8 +75,8 @@ public sealed class PacketManager : IPacketManager, IDisposable
         }
 
         // pixelrp: a connection's packets come out of a budget per packet type
-        // (RateLimitAttribute) before any handler runs - before log in too. Over
-        // it, the packet is dropped; a connection that keeps going far over it
+        // and a total (PacketLimits) before any handler runs - before log in too.
+        // Over it, the packet is dropped; a connection that keeps going far over it
         // is flooding, which only a packet tool or a bot does, so it is written
         // down for housekeeping (PacketFloodLog) and disconnected.
         if (_rateLimits.TryGetValue(pak.GetType(), out var limit))
