@@ -1,19 +1,26 @@
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
 /// <summary>
-/// pixelrp: `:ss` - set the state of the piece you are facing.
+/// pixelrp: `:ss 2` - a sticky place state (Twist, 2026-10-22). Every furni the
+/// builder places from then on goes down in state 2 instead of the state it
+/// had in the inventory; `:ss` on its own turns it off. The same shape as :bh,
+/// which does it for height.
 ///
-/// A switchable piece only moves one state per click, so reaching state 7 of a
-/// gate means clicking it seven times and counting. `:ss 7` goes there, which
-/// is the difference between posing a room and operating it.
+/// Any number, whatever the furni (Twist: ":ss can be any number depending on
+/// the state") - not capped at its click count, because some furni draw states
+/// past it (a number block's 100 faces, a state the server sets itself), and
+/// the builder sees at once what a number looks like. What it is never written
+/// into is extra data that is not a plain state number - a photo keeps its
+/// image there, a group furni its group, a background its map, and a number
+/// would blank them; those go down as they are. Only plain furni and gates take
+/// one (TakesPlaceState).
 ///
-/// States are the same numbers the furni itself uses - 0 up to one less than
-/// its mode count - and a piece with nothing to switch says so rather than
-/// having a number written into its data. That guard matters: extra_data is
-/// also where a photo keeps its image and a background keeps its map, and a
-/// stray "3" would blank them.
+/// The state itself is applied in PlaceObjectEvent; this command only records
+/// it on the RoomUser, so it is forgotten when the builder leaves the room.
 /// </summary>
 internal class SetStateCommand : IChatCommand
 {
@@ -22,14 +29,35 @@ internal class SetStateCommand : IChatCommand
 
     public string Parameters => "%state%";
 
-    public string Description => "Sets the state of the furniture you are facing. :ss 3, or :ss on its own for the next one.";
+    public string Description => "Places furniture in the state you pick. :ss 2, then :ss on its own to turn it off.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        var actor = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+        var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
 
-        if (actor == null)
+        if (user == null)
             return;
+
+        // Bare `:ss`, or `:ss off`, turns it off. Like :bh, that needs no rights:
+        // a builder who lost rights mid-build can still clear what they set.
+        if (!parameters.Any() || parameters[0].Equals("off", StringComparison.OrdinalIgnoreCase))
+        {
+            if (user.PlaceState == null)
+            {
+                session.SendWhisper("Place state is already off.");
+                return;
+            }
+
+            user.PlaceState = null;
+            session.SendWhisper("Place state off. Furniture goes down in its own state again.");
+            return;
+        }
+
+        if (!int.TryParse(parameters[0], out var state) || state < 0)
+        {
+            session.SendWhisper("That is not a state. Try :ss 2, or :ss on its own to turn it off.");
+            return;
+        }
 
         if (!room.CheckRights(session, false, true))
         {
@@ -37,58 +65,15 @@ internal class SetStateCommand : IChatCommand
             return;
         }
 
-        if (!BuildTarget.FindFurni(room, actor, out var item))
-        {
-            session.SendWhisper("There is nothing there to set. Face the piece, or stand on it.");
-            return;
-        }
-
-        var name = string.IsNullOrEmpty(item.Definition.PublicName) ? item.Definition.ItemName : item.Definition.PublicName;
-
-        // The same ceiling the click interactor uses: Modes is the count, so the
-        // highest legal state is one below it.
-        var highest = item.Definition.Modes - 1;
-
-        if (highest <= 0)
-        {
-            session.SendWhisper($"{name} has only one state.");
-            return;
-        }
-
-        int state;
-
-        if (parameters.Any())
-        {
-            if (!int.TryParse(parameters[0], out state) || state < 0 || state > highest)
-            {
-                session.SendWhisper($"{name} goes from 0 to {highest}.");
-                return;
-            }
-        }
-        else
-        {
-            // Bare `:ss` is one click, wrap included - so it can be held down
-            // through a cycle without doing the arithmetic.
-            if (!int.TryParse(item.LegacyDataString, out var current))
-                current = 0;
-
-            state = (current >= highest) ? 0 : current + 1;
-        }
-
-        item.LegacyDataString = state.ToString();
-
-        // The setter is a no-op on anything whose extra data is not the legacy
-        // string format - a photo, a background, a crackable. Modes should have
-        // ruled those out already, so this is a belt on top of braces: better a
-        // sentence than a command that reports a state the piece never took.
-        if (item.LegacyDataString != state.ToString())
-        {
-            session.SendWhisper($"{name} does not take a numbered state.");
-            return;
-        }
-
-        item.UpdateState();
-
-        session.SendWhisper($"{name} set to state {state}.");
+        user.PlaceState = state;
+        session.SendWhisper($"Place state set to {state}. Furniture you place goes down in state {state} until you type :ss.");
     }
+
+    /// <summary>
+    /// Whether a piece about to be placed can be put in a place state: plain
+    /// furni and gates, whose extra data is a state number.
+    /// </summary>
+    internal static bool TakesPlaceState(Item item) =>
+        item.ExtraData is LegacyDataFormat
+        && item.Definition.InteractionType is InteractionType.None or InteractionType.Gate;
 }

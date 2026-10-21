@@ -309,6 +309,13 @@ public class RoomUser
     public double? BuildHeight { get; set; }
 
     /// <summary>
+    /// pixelrp: the sticky place state from :ss, or null for none - every furni
+    /// this builder places goes down in that state, if it has it. Lives here for
+    /// the same reason BuildHeight does.
+    /// </summary>
+    public int? PlaceState { get; set; }
+
+    /// <summary>
     /// pixelrp: the one furni placement :undo can put back - the state of the
     /// last piece this builder moved, rotated, re-levelled or faded, captured
     /// just before they changed it. Null when there is nothing to undo.

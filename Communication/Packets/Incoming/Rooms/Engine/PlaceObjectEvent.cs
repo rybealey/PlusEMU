@@ -5,6 +5,7 @@ using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.Chat.Commands.User;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Engine;
 
@@ -89,6 +90,13 @@ internal class PlaceObjectEvent : RoomPacketEvent
                 break;
             }
         }
+        // pixelrp: :ss - the builder's place state, if this piece has it. Set
+        // before it goes down, so the room sees it arrive that way, and saved
+        // once it is down, because placing only writes where a piece stands.
+        var placeState = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id)?.PlaceState;
+        var stateSet = placeState != null && SetStateCommand.TakesPlaceState(item);
+        if (stateSet)
+            item.LegacyDataString = placeState.Value.ToString();
         if (!item.IsWallItem)
         {
             if (data.Length < 4)
@@ -110,6 +118,8 @@ internal class PlaceObjectEvent : RoomPacketEvent
             {
                 session.GetHabbo().Inventory.Furniture.RemoveItem(itemId);
                 session.Send(new FurniListRemoveComposer(itemId));
+                if (stateSet)
+                    room.GetRoomItemHandler().UpdateItem(item);
                 if (session.GetHabbo().Id == room.OwnerId)
                     _achievementManager.ProgressAchievement(session, "ACH_RoomDecoFurniCount", 1);
                 if (item.IsWired)
@@ -141,6 +151,8 @@ internal class PlaceObjectEvent : RoomPacketEvent
                     {
                         session.GetHabbo().Inventory.Furniture.RemoveItem(itemId);
                         session.Send(new FurniListRemoveComposer(itemId));
+                        if (stateSet)
+                            room.GetRoomItemHandler().UpdateItem(item);
                         if (session.GetHabbo().Id == room.OwnerId)
                             _achievementManager.ProgressAchievement(session, "ACH_RoomDecoFurniCount", 1);
                     }
