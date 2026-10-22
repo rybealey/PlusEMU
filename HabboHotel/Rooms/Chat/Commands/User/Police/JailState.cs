@@ -53,6 +53,9 @@ public static class JailState
     /// <summary>No sentence is longer than this, however long the sheet (Twist, 2026-09-30).</summary>
     public const int MaxSentenceSeconds = 40 * 60;
 
+    /// <summary>What a prisoner a staff member lets go is told, from the City Panel or :release.</summary>
+    public const string StaffReleasedWhisper = "A staff member has released you from jail.";
+
     /// <summary>The shortest sentence that may ask for a jury trial (Twist, 2026-10-19).</summary>
     public const int TrialMinSentenceSeconds = 15 * 60;
 
@@ -130,8 +133,10 @@ public static class JailState
     /// <summary>
     /// What a prisoner cannot do, by command key. A block list, for the reason
     /// PoliceState.CuffedCannot gives. Walking, talking and the meta commands
-    /// stay; what goes is fighting, police work, handing things over, following
-    /// somebody out, and clocking in.
+    /// stay; what goes is fighting, police work, handing things over, and
+    /// following somebody out. Clocking in is refused by ShiftManager.StartShift
+    /// instead, which knows the job: City Government staff go on duty even in
+    /// jail (Twist, 2026-10-22).
     /// </summary>
     private static readonly HashSet<string> JailedCannot = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -141,8 +146,8 @@ public static class JailState
         "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort", "charge", "pardon", "arrest",
         // Trading, and handing things over.
         "offer", "sell", "give", "heal",
-        // Out of the room behind somebody, and back on the clock.
-        "follow", "startwork",
+        // Out of the room behind somebody.
+        "follow",
         // Down and off to the hospital (SuicideCommand).
         "suicide"
     };
@@ -174,16 +179,17 @@ public static class JailState
     }
 
     /// <summary>
-    /// City Panel: staff let a prisoner go early. Online through the one
-    /// release point (<see cref="Release"/>); offline, the open record is
-    /// closed, so their next login finds nothing to resume. False when there
-    /// was no sentence to end.
+    /// City Panel and :release: staff let a prisoner go early. Online through
+    /// the one release point (<see cref="Release"/>), where they are whispered
+    /// <paramref name="whisper"/>; offline, the open record is closed, so their
+    /// next login finds nothing to resume. False when there was no sentence to
+    /// end.
     /// </summary>
-    public static bool StaffRelease(int habboId, GameClient? client)
+    public static bool StaffRelease(int habboId, GameClient? client, string? whisper = null)
     {
         if (Serving.ContainsKey(habboId))
         {
-            Release(habboId, client);
+            Release(habboId, client, whisper: whisper);
             return true;
         }
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
@@ -468,10 +474,11 @@ public static class JailState
     /// Time served: stamp the record, let them go, and tell them. Safe from any
     /// thread and for somebody not serving - only the first caller releases.
     /// A prisoner found not guilty is let go here too, told "You are free to
-    /// go." instead of the whisper (<paramref name="acquitted"/>). Any trial of
-    /// theirs still to come is called off (JuryTrials.OnReleased).
+    /// go." instead of the whisper (<paramref name="acquitted"/>), and one let
+    /// go by staff is whispered <paramref name="whisper"/>. Any trial of theirs
+    /// still to come is called off (JuryTrials.OnReleased).
     /// </summary>
-    public static void Release(int habboId, GameClient? client, bool acquitted = false)
+    public static void Release(int habboId, GameClient? client, bool acquitted = false, string? whisper = null)
     {
         SummonedTo.TryRemove(habboId, out _);
         if (!Serving.TryRemove(habboId, out var sentence))
@@ -487,7 +494,7 @@ public static class JailState
         if (acquitted)
             client?.SendNotification("You are free to go.");
         else
-            client?.SendWhisper("You have served your sentence.");
+            client?.SendWhisper(whisper ?? "You have served your sentence.");
         // Out of the prisoner's uniform - into their rank's, if they are on duty.
         UniformManager.Refresh(client);
         SendPrisoners((client ?? PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId))?.GetHabbo()?.CurrentRoom);

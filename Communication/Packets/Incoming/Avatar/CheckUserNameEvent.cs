@@ -35,6 +35,12 @@ internal class CheckUserNameEvent : IPacketEvent
             session.Send(new NameChangeUpdateComposer(name, 4));
             return;
         }
+        // pixelrp: "bot-" names are bots' (BotNames).
+        if (HabboHotel.Rooms.AI.BotNames.IsBotName(name))
+        {
+            session.Send(new NameChangeUpdateComposer(name, 4));
+            return;
+        }
         if (!session.GetHabbo().Permissions.HasRight("mod_tool") && name.ToLower().Contains("mod") || name.ToLower().Contains("adm") || name.ToLower().Contains("admin") ||
             name.ToLower().Contains("m0d"))
         {

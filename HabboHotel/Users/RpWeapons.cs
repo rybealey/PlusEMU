@@ -49,7 +49,16 @@ public static class RpWeapons
 
     public static bool IsWeapon(string item) => !string.IsNullOrEmpty(item) && Weapons.ContainsKey(item);
 
-    public static int HandItemFor(string item) => (IsWeapon(item) ? Weapons[item].HandItem : 0);
+    /// <summary>
+    /// What the Weapon slot takes: the weapons, and the vape - in the hand only
+    /// while it is equipped there (Twist, 2026-10-22). The vape is no weapon:
+    /// it still stacks, and nothing that counts weapons (trades, the deposit
+    /// box, the City Panel's caps) treats it as one.
+    /// </summary>
+    public static bool IsEquippable(string item) => IsWeapon(item) || item == RpVape.Item;
+
+    public static int HandItemFor(string item) =>
+        IsWeapon(item) ? Weapons[item].HandItem : item == RpVape.Item ? RpVape.HandItem : 0;
 
     public static string NameOf(string item) => (IsWeapon(item) ? Weapons[item].Name : item);
 

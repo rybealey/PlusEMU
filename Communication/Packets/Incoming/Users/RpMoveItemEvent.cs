@@ -11,7 +11,8 @@ namespace Plus.Communication.Packets.Incoming.Users;
 ///
 /// The Weapon frame (RpWeapons.WeaponSlot) is a slot too: dragging a weapon
 /// onto it equips it, dragging it back out unequips it, and it only ever holds
-/// a weapon - so a swap out of it is refused unless what comes back in is one.
+/// a weapon or a vape (RpWeapons.IsEquippable) - so a swap out of it is refused
+/// unless what comes back in is one.
 /// </summary>
 internal class RpMoveItemEvent : IPacketEvent
 {
@@ -44,11 +45,11 @@ internal class RpMoveItemEvent : IPacketEvent
         var weaponSlot = Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
         if (to != weaponSlot && (to > habbo.RpUnlockedSlots) && !targetOccupied)
             return Task.CompletedTask;
-        // The Weapon frame holds weapons and nothing else, from either side.
-        if ((to == weaponSlot && !Plus.HabboHotel.Users.RpWeapons.IsWeapon(source.Item))
-            || (from == weaponSlot && targetOccupied && !Plus.HabboHotel.Users.RpWeapons.IsWeapon(target.Item)))
+        // The Weapon frame holds weapons and the vape and nothing else, from either side.
+        if ((to == weaponSlot && !Plus.HabboHotel.Users.RpWeapons.IsEquippable(source.Item))
+            || (from == weaponSlot && targetOccupied && !Plus.HabboHotel.Users.RpWeapons.IsEquippable(target.Item)))
         {
-            session.SendWhisper("Only a weapon goes in the Weapon slot.");
+            session.SendWhisper("Only a weapon or a vape goes in the Weapon slot.");
             return Task.CompletedTask;
         }
         // Drawing or holstering is something your hands do; cuffs stop it,

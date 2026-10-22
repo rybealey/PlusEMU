@@ -58,6 +58,9 @@ internal class ChangeUserNameEvent : IPacketEvent
         const string allowedCharacters = "abcdefghijklmnopqrstuvwxyz.,_-;:?!1234567890";
         if (letters.Any(chr => !allowedCharacters.Contains(chr)))
             return;
+        // pixelrp: "bot-" names are bots' (BotNames).
+        if (HabboHotel.Rooms.AI.BotNames.IsBotName(newName))
+            return;
         if (!session.GetHabbo().Permissions.HasRight("mod_tool") && newName.ToLower().Contains("mod") || newName.ToLower().Contains("adm") || newName.ToLower().Contains("admin")
             || newName.ToLower().Contains("m0d") || newName.ToLower().Contains("mob") || newName.ToLower().Contains("m0b"))
             return;

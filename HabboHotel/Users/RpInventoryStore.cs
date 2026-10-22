@@ -71,17 +71,15 @@ public static class RpInventoryStore
         if (slot == 0)
             return -1;
         // pixelrp: hits are counted per player (RpVape), so a vape coming into
-        // a backpack that holds none starts full - and goes into the hand.
-        var firstVape = item == RpVape.Item && !inventory.Any(entry => entry.Item == item);
-        if (firstVape)
+        // a backpack that holds none starts full. It goes into the hand only
+        // once it is equipped (RpWeapons.IsEquippable).
+        if (item == RpVape.Item && !inventory.Any(entry => entry.Item == item))
             RpVape.Refill(userId);
         dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.AddParameter("item", item);
         dbClient.RunQuery();
-        if (firstVape)
-            RpVape.SyncHand(userId);
         return slot;
     }
 
@@ -140,7 +138,7 @@ public static class RpInventoryStore
         dbClient.AddParameter("slot", slot);
         dbClient.RunQuery();
         if (entry.Item == RpVape.Item)
-            RpVape.SyncHand(userId);       // the last one gone empties the hand
+            RpVape.SyncHand(userId);       // the last equipped one gone empties the hand
         return entry.Item;
     }
 

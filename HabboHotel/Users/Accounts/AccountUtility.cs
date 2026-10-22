@@ -186,6 +186,10 @@ public static class AccountUtility
             return "That name is too short.";
         if (name.Length > 25)
             return "That name is too long.";
+        // pixelrp: "bot-" names are bots' (BotNames) - the website refuses
+        // them too (NotBotNameRule).
+        if (Rooms.AI.BotNames.IsBotName(name))
+            return Rooms.AI.BotNames.PlayerNameRefusal;
 
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
 

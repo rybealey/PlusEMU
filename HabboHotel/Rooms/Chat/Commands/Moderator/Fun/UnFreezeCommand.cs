@@ -1,9 +1,12 @@
 ﻿using Plus.HabboHotel.GameClients;
-using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator.Fun;
 
-internal class UnFreezeCommand : ITargetChatCommand
+/// <summary>
+/// pixelrp: Builders only on themselves, as :freeze (Twist, 2026-10-22) - who
+/// it is for is FreezeCommand.Target.
+/// </summary>
+internal class UnFreezeCommand : IChatCommand
 {
     private readonly IGameClientManager _gameClientManager;
     public string Key => "unfreeze";
@@ -11,21 +14,21 @@ internal class UnFreezeCommand : ITargetChatCommand
 
     public string Parameters => "%username%";
 
-    public string Description => "Allow another user to walk again.";
-
-    public bool MustBeInSameRoom => true;
+    public string Description => "Let a user walk again - Builders can only unfreeze themselves.";
 
     public UnFreezeCommand(IGameClientManager gameClientManager)
     {
         _gameClientManager = gameClientManager;
     }
 
-    public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
+    public void Execute(GameClient session, Room room, string[] parameters)
     {
-        var targetUser = session.GetHabbo().CurrentRoom.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
+        var target = FreezeCommand.Target(session, room, parameters, _gameClientManager, "unfreeze");
+        if (target == null)
+            return;
+        var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
         if (targetUser != null)
             targetUser.Frozen = false;
-        session.SendWhisper($"Successfully unfroze {target.Username}!");
-        return Task.CompletedTask;
+        session.SendWhisper(target.Id == session.GetHabbo().Id ? "You have unfrozen yourself." : $"Successfully unfroze {target.Username}!");
     }
 }

@@ -32,11 +32,16 @@ public class CommandManager : ICommandManager
     /// gang, corporation and partner chat, and talking stays open. :911 / :999 are NOT here
     /// (Twist, 2026-10-13): out cold, you cannot call the police, and an
     /// officer cannot call for backup.
+    ///
+    /// :startwork is here so City Government staff can go on duty out cold
+    /// (Twist, 2026-10-22); ShiftManager.StartShift refuses everybody else,
+    /// since only it knows the job.
     /// </summary>
     private static readonly HashSet<string> KnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
     {
         "stats", "flagme",
-        "ga", "ca", "pa"
+        "ga", "ca", "pa",
+        "startwork"
     };
 
     /// <summary>
@@ -179,7 +184,11 @@ public class CommandManager : ICommandManager
                     parameters = parameters[1..];
                 }
 
-                if (target?.GetHabbo() == null)
+                // pixelrp: a bot's name ("bot-Name" - the HUD target's "x" types
+                // one) is plainly a name, so it never falls back to the selected
+                // player: no player command here acts on a bot.
+                var typedBot = Rooms.AI.BotNames.IsBotName(typed);
+                if (target?.GetHabbo() == null && !typedBot)
                 {
                     var hudTargetId = session.GetHabbo().RpHudTargetId;
                     target = hudTargetId > 0 ? _gameClientManager.GetClientByUserId(hudTargetId) : null;
@@ -189,7 +198,9 @@ public class CommandManager : ICommandManager
                 {
                     // Nothing typed (or only "x") and nobody selected; or a name
                     // that is not online, with nobody selected to fall back on.
-                    session.SendWhisper(typed == null || typedX ? targetChatCommand.NoTargetMessage : $"User {typed} seems to be offline.");
+                    session.SendWhisper(typed == null || typedX ? targetChatCommand.NoTargetMessage
+                        : typedBot ? "You can't use this command on a bot."
+                        : $"User {typed} seems to be offline.");
                     return true;
                 }
 

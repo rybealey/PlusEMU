@@ -104,9 +104,8 @@ internal class RpCityPlayerActionEvent : IPacketEvent
                 // Not mid-trial (Twist, 2026-10-20).
                 if (JuryTrials.InCourtNow(userId))
                     return "They are on trial.";
-                if (!JailState.StaffRelease(userId, targetClient))
+                if (!JailState.StaffRelease(userId, targetClient, JailState.StaffReleasedWhisper))
                     return "They are not in jail.";
-                targetClient?.SendWhisper("A staff member has released you from jail.");
                 return null;
             case ClearCharges:
                 WantedUtility.ExpireLapsed();

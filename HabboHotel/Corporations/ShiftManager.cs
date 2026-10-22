@@ -203,14 +203,7 @@ public static class ShiftManager
             client.SendWhisper("You're already on duty.");
             return;
         }
-        var permit = CorporationUtility.EvaluateWork(client.GetHabbo(), isStart: true);
-        if (!permit.Ok)
-        {
-            client.SendWhisper(permit.Reason);
-            return;
-        }
         (int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId, string ServiceType)? job;
-        JobFlags flags;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             job = connection.QuerySingleOrDefault<(int PaySeconds, int Pay, string CorpName, string Acronym, string RankName, int Tier, int Tiers, int CorpId, int RankId, string ServiceType)?>(
@@ -220,11 +213,35 @@ public static class ShiftManager
                 "INNER JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
                 "INNER JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
                 "WHERE e.`user_id` = @userId LIMIT 1", new { userId });
-            if (job == null)
+        }
+        if (job == null)
+        {
+            client.SendWhisper("You don't have a job. Get hired by a corporation first.");
+            return;
+        }
+        // pixelrp: City Government staff go on duty whatever state they are in -
+        // in jail, out cold, cuffed (Twist, 2026-10-22). Everybody else is
+        // refused here, with the sentences CommandManager used to give, because
+        // only here is the job known; it lets :startwork through for this.
+        if (job.Value.ServiceType != "staff")
+        {
+            if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailed(userId))
             {
-                client.SendWhisper("You don't have a job. Get hired by a corporation first.");
+                client.SendWhisper("You can't do that in jail.");
                 return;
             }
+            if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(client))
+                return;
+        }
+        var permit = CorporationUtility.EvaluateWork(client.GetHabbo(), isStart: true);
+        if (!permit.Ok)
+        {
+            client.SendWhisper(permit.Reason);
+            return;
+        }
+        JobFlags flags;
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+        {
             flags = ReadJobFlags(connection, userId);
             connection.Execute("UPDATE `rp_corporation_employees` SET `on_duty` = 1 WHERE `user_id` = @userId LIMIT 1", new { userId });
         }

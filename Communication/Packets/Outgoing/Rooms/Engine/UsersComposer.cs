@@ -26,12 +26,11 @@ public class UsersComposer : IServerPacket
     /// <summary>
     /// pixelrp: every bot shows in the room as "bot-Name" (Twist, 2026-10-18) -
     /// over its head, on its chat and in its infostand, all of which read the
-    /// name sent here. Display only: the bots table, the rename box and every
-    /// lookup by name on the server keep the plain name. Not doubled for a bot
-    /// already named that way.
+    /// name sent here. Display only: the bots table and the rename box keep the
+    /// plain name; a lookup by name takes either (BotNames). Not doubled for a
+    /// bot already named that way.
     /// </summary>
-    private static string BotDisplayName(string name) =>
-        name.StartsWith("bot-", StringComparison.OrdinalIgnoreCase) ? name : $"bot-{name}";
+    private static string BotDisplayName(string name) => BotNames.Display(name);
 
     public UsersComposer(RoomUser user)
     {

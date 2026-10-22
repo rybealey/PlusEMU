@@ -414,10 +414,9 @@ public class RoomUserManager
         //
         // The weapon is set before the phone, so an open phone still wins the
         // hand and the weapon waits for it to close - except a stun gun, which
-        // is drawn over the phone (RoomUser.StunGunDrawn). A vape in the
-        // backpack rests under both (RpVape).
+        // is drawn over the phone (RoomUser.StunGunDrawn). An equipped vape is
+        // held the same way (RpWeapons.IsEquippable).
         var rpInventory = session.GetHabbo().LoadRpInventory();
-        user.SetVapeHandItem(RpVape.HandItemFor(rpInventory));
         user.SetWeaponHandItem(RpWeapons.HandItemFor(RpWeapons.EquippedItem(rpInventory)));
         if (session.GetHabbo().PhoneOpen)
             user.SetPhoneInHand(true);
@@ -687,15 +686,15 @@ public class RoomUserManager
 
     public bool TryGetBot(int botId, out RoomUser bot) => _bots.TryGetValue(botId, out bot);
 
+    // pixelrp: by its plain name, or the "bot-Name" the room shows (BotNames) -
+    // which is what the HUD target's "x" types (Twist, 2026-10-22). The plain
+    // name first, for a bot actually named "bot-something".
     public RoomUser GetBotByName(string name)
     {
-        var foundBot = _bots.Count(x => x.Value.BotData != null && x.Value.BotData.Name.ToLower() == name.ToLower()) > 0;
-        if (foundBot)
-        {
-            var id = _bots.FirstOrDefault(x => x.Value.BotData != null && x.Value.BotData.Name.ToLower() == name.ToLower()).Value.BotData.Id;
-            return _bots[id];
-        }
-        return null;
+        var bot = _bots.Values.FirstOrDefault(x => x.BotData != null && x.BotData.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (bot == null && AI.BotNames.IsBotName(name))
+            bot = GetBotByName(name[AI.BotNames.Prefix.Length..]);
+        return bot;
     }
 
     public void UpdateUserCount(int count)

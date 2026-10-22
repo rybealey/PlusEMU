@@ -81,8 +81,10 @@ public class RpUseItemEvent : IPacketEvent
             return;
         // pixelrp weapons: using one EQUIPS it - a move into the Weapon frame,
         // swapping out whatever was equipped - and using the equipped one puts
-        // it back in the first free slot. Nothing is consumed either way.
-        if (slot == weaponSlot || RpWeapons.IsWeapon(item))
+        // it back in the first free slot. Nothing is consumed either way. A
+        // vape equips the same way (Twist, 2026-10-22), but the equipped one
+        // takes a hit (below) - it is put away by dragging it out.
+        if ((slot == weaponSlot && item != RpVape.Item) || (slot != weaponSlot && RpWeapons.IsEquippable(item)))
         {
             // pixelrp police: the stun gun is drawn only by a police officer -
             // on duty or off: an officer off duty may hold theirs, and only
@@ -246,8 +248,8 @@ public class RpUseItemEvent : IPacketEvent
                 session.SendWhisper("Spit Token redeemed - you can now use :spit <username>.");
                 break;
             }
-            // pixelrp: a hit from the vape - one of its seven. TakeHit resends
-            // the backpack itself when the last one uses it up.
+            // pixelrp: a hit from the equipped vape - one of its seven. TakeHit
+            // resends the backpack itself when the last one uses it up.
             case RpVape.Item:
                 RpVape.TakeHit(session, slot);
                 return;

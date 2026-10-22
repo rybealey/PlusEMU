@@ -8,11 +8,12 @@ using Plus.HabboHotel.Rooms.Gym;
 namespace Plus.HabboHotel.Users;
 
 /// <summary>
-/// pixelrp: the vape (Twist, 2026-10-20). While there is one in the backpack it
-/// is in the hand (hand item 1129, docker/nitro/make-vape-handitem.py) - under
-/// a weapon, the open phone or anything carried, which keep the hand until they
-/// are put down (RoomUser.SetVapeHandItem). Clicked in the backpack, the player
-/// takes a hit: "*takes a hit from their vape*" in the blue action bubble, the
+/// pixelrp: the vape (Twist, 2026-10-20). It is in the hand (hand item 1129,
+/// docker/nitro/make-vape-handitem.py) only while it is EQUIPPED in the Weapon
+/// slot (Twist, 2026-10-22) - held like a weapon (RpWeapons.IsEquippable),
+/// under the open phone or anything carried. Clicked in the backpack it is
+/// equipped; the equipped one, clicked, takes a hit: "*takes a hit from their
+/// vape*" in the blue action bubble, the
 /// vape goes to their mouth and they breathe out a puff of smoke (effect 640,
 /// docker/nitro/make-vape-smoke.py; the client raises the vape for the puff's
 /// first second, which draws nothing, and the smoke comes as it goes down).
@@ -102,25 +103,21 @@ public static class RpVape
 
     public static int HitsLeft(int habboId) => Math.Max(0, Hits - HitsTaken.GetValueOrDefault(habboId));
 
-    /// <summary>The hand item for this backpack: the vape while it holds one, else 0.</summary>
-    public static int HandItemFor(List<(int Slot, string Item, int Count)> inventory) =>
-        inventory.Any(entry => entry.Item == Item) ? HandItem : 0;
-
     /// <summary>
-    /// Bring the hand in line with the backpack - a vape in it, a vape in the
-    /// hand. Left alone mid-puff, so a hit that uses the last one up keeps it
-    /// at the mouth until the puff ends, which syncs it then. A player not in a
-    /// room has no hand; room entry catches them up.
+    /// Bring the hand in line with the Weapon slot (RpWeapons.ApplyToHand) -
+    /// an equipped vape in it, a vape in the hand. Left alone mid-puff, so a
+    /// hit that uses the last one up keeps it at the mouth until the puff ends,
+    /// which syncs it then. A player not in a room has no hand; room entry
+    /// catches them up.
     /// </summary>
     public static void SyncHand(Habbo habbo, List<(int Slot, string Item, int Count)> inventory = null)
     {
         if (habbo == null || IsPuffing(habbo.Id))
             return;
-        var user = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
-        user?.SetVapeHandItem(HandItemFor(inventory ?? habbo.LoadRpInventory()));
+        RpWeapons.ApplyToHand(habbo, inventory);
     }
 
-    /// <summary>A vape came into or left this player's backpack (RpInventoryStore): their hand follows, if they are on.</summary>
+    /// <summary>A vape left this player's backpack (RpInventoryStore) - the equipped one, perhaps: their hand follows, if they are on.</summary>
     public static void SyncHand(int habboId) =>
         SyncHand(PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.GetHabbo());
 
@@ -134,7 +131,8 @@ public static class RpVape
 
     /// <summary>
     /// A trade changed the backpack (RpTrades): a vape received into a
-    /// backpack that held none starts full, and the hand follows.
+    /// backpack that held none starts full, and the hand follows the Weapon
+    /// slot, in case the equipped one was given away.
     /// </summary>
     public static void Traded(Habbo habbo, List<(int Slot, string Item, int Count)> inventory, int given, int received)
     {
@@ -144,7 +142,7 @@ public static class RpVape
         SyncHand(habbo, inventory);
     }
 
-    /// <summary>The vape in <paramref name="slot"/> was clicked (RpUseItemEvent).</summary>
+    /// <summary>The equipped vape (in the Weapon slot, <paramref name="slot"/>) was clicked (RpUseItemEvent).</summary>
     public static void TakeHit(GameClient session, int slot)
     {
         var habbo = session?.GetHabbo();
@@ -166,9 +164,9 @@ public static class RpVape
             session.SendWhisper("You can't use your vape right now.");
             return;
         }
-        // The vape goes to the mouth from the hand. A weapon, the open phone or
-        // a drink lend it the hand for the hit; nothing goes into a hand
-        // holding a stun gun (RoomUser.StunGunDrawn).
+        // The vape goes to the mouth from the hand. The open phone or a drink
+        // lend it the hand for the hit; nothing goes into a hand holding a
+        // stun gun (RoomUser.StunGunDrawn).
         if (user.CarryItemId != HandItem)
         {
             if (!user.CanCarry(HandItem))
