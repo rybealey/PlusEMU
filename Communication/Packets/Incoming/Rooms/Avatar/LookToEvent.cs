@@ -27,6 +27,12 @@ internal class LookToEvent : RoomPacketEvent
         if (HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.IsBeingEscorted(user.UserId))
             return Task.CompletedTask;
         var rot = Rotation.Calculate(user.X, user.Y, x, y);
+        // pixelrp: a look that turns nothing - clicking a player already faced -
+        // sent the whole room a status update on every click. Standing, SetRot
+        // always ends with the head on rot and moves the body only from two or
+        // more away, so this is exactly the look it would leave as it is.
+        if (!user.Statusses.ContainsKey("sit") && !user.Statusses.ContainsKey("lay") && user.RotHead == rot && Math.Abs(user.RotBody - rot) < 2)
+            return Task.CompletedTask;
         var bodyBefore = user.RotBody;
         user.SetRot(rot, false);
         user.UpdateNeeded = true;

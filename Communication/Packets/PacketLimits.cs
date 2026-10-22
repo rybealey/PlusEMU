@@ -3,6 +3,8 @@ using Plus.Communication.Packets.Incoming.Catalog;
 using Plus.Communication.Packets.Incoming.Groups;
 using Plus.Communication.Packets.Incoming.Inventory.Trading;
 using Plus.Communication.Packets.Incoming.Marketplace;
+using Plus.Communication.Packets.Incoming.Rooms.AI.Pets;
+using Plus.Communication.Packets.Incoming.Rooms.Avatar;
 using Plus.Communication.Packets.Incoming.Rooms.Chat;
 using Plus.Communication.Packets.Incoming.Rooms.Engine;
 using Plus.Communication.Packets.Incoming.Users;
@@ -11,8 +13,10 @@ using Plus.Communication.Packets.Incoming.Users.Banking;
 namespace Plus.Communication.Packets;
 
 /// <summary>How often one connection may send a packet: a token bucket holding
-/// <see cref="Burst"/> at most, refilled at <see cref="PerSecond"/>.</summary>
-public readonly record struct PacketLimit(double PerSecond, int Burst);
+/// <see cref="Burst"/> at most, refilled at <see cref="PerSecond"/>. A limit that
+/// is not <see cref="Shared"/> has its bucket only - it takes nothing from
+/// <see cref="PacketLimits.Total"/> and its drops never count towards a flood.</summary>
+public readonly record struct PacketLimit(double PerSecond, int Burst, bool Shared = true);
 
 /// <summary>
 /// pixelrp: every packet limit in one place (PacketBudget applies them; the
@@ -46,6 +50,12 @@ internal static class PacketLimits
     /// <summary>Each catalog search scans the whole catalog; the client waits 300ms after typing (CatalogSearchView), so 3 a second at most.</summary>
     public static readonly PacketLimit Search = new(4, 8);
 
+    /// <summary>What a click on a player, pet or group furni asks for - turning to look, their badges,
+    /// partner, gang and group, and who the HUD targets. Clicking from player to player sends four or
+    /// five a click, which took a fast clicker past the total and had them dropped unseen (a turn that
+    /// never came, a HUD target the server never heard) and, kept up, disconnected for flooding.</summary>
+    public static readonly PacketLimit Selection = new(10, 40, Shared: false);
+
     private static readonly Dictionary<Type, PacketLimit> Listed = new()
     {
         [typeof(ChatEvent)] = Chat,
@@ -75,6 +85,13 @@ internal static class PacketLimits
         [typeof(TradingConfirmEvent)] = Money,
 
         [typeof(RpCatalogSearchEvent)] = Search,
+        [typeof(LookToEvent)] = Selection,
+        [typeof(GetSelectedBadgesEvent)] = Selection,
+        [typeof(GetRelationshipsEvent)] = Selection,
+        [typeof(RpGetUserGangEvent)] = Selection,
+        [typeof(RpSetHudTargetEvent)] = Selection,
+        [typeof(GetGroupInfoEvent)] = Selection,
+        [typeof(GetPetInformationEvent)] = Selection,
     };
 
     /// <summary>The limit for a packet type, or null when it is never limited (walking).</summary>

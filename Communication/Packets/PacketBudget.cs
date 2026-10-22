@@ -48,6 +48,13 @@ internal sealed class PacketBudget
             var now = Environment.TickCount64;
             var bucket = _buckets.TryGetValue(type, out var held) ? held : (limit.Burst, now);
             var tokens = Math.Min(limit.Burst, bucket.Tokens + (now - bucket.At) * limit.PerSecond / 1000.0);
+            // Its own bucket only (PacketLimits.Selection): no total, no flood count.
+            if (!limit.Shared)
+            {
+                var taken = tokens >= 1;
+                _buckets[type] = (taken ? tokens - 1 : tokens, now);
+                return taken;
+            }
             var total = Math.Min(PacketLimits.Total.Burst, _totalTokens + (now - _totalAt) * PacketLimits.Total.PerSecond / 1000.0);
             _totalAt = now;
             if (tokens >= 1 && total >= 1)

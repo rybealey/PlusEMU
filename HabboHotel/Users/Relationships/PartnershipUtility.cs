@@ -140,6 +140,21 @@ public static class PartnershipUtility
         if (partnerId == 0)
             return relationships;
 
+        // pixelrp: an online partner's name and look from their session. This
+        // runs on the asking player's packet thread for every infostand opened,
+        // and their walk waits behind it.
+        var online = PlusEnvironment.Game.ClientManager.GetClientByUserId(partnerId)?.GetHabbo();
+        if (online != null)
+        {
+            relationships[LoveRelationship] = (new MessengerBuddy
+            {
+                Id = partnerId,
+                Username = online.Username ?? string.Empty,
+                Look = online.Look ?? string.Empty
+            }, 1);
+            return relationships;
+        }
+
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         var partner = connection.QuerySingleOrDefault<(string Username, string Look)?>(
             "SELECT `username`, `look` FROM `users` WHERE `id` = @partnerId LIMIT 1",
