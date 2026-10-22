@@ -711,17 +711,11 @@ public static class EmergencyCalls
 
     /// <summary>
     /// Who is on duty right now: police officers, and with `staff` also City
-    /// Government, who take police calls too.
+    /// Government, who take police calls too. From the shifts in memory
+    /// (ShiftManager), not the database - a shift is a session here, and
+    /// the flags it reads at clock-in are the ones the query read.
     /// </summary>
-    private static List<int> OnDutyResponders(bool staff = true)
-    {
-        using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.Query<int>(
-            "SELECT e.`user_id` FROM `rp_corporation_employees` e " +
-            "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-            "WHERE e.`on_duty` = 1 AND (c.`is_police` = 1 OR (@staff = 1 AND c.`service_type` = 'staff'))",
-            new { staff = staff ? 1 : 0 }).Distinct().ToList();
-    }
+    private static List<int> OnDutyResponders(bool staff = true) => ShiftManager.OnDutyResponders(staff);
 
     private static void Send(GameClient session, string notice) =>
         session.Send(new RpEmergencyCallsComposer(true, Newest(), notice));

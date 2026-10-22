@@ -58,6 +58,10 @@ public static class ShiftManager
         public bool IsPolice;
         public bool IsMedical;
         public bool EmergencyEligible;
+        // pixelrp: the account this character belongs to (parent_id, or
+        // themselves), read once at clock-in - it never changes. A medical
+        // call must not be taken by the patient's own other character.
+        public int RootId;
     }
 
     private sealed class JobFlags
@@ -107,6 +111,24 @@ public static class ShiftManager
     /// <summary>Everyone clocked in right now: who, for which corporation and at which rank.</summary>
     public static List<(int UserId, int CorpId, int RankId)> OnDuty() =>
         Sessions.Values.Select(session => (session.UserId, session.CorpId, session.RankId)).ToList();
+
+    /// <summary>
+    /// pixelrp: who takes police calls right now - on-duty officers, and
+    /// with `staff` City Government too. The same answer IsPoliceOnDuty and
+    /// IsStaffOnDuty give, as a list: EmergencyCalls used to ask the
+    /// database for it on every broadcast, once a second during a call.
+    /// </summary>
+    public static List<int> OnDutyResponders(bool staff) =>
+        Sessions.Values.Where(session => session.IsPolice || (staff && session.IsStaffCorp)).Select(session => session.UserId).ToList();
+
+    /// <summary>
+    /// pixelrp: the on-duty paramedics - a medical corporation, at a rank
+    /// that takes emergency calls - and the account each is on, for
+    /// MedicalCalls, which used to ask the database once a second during
+    /// a knockout.
+    /// </summary>
+    public static List<(int UserId, int Root)> OnDutyMedics() =>
+        Sessions.Values.Where(session => session.IsMedical && session.EmergencyEligible).Select(session => (session.UserId, session.RootId)).ToList();
 
     /// <summary>The rank a player is clocked in at, or 0 when they are off duty. Uniforms follow it.</summary>
     public static int RankOf(int userId) => Sessions.TryGetValue(userId, out var session) ? session.RankId : 0;
@@ -254,7 +276,8 @@ public static class ShiftManager
             StartedAt = UnixTimestamp.GetNow(),
             CorpId = job.Value.CorpId,
             RankId = job.Value.RankId,
-            IsStaffCorp = (job.Value.ServiceType == "staff")
+            IsStaffCorp = (job.Value.ServiceType == "staff"),
+            RootId = Users.Accounts.AccountUtility.RootOf(userId)
         };
         ApplyJobFlags(session, flags);
         session.WorkingMotto = BuildWorkingMotto(session.CorpName, job.Value.Acronym, job.Value.RankName, job.Value.Tier, job.Value.Tiers);

@@ -736,16 +736,9 @@ public static class MedicalCalls
     /// same three halves as <see cref="MedicalUtility.IsOnDutyParamedic"/>, for
     /// everybody at once - with the account each is on.
     /// </summary>
-    private static List<Medic> OnDutyParamedics()
-    {
-        using var connection = PlusEnvironment.DatabaseManager.Connection();
-        return connection.Query<Medic>(
-                "SELECT DISTINCT e.`user_id` AS UserId, CAST(COALESCE(NULLIF(u.`parent_id`, 0), u.`id`) AS SIGNED) AS Root " +
-                "FROM `rp_corporation_employees` e " +
-                "JOIN `rp_corporations` c ON c.`id` = e.`corporation_id` " +
-                "JOIN `rp_corporation_ranks` r ON r.`id` = e.`rank_id` " +
-                "JOIN `users` u ON u.`id` = e.`user_id` " +
-                "WHERE e.`on_duty` = 1 AND c.`service_type` = 'medical' AND r.`emergency_eligible` = 1")
-            .ToList();
-    }
+    // pixelrp: from the shifts in memory (ShiftManager), not the database -
+    // a paramedic on duty is a session there, with the job flags the query
+    // read and the account root, read once at clock-in.
+    private static List<Medic> OnDutyParamedics() =>
+        ShiftManager.OnDutyMedics().Select(medic => new Medic { UserId = medic.UserId, Root = medic.Root }).ToList();
 }

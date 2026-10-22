@@ -1480,10 +1480,6 @@ public class RoomUserManager
                     // and the once-a-minute save write to the database (afterLock).
                     if (Chat.Commands.User.Police.JailState.Tick(user) is { } jailWork)
                         (afterLock ??= new()).Add(jailWork);
-                    // pixelrp offers: drop what has run out. Memory only - no
-                    // database, and packets only to the two people concerned -
-                    // so the game loop can carry it.
-                    Offers.OfferState.Tick();
                     if (!user.IsBot && user.GetClient()?.GetHabbo() is { RpAggression: > 0 } habboAgg)
                     {
                         // The decay itself still runs every tick; only the
@@ -1571,6 +1567,12 @@ public class RoomUserManager
                     if (IsPositionSaveDue(user))
                         (dirtyPositions ??= new List<RoomUser>()).Add(user);
                 }
+                // pixelrp offers: drop what has run out. Memory only - no
+                // database, and packets only to the two people concerned -
+                // so the game loop can carry it. Once per tick, after the
+                // players: it is hotel-wide, and it used to sit inside the
+                // loop above, scanning every live offer once per player.
+                Offers.OfferState.Tick();
                 if (dirtyPositions != null)
                 {
                     // Snapshot in-memory here; the MySQL writes run on
