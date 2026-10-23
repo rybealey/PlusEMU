@@ -48,7 +48,7 @@ internal class FacelessCommand : IChatCommand
         }
         // pixelrp: staff keep club clothing access even without an active VIP subscription.
         // pixelrp: HC/club clothing is not VIP-gated.
-        session.GetHabbo().Look = _figureDataManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().IsStaff);
+        session.GetHabbo().Look = _figureDataManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().WearsAnyClothing);
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.RunQuery($"UPDATE `users` SET `look` = '{session.GetHabbo().Look}' WHERE `id` = '{session.GetHabbo().Id}' LIMIT 1");

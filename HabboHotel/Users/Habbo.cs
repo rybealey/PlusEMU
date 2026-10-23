@@ -80,6 +80,15 @@ public class Habbo
     /// <summary>Builder, the lowest staff rank (migration 285).</summary>
     public const int BuilderRank = 2;
 
+    /// <summary>Moderator (migration 285).</summary>
+    public const int ModeratorRank = 4;
+
+    // pixelrp: Moderator or above wears any clothing without owning it - every
+    // Clothing Store piece and every face - in Choose Your Look and on any look
+    // they save (FigureDataManager.ProcessFigure; 2026-10-22).
+    // Client: WearsAnyClothing in RpRanks.
+    public bool WearsAnyClothing => Rank >= ModeratorRank;
+
     // pixelrp: Builder or above. The Furni Shop and the furni inventory open
     // from here rather than IsStaff, because Builders build (Twist, 2026-10-20),
     // and so does the navigator - room creation included (Twist, 2026-10-21).
