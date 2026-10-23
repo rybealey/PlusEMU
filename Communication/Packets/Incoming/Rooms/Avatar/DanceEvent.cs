@@ -33,6 +33,11 @@ internal class DanceEvent : RoomPacketEvent
             room.SendPacket(new AvatarEffectComposer(user.VirtualId, 0));
         user.DanceId = danceId;
         room.SendPacket(new DanceComposer(user, danceId));
+        // pixelrp :invisible: a dance hides the Ghost enable, and stopping
+        // puts it back. The strip above only tells the room - CurrentEffect is
+        // untouched - so the tick would never send it again.
+        if (danceId == 0 && session.GetHabbo().IsInvisible && session.GetHabbo().Effects.CurrentEffect > 0)
+            room.SendPacket(new AvatarEffectComposer(user.VirtualId, session.GetHabbo().Effects.CurrentEffect));
         _questManager.ProgressUserQuest(session, QuestType.SocialDance);
         if (room.GetRoomUserManager().GetRoomUsers().Count > 19)
             _questManager.ProgressUserQuest(session, QuestType.MassDance);
