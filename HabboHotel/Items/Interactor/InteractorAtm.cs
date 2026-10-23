@@ -53,10 +53,9 @@ public class InteractorAtm : IFurniInteractor
         var account = BankUtility.Get(habbo.Id);
         if (account == null)
         {
-            // Refused at the machine rather than opened onto an empty screen:
-            // an account is opened in the Wallet, which is where the card and
-            // the savings account live and where the choice belongs.
-            session.SendWhisper("You need a bank account before you can use an ATM. Open one from your Wallet.");
+            // Refused at the machine rather than opened onto an empty screen.
+            // The same words as :bal (Twist, 2026-10-23).
+            session.SendWhisper("You do not have a bank account. Head to Mercury Bank to open one.");
             return;
         }
 

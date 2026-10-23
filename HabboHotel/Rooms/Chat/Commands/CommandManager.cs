@@ -39,7 +39,7 @@ public class CommandManager : ICommandManager
     /// </summary>
     private static readonly HashSet<string> KnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
     {
-        "stats", "flagme",
+        "stats", "bal", "flagme",
         "ga", "ca", "pa",
         "startwork"
     };
@@ -60,14 +60,14 @@ public class CommandManager : ICommandManager
 
     /// <summary>
     /// pixelrp :invisible: the player commands that still work while you're
-    /// invisible (Invisibility) - your own stats, and clocking in and out.
-    /// Everything else in the roleplay is refused: nobody is hit, cuffed or
-    /// paid by someone they can't see. Staff commands are not player commands,
-    /// so they all still work.
+    /// invisible (Invisibility) - your own stats and balance, and clocking in
+    /// and out. Everything else in the roleplay is refused: nobody is hit,
+    /// cuffed or paid by someone they can't see. Staff commands are not player
+    /// commands, so they all still work.
     /// </summary>
     private static readonly HashSet<string> InvisibleCan = new(StringComparer.OrdinalIgnoreCase)
     {
-        "stats", "startwork", "stopwork"
+        "stats", "bal", "startwork", "stopwork"
     };
 
     private static bool IsPlayerCommand(ICommandBase command) =>

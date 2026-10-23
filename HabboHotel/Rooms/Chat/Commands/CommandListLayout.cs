@@ -56,7 +56,7 @@ internal static class CommandListLayout
 
     // :wd is staff or VIP (277); it lists here, with the VIP tag, for both.
     private static readonly Group General = new("General", false, false,
-        "sit", "stand", "lay", "stats", "passive", "suicide", "flagme", "mutebots", "mutepets", "wd");
+        "sit", "stand", "lay", "stats", "bal", "passive", "suicide", "flagme", "mutebots", "mutepets", "wd");
 
     private static readonly Group JobsAndGangs = new("Jobs & gangs", false, false,
         "startwork", "stopwork", "hire", "fire", "quitjob", "ca", "heal", "ga", "leavegang");
