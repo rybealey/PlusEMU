@@ -11,6 +11,7 @@ public interface IRoomManager
     void ReloadModel(string id);
     bool TryGetModel(string id, out RoomModel model);
     void UnloadRoom(uint roomId);
+    void ReloadRoom(Room room);
     bool TryLoadRoom(uint roomId, out Room room);
     List<Room> SearchGroupRooms(string query);
     List<Room> SearchTaggedRooms(string query);

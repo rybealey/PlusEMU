@@ -131,19 +131,9 @@ internal class SaveFloorPlanModelEvent : RoomPacketEvent
         room.ModelName = modelName;
         room.WallThickness = wallThick;
         room.FloorThickness = floorThick;
-        var usersToReturn = room.GetRoomUserManager().GetRoomUsers().ToList();
         _roomManager.ReloadModel(modelName);
-        _roomManager.UnloadRoom(room.Id);
-        foreach (var user in usersToReturn)
-        {
-            var client = user?.GetClient();
-            if (client?.GetHabbo() == null)
-                continue;
-            // The room was just disposed without removing its users; drop the
-            // stale reference so the forced re-entry below starts clean.
-            client.GetHabbo().CurrentRoom = null;
-            client.SendRoomForward(room.Id);
-        }
+        // Everyone in the room comes straight back into it on the new floor.
+        _roomManager.ReloadRoom(room);
         return Task.CompletedTask;
     }
 

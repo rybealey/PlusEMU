@@ -65,8 +65,11 @@ internal class DeleteGroupEvent : IPacketEvent
             connection.Execute("DELETE FROM `items_groups` WHERE `group_id` = @groupId", new { groupId = group.Id });
         }
 
-        //Unload it last.
-        _roomManager.UnloadRoom(room.Id);
+        // Reload it last, with everyone in it brought straight back
+        // (RoomManager.ReloadRoom): only unloaded, they were left pointing at
+        // the room it disposed, and their next word to it dropped their
+        // connection (Twist, 2026-10-24).
+        _roomManager.ReloadRoom(room);
 
         //Say hey!
         session.SendNotification("You have successfully deleted your group.");

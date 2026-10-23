@@ -16,7 +16,7 @@ internal class UnloadCommand : IChatCommand
 
     public string Parameters => "";
 
-    public string Description => "Unload the room you are in.";
+    public string Description => "Reload the room you are in - everyone in it comes straight back.";
 
     public UnloadCommand(IRoomManager roomManager)
     {
@@ -24,6 +24,11 @@ internal class UnloadCommand : IChatCommand
     }
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        _roomManager.UnloadRoom(room.Id);
+        // pixelrp: everyone in the room comes straight back into it, freshly
+        // loaded (RoomManager.ReloadRoom). Unloaded and left there, they still
+        // pointed at the room just disposed, and the typing indicator going off
+        // as the command went out threw on it and dropped the connection: the
+        // disconnected screen (Twist, 2026-10-24).
+        _roomManager.ReloadRoom(room);
     }
 }

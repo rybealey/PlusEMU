@@ -168,6 +168,31 @@ public class RoomManager : IRoomManager
         if (_rooms.TryRemove(roomId, out var room)) room.Dispose();
     }
 
+    /// <summary>
+    /// pixelrp: unload a room and bring everyone in it straight back, freshly
+    /// loaded - a floor plan save, :unload, a group deleted.
+    ///
+    /// UnloadRoom alone leaves the players in it pointing at the room it has
+    /// just disposed (Habbo.CurrentRoom), whose user list is gone: the next
+    /// thing their client sends about the room - the typing indicator going
+    /// off, a whisper to them - throws, and a throw there drops the connection
+    /// and puts up the disconnected screen. And players are never out of a
+    /// room. So each is taken out of it and forwarded back in.
+    /// </summary>
+    public void ReloadRoom(Room room)
+    {
+        var usersToReturn = room.GetRoomUserManager().GetRoomUsers().ToList();
+        UnloadRoom(room.Id);
+        foreach (var user in usersToReturn)
+        {
+            var client = user?.GetClient();
+            if (client?.GetHabbo() == null)
+                continue;
+            client.GetHabbo().CurrentRoom = null;
+            client.SendRoomForward(room.Id);
+        }
+    }
+
     public bool TryLoadRoom(uint roomId, out Room room)
     {
         Room inst = null;
