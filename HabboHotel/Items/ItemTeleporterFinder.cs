@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Data;
 using Plus.HabboHotel.Rooms;
 
 namespace Plus.HabboHotel.Items;
@@ -27,6 +28,28 @@ public static class ItemTeleporterFinder
         var linkId = Convert.ToUInt32(row[0]);
         Links[teleId] = linkId;
         return linkId;
+    }
+
+    /// <summary>
+    /// pixelrp: every arrow's link, in one query, at startup (KeyRooms). The
+    /// first step onto each arrow after a restart used to look its link up
+    /// right there, on the thread that sends every room's walking.
+    /// </summary>
+    public static void PreloadArrowLinks()
+    {
+        DataTable table;
+        using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
+        {
+            dbClient.SetQuery("SELECT `room_items_tele_links`.`tele_one_id`, `room_items_tele_links`.`tele_two_id` FROM `room_items_tele_links`"
+                + " JOIN `items` ON `items`.`id` = `room_items_tele_links`.`tele_one_id`"
+                + " JOIN `furniture` ON `furniture`.`id` = `items`.`base_item`"
+                + " WHERE `furniture`.`interaction_type` = 'arrow'");
+            table = dbClient.GetTable();
+        }
+        if (table == null)
+            return;
+        foreach (DataRow row in table.Rows)
+            Links[Convert.ToUInt32(row[0])] = Convert.ToUInt32(row[1]);
     }
 
     public static uint GetTeleRoomId(uint teleId, Room pRoom)

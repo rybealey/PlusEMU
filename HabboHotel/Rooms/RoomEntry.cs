@@ -45,6 +45,16 @@ public static class RoomEntry
         // And how see-through the floor is (RoomFloorOpacity), for the same
         // reason: the floor is drawn faded from the first frame.
         session.Send(new RpRoomFloorOpacityComposer(room.Id, room.FloorOpacity));
+        // ...and all of that out now, as a message of its own. A room entry
+        // goes as one batch (Habbo.EnterRoom), which held the shape back until
+        // the lookups below were done and the last packet written; flushed
+        // here, the client clears the old room and builds the new one's floor
+        // and walls while those run. The rest follows as one more message. The client keeps the
+        // old room's picture up until RoomEntryInfo, the last of it, arrives
+        // (renderer patch room-fill), so the split never shows. No batch is
+        // open when the client asked for the room itself (GetRoomEntryData),
+        // and then this does nothing.
+        session.FlushBatch();
         // Only add the avatar on a genuine first entry. A duplicated entry - the
         // login room-forward processed twice by the client under network latency -
         // arrives with the user already in the room from the first one.

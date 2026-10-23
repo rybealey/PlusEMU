@@ -426,23 +426,44 @@ public abstract class GameClient
         {
             if (_batchDepth == 0 || --_batchDepth > 0)
                 return;
-            var held = _batch;
-            if (held != null && held.Count > 0)
-            {
-                var framed = new byte[held.Sum(bytes => bytes.Length)];
-                var offset = 0;
-                foreach (var bytes in held)
-                {
-                    Buffer.BlockCopy(bytes, 0, framed, offset, bytes.Length);
-                    offset += bytes.Length;
-                }
-                SendNow(framed);
-            }
+            SendHeld();
             // Cleared after the send and inside the lock: a packet sent
             // meanwhile waits for the lock, finds no batch, and goes out behind
             // the batch - never ahead of it.
             _batch = null;
         }
+    }
+
+    /// <summary>
+    /// pixelrp: send what an open batch holds so far as one message, and keep
+    /// the batch open for the rest - so the start of a room entry (its shape)
+    /// does not wait on the database lookups made for the part behind it.
+    /// Nothing happens when no batch is open.
+    /// </summary>
+    public void FlushBatch()
+    {
+        lock (_batchLock)
+        {
+            if (_batch == null)
+                return;
+            SendHeld();
+            _batch.Clear();
+        }
+    }
+
+    private void SendHeld()
+    {
+        var held = _batch;
+        if (held == null || held.Count == 0)
+            return;
+        var framed = new byte[held.Sum(bytes => bytes.Length)];
+        var offset = 0;
+        foreach (var bytes in held)
+        {
+            Buffer.BlockCopy(bytes, 0, framed, offset, bytes.Length);
+            offset += bytes.Length;
+        }
+        SendNow(framed);
     }
 
     private bool HoldInBatch(IServerPacket composer)

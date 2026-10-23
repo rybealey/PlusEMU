@@ -107,5 +107,14 @@ public static class KeyRooms
         {
             ExceptionLogger.LogException(e);
         }
+        try
+        {
+            ItemTeleporterFinder.PreloadArrowLinks();
+        }
+        catch (Exception e)
+        {
+            // Only a head start: each arrow still looks its link up on first use.
+            ExceptionLogger.LogException(e);
+        }
     }
 }
