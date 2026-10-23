@@ -36,7 +36,9 @@ internal class FollowFriendEvent : IPacketEvent
             return Task.CompletedTask;
         // Read once: the friend can change rooms between two reads.
         var room = client.GetHabbo().CurrentRoom;
-        if (room == null)
+        // pixelrp :invisible: a friend out of sight is, to anyone who can't
+        // see them, in no room at all.
+        if (room == null || client.GetHabbo().IsInvisible && !session.GetHabbo().IsInvisible)
         {
             session.Send(new FollowFriendFailedComposer(2));
             return Task.CompletedTask;

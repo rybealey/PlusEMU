@@ -6,11 +6,20 @@ using Plus.HabboHotel.Rooms.AI;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 
-public class UsersComposer : IServerPacket
+public class UsersComposer : IServerPacket, IUnitPacket
 {
     private readonly ICollection<RoomUser> _users;
 
     public uint MessageId => ServerPacketHeader.UsersComposer;
+
+    // pixelrp :invisible: the same list without anyone the viewer can't see.
+    public IServerPacket? WithoutUnits(ISet<int> hidden)
+    {
+        if (!_users.Any(user => hidden.Contains(user.VirtualId)))
+            return this;
+        var visible = _users.Where(user => !hidden.Contains(user.VirtualId)).ToList();
+        return visible.Count == 0 ? null : new UsersComposer(visible);
+    }
 
     public UsersComposer(ICollection<RoomUser> users)
     {

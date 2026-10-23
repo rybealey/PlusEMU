@@ -2,12 +2,14 @@
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Chat;
 
-public class UserTypingComposer : IServerPacket
+public class UserTypingComposer : IServerPacket, IUnitPacket
 {
     private readonly int _virtualId;
     private readonly bool _typing;
 
     public uint MessageId => ServerPacketHeader.UserTypingComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public UserTypingComposer(int virtualId, bool typing)
     {

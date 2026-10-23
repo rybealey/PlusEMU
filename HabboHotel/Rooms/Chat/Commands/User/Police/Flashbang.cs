@@ -97,7 +97,8 @@ public static class Flashbang
         foreach (var user in room.GetRoomUserManager().GetRoomUsers().ToList())
         {
             var target = user?.GetClient()?.GetHabbo();
-            if (user == null || user.IsBot || target == null || target.Id == habbo.Id)
+            // pixelrp :invisible: nobody out of sight is in the blast.
+            if (user == null || user.IsBot || target == null || target.Id == habbo.Id || user.IsInvisible)
                 continue;
             if (Math.Max(Math.Abs(user.X - thrower.X), Math.Abs(user.Y - thrower.Y)) > Reach)
                 continue;

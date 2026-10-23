@@ -22,7 +22,9 @@ internal class GiveHandItemEvent : RoomPacketEvent
         if (KnockedOut.Refuse(session))
             return Task.CompletedTask;
         var targetUser = room.GetRoomUserManager().GetRoomUserByHabbo(packet.ReadInt());
-        if (targetUser == null)
+        // pixelrp :invisible: nothing passes between someone out of sight and
+        // someone who can't see them.
+        if (targetUser == null || !user.CanSee(targetUser) || !targetUser.CanSee(user))
             return Task.CompletedTask;
         if (!(Math.Abs(user.X - targetUser.X) >= 3 || Math.Abs(user.Y - targetUser.Y) >= 3) || session.GetHabbo().Permissions.HasRight("mod_tool"))
         {

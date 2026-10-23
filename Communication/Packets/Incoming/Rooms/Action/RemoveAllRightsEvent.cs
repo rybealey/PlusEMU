@@ -42,7 +42,7 @@ internal class RemoveAllRightsEvent : RoomPacketEvent
             }
             session.Send(new FlatControllerRemovedComposer(instance, userId));
             session.Send(new RoomRightsListComposer(instance));
-            session.Send(new UserUpdateComposer(instance.GetRoomUserManager().GetUserList().ToList()));
+            instance.SendToViewer(session, new UserUpdateComposer(instance.GetRoomUserManager().GetUserList().ToList()));
         }
         if (instance.UsersWithRights.Count > 0)
             instance.UsersWithRights.Clear();

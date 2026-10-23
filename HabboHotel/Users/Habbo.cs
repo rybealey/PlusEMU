@@ -362,6 +362,21 @@ public class Habbo
     // changes; the room tick re-applies it) and comes off at clock-out.
     public const int StaffDutyEffectId = 102;
 
+    // pixelrp: :invisible (Invisibility). Nobody sees this player - their
+    // avatar, chat, typing or enable - except others who are invisible too;
+    // they still see and hear the whole room. Lives on the session, so it
+    // follows them from room to room and ends at logout. The Ghost enable
+    // beats every other one, the City Government enable included.
+    public bool IsInvisible { get; set; }
+
+    // Who made this player invisible with :invisible <name>; 0 when they
+    // turned it on themselves. A player brought in who isn't staff can't turn
+    // it off, so it ends with the one who brought them (Invisibility.Disable,
+    // Invisibility.OnLeaveRoom).
+    public int InvisibleBroughtById { get; set; }
+
+    public const int InvisibleEffectId = 13;
+
     // pixelrp: passive is EITHER a smoothie still running OR being on duty
     // for City Government - staff are untouchable while working. Every
     // passive check reads this so the two sources can never drift apart.

@@ -107,7 +107,9 @@ public class ChatEvent : IPacketEvent
             }
         }
         
-        _chatlogManager.StoreChatlog(new(session.GetHabbo().Id, room.Id, message, UnixTimestamp.GetNow(), session.GetHabbo(), room));
+        // pixelrp :invisible: logged like any line, marked so whoever reads the
+        // log knows the room never saw it.
+        _chatlogManager.StoreChatlog(new(session.GetHabbo().Id, room.Id, session.GetHabbo().IsInvisible ? $"<Invisible> {message}" : message, UnixTimestamp.GetNow(), session.GetHabbo(), room));
         
         if (message.StartsWith(":", StringComparison.CurrentCulture) && await _commandManager.Parse(session, message))
             return true;

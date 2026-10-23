@@ -668,7 +668,8 @@ public static class JailState
             return;
         if (!Serving.TryGetValue(user.UserId, out var sentence))
         {
-            user.GetClient()?.Send(PrisonersIn(room));
+            if (user.GetClient() is { } client)
+                room.SendToViewer(client, PrisonersIn(room));
             return;
         }
         // Found not guilty and back in the jail: free (Twist, 2026-10-20).

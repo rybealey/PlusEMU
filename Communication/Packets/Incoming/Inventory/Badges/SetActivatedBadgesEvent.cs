@@ -34,7 +34,7 @@ internal class SetActivatedBadgesEvent : IPacketEvent
 
         if (habbo.InRoom)
         {
-            habbo.CurrentRoom?.SendPacket(new HabboUserBadgesComposer(habbo.Id, equippedBadges));
+            habbo.CurrentRoom?.SendPacketAbout(habbo, new HabboUserBadgesComposer(habbo.Id, equippedBadges));
         }
         else
         {

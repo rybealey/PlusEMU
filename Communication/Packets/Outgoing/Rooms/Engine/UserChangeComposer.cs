@@ -4,7 +4,7 @@ using Plus.HabboHotel.Rooms.AI;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 
-public class UserChangeComposer : IServerPacket
+public class UserChangeComposer : IServerPacket, IUnitPacket
 {
     private int _virtualId;
     private string _look;
@@ -13,6 +13,8 @@ public class UserChangeComposer : IServerPacket
     private int _achievementScore;
 
     public uint MessageId => ServerPacketHeader.UserChangeComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public UserChangeComposer(RoomUser user, bool self)
     {

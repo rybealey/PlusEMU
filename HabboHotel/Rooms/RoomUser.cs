@@ -282,6 +282,14 @@ public class RoomUser
 
     public int CurrentEffect => GetClient().GetHabbo().Effects.CurrentEffect;
 
+    /// <summary>pixelrp :invisible - see Invisibility. Only a player can be;
+    /// bots and pets never are.</summary>
+    public bool IsInvisible => !IsBot && GetClient()?.GetHabbo()?.IsInvisible == true;
+
+    /// <summary>pixelrp :invisible: an invisible unit is seen only by others
+    /// who are invisible too; everyone else is seen by everybody.</summary>
+    public bool CanSee(RoomUser unit) => unit == null || !unit.IsInvisible || IsInvisible;
+
 
     public bool IsDancing
     {
@@ -564,7 +572,10 @@ public class RoomUser
                     continue;
                 var candidate = _mRoom.GetRoomUserManager()
                     .GetRoomUserByHabbo(token.Substring(1).TrimEnd('.', ',', '!', '?', ':', ';'));
-                if (candidate != null && !candidate.IsBot && candidate != this)
+                // pixelrp :invisible: an invisible player can't be pinged by
+                // anyone who can't see them, and an invisible speaker pings
+                // only those who can see them back.
+                if (candidate != null && !candidate.IsBot && candidate != this && candidate.CanSee(this) && CanSee(candidate))
                 {
                     // Still inside their own quiet period: named in the text like
                     // everybody else, just not rung again. A flag rather than a
@@ -615,7 +626,7 @@ public class RoomUser
                 foreach (var user in toNotify)
                 {
                     if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null ||
-                        user.GetClient().GetHabbo().TentId == GetClient().GetHabbo().TentId)
+                        user.GetClient().GetHabbo().TentId == GetClient().GetHabbo().TentId || !user.CanSee(this))
                         continue;
                     user.GetClient().Send(packet);
                 }
@@ -630,6 +641,10 @@ public class RoomUser
             foreach (var user in _mRoom.GetRoomUserManager().GetRoomUsers().ToList())
             {
                 if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null || user.GetClient().GetHabbo().IgnoresComponent.IsIgnored(_mClient.GetHabbo().Id))
+                    continue;
+                // pixelrp :invisible: an invisible speaker is heard only by
+                // others who are invisible.
+                if (!user.CanSee(this))
                     continue;
                 // pixelrp: no hearing distance - everyone in the room sees every
                 // chat bubble wherever they stand. The room's chat_hearing_distance
@@ -647,6 +662,10 @@ public class RoomUser
                 chatFrame.SendTo(user.GetClient());
             }
         }
+        // pixelrp :invisible: bots don't hear an invisible speaker either - a
+        // bartender or banker answers in public.
+        if (IsInvisible)
+            return;
         if (shout)
         {
             foreach (var user in _mRoom.GetRoomUserManager().GetUserList().ToList())

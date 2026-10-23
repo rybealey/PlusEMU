@@ -12,7 +12,7 @@ namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 /// grid (all on-grid walkers world-wide share one cycle origin); the instant
 /// first step and global-tick steps are off-grid and render natively.
 /// </summary>
-public class RpMovementCycleComposer : IServerPacket
+public class RpMovementCycleComposer : IServerPacket, IUnitPacket
 {
     private readonly int _virtualId;
     private readonly int _seq;
@@ -29,6 +29,8 @@ public class RpMovementCycleComposer : IServerPacket
     private readonly int _l2X; private readonly int _l2Y; private readonly int _l2Z;
 
     public uint MessageId => ServerPacketHeader.RpMovementCycleComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     /// <summary>
     /// pixelrp walk-end marker: a zero-length edge (from == to) at the

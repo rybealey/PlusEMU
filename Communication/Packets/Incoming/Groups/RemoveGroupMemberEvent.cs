@@ -91,7 +91,7 @@ internal class RemoveGroupMemberEvent : IPacketEvent
                             .SendPacket(new UpdateFavouriteGroupComposer(group, user.VirtualId));
                     }
                     session.GetHabbo().CurrentRoom
-                        .SendPacket(new RefreshFavouriteGroupComposer(session.GetHabbo().Id));
+                        .SendPacketAbout(session.GetHabbo(), new RefreshFavouriteGroupComposer(session.GetHabbo().Id));
                 }
                 else
                     session.Send(new RefreshFavouriteGroupComposer(session.GetHabbo().Id));
