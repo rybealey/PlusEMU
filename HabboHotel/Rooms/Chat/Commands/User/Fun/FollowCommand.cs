@@ -22,6 +22,13 @@ internal class FollowCommand : ITargetChatCommand
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
+        // pixelrp :invisible: someone out of sight is in no room you can follow
+        // them to - the answer for anyone in the hotel view.
+        if (target.IsInvisible && !session.GetHabbo().IsInvisible)
+        {
+            session.SendWhisper("That user currently isn't in a room!");
+            return Task.CompletedTask;
+        }
         if (target.CurrentRoom == session.GetHabbo().CurrentRoom)
         {
             session.SendWhisper($"Hey you, open your eyes! {target.Username} is in this room!");

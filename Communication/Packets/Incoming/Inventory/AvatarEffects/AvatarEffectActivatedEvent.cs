@@ -10,6 +10,12 @@ internal class AvatarEffectActivatedEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var effectId = packet.ReadInt();
+        // pixelrp :invisible: the Ghost enable stays on until they turn visible.
+        if (session.GetHabbo().IsInvisible)
+        {
+            session.SendWhisper("Your invisible enable stays on while you're invisible.");
+            return Task.CompletedTask;
+        }
         // pixelrp: City Government on duty wears the staff enable and nothing
         // else for the shift - other enables are refused until clock-out.
         if (ShiftManager.IsStaffOnDuty(session.GetHabbo().Id) && effectId != Habbo.StaffDutyEffectId)

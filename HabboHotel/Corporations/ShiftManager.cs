@@ -197,7 +197,10 @@ public static class ShiftManager
     {
         var habbo = client?.GetHabbo();
         if (habbo == null) return;
-        habbo.Effects?.ApplyEffect(Habbo.StaffDutyEffectId);
+        // pixelrp :invisible: the Ghost enable stays on; the staff enable is
+        // put back when they turn visible (Invisibility.RestoreEffectId).
+        if (!habbo.IsInvisible)
+            habbo.Effects?.ApplyEffect(Habbo.StaffDutyEffectId);
         BroadcastRpStats(habbo);
     }
 

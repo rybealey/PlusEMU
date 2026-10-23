@@ -24,7 +24,7 @@ namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 /// the whole point: V1's native path restarts its interpolation window from
 /// PACKET ARRIVAL, which turns arrival jitter into position jitter.
 /// </summary>
-public class RpMovementV2Composer : IServerPacket
+public class RpMovementV2Composer : IServerPacket, IUnitPacket
 {
     public const int FormatVersion = 2;
 
@@ -35,6 +35,8 @@ public class RpMovementV2Composer : IServerPacket
     private readonly long _serverNowMs;
 
     public uint MessageId => ServerPacketHeader.RpMovementV2Composer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_edge.VirtualId) ? null : this;
 
     /// <summary>
     /// serverNow is supplied at SEND time, not stored on the edge: it is a

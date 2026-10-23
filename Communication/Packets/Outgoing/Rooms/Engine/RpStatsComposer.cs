@@ -7,7 +7,7 @@ namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 /// HUD) to clients. Keyed by the unit's virtual id (roomIndex client-side).
 /// Sent on room entry (both directions) and whenever a stat changes.
 /// </summary>
-public class RpStatsComposer : IServerPacket
+public class RpStatsComposer : IServerPacket, IUnitPacket
 {
     private readonly int _virtualId;
     private readonly int _health;
@@ -19,6 +19,8 @@ public class RpStatsComposer : IServerPacket
     private readonly int _staff;
 
     public uint MessageId => ServerPacketHeader.RpStatsComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public RpStatsComposer(int virtualId, int health, int healthMax, int energy, int energyMax, int aggression, int passive, int staff)
     {

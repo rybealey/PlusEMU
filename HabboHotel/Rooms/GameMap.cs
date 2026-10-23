@@ -904,6 +904,9 @@ public class Gamemap
         var x = false;
         foreach (var user in _room.GetRoomUserManager().GetRoomUsers())
         {
+            // pixelrp :invisible: a chaser never hunts someone out of sight.
+            if (user.IsInvisible)
+                continue;
             if (user.X == item.GetX || item.GetY == user.Y)
             {
                 if (user.X == item.GetX)

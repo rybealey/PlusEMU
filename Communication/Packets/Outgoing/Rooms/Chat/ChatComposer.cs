@@ -2,7 +2,7 @@
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Chat;
 
-public class ChatComposer : IServerPacket
+public class ChatComposer : IServerPacket, IUnitPacket
 {
     private readonly int _virtualId;
     private readonly string _message;
@@ -12,6 +12,8 @@ public class ChatComposer : IServerPacket
     private readonly string _icon;
     private readonly string _iconColor;
     public uint MessageId => ServerPacketHeader.ChatComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public ChatComposer(int virtualId, string message, int emotion, int colour, string usernameColor = "", string icon = "", string iconColor = "")
     {

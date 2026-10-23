@@ -2,11 +2,13 @@
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 
-public class UserRemoveComposer : IServerPacket
+public class UserRemoveComposer : IServerPacket, IUnitPacket
 {
     private readonly int _id;
 
     public uint MessageId => ServerPacketHeader.UserRemoveComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_id) ? null : this;
 
     public UserRemoveComposer(int id)
     {

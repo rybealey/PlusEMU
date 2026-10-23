@@ -642,6 +642,52 @@ public class Room : RoomData
     }
 
     /// <summary>
+    /// pixelrp: one unit as a client that has never seen it needs it - the
+    /// avatar, then everything worn on it. SendObjects sends each unit in the
+    /// room this way; Invisibility sends one unit to a viewer it has just
+    /// appeared to.
+    /// </summary>
+    /// <param name="employment">pixelrp corporations: the unit's job, read by
+    /// the caller - SendObjects reads the whole room's in one query.</param>
+    public void SendUnitTo(GameClient session, RoomUser unit, Plus.HabboHotel.Corporations.CorporationUtility.Employment employment)
+    {
+        session.Send(new UsersComposer(unit));
+        // pixelrp RP stats: the entering client learns every player's
+        // health/energy for the HUD (bots/pets have no stats).
+        if (!unit.IsBot && !unit.IsPet && unit.GetClient()?.GetHabbo() != null)
+        {
+            var habbo = unit.GetClient().GetHabbo();
+            habbo.EnsureRpStatsLoaded();
+            session.Send(new RpStatsComposer(unit.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
+            // pixelrp corporations: the entering client learns everyone's
+            // employment (infostand corp badge slot / profile row).
+            if (employment != null)
+                session.Send(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(habbo.Id, employment));
+        }
+        if (unit.IsBot && unit.BotData.DanceId > 0)
+            session.Send(new DanceComposer(unit, unit.BotData.DanceId));
+        else if (!unit.IsBot && !unit.IsPet && unit.IsDancing)
+            session.Send(new DanceComposer(unit, unit.DanceId));
+        if (unit.IsAsleep)
+            session.Send(new SleepComposer(unit, true));
+        // pixelrp: a RESTING hand item too - an equipped weapon, an open
+        // phone - not just a timed carry. Right after this unit's
+        // UsersComposer is the only place the entering client is sure to
+        // have the avatar to put it on; sent any earlier (AddAvatarToRoom
+        // used to) it arrived before the avatar existed and was dropped, so
+        // a player changing rooms lost their own stun gun from view and saw
+        // nobody else's. RestingHandItemId is 0 for bots and pets, so a stale
+        // CarryItemId with no timer still goes unsent.
+        if (unit.CarryItemId > 0 && (unit.CarryTimer > 0 || unit.CarryItemId == unit.RestingHandItemId))
+            session.Send(new CarryObjectComposer(unit.VirtualId, unit.CarryItemId));
+        if (!unit.IsBot && !unit.IsPet && unit.CurrentEffect > 0)
+            session.Send(new AvatarEffectComposer(unit.VirtualId, unit.CurrentEffect));
+        else if (unit.IsBot && !unit.IsPet)
+            // Bots always wear the identifier effect so entering players can spot them.
+            session.Send(new AvatarEffectComposer(unit.VirtualId, RoomBot.IdentifierEffect));
+    }
+
+    /// <summary>
     /// pixelrp: the room's shape - what the client builds the room from, and the
     /// end of the blank screen. Sent first, ahead of the entering player's own
     /// lookups (GetRoomEntryDataEvent), not as the start of SendObjects.
@@ -666,53 +712,27 @@ public class Room : RoomData
                     .Select(unit => unit.GetClient().GetHabbo().Id))
             .GroupBy(employment => employment.UserId)
             .ToDictionary(group => group.Key, group => group.First());
+        // pixelrp :invisible: a newcomer who isn't invisible is sent nobody
+        // who is (Invisibility) - not their avatar, their step or their status.
+        var hidden = session.GetHabbo().IsInvisible ? null : HiddenUnits(units);
         foreach (var user in units)
         {
             if (user == null || (ownAvatarSent && user.GetClient() == session))
                 continue;
-            session.Send(new UsersComposer(user));
-            // pixelrp RP stats: the entering client learns every player's
-            // health/energy for the HUD (bots/pets have no stats).
-            if (!user.IsBot && !user.IsPet && user.GetClient()?.GetHabbo() != null)
-            {
-                var habbo = user.GetClient().GetHabbo();
-                habbo.EnsureRpStatsLoaded();
-                session.Send(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax, (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
-                // pixelrp corporations: the entering client learns everyone's
-                // employment (infostand corp badge slot / profile row).
-                employments.TryGetValue(habbo.Id, out var employment);
-                if (employment != null)
-                    session.Send(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(habbo.Id, employment));
-            }
-            if (user.IsBot && user.BotData.DanceId > 0)
-                session.Send(new DanceComposer(user, user.BotData.DanceId));
-            else if (!user.IsBot && !user.IsPet && user.IsDancing)
-                session.Send(new DanceComposer(user, user.DanceId));
-            if (user.IsAsleep)
-                session.Send(new SleepComposer(user, true));
-            // pixelrp: a RESTING hand item too - an equipped weapon, an open
-            // phone - not just a timed carry. Right after this unit's
-            // UsersComposer is the only place the entering client is sure to
-            // have the avatar to put it on; sent any earlier (AddAvatarToRoom
-            // used to) it arrived before the avatar existed and was dropped, so
-            // a player changing rooms lost their own stun gun from view and saw
-            // nobody else's. RestingHandItemId is 0 for bots and pets, so a stale
-            // CarryItemId with no timer still goes unsent.
-            if (user.CarryItemId > 0 && (user.CarryTimer > 0 || user.CarryItemId == user.RestingHandItemId))
-                session.Send(new CarryObjectComposer(user.VirtualId, user.CarryItemId));
-            if (!user.IsBot && !user.IsPet && user.CurrentEffect > 0)
-                session.Send(new AvatarEffectComposer(user.VirtualId, user.CurrentEffect));
-            else if (user.IsBot && !user.IsPet)
-                // Bots always wear the identifier effect so entering players can spot them.
-                session.Send(new AvatarEffectComposer(user.VirtualId, RoomBot.IdentifierEffect));
+            if (hidden != null && hidden.Contains(user.VirtualId))
+                continue;
+            Plus.HabboHotel.Corporations.CorporationUtility.Employment employment = null;
+            if (!user.IsBot && user.GetClient()?.GetHabbo() is { } habbo)
+                employments.TryGetValue(habbo.Id, out employment);
+            SendUnitTo(session, user, employment);
         }
         // pixelrp Movement V2: the step every walking unit is on right now,
         // BEFORE the status list - so the newcomer's client draws walkers on
         // their real timing from the first frame, instead of guessing with
         // stock Nitro for ~0.6s and then hopping them all forward.
         foreach (var catchUp in Movement.MovementV2Bridge.EntryCatchUp(this))
-            session.Send(catchUp);
-        session.Send(new UserUpdateComposer(_roomUserManager.GetUserList().ToList()));
+            SendUnlessHidden(session, catchUp, hidden);
+        SendUnlessHidden(session, new UserUpdateComposer(_roomUserManager.GetUserList().ToList()), hidden);
         session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));
         // Opacity rides after the objects themselves, so the client has
         // something to apply it to. Only faded items travel; a room nobody
@@ -833,10 +853,11 @@ public class Room : RoomData
     {
         if (!_tents.ContainsKey(tentId))
             return;
+        var sender = _roomUserManager.GetRoomUserByHabbo(id);
         foreach (var user in _tents[tentId].ToList())
         {
             if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null || user.GetClient().GetHabbo().IgnoresComponent.IsIgnored(id) ||
-                user.GetClient().GetHabbo().TentId != tentId)
+                user.GetClient().GetHabbo().TentId != tentId || !user.CanSee(sender))
                 continue;
             user.GetClient().Send(packet);
         }
@@ -848,15 +869,25 @@ public class Room : RoomData
             return;
         try
         {
+            var users = _roomUserManager.GetUserList().ToList();
             // pixelrp: composed once, not once per viewer (SharedFrame).
             var frame = new SharedFrame(packet);
-            foreach (var user in _roomUserManager.GetUserList().ToList())
+            // pixelrp :invisible: whoever can't see an invisible unit gets the
+            // packet without it, or nothing when it was only about them.
+            var visibleFrame = frame;
+            var hidden = HiddenUnits(users);
+            if (hidden != null)
+            {
+                var visiblePacket = IUnitPacket.Filter(packet, hidden);
+                visibleFrame = visiblePacket == null ? null : ReferenceEquals(visiblePacket, packet) ? frame : new SharedFrame(visiblePacket);
+            }
+            foreach (var user in users)
             {
                 if (user?.GetClient() is not { } client || user.IsBot)
                     continue;
                 if (withRightsOnly && !CheckRights(client))
                     continue;
-                frame.SendTo(client);
+                (user.IsInvisible ? frame : visibleFrame)?.SendTo(client);
             }
         }
         catch (Exception e)
@@ -869,6 +900,50 @@ public class Room : RoomData
     {
         foreach (var packet in packets)
             SendPacket(packet);
+    }
+
+    /// <summary>pixelrp :invisible: a packet about <paramref name="subject"/>
+    /// that names them by user id, which the send filter (IUnitPacket) can't
+    /// read - their badges, their job, their favourite group. To everyone,
+    /// unless they're invisible: then only to those who can see them.</summary>
+    public void SendPacketAbout(Plus.HabboHotel.Users.Habbo subject, IServerPacket packet)
+    {
+        if (subject is not { IsInvisible: true })
+        {
+            SendPacket(packet);
+            return;
+        }
+        foreach (var user in _roomUserManager.GetUserList().ToList())
+            if (user is { IsInvisible: true } && user.GetClient() is { } client)
+                client.Send(packet);
+    }
+
+    /// <summary>pixelrp :invisible: the virtual ids of the invisible units
+    /// among <paramref name="users"/>, or null when there are none - the
+    /// usual case, which keeps every send exactly as it was.</summary>
+    public static HashSet<int> HiddenUnits(IEnumerable<RoomUser> users)
+    {
+        HashSet<int> hidden = null;
+        foreach (var user in users)
+            if (user is { IsInvisible: true })
+                (hidden ??= new()).Add(user.VirtualId);
+        return hidden;
+    }
+
+    /// <summary>pixelrp :invisible: <paramref name="packet"/> to one viewer in
+    /// the room, without anyone invisible they can't see.</summary>
+    public void SendToViewer(GameClient session, IServerPacket packet)
+    {
+        SendUnlessHidden(session, packet, session.GetHabbo().IsInvisible ? null : HiddenUnits(_roomUserManager.GetUserList()));
+    }
+
+    /// <summary>pixelrp :invisible: <paramref name="packet"/> to one viewer
+    /// who can't see <paramref name="hidden"/> (null: sees everyone).</summary>
+    private static void SendUnlessHidden(GameClient session, IServerPacket packet, ISet<int> hidden)
+    {
+        var filtered = hidden == null ? packet : IUnitPacket.Filter(packet, hidden);
+        if (filtered != null)
+            session.Send(filtered);
     }
 
     /// <summary>
@@ -895,18 +970,22 @@ public class Room : RoomData
             return;
         try
         {
-            var groups = new Dictionary<(Type, Plus.Communication.Revisions.Revision), List<GameClient>>();
-            foreach (var user in _roomUserManager.GetUserList().ToList())
+            var users = _roomUserManager.GetUserList().ToList();
+            // pixelrp :invisible: viewers who can't see an invisible unit are a
+            // group of their own, sent the packets without it (IUnitPacket).
+            var hidden = HiddenUnits(users);
+            var groups = new Dictionary<(Type, Plus.Communication.Revisions.Revision, bool), List<GameClient>>();
+            foreach (var user in users)
             {
                 if (user?.GetClient() is not { } client || user.IsBot || client.Revision == null)
                     continue;
-                var key = (client.GetType(), client.Revision);
+                var key = (client.GetType(), client.Revision, hidden != null && !user.IsInvisible);
                 if (!groups.TryGetValue(key, out var list))
                     groups[key] = list = new List<GameClient>();
                 list.Add(client);
             }
 
-            foreach (var clients in groups.Values)
+            foreach (var (key, clients) in groups)
             {
                 try
                 {
@@ -914,8 +993,11 @@ public class Room : RoomData
                     // are the group's, so its bytes are everyone's.
                     var parts = new List<byte[]>(packets.Count);
                     var total = 0;
-                    foreach (var packet in packets)
+                    foreach (var unfiltered in packets)
                     {
+                        if (unfiltered == null)
+                            continue;
+                        var packet = key.Item3 ? IUnitPacket.Filter(unfiltered, hidden) : unfiltered;
                         if (packet == null)
                             continue;
                         var framed = clients[0].Frame(packet);

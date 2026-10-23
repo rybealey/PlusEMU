@@ -2,7 +2,7 @@
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Chat;
 
-public class WhisperComposer : IServerPacket
+public class WhisperComposer : IServerPacket, IUnitPacket
 {
     private readonly int _virtualId;
     private readonly string _text;
@@ -13,6 +13,8 @@ public class WhisperComposer : IServerPacket
     private readonly string _iconColor;
 
     public uint MessageId => ServerPacketHeader.WhisperComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public WhisperComposer(int virtualId, string text, int emotion, int colour, string usernameColor = "", string icon = "", string iconColor = "")
     {

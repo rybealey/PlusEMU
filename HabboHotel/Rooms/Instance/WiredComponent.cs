@@ -302,6 +302,11 @@ public class WiredComponent
 
     public bool TriggerEvent(WiredBoxType type, params object[] @params)
     {
+        // pixelrp :invisible: the room's wired never notices someone out of
+        // sight - walking in, talking, a command, a step on a furni. Anything
+        // it did in answer would show the room they are there.
+        if (@params.Length > 0 && @params[0] is Plus.HabboHotel.Users.Habbo { IsInvisible: true })
+            return false;
         var finished = false;
         try
         {

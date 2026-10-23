@@ -67,8 +67,16 @@ public class WhisperEvent : IPacketEvent
         if (user == null)
             return Task.CompletedTask;
         var user2 = room.GetRoomUserManager().GetRoomUserByHabbo(toUser);
-        if (user2 == null)
+        // pixelrp :invisible: nobody whispers someone they can't see - it goes
+        // nowhere, exactly as it would to a name not in the room.
+        if (user2 == null || !user.CanSee(user2))
             return Task.CompletedTask;
+        // ...and an invisible player can't whisper anyone who can't see them.
+        if (!user2.CanSee(user))
+        {
+            session.SendWhisper($"{user2.GetUsername()} can't hear you while you're invisible.");
+            return Task.CompletedTask;
+        }
         if (session.GetHabbo().TimeMuted > 0)
         {
             session.Send(new MutedComposer(session.GetHabbo().TimeMuted));
@@ -93,7 +101,7 @@ public class WhisperEvent : IPacketEvent
                 return Task.CompletedTask;
             }
         }
-        _chatlogManager.StoreChatlog(new(session.GetHabbo().Id, room.Id, $"<Whisper to {toUser}>: {message}", UnixTimestamp.GetNow(), session.GetHabbo(), room));
+        _chatlogManager.StoreChatlog(new(session.GetHabbo().Id, room.Id, $"{(user.IsInvisible ? "<Invisible> " : "")}<Whisper to {toUser}>: {message}", UnixTimestamp.GetNow(), session.GetHabbo(), room));
         if (_wordFilterManager.CheckBannedWords(message))
         {
             session.GetHabbo().BannedPhraseCount++;
@@ -120,7 +128,7 @@ public class WhisperEvent : IPacketEvent
         {
             foreach (var notifiable in toNotify)
             {
-                if (notifiable != null && notifiable.HabboId != user2.HabboId && notifiable.HabboId != user.HabboId)
+                if (notifiable != null && notifiable.HabboId != user2.HabboId && notifiable.HabboId != user.HabboId && notifiable.CanSee(user))
                 {
                     if (notifiable.GetClient() != null && notifiable.GetClient().GetHabbo() != null && !notifiable.GetClient().GetHabbo().IgnorePublicWhispers)
                         notifiable.GetClient().Send(new WhisperComposer(user.VirtualId, $"[Whisper to {toUser}] {message}", 0, user.LastBubble, usernameColor, usernameIcon, usernameIconColor));

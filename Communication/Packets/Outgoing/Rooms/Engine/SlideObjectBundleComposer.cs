@@ -3,7 +3,7 @@ using Plus.Utilities;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 
-public class SlideObjectBundleComposer : IServerPacket
+public class SlideObjectBundleComposer : IServerPacket, IUnitPacket
 {
     private readonly int _fromX;
     private readonly int _fromY;
@@ -16,6 +16,10 @@ public class SlideObjectBundleComposer : IServerPacket
     private readonly uint _itemId;
 
     public uint MessageId => ServerPacketHeader.SlideObjectBundleComposer;
+
+    // pixelrp :invisible: an avatar's slide (a roller, :teleport) - itemId 0.
+    // With an item the "avatar" id is a furni's (Soccer), never a unit's.
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => _itemId == 0 && hidden.Contains(_avatarId) ? null : this;
 
     public SlideObjectBundleComposer(int fromX, int fromY, double fromZ, int toX, int toY, double toZ, uint rollerId, int avatarId, uint itemId)
     {

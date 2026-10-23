@@ -354,6 +354,10 @@ public class RoomUserManager
         // last-position restore puts a player who logged out in a chair back in
         // it instead of standing on it.
         UpdateUserStatus(user, false);
+        // pixelrp :invisible: a player brought in who walks in here without the
+        // moderator who brought them - the room they were in was unloaded
+        // around them - is visible again before anyone is told they arrived.
+        Invisibility.OnEnterRoom(_room, user);
         _room.SendPacket(new UsersComposer(user));
         // pixelrp RP stats: announce the entering player's health/energy to the
         // room (the enterer receives everyone else's in Room.SendObjects).
@@ -362,7 +366,7 @@ public class RoomUserManager
         // pixelrp corporations: announce the entering player's employment.
         var enteringEmployment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(session.GetHabbo().Id);
         if (enteringEmployment != null)
-            _room.SendPacket(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(session.GetHabbo().Id, enteringEmployment));
+            _room.SendPacketAbout(session.GetHabbo(), Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(session.GetHabbo().Id, enteringEmployment));
         // Knocked-out players (0 health persists) re-enter laying and frozen.
         user.UpdateRpKnockoutState();
         ApplyRoomRights(session, user);
@@ -379,7 +383,11 @@ public class RoomUserManager
         // pixelrp: City Government on duty wears the staff enable instead.
         // pixelrp turfs: the turf panel for this room - hidden when it is not a turf.
         session.Send(Communication.Packets.Outgoing.Rooms.Settings.RpRoomTurfComposer.For(_room, session.GetHabbo().Id));
-        if (ShiftManager.IsStaffOnDuty(session.GetHabbo().Id) && session.GetHabbo().Effects != null)
+        // pixelrp :invisible: the Ghost enable beats every other one, City
+        // Government's included (Invisibility).
+        if (session.GetHabbo().IsInvisible && session.GetHabbo().Effects != null)
+            session.GetHabbo().Effects.ApplyEffect(Habbo.InvisibleEffectId);
+        else if (ShiftManager.IsStaffOnDuty(session.GetHabbo().Id) && session.GetHabbo().Effects != null)
             session.GetHabbo().Effects.ApplyEffect(Habbo.StaffDutyEffectId);
         else if (PoliceBeacon.EnteredRoom(session.GetHabbo(), _room, user))
         {
@@ -431,9 +439,11 @@ public class RoomUserManager
         Chat.Commands.User.Police.JailState.OnRoomEntered(_room, user);
         // pixelrp jury trials: the prisoner reaching the Courthouse opens court.
         Chat.Commands.User.Police.JuryTrials.OnRoomEntered(_room, user);
+        // pixelrp :invisible: no bot greets someone out of sight - a pet's hello
+        // to its owner is out loud.
         foreach (var bot in _bots.Values.ToList())
         {
-            if (bot == null || bot.BotAi == null)
+            if (bot == null || bot.BotAi == null || user.IsInvisible)
                 continue;
             bot.BotAi.OnUserEnterRoom(user);
         }
@@ -680,6 +690,18 @@ public class RoomUserManager
         }
         user.InternalRoomId = -1;
         OnRemove(user);
+        // pixelrp :invisible: once they're out, whoever they brought in who
+        // isn't staff turns visible - and so do they, if that's how they were.
+        // Last, and caught: it sends packets and reads jobs, and none of that
+        // may cost the leave its own teardown.
+        try
+        {
+            Invisibility.OnLeaveRoom(_room, user);
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+        }
     }
 
     public bool TryGetPet(int petId, out RoomUser pet) => _pets.TryGetValue(petId, out pet);
@@ -1560,7 +1582,8 @@ public class RoomUserManager
                         user.ApplyEffect(77);
                     if (user.IsBot && user.BotAi != null)
                         user.BotAi.OnTimerTick();
-                    else
+                    // pixelrp :invisible: the navigator counts who the room can see.
+                    else if (!user.IsInvisible)
                         userCounter++;
                     UpdateUserEffect(user, user.X, user.Y);
                     UpdatePassiveEffect(user);
@@ -2002,10 +2025,28 @@ public class RoomUserManager
         // Dancing and lying keep their exceptions: ApplyEffect stops a dance,
         // and LayCommand clears the effect to hold the lay pose, so the enable
         // resumes when the player stands.
-        if (ShiftManager.IsStaffOnDuty(habbo.Id))
+        // pixelrp :invisible: ahead of all of that, the Ghost enable owns the
+        // slot - the one sign, to them and the others hidden with them, that
+        // they are out of sight. Same exceptions, and it gives way to the
+        // cuffs, the ambulance and a horse, which put theirs back every tick:
+        // a player brought in can be any of those, and the two would trade
+        // the slot back and forth forever.
+        if (habbo.IsInvisible)
+        {
+            var held = user.RidingHorse || cur == Chat.Commands.User.Police.PoliceState.CuffEffectId || cur == Chat.Commands.User.Police.PoliceState.AmbulanceEffectId;
+            if (cur != Habbo.InvisibleEffectId && !held && !user.IsDancing && !user.IsLying)
+                habbo.Effects.ApplyEffect(Habbo.InvisibleEffectId);
+        }
+        else if (ShiftManager.IsStaffOnDuty(habbo.Id))
         {
             if (cur != Habbo.StaffDutyEffectId && !user.IsDancing && !user.IsLying)
                 habbo.Effects.ApplyEffect(Habbo.StaffDutyEffectId);
+        }
+        // pixelrp :invisible: a Ghost left on someone visible - put back by an
+        // effect's "before" (the gym, a vape, the beacon) - comes off.
+        else if (cur == Habbo.InvisibleEffectId)
+        {
+            habbo.Effects.ApplyEffect(Invisibility.RestoreEffectId(habbo));
         }
         else if (habbo.RpPassiveSeconds > 0)
         {

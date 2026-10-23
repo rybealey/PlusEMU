@@ -58,6 +58,18 @@ public class CommandManager : ICommandManager
         "escort", "charge", "pardon"
     };
 
+    /// <summary>
+    /// pixelrp :invisible: the player commands that still work while you're
+    /// invisible (Invisibility) - your own stats, and clocking in and out.
+    /// Everything else in the roleplay is refused: nobody is hit, cuffed or
+    /// paid by someone they can't see. Staff commands are not player commands,
+    /// so they all still work.
+    /// </summary>
+    private static readonly HashSet<string> InvisibleCan = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "stats", "startwork", "stopwork"
+    };
+
     private static bool IsPlayerCommand(ICommandBase command) =>
         (command.GetType().Namespace ?? string.Empty).Contains(".Commands.User", StringComparison.Ordinal);
 
@@ -154,6 +166,13 @@ public class CommandManager : ICommandManager
             // one check here, not a copy in every command.
             if (IsPlayerCommand(command) && !KnockedOutCan.Contains(key) && KnockedOut.Refuse(session))
                 return true;
+            // pixelrp :invisible: someone out of sight is out of the roleplay
+            // (InvisibleCan).
+            if (IsPlayerCommand(command) && session.GetHabbo().IsInvisible && !InvisibleCan.Contains(key))
+            {
+                session.SendWhisper("Turn off :invisible first.");
+                return true;
+            }
             session.GetHabbo().ChatCommand = command;
             session.GetHabbo().CurrentRoom.GetWired().TriggerEvent(WiredBoxType.TriggerUserSaysCommand, session.GetHabbo(), this);
 
@@ -205,7 +224,13 @@ public class CommandManager : ICommandManager
                 }
 
                 var targetHabbo = target.GetHabbo();
-                if (targetChatCommand.MustBeInSameRoom && session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom)
+                // pixelrp :invisible: to a player command of anyone who can't
+                // see them, someone out of sight is somewhere else - typed or
+                // the HUD target selected before they went. The same answer
+                // word for word, so it can't be used to find them out. A
+                // command that reaches another room already works on them.
+                var outOfSight = IsPlayerCommand(command) && targetHabbo.IsInvisible && !session.GetHabbo().IsInvisible;
+                if (targetChatCommand.MustBeInSameRoom && (session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom || outOfSight))
                 {
                     session.SendWhisper(targetChatCommand.IsRanged ? RangeMessages.NotInRoom : $"You must be in the same room as {targetHabbo.Username} to execute this command.");
                     return true;

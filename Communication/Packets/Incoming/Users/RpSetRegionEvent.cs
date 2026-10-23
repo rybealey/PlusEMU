@@ -46,7 +46,8 @@ internal class RpSetRegionEvent : IPacketEvent
         {
             var client = user?.GetClient();
             var viewer = client?.GetHabbo();
-            if (viewer == null || viewer.Id == habbo.Id)
+            // pixelrp :invisible: nor to anyone who can't see them.
+            if (viewer == null || viewer.Id == habbo.Id || habbo.IsInvisible && !viewer.IsInvisible)
                 continue;
             client.Send(PrivacyUtility.CanSeeRegion(viewer.Id, habbo.Id) ? shared : hidden);
         }

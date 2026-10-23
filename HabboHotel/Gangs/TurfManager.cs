@@ -270,7 +270,8 @@ public static class TurfManager
         foreach (var user in users.GetRoomUsers().ToList())
         {
             var habbo = user?.GetClient()?.GetHabbo();
-            if (user == null || user.IsBot || habbo == null || user.RpKnockedOut || user.IsAsleep)
+            // pixelrp :invisible: nor out of sight - they'd be named.
+            if (user == null || user.IsBot || habbo == null || user.RpKnockedOut || user.IsAsleep || user.IsInvisible)
                 continue;
             var theirs = capture.GangOf.GetOrAdd(habbo.Id, id => GangUtility.GetGang(id)?.GangId ?? 0);
             if (theirs == 0 || theirs == capture.GangId)

@@ -31,7 +31,8 @@ internal class InitTradeEvent : IPacketEvent
         if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(session))
             return Task.CompletedTask;
         var targetUser = room.GetRoomUserManager().GetRoomUserByVirtualId(userId);
-        if (targetUser == null)
+        // pixelrp :invisible: no trade with or by someone out of sight.
+        if (targetUser == null || !roomUser.CanSee(targetUser) || !targetUser.CanSee(roomUser))
             return Task.CompletedTask;
         // pixelrp: one account's characters cannot trade with each other.
         // Two of your own people passing items back and forth is not a trade,

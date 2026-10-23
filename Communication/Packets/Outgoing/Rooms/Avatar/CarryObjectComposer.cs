@@ -2,12 +2,14 @@
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 
-public class CarryObjectComposer : IServerPacket
+public class CarryObjectComposer : IServerPacket, IUnitPacket
 {
     private readonly int _virtualId;
     private readonly int _itemId;
 
     public uint MessageId => ServerPacketHeader.CarryObjectComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public CarryObjectComposer(int virtualId, int itemId)
     {

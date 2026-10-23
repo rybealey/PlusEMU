@@ -3,12 +3,14 @@ using Plus.HabboHotel.Groups;
 
 namespace Plus.Communication.Packets.Outgoing.Groups;
 
-public class UpdateFavouriteGroupComposer : IServerPacket
+public class UpdateFavouriteGroupComposer : IServerPacket, IUnitPacket
 {
     private readonly Group? _group;
     private readonly int _virtualId;
 
     public uint MessageId => ServerPacketHeader.UpdateFavouriteGroupComposer;
+
+    public IServerPacket? WithoutUnits(ISet<int> hidden) => hidden.Contains(_virtualId) ? null : this;
 
     public UpdateFavouriteGroupComposer(Group? group, int virtualId)
     {
