@@ -52,8 +52,9 @@ namespace Plus.HabboHotel.Corporations;
 /// NO PARAMEDIC ON DUTY (Twist, 2026-10-19). A knockout with nobody on duty to
 /// send - not counting the patient's own characters - is not left to the
 /// usual hospital clock: the hospital comes for a player in
-/// <see cref="NoMedicSeconds"/>, and for VIP and staff straight away, each told
-/// so instead of "Your call has been sent!". The same goes for a call left
+/// <see cref="NoMedicSeconds"/>, and for VIP and staff in
+/// <see cref="NoMedicVipSeconds"/>, each told so instead of "Your call has been
+/// sent!". The same goes for a call left
 /// waiting when the last paramedic stops work - offered, accepted or still
 /// waiting for a turn - once each time it is left with nobody, and never
 /// later than the hospital was already coming. The call is still queued, so
@@ -90,15 +91,15 @@ public static class MedicalCalls
     /// <summary>Coins a paramedic is tipped for laying a patient on a hospital bed.</summary>
     public const int DropOffTip = 3;
 
-    /// <summary>No paramedic on duty: how long until the hospital collects the patient.</summary>
-    private const int NoMedicSeconds = 60;
+    /// <summary>No paramedic on duty: how long until the hospital collects the patient (Twist, 2026-10-24; was one minute).</summary>
+    private const int NoMedicSeconds = 120;
 
-    /// <summary>... and for VIP and staff - at once, but after their whisper (<see cref="AfterBubbleMs"/>).</summary>
-    private const int NoMedicVipSeconds = 2;
+    /// <summary>... and for VIP and staff (Twist, 2026-10-24; was at once).</summary>
+    private const int NoMedicVipSeconds = 60;
 
-    private const string NoMedicWhisper = "You'll be automatically transported to the hospital in 1 minute.";
+    private const string NoMedicWhisper = "There are no paramedics on duty, you will be automatically transported to the hospital in 2 minutes.";
 
-    private const string NoMedicVipWhisper = "There are no paramedics on duty, you will be automatically transported to the hospital.";
+    private const string NoMedicVipWhisper = "There are no paramedics on duty, you will be automatically transported to the hospital in 1 minute.";
 
     private const string ReminderWhisper = "You have 30 seconds to retrieve the patient!";
 
@@ -609,8 +610,8 @@ public static class MedicalCalls
 
     /// <summary>
     /// No paramedic on duty for this patient: the hospital comes for them in
-    /// <see cref="NoMedicSeconds"/>, or at once for VIP and staff, and they are
-    /// told which. Nothing - not even the whisper - when it was coming sooner
+    /// <see cref="NoMedicSeconds"/>, or <see cref="NoMedicVipSeconds"/> for VIP
+    /// and staff, and they are told which. Nothing - not even the whisper - when it was coming sooner
     /// already (HospitalAdmission.CollectSoon).
     /// </summary>
     private static void SendSooner(GameClient? client, bool afterBubble)

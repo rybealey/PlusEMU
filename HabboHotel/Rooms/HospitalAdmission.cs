@@ -25,7 +25,7 @@ namespace Plus.HabboHotel.Rooms;
 /// from the Accept): earlier or later than the usual clock, that is when the
 /// hospital comes. With no paramedic on duty to send - at the knockout, or
 /// later, when the last one stops work - it comes sooner instead
-/// (<see cref="CollectSoon"/>): a minute, or at once for VIP and staff.
+/// (<see cref="CollectSoon"/>): two minutes, one for VIP and staff.
 ///
 /// Held in memory and keyed by player id, like the police registries and for
 /// the same reason: being down is a moment, not a property of an account. A
