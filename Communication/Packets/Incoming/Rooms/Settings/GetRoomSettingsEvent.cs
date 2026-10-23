@@ -32,6 +32,8 @@ internal class GetRoomSettingsEvent : IPacketEvent
         session.Send(CorporationUtility.BuildRoomCorp(room));
         // pixelrp jail: and the room's police tag (jail).
         session.Send(new RpRoomPoliceComposer(room.Id, room.IsJailRoom));
+        // pixelrp: and the Overview tab's floor opacity (RoomFloorOpacity).
+        session.Send(new RpRoomFloorOpacityComposer(room.Id, room.FloorOpacity));
         return Task.CompletedTask;
     }
 }

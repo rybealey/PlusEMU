@@ -21,6 +21,11 @@ public static class RoomFactory
     private static bool ReadTurf(System.Data.DataRow row) =>
         row.Table.Columns.Contains("is_turf") && ToBool(row["is_turf"]);
 
+    // pixelrp: `floor_opacity` (306_FloorOpacity), read the same way - a room
+    // from before the migration is solid.
+    private static int ReadFloorOpacity(System.Data.DataRow row) =>
+        row.Table.Columns.Contains("floor_opacity") ? ToInt(row["floor_opacity"], RoomFloorOpacity.Solid) : RoomFloorOpacity.Solid;
+
     private static bool ToBool(object value) =>
         value is bool b ? b : Convert.ToString(value) == "1";
 
@@ -77,7 +82,8 @@ public static class RoomFactory
             AllowMedical = ToBool(row["allow_medical"]),
             AllowPolice = ToBool(row["allow_police"]),
             AllowStaff = ToBool(row["allow_staff"]),
-            IsJailRoom = ToBool(row["rp_jail_room"])
+            IsJailRoom = ToBool(row["rp_jail_room"]),
+            FloorOpacity = ReadFloorOpacity(row)
         };
     }
 
@@ -190,6 +196,7 @@ public static class RoomFactory
                 data.AllowPolice = ToBool(row["allow_police"]);
                 data.AllowStaff = ToBool(row["allow_staff"]);
                 data.IsJailRoom = ToBool(row["rp_jail_room"]);
+                data.FloorOpacity = ReadFloorOpacity(row);
                 return true;
             }
         }

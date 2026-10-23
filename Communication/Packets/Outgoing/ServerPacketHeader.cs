@@ -238,6 +238,8 @@ public static class ServerPacketHeader
     public const uint RpUserPresenceComposer = 4225;
     // pixelrp: the answer to RpGetUserStatsEvent
     public const uint RpUserStatsComposer = 4227;
+    // pixelrp: a room's floor opacity (RoomFloorOpacity)
+    public const uint RpRoomFloorOpacityComposer = 4229;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

@@ -76,7 +76,7 @@ internal static class CommandListLayout
     // The room commands only staff can use: their own group under Staff, not
     // a tag inside the player one.
     private static readonly Group StaffRoomAndFurni = new("Room & Furni", true, true, RoomAndFurni,
-        "ejectall", "floor", "floorplan", "kickbots", "regenmaps", "setspeed", "ss", "unload");
+        "ejectall", "floor", "floorplan", "kickbots", "regenmaps", "setspeed", "ss", "topacity", "unload");
 
     // Moderator/Fun, plus the User/Fun commands made staff-only in the clean-up.
     private static readonly Group StaffFun = new("Staff fun", true, true, Social,

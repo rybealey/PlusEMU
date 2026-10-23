@@ -116,6 +116,7 @@ public class RoomData
         AllowPolice = data.AllowPolice;
         AllowStaff = data.AllowStaff;
         IsJailRoom = data.IsJailRoom;
+        FloorOpacity = data.FloorOpacity;
         Model = data.Model;
     }
 
@@ -191,6 +192,10 @@ public class RoomData
     // arrest_point (ArrestCommand). rooms.rp_arrest_room is no longer read.
     public bool IsJailRoom { get; set; }
 
+    // pixelrp: how see-through the floor tiles are, 0 (gone) to 100 (solid)
+    // - :topacity and the Room tool's slider (RoomFloorOpacity). Assigned by
+    // RoomFactory from `floor_opacity`.
+    public int FloorOpacity { get; set; } = RoomFloorOpacity.Solid;
 
     public RoomModel Model { get; set; }
 

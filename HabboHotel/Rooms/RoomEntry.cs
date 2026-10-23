@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Outgoing.Navigator;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.Communication.Packets.Outgoing.Rooms.Settings;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items.Wired;
 using Plus.HabboHotel.Quests;
@@ -41,6 +42,9 @@ public static class RoomEntry
         // (the client drops it before the room exists), so the walls are drawn
         // once, right - not drawn, then redrawn when this came last.
         session.Send(new RoomVisualizationSettingsComposer(room.WallThickness, room.FloorThickness, Convert.ToBoolean(room.Hidewall)));
+        // And how see-through the floor is (RoomFloorOpacity), for the same
+        // reason: the floor is drawn faded from the first frame.
+        session.Send(new RpRoomFloorOpacityComposer(room.Id, room.FloorOpacity));
         // Only add the avatar on a genuine first entry. A duplicated entry - the
         // login room-forward processed twice by the client under network latency -
         // arrives with the user already in the room from the first one.
