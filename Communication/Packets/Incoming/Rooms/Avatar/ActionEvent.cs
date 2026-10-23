@@ -31,7 +31,11 @@ public class ActionEvent : RoomPacketEvent
             return Task.CompletedTask;
         if (user.DanceId > 0)
             user.DanceId = 0;
-        if (session.GetHabbo().Effects.CurrentEffect > 0)
+        // pixelrp :invisible: the Ghost enable stays on through a wave. This
+        // only tells the room "no effect" - CurrentEffect is untouched, so the
+        // tick never sends it back, and the one sign of being out of sight
+        // would be gone until they changed rooms.
+        if (session.GetHabbo().Effects.CurrentEffect > 0 && !session.GetHabbo().IsInvisible)
             room.SendPacket(new AvatarEffectComposer(user.VirtualId, 0));
         user.UnIdle();
         room.SendPacket(new ActionComposer(user.VirtualId, action));
