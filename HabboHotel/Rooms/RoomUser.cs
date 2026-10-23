@@ -773,9 +773,20 @@ public class RoomUser
     {
         if (TeleportEnabled)
         {
+            // pixelrp: there is nowhere to stand off the map, and the height
+            // below would be read outside it.
+            if (!GetRoom().GetGameMap().ValidTile(pX, pY))
+                return;
             WalkRequests++;
             UnIdle();
-            GetRoom().SendPacket(GetRoom().GetRoomItemHandler().UpdateUserOnRoller(this, new(pX, pY), 0, GetRoom().GetGameMap().SqAbsoluteHeight(GoalX, GoalY)));
+            // pixelrp: you arrive at the height of the square you clicked
+            // (Twist, 2026-10-24). This read GoalX/GoalY - the last WALK's
+            // destination, which a teleport never sets - so on tiles a floor
+            // plan had raised you landed at the old goal's height, usually the
+            // floor's 0, sunk under the tiles and unable to step off; and after
+            // a warp, which leaves the goal at -1, the read went off the map and
+            // the click did nothing.
+            GetRoom().SendPacket(GetRoom().GetRoomItemHandler().UpdateUserOnRoller(this, new(pX, pY), 0, GetRoom().GetGameMap().SqAbsoluteHeight(pX, pY)));
             if (Statusses.ContainsKey("sit"))
                 Z -= 0.35;
             UpdateNeeded = true;
