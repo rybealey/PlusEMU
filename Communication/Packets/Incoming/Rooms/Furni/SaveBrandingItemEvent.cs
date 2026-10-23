@@ -1,4 +1,5 @@
-﻿using Plus.HabboHotel.GameClients;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
 namespace Plus.Communication.Packets.Incoming.Rooms.Furni;
@@ -34,6 +35,14 @@ internal class SaveBrandingItemEvent : IPacketEvent
                 if (!string.IsNullOrEmpty(key)) map[key] = value;
             }
             item.ExtraData = new Plus.HabboHotel.Items.DataFormat.MapDataFormat(map);
+            // pixelrp: saved and shown here, not through SetFloorItem. Only the
+            // picture's settings changed, and SetFloorItem refuses a piece on a
+            // square off the map - where a room ad stays once a floor plan
+            // shrinks past it (LoadFurniture) - and, refused, marks nothing to
+            // save: the picture would go back to its old place on the next load.
+            room.GetRoomItemHandler().UpdateItem(item);
+            room.SendPacket(new ObjectUpdateComposer(item));
+            return Task.CompletedTask;
         }
         else if (item.Definition.InteractionType == InteractionType.FxProvider)
         {

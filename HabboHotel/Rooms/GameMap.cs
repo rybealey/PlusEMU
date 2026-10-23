@@ -197,7 +197,9 @@ public class Gamemap
             var items = _room.GetRoomItemHandler().GetFloor.ToArray();
             foreach (var item in items.ToList())
             {
-                if (item == null)
+                // A room ad past the edge of the floor stays out of the map
+                // rather than stretching it (see AddItemToMap).
+                if (item == null || item.IsRoomAd)
                     continue;
                 if (item.GetX > Model.MapSizeX && item.GetX > maxX)
                     maxX = item.GetX;
@@ -677,6 +679,11 @@ public class Gamemap
             RemoveSpecialItem(item);
         if (_room.GotSoccer())
             _room.GetSoccer().OnGateRemove(item);
+        // A room ad never shaped a square (AddItemToMap), so there is none to
+        // put back - and one left past the edge of a smaller floor would index
+        // outside the map below.
+        if (item.IsRoomAd)
+            return false;
         var isRemoved = false;
         foreach (var coord in item.GetCoords.ToList())
         {
@@ -775,6 +782,14 @@ public class Gamemap
             }
         }
         if (item.Definition.Type != ItemType.Floor)
+            return true;
+        // pixelrp: a room ad is a picture painted into the room, not a piece of
+        // floor furniture, so it is never laid onto the map. Laid on, it
+        // re-opened its square if a floor plan voided it (ConstructMapForItem),
+        // and past the edge of a smaller floor it stretched the map out to reach
+        // it - the floor plan reaching a picture it should leave alone. It is
+        // flat and walkable, so nobody walks or stacks differently without it.
+        if (item.IsRoomAd)
             return true;
         foreach (var coord in item.GetCoords.ToList()) AddCoordinatedItem(item, new(coord.X, coord.Y));
         if (item.GetX > Model.MapSizeX - 1)
@@ -1105,6 +1120,12 @@ public class Gamemap
         if (x < 0 || y < 0 || x >= Model.MapSizeX || y >= Model.MapSizeY) return false;
         return true;
     }
+
+    /// <summary>
+    /// pixelrp: the floor's own height at a square, and 0 off the map - where a
+    /// room ad can stand once a floor plan has shrunk past it.
+    /// </summary>
+    public double FloorHeightAt(int x, int y) => ValidTile(x, y) ? Model.SqFloorHeight[x, y] : 0;
 
     public static Dictionary<int, ThreeDCoord> GetAffectedTiles(int length, int width, int posX, int posY, int rotation)
     {

@@ -171,6 +171,16 @@ public class Item
 
     public bool IsFloorItem => Definition.Type == ItemType.Floor;
 
+    /// <summary>
+    /// pixelrp: a room ad - the Room Background and the three billboards, the
+    /// furni that paint an image into the room (130_RoomAdImages).
+    ///
+    /// A picture, not a piece of floor furniture: the floor plan, the walk map
+    /// and the floor plan editor all leave it alone, so editing a room's tiles
+    /// never moves one, sends one to the backpack or opens a tile under one.
+    /// </summary>
+    public bool IsRoomAd => Definition != null && Definition.InteractionType == InteractionType.Background;
+
     public Point SquareInFront
     {
         get

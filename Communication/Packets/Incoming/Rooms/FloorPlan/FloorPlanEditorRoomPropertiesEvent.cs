@@ -16,7 +16,10 @@ internal class FloorPlanEditorRoomPropertiesEvent : IPacketEvent
         var model = room.GetGameMap().Model;
         if (model == null)
             return Task.CompletedTask;
-        var floorItems = room.GetRoomItemHandler().GetFloor;
+        // pixelrp: the squares furni stand on are locked in the editor, and a
+        // room ad is a picture, not floor furniture - its square stays free to
+        // reshape, and the ad stays put whatever happens to it.
+        var floorItems = room.GetRoomItemHandler().GetFloor.Where(item => !item.IsRoomAd).ToList();
         session.Send(new FloorPlanFloorMapComposer(floorItems));
         session.Send(new FloorPlanSendDoorComposer(model.DoorX, model.DoorY, model.DoorOrientation));
         session.Send(new RoomVisualizationSettingsComposer(room.WallThickness, room.FloorThickness, Convert.ToBoolean(room.Hidewall)));

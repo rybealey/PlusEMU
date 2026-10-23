@@ -120,7 +120,13 @@ public class RoomItemHandling
             }
             if (item.IsFloorItem)
             {
-                if (!_room.GetGameMap().ValidTile(item.GetX, item.GetY))
+                // pixelrp: a room ad stays where it was put when a floor plan
+                // no longer reaches its square. The floor plan editor trims the
+                // empty rows and columns off the far edges on every save, and
+                // a picture lined up from a corner of the old floor went to its
+                // owner's backpack with them. It takes no part in the map
+                // (Gamemap.AddItemToMap), so standing past the edge costs nothing.
+                if (!item.IsRoomAd && !_room.GetGameMap().ValidTile(item.GetX, item.GetY))
                 {
                     using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
                     {
@@ -835,7 +841,7 @@ public class RoomItemHandling
         // has to survive the rounding.
         const double epsilon = 0.001;
 
-        var restZ = (double)_room.GetGameMap().Model.SqFloorHeight[item.GetX, item.GetY];
+        var restZ = _room.GetGameMap().FloorHeightAt(item.GetX, item.GetY);
         var seen = new HashSet<uint>();
         // GetAffectedTiles holds only a multi-tile piece's EXTRA squares, so the
         // anchor is asked for separately.

@@ -72,7 +72,7 @@ internal class UpdateMagicTileEvent : IPacketEvent
         else
         {
             item.CustomHeight = (decimalHeight == 0)
-                ? room.GetGameMap().Model.SqFloorHeight[item.GetX, item.GetY]
+                ? room.GetGameMap().FloorHeightAt(item.GetX, item.GetY)
                 : Math.Min(height, MaximumHeight);
             item.GetZ = item.CustomHeight;
         }
