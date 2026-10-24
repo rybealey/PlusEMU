@@ -49,11 +49,10 @@ public static class RoomEntry
         // goes as one batch (Habbo.EnterRoom), which held the shape back until
         // the lookups below were done and the last packet written; flushed
         // here, the client clears the old room and builds the new one's floor
-        // and walls while those run. The rest follows as one more message. The client keeps the
-        // old room's picture up until RoomEntryInfo, the last of it, arrives
-        // (renderer patch room-fill), so the split never shows. No batch is
-        // open when the client asked for the room itself (GetRoomEntryData),
-        // and then this does nothing.
+        // and walls while those run. The rest follows as one more message, and
+        // the room's players and furni fill in on the drawn floor as it lands.
+        // No batch is open when the client asked for the room itself
+        // (GetRoomEntryData), and then this does nothing.
         session.FlushBatch();
         // Only add the avatar on a genuine first entry. A duplicated entry - the
         // login room-forward processed twice by the client under network latency -
