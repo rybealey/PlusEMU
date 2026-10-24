@@ -51,7 +51,8 @@ internal class InteractorMannequin : IFurniInteractor
             }
             var final = "";
             foreach (var str in newFig.Values) final += $"{str}.";
-            final = final.TrimEnd('.');
+            // a mannequin dressed from someone in armour has the vest on it - not theirs to keep
+            final = UniformManager.WithoutVest(session.GetHabbo(), final.TrimEnd('.'));
             // theirs to keep, with any vest back on top
             UniformManager.SetOwnLook(session.GetHabbo(), final);
             using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())

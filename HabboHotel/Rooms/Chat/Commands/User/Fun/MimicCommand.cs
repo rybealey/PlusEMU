@@ -47,7 +47,7 @@ internal class MimicCommand : ITargetChatCommand
         session.GetHabbo().Gender = targetUser.GetClient().GetHabbo().Gender;
         // pixelrp body armour: their own clothes, not the vest over them - and
         // a vest of our own stays on top (UniformManager.SetOwnLook).
-        var look = UniformManager.OwnLookOf(targetUser.GetClient().GetHabbo());
+        var look = UniformManager.WithoutVest(session.GetHabbo(), UniformManager.OwnLookOf(targetUser.GetClient().GetHabbo()));
         UniformManager.SetOwnLook(session.GetHabbo(), look);
         using (var dbClient = _database.GetQueryReactor())
         {

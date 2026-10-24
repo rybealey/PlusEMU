@@ -137,8 +137,10 @@ public class SsoTicketEvent : IPacketEvent
             session.Send(new RpUiSettingsComposer(session.GetHabbo().RpUiChromeColor, session.GetHabbo().RpUiChromeOpacity, session.GetHabbo().RpUiHeaderColor, session.GetHabbo().RpUiUsernameColor, session.GetHabbo().RpUiUsernameIcon, session.GetHabbo().RpUiUsernameIconColor));
             var rpInventory = session.GetHabbo().LoadRpInventory();
             session.Send(new RpInventoryComposer(rpInventory));
-            // pixelrp body armour: still worn from last time - the vest goes back on
-            // before they walk into their first room (RpDurability).
+            // pixelrp body armour: a saved look that kept the vest is cleaned - it
+            // is only ever the armour's - and armour still worn from last time
+            // puts it back on before their first room (RpDurability).
+            Plus.HabboHotel.Corporations.UniformManager.CleanSavedLook(session.GetHabbo());
             Plus.HabboHotel.Users.RpDurability.SyncVest(session.GetHabbo(), rpInventory);
             // pixelrp: the stun gun's shots left, for the bar on it in the backpack.
             session.Send(new RpStunGunChargeComposer(

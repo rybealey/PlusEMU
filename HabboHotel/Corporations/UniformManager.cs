@@ -230,30 +230,51 @@ public static class UniformManager
     }
 
     /// <summary>
-    /// A look chosen in Change Looks while body armour is worn. The editor
-    /// starts from the look as it is shown, vest and all, so a vest that comes
-    /// back untouched is the armour's, not theirs: their own jacket goes back
-    /// in its place (none, if they had none). A jacket they changed is theirs.
+    /// A look about to be saved as the player's own (Change Looks, a
+    /// mannequin, :mimic, and their saved look at login) with body armour's
+    /// vest in it. The vest is the armour's, not theirs - Change Looks starts
+    /// from the look as it is shown, vest and all, and can still be saved
+    /// after the armour has come off (Twist, 2026-10-25: "unequipping the vest
+    /// will unwear the vest") - so their own jacket goes back in its place
+    /// (none, if they had none). Owning the jacket makes no difference: the
+    /// vest only ever shows with the armour.
     /// </summary>
     public static string WithoutVest(Habbo habbo, string figure)
     {
-        if (!habbo.WearingArmor || string.IsNullOrEmpty(figure))
+        if (string.IsNullOrEmpty(figure))
             return figure;
-        var vest = RpDurability.VestPart.Split('-');
         var parts = figure.Split('.', StringSplitOptions.RemoveEmptyEntries).ToList();
-        var index = parts.FindIndex(part =>
-        {
-            var fields = part.Split('-');
-            return fields.Length > 1 && string.Equals(fields[0], vest[0], StringComparison.OrdinalIgnoreCase) && fields[1] == vest[1];
-        });
-        if (index < 0)
+        if (parts.RemoveAll(IsVest) == 0)
             return figure;
-        parts.RemoveAt(index);
-        var ownJacket = (habbo.OwnLook ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(part => string.Equals(part.Split('-')[0], vest[0], StringComparison.OrdinalIgnoreCase));
+        var vestType = RpDurability.VestPart.Split('-')[0];
+        var ownJacket = OwnLookOf(habbo).Split('.', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(part => !IsVest(part) && string.Equals(part.Split('-')[0], vestType, StringComparison.OrdinalIgnoreCase));
         if (ownJacket != null)
             parts.Add(ownJacket);
         return string.Join(".", parts);
+    }
+
+    /// <summary>A figure part that is body armour's vest, in any colour.</summary>
+    private static bool IsVest(string part)
+    {
+        var vest = RpDurability.VestPart.Split('-');
+        var fields = part.Split('-');
+        return fields.Length > 1 && string.Equals(fields[0], vest[0], StringComparison.OrdinalIgnoreCase) && fields[1] == vest[1];
+    }
+
+    /// <summary>
+    /// At login: a saved look that kept armour's vest - from before this was
+    /// guarded - is cleaned and saved again, so the vest comes off with the
+    /// armour (<see cref="WithoutVest"/>).
+    /// </summary>
+    public static void CleanSavedLook(Habbo habbo)
+    {
+        var clean = WithoutVest(habbo, habbo.Look);
+        if (clean == habbo.Look)
+            return;
+        habbo.Look = clean;
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        connection.Execute("UPDATE `users` SET `look` = @look WHERE `id` = @id LIMIT 1", new { look = clean, id = habbo.Id });
     }
 
     /// <summary>

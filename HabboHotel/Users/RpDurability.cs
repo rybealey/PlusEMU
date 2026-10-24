@@ -74,25 +74,25 @@ public static class RpDurability
     }
 
     /// <summary>
-    /// The jacket palette's colour nearest a gang's RGB colour - by the
-    /// "redmean" distance, which weighs red, green and blue the way the eye
-    /// does. The grey when the palette cannot be read.
+    /// The jacket palette's colour nearest a gang's RGB colour, compared the
+    /// way the eye sees colour (CIELAB) with a change of hue counted double -
+    /// so a grey stays grey and a blue stays blue rather than landing on a
+    /// green that happens to be close in plain RGB. Every palette colour
+    /// counts, not only the ones the clothes editor offers: those alone hold
+    /// no true greys. The grey when the palette cannot be read.
     /// </summary>
     private static int PaletteColourFor(int rgb) => PaletteMatches.GetOrAdd(rgb & 0xFFFFFF, colour =>
     {
         if (PlusEnvironment.FigureManager == null || !PlusEnvironment.FigureManager.TryGetPalette(VestPalette, out var palette))
             return VestDefaultColour;
-        var (r1, g1, b1) = ((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF);
+        var target = Lab(colour);
         var best = VestDefaultColour;
-        var bestDistance = long.MaxValue;
+        var bestDistance = double.MaxValue;
         foreach (var candidate in palette.Colors.Values)
         {
-            if (!candidate.Selectable || !int.TryParse(candidate.Value, System.Globalization.NumberStyles.HexNumber, null, out var hex))
+            if (!int.TryParse(candidate.Value, System.Globalization.NumberStyles.HexNumber, null, out var hex))
                 continue;
-            var (r2, g2, b2) = ((hex >> 16) & 0xFF, (hex >> 8) & 0xFF, hex & 0xFF);
-            long redMean = (r1 + r2) / 2;
-            long dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
-            var distance = (((512 + redMean) * dr * dr) >> 8) + (4 * dg * dg) + (((767 - redMean) * db * db) >> 8);
+            var distance = LabDistance(target, Lab(hex));
             if (distance < bestDistance)
             {
                 bestDistance = distance;
@@ -101,6 +101,36 @@ public static class RpDurability
         }
         return best;
     });
+
+    /// <summary>An RGB colour in CIELAB (D65 white).</summary>
+    private static (double L, double A, double B) Lab(int rgb)
+    {
+        static double Linear(int channel)
+        {
+            var c = channel / 255.0;
+            return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+        static double F(double t) => t > 0.008856 ? Math.Cbrt(t) : (7.787 * t) + (16.0 / 116.0);
+        var (r, g, b) = (Linear((rgb >> 16) & 0xFF), Linear((rgb >> 8) & 0xFF), Linear(rgb & 0xFF));
+        var fx = F(((0.4124 * r) + (0.3576 * g) + (0.1805 * b)) / 0.95047);
+        var fy = F((0.2126 * r) + (0.7152 * g) + (0.0722 * b));
+        var fz = F(((0.0193 * r) + (0.1192 * g) + (0.9505 * b)) / 1.08883);
+        return ((116 * fy) - 16, 500 * (fx - fy), 200 * (fy - fz));
+    }
+
+    /// <summary>
+    /// How far apart two CIELAB colours look (squared): lightness and
+    /// colourfulness as they are, a change of hue weighed twice over.
+    /// </summary>
+    private static double LabDistance((double L, double A, double B) x, (double L, double A, double B) y)
+    {
+        var dL = x.L - y.L;
+        var dC = Math.Sqrt((x.A * x.A) + (x.B * x.B)) - Math.Sqrt((y.A * y.A) + (y.B * y.B));
+        var dA = x.A - y.A;
+        var dB = x.B - y.B;
+        var dH = Math.Max(0, (dA * dA) + (dB * dB) - (dC * dC));
+        return (dL * dL) + (dC * dC) + (4 * dH);
+    }
 
     /// <summary>The damage each item is good for before it breaks.</summary>
     private static readonly Dictionary<string, int> MaxWear = new()
