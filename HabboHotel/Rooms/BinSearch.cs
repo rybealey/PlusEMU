@@ -18,7 +18,8 @@ namespace Plus.HabboHotel.Rooms;
 /// pixelrp: searching a bin (Twist, 2026-10-18). The PixelRP Bin, and any
 /// furni given the bin_search behaviour, in a PixelRP-owned room.
 ///
-/// Double-click it from beside it: ten seconds of rummaging, flies (effect 10)
+/// Double-click it: once the searcher stands still beside it (walking up to it
+/// first, when they are not), ten seconds of rummaging, flies (effect 10)
 /// over the searcher's head and "*starts searching through the bin*" over it,
 /// then one find from the City Panel's table (BinRewards) said out loud the
 /// same way. The bin then shows its open, searched state (1) for fifteen
@@ -69,6 +70,9 @@ public static class BinSearch
     // Five seconds after a search ends - found or stopped - before the same
     // player can start another (Twist, 2026-10-18).
     public const long CooldownMs = 5_000;
+    // A double-click still waiting for its player to stand still this long
+    // has been forgotten; the walk-up is long over.
+    private const long HeldMs = 60_000;
 
     private sealed class Search
     {
@@ -82,12 +86,26 @@ public static class BinSearch
         public int EffectBefore;
     }
 
+    // A double-click waiting for its player to stand still beside the bin
+    // (Start, TickHeld).
+    private sealed class Held
+    {
+        public uint ItemId;
+        // Their walks so far, to tell when they walk again (TickHeld).
+        public int WalkRequests;
+        // Sent up to the bin already, so standing still out of reach again
+        // lets it go rather than walking them up a second time.
+        public bool WalkedUp;
+        public long At;
+    }
+
     private static readonly object Gate = new();
     private static readonly ConcurrentDictionary<int, Search> ByUser = new();
     private static readonly ConcurrentDictionary<uint, int> SearcherOf = new();
     private static readonly ConcurrentDictionary<uint, long> SearchedAt = new();
     private static readonly ConcurrentDictionary<int, long> LastAttempt = new();
     private static readonly ConcurrentDictionary<int, long> LastEnded = new();
+    private static readonly ConcurrentDictionary<int, Held> HeldBy = new();
 
     /// <summary>Whole seconds before this player may start another search; 0 when they may now.</summary>
     private static int CooldownLeft(int userId)
@@ -120,7 +138,15 @@ public static class BinSearch
         || !PixelRpRooms.IsPixelRpRoom(room)
         || PixelRpRooms.IsStaff(session?.GetHabbo());
 
-    /// <summary>A double-click on a searchable bin.</summary>
+    /// <summary>
+    /// A double-click on a searchable bin. Standing still beside it, the
+    /// search starts now. Otherwise the double-click is held (Hold) until they
+    /// stand still beside it: the first click of a double-click is also a
+    /// click on the floor under the mouse - behind the bin, wherever it stands
+    /// on open floor - so the use often comes in with that walk under way.
+    /// Started mid-step, the search stopped again on the next tile; turned
+    /// away, the double-click did nothing.
+    /// </summary>
     public static void Start(GameClient session, Item item)
     {
         var habbo = session?.GetHabbo();
@@ -132,45 +158,75 @@ public static class BinSearch
         if (LastAttempt.TryGetValue(habbo.Id, out var last) && (now - last) < AttemptGapMs)
             return;
         LastAttempt[habbo.Id] = now;
-        // Like the vending machines: walk up to it first, then use it.
-        if (!Gamemap.TilesTouching(user.X, user.Y, item.GetX, item.GetY))
+
+        var moving = IsMoving(user);
+        var beside = Gamemap.TilesTouching(user.X, user.Y, item.GetX, item.GetY);
+        if (beside && !moving)
+            Face(user, item);
+        // Before any walking: no point walking up to a bin they can't search.
+        if (Refused(session, habbo.Id, item))
+            return;
+
+        // Their own walk ends beside the bin: the search starts when it does.
+        if (moving && Gamemap.TilesTouching(user.GoalX, user.GoalY, item.GetX, item.GetY))
         {
-            user.MoveTo(item.SquareInFront);
+            Hold(habbo.Id, user, item, walkedUp: false);
             return;
         }
-        // Started mid-step it would stop again on the next tile.
-        if (user.IsWalking)
+        // Like the vending machines: walk up to it first.
+        if (moving || !beside)
+        {
+            user.MoveTo(item.SquareInFront);
+            Hold(habbo.Id, user, item, walkedUp: true);
             return;
-        user.SetRot(Rotation.Calculate(user.X, user.Y, item.GetX, item.GetY), false);
+        }
+        HeldBy.TryRemove(habbo.Id, out _);
+        Begin(session, item, room, user, fromTick: false);
+    }
 
-        // The answers that need nothing from the database first. All three are
-        // asked again under the Gate below, which is where they count.
-        if (ByUser.TryGetValue(habbo.Id, out var mine) && (now - mine.StartedAt) <= StaleMs)
+    // The answers that need nothing from the database, asked before anyone
+    // walks anywhere. All but the cooldown are asked again under the Gate in
+    // Begin, which is where they count.
+    private static bool Refused(GameClient session, int userId, Item item)
+    {
+        var now = Now;
+        if (ByUser.TryGetValue(userId, out var mine) && (now - mine.StartedAt) <= StaleMs)
         {
             if (mine.ItemId != item.Id)
                 session.SendWhisper("You're already searching a bin.");
-            return;
+            return true;
         }
         // The hotel's one cooldown whisper, as :hit and the gym say it (Twist,
         // 2026-10-18): seconds still to wait over the whole, [5/5] down to [1/5].
-        var cooldown = CooldownLeft(habbo.Id);
+        var cooldown = CooldownLeft(userId);
         if (cooldown > 0)
         {
             session.SendWhisper($"Cooldown [{cooldown}/{CooldownMs / 1000}]");
-            return;
+            return true;
         }
         if (IsSearched(item.Id))
         {
             session.SendWhisper("This bin has already been searched.");
-            return;
+            return true;
         }
-        if (SearcherOf.TryGetValue(item.Id, out var busy) && busy != habbo.Id
+        if (SearcherOf.TryGetValue(item.Id, out var busy) && busy != userId
             && ByUser.TryGetValue(busy, out var busyWith) && busyWith.ItemId == item.Id && (now - busyWith.StartedAt) <= StaleMs)
         {
             session.SendWhisper("Someone is already searching this bin.");
-            return;
+            return true;
         }
+        return false;
+    }
 
+    /// <summary>
+    /// The search itself, for a player standing still beside the bin who got
+    /// past Refused: the refusals that need more than memory, then the search
+    /// taken under the Gate. From the bin's own tick (a held double-click) it
+    /// re-arms with the counter alone, as Tick does.
+    /// </summary>
+    private static void Begin(GameClient session, Item item, Room room, RoomUser user, bool fromTick)
+    {
+        var habbo = session.GetHabbo();
         if (PoliceState.IsCuffed(habbo.Id))
         {
             session.SendWhisper("Your hands are cuffed.");
@@ -254,8 +310,38 @@ public static class BinSearch
         Say(room, user, "*starts searching through the bin*");
         // Their own card above the chat bar: the bin's icon and the countdown.
         session.Send(new RpBinSearchComposer(true, item.Definition.SpriteId, (int)SearchMs, (int)SearchMs));
-        item.RequestUpdate(1, true);
+        if (fromTick)
+            item.RequestUpdate(1, false);
+        else
+            Wake(item);
     }
+
+    // Hold a double-click until its player stands still beside the bin; the
+    // bin ticks for it until then (TickHeld). A newer one replaces it.
+    private static void Hold(int userId, RoomUser user, Item item, bool walkedUp)
+    {
+        HeldBy[userId] = new Held { ItemId = item.Id, WalkRequests = user.WalkRequests, WalkedUp = walkedUp, At = Now };
+        Wake(item);
+    }
+
+    // The bin's tick, asked for from outside it (a packet). One already
+    // counting down only needs its count brought in: queued a second time it
+    // would tick twice a cycle.
+    private static void Wake(Item item)
+    {
+        if (item.UpdateCounter > 0)
+            item.UpdateCounter = 1;
+        else
+            item.RequestUpdate(1, true);
+    }
+
+    private static void Face(RoomUser user, Item item) =>
+        user.SetRot(Rotation.Calculate(user.X, user.Y, item.GetX, item.GetY), false);
+
+    // Walking, or waiting on the room's beat to set off - which
+    // RoomUser.IsWalking alone does not show.
+    private static bool IsMoving(RoomUser user) =>
+        user.IsWalking || Movement.MovementV2Bridge.IsWalkingOrWaiting(user);
 
     /// <summary>
     /// Stop this player's search, if they have one, and tell them. For the
@@ -270,21 +356,98 @@ public static class BinSearch
             Stop(userId, true);
     }
 
-    /// <summary>A bin picked up: whoever was searching it has nothing left to search.</summary>
+    /// <summary>A bin picked up: whoever was searching it, or on their way to, has nothing left to search.</summary>
     public static void OnRemoved(Item item)
     {
         if (SearcherOf.TryGetValue(item.Id, out var userId))
             Stop(userId, true);
+        foreach (var (heldBy, held) in HeldBy)
+        {
+            if (held.ItemId == item.Id)
+                HeldBy.TryRemove(new KeyValuePair<int, Held>(heldBy, held));
+        }
     }
 
     /// <summary>
     /// The bin's own update tick: a search in progress, or the fifteen minutes
-    /// running out. Called from inside the room's update pass
-    /// (Item.ProcessUpdates), so it re-arms with the counter alone - the pass
-    /// keeps an item with a count left for the next cycle. Queueing it again
-    /// from here would put it straight back into the pass that is running.
+    /// running out, and the double-clicks held on it. Called from inside the
+    /// room's update pass (Item.ProcessUpdates), so it re-arms with the
+    /// counter alone - the pass keeps an item with a count left for the next
+    /// cycle. Queueing it again from here would put it straight back into the
+    /// pass that is running.
     /// </summary>
     public static void Tick(Item item)
+    {
+        TickSearch(item);
+        // Every cycle while one waits, whatever the search side asked for -
+        // the fifteen minutes are read off the clock, so ticking early only
+        // counts them again.
+        if (TickHeld(item))
+            item.RequestUpdate(1, false);
+    }
+
+    /// <summary>
+    /// The double-clicks held on this bin (Start). Standing still beside it,
+    /// the search starts; standing still out of reach, they are walked up to
+    /// it - once. Walking off somewhere else, being moved off, leaving the
+    /// room or a minute gone lets it go. True while one is still on its way.
+    /// </summary>
+    private static bool TickHeld(Item item)
+    {
+        var waiting = false;
+        foreach (var (userId, held) in HeldBy)
+        {
+            if (held.ItemId != item.Id)
+                continue;
+            var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+            var room = item.GetRoom();
+            var user = room?.GetRoomUserManager().GetRoomUserByHabbo(userId);
+            if (client?.GetHabbo() == null || room == null || user == null || Now - held.At > HeldMs)
+            {
+                HeldBy.TryRemove(new KeyValuePair<int, Held>(userId, held));
+                continue;
+            }
+            // Walked again since. Towards the bin - another click on it, the
+            // first click of a double-click again - it still stands; anywhere
+            // else it is let go.
+            if (user.WalkRequests != held.WalkRequests)
+            {
+                if (!Gamemap.TilesTouching(user.GoalX, user.GoalY, item.GetX, item.GetY))
+                {
+                    HeldBy.TryRemove(new KeyValuePair<int, Held>(userId, held));
+                    continue;
+                }
+                held.WalkRequests = user.WalkRequests;
+            }
+            if (IsMoving(user))
+            {
+                waiting = true;
+                continue;
+            }
+            if (Gamemap.TilesTouching(user.X, user.Y, item.GetX, item.GetY))
+            {
+                HeldBy.TryRemove(new KeyValuePair<int, Held>(userId, held));
+                Face(user, item);
+                if (!Refused(client, userId, item))
+                    Begin(client, item, room, user, fromTick: true);
+                continue;
+            }
+            if (held.WalkedUp)
+            {
+                HeldBy.TryRemove(new KeyValuePair<int, Held>(userId, held));
+                continue;
+            }
+            // Their click took them past it. Walking up is part of the use, so
+            // it is their own walking off, as from the packet (OwnWalk.Use).
+            OwnWalk.Use(client, room, () => user.MoveTo(item.SquareInFront));
+            held.WalkedUp = true;
+            held.WalkRequests = user.WalkRequests;
+            waiting = true;
+        }
+        return waiting;
+    }
+
+    private static void TickSearch(Item item)
     {
         if (SearcherOf.TryGetValue(item.Id, out var userId))
         {
