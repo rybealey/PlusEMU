@@ -186,7 +186,11 @@ internal class HitCommand : ITargetChatCommand
         {
             // Strength is the gym's: the range grows with the attacker's level.
             var (minDamage, maxDamage) = Gym.GymState.PunchDamage(habbo.RpStrengthLevel);
-            var damage = Random.Shared.Next(minDamage, maxDamage + 1);
+            var dealt = Random.Shared.Next(minDamage, maxDamage + 1);
+            // pixelrp durability: worn armour soaks its share and wears by the
+            // whole hit; the bubble says what the target's health lost. The
+            // weapon in the attacker's hand wears by the whole hit too, below.
+            var damage = RpDurability.Absorb(target, dealt);
             target.RpHealth = Math.Max(0, target.RpHealth - damage);
             // pixelrp: a punch ends a bin search, and an officer's trip to a call.
             BinSearch.Interrupt(target.Id);
@@ -213,6 +217,7 @@ internal class HitCommand : ITargetChatCommand
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
             // the only thing that moved on the target is their health
             SendStats(room, targetUser, target);
+            RpDurability.WearWeapon(habbo, dealt);
         }
         else
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, but misses*", 0, FightBubble));

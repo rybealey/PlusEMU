@@ -177,7 +177,8 @@ internal class SlapCommand : ITargetChatCommand
         if (!hurts)
             return Task.CompletedTask;
 
-        target.RpHealth = Math.Max(0, target.RpHealth - Damage);
+        // pixelrp durability: worn armour wears by the slap and soaks its share (RpDurability).
+        target.RpHealth = Math.Max(0, target.RpHealth - RpDurability.Absorb(target, Damage));
         // pixelrp: so does a slap - it is a hit, if a light one.
         BinSearch.Interrupt(target.Id);
         // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.

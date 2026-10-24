@@ -198,9 +198,11 @@ public static class DepositBox
         var wanted = all ? entry.Count : 1;
         var moved = 0;
         var open = OpenSlots(habbo);
+        // a weapon or armour is one to a slot, and goes in as worn as it is (RpDurability)
+        var wear = RpInventoryStore.WearOf(habbo.Id, slot);
         while (moved < wanted)
         {
-            if (AddOne(habbo.Id, entry.Item, open) < 0)
+            if (AddOne(habbo.Id, entry.Item, open, wear) < 0)
                 break;
             RpInventoryStore.Consume(habbo.Id, slot);
             moved++;
@@ -218,9 +220,10 @@ public static class DepositBox
         var wanted = all ? entry.Count : 1;
         var moved = 0;
         var result = 0;
+        var wear = WearOf(habbo.Id, slot);
         while (moved < wanted)
         {
-            result = RpInventoryStore.Add(habbo.Id, entry.Item, habbo.RpUnlockedSlots);
+            result = RpInventoryStore.Add(habbo.Id, entry.Item, habbo.RpUnlockedSlots, wear);
             if (result < 0)
                 break;
             RemoveOne(habbo.Id, slot);
@@ -232,14 +235,25 @@ public static class DepositBox
         return moved == 0 ? char.ToUpper(why[0]) + why[1..] + "." : $"Took out {moved} - {why}.";
     }
 
+    /// <summary>pixelrp: how worn the weapon or armour in one box slot is (RpDurability); 0 for anything else.</summary>
+    private static int WearOf(int userId, int slot)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `wear` FROM `user_rp_deposit_box` WHERE `user_id` = @id AND `slot` = @slot LIMIT 1");
+        dbClient.AddParameter("id", userId);
+        dbClient.AddParameter("slot", slot);
+        return dbClient.GetInteger();
+    }
+
     /// <summary>
     /// One of an item into the box: onto a stack of it with room, else the
-    /// first free open slot. The slot, or -1 when the box is full.
+    /// first free open slot. The slot, or -1 when the box is full. A weapon or
+    /// armour takes its wear with it (RpDurability).
     /// </summary>
-    private static int AddOne(int userId, string item, int openSlots)
+    private static int AddOne(int userId, string item, int openSlots, int wear = 0)
     {
         var box = Load(userId);
-        var existing = RpWeapons.IsWeapon(item)
+        var existing = RpDurability.NeverStacks(item)
             ? default
             : box.FirstOrDefault(row => row.Item == item && row.Count < Habbo.RpStackCap && row.Slot <= openSlots);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
@@ -255,10 +269,11 @@ public static class DepositBox
         var slot = Enumerable.Range(1, openSlots).FirstOrDefault(candidate => !used.Contains(candidate));
         if (slot == 0)
             return -1;
-        dbClient.SetQuery("INSERT INTO `user_rp_deposit_box` (`user_id`, `slot`, `item`, `count`) VALUES (@id, @slot, @item, 1)");
+        dbClient.SetQuery("INSERT INTO `user_rp_deposit_box` (`user_id`, `slot`, `item`, `count`, `wear`) VALUES (@id, @slot, @item, 1, @wear)");
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.AddParameter("item", item);
+        dbClient.AddParameter("wear", RpDurability.IsDurable(item) ? Math.Max(0, wear) : 0);
         dbClient.RunQuery();
         return slot;
     }

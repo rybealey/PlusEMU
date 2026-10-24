@@ -12,12 +12,14 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// The Weapon frame (RpWeapons.WeaponSlot) is a slot too: dragging a weapon
 /// onto it equips it, dragging it back out unequips it, and it only ever holds
 /// a weapon or a vape (RpWeapons.IsEquippable) - so a swap out of it is refused
-/// unless what comes back in is one.
+/// unless what comes back in is one. The Armor frame (RpDurability.ArmorSlot)
+/// works the same for body armour.
 /// </summary>
 internal class RpMoveItemEvent : IPacketEvent
 {
     private static bool IsSlot(int slot) =>
-        (slot >= 1 && slot <= Plus.HabboHotel.Users.Habbo.RpCarrySlots) || slot == Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
+        (slot >= 1 && slot <= Plus.HabboHotel.Users.Habbo.RpCarrySlots) || slot == Plus.HabboHotel.Users.RpWeapons.WeaponSlot
+        || slot == Plus.HabboHotel.Users.RpDurability.ArmorSlot;
 
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
@@ -43,8 +45,16 @@ internal class RpMoveItemEvent : IPacketEvent
         var target = inventory.FirstOrDefault(entry => entry.Slot == to);
         var targetOccupied = !string.IsNullOrEmpty(target.Item);
         var weaponSlot = Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
-        if (to != weaponSlot && (to > habbo.RpUnlockedSlots) && !targetOccupied)
+        var armorSlot = Plus.HabboHotel.Users.RpDurability.ArmorSlot;
+        var armor = Plus.HabboHotel.Users.RpDurability.BodyArmorItem;
+        if (to != weaponSlot && to != armorSlot && (to > habbo.RpUnlockedSlots) && !targetOccupied)
             return Task.CompletedTask;
+        // pixelrp: the Armor frame holds body armour and nothing else, from either side.
+        if ((to == armorSlot && source.Item != armor) || (from == armorSlot && targetOccupied && target.Item != armor))
+        {
+            session.SendWhisper("Only body armor goes in the Armor slot.");
+            return Task.CompletedTask;
+        }
         // The Weapon frame holds weapons and the vape and nothing else, from either side.
         if ((to == weaponSlot && !Plus.HabboHotel.Users.RpWeapons.IsEquippable(source.Item))
             || (from == weaponSlot && targetOccupied && !Plus.HabboHotel.Users.RpWeapons.IsEquippable(target.Item)))
@@ -54,7 +64,7 @@ internal class RpMoveItemEvent : IPacketEvent
         }
         // Drawing or holstering is something your hands do; cuffs stop it,
         // the same as they stop using anything in the backpack.
-        if ((to == weaponSlot || from == weaponSlot) && Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.IsCuffed(habbo.Id))
+        if ((to == weaponSlot || from == weaponSlot || to == armorSlot || from == armorSlot) && Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.IsCuffed(habbo.Id))
         {
             session.SendWhisper("Your hands are cuffed.");
             return Task.CompletedTask;

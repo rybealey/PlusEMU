@@ -30,31 +30,48 @@ public static class RpInventoryStore
 
     public static List<(int Slot, string Item, int Count)> Load(int userId)
     {
-        var list = new List<(int, string, int)>();
+        var list = new RpInventoryList();
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("SELECT `slot`,`item`,`count` FROM `user_rp_inventory` WHERE `user_id` = @id ORDER BY `slot`");
+        dbClient.SetQuery("SELECT `slot`,`item`,`count`,`wear` FROM `user_rp_inventory` WHERE `user_id` = @id ORDER BY `slot`");
         dbClient.AddParameter("id", userId);
         var table = dbClient.GetTable();
         if (table != null)
             foreach (System.Data.DataRow row in table.Rows)
-                list.Add((Convert.ToInt32(row["slot"]), Convert.ToString(row["item"]), Convert.ToInt32(row["count"])));
+            {
+                var slot = Convert.ToInt32(row["slot"]);
+                list.Add((slot, Convert.ToString(row["item"]), Convert.ToInt32(row["count"])));
+                list.Wear[slot] = Convert.ToInt32(row["wear"]);
+            }
         return list;
+    }
+
+    /// <summary>pixelrp: how worn the item in one slot is (RpDurability) - 0 for an empty slot or an item that does not wear.</summary>
+    public static int WearOf(int userId, int slot)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `wear` FROM `user_rp_inventory` WHERE `user_id` = @id AND `slot` = @slot LIMIT 1");
+        dbClient.AddParameter("id", userId);
+        dbClient.AddParameter("slot", slot);
+        return dbClient.GetInteger();
     }
 
     /// <summary>
     /// Adds one of an item (stacking onto an existing slot of the same item,
     /// else the first free carry slot). Returns the slot, -1 when the backpack
     /// is full, or <see cref="Habbo.RpAlreadyHeld"/> for a one-per-player item
-    /// already held.
+    /// already held. <paramref name="wear"/> is how worn it already is - a
+    /// weapon or armour coming out of the deposit box keeps its wear
+    /// (RpDurability); anything new starts at 0.
     /// </summary>
-    public static int Add(int userId, string item, int unlockedSlots)
+    public static int Add(int userId, string item, int unlockedSlots, int wear = 0)
     {
         var inventory = Load(userId);
         if (OnePerPlayer.Contains(item) && inventory.Any(entry => entry.Item == item))
             return Habbo.RpAlreadyHeld;
-        // pixelrp: weapons never stack - each is its own item, one to a slot -
-        // and only the carry slots are stacked onto, never the Weapon frame.
-        var existing = RpWeapons.IsWeapon(item)
+        // pixelrp: weapons and armour never stack - each is its own item, one
+        // to a slot, with its own wear - and only the carry slots are stacked
+        // onto, never the Weapon frame.
+        var existing = RpDurability.NeverStacks(item)
             ? default
             : inventory.FirstOrDefault(entry => entry.Item == item && entry.Count < Habbo.RpStackCap && entry.Slot >= 1 && entry.Slot <= Habbo.RpCarrySlots);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
@@ -75,10 +92,11 @@ public static class RpInventoryStore
         // once it is equipped (RpWeapons.IsEquippable).
         if (item == RpVape.Item && !inventory.Any(entry => entry.Item == item))
             RpVape.Refill(userId);
-        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`) VALUES (@id,@slot,@item,1)");
+        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`,`wear`) VALUES (@id,@slot,@item,1,@wear)");
         dbClient.AddParameter("id", userId);
         dbClient.AddParameter("slot", slot);
         dbClient.AddParameter("item", item);
+        dbClient.AddParameter("wear", RpDurability.IsDurable(item) ? Math.Max(0, wear) : 0);
         dbClient.RunQuery();
         return slot;
     }
@@ -178,7 +196,7 @@ public static class RpInventoryStore
         var entry = Load(userId).FirstOrDefault(candidate => candidate.Slot == slot);
         if (string.IsNullOrEmpty(entry.Item))
             return false;
-        var cap = (RpWeapons.IsWeapon(entry.Item) || OnePerPlayer.Contains(entry.Item)) ? 1 : Habbo.RpStackCap;
+        var cap = (RpDurability.NeverStacks(entry.Item) || OnePerPlayer.Contains(entry.Item)) ? 1 : Habbo.RpStackCap;
         var target = Math.Clamp(count, 0, cap);
         using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
         if (target == 0)
@@ -195,4 +213,15 @@ public static class RpInventoryStore
             RpVape.SyncHand(userId);
         return true;
     }
+}
+
+/// <summary>
+/// pixelrp: a backpack as <see cref="RpInventoryStore.Load"/> reads it - the
+/// rows, plus how worn each one is, by slot (RpDurability). Still the plain
+/// list of rows to everything that only wants those; the backpack packet
+/// (RpInventoryComposer) also sends the wear, so a bar can show it.
+/// </summary>
+public class RpInventoryList : List<(int Slot, string Item, int Count)>
+{
+    public Dictionary<int, int> Wear { get; } = new();
 }

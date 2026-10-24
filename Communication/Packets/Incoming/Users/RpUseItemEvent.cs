@@ -49,7 +49,7 @@ public class RpUseItemEvent : IPacketEvent
         var slot = packet.ReadInt();
         var habbo = session.GetHabbo();
         var weaponSlot = RpWeapons.WeaponSlot;
-        if (habbo == null || ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot))
+        if (habbo == null || ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot && slot != RpDurability.ArmorSlot))
             return;
         // pixelrp police: cuffs stop the things you do with your hands, and
         // rummaging in a backpack is one of them. Above the peek so nothing is
@@ -112,6 +112,27 @@ public class RpUseItemEvent : IPacketEvent
             var after = habbo.LoadRpInventory();
             RpWeapons.ApplyToHand(habbo, after);
             session.Send(new RpInventoryComposer(after));
+            return;
+        }
+        // pixelrp body armour: using it puts it on - a move into the Armor
+        // frame, swapping out any armour already worn - and using the worn
+        // one takes it off into the first free slot (RpDurability).
+        if (slot == RpDurability.ArmorSlot || item == RpDurability.BodyArmorItem)
+        {
+            if (slot == RpDurability.ArmorSlot)
+            {
+                var used = habbo.LoadRpInventory().Select(entry => entry.Slot).ToHashSet();
+                var free = Enumerable.Range(1, habbo.RpUnlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
+                if (free == 0)
+                {
+                    session.SendWhisper("Your backpack is full - there is nowhere to put it away.");
+                    return;
+                }
+                habbo.MoveRpItem(RpDurability.ArmorSlot, free);
+            }
+            else
+                habbo.MoveRpItem(slot, RpDurability.ArmorSlot);
+            session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
             return;
         }
         // pixelrp Clothing Store: a limited-edition token ("clothing:<id>:<edition>")

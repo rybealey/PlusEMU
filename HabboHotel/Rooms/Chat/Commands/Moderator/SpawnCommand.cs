@@ -23,6 +23,8 @@ internal class SpawnCommand : ITargetChatCommand
         { "knife", ("knife", "Knife") },
         { "bat", ("baseball_bat", "Baseball Bat") },
         { "axe", ("axe", "Axe") },
+        // pixelrp: worn in the backpack's Armor slot; soaks a fifth of every hit (RpDurability)
+        { "armor", (RpDurability.BodyArmorItem, "Body Armor") },
         { "stun", ("stun_gun", "Stun Gun") },
         { "cuffs", ("handcuffs", "Handcuffs") },
         { "flashbang", ("flashbang", "Flashbang") },

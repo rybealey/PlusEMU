@@ -202,7 +202,8 @@ internal class SpitCommand : ITargetChatCommand
         if (!landed || !hurts)
             return Task.CompletedTask;
 
-        target.RpHealth = Math.Max(0, target.RpHealth - Damage);
+        // pixelrp durability: worn armour wears by the spit and soaks its share (RpDurability).
+        target.RpHealth = Math.Max(0, target.RpHealth - RpDurability.Absorb(target, Damage));
         // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.
         RoomTickWriter.QueueRpStats(target);
         habbo.RpAggression = AggressionOnSpit;

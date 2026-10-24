@@ -8,7 +8,8 @@ namespace Plus.Communication.Packets.Outgoing.Users;
 ///
 /// Open: the trade's id, who it is with, both offers as (item, count) pairs -
 /// yours first - each side's Ready and Confirmed, whether each offer fits the
-/// other backpack, and what to tell this player about their last press.
+/// other backpack, and what to tell this player about their last press - then
+/// how worn each weapon and suit of armour on offer is, for its bar.
 /// Closed: how it ended (RpTrades.Result*) and a line saying so.
 /// </summary>
 public class RpTradeComposer : IServerPacket
@@ -23,11 +24,14 @@ public class RpTradeComposer : IServerPacket
     private readonly bool _theirsFits;
     private readonly string _notice = "";
     private readonly int _result;
+    private readonly List<(string Item, int Wear, int Max)> _mineWorn = new();
+    private readonly List<(string Item, int Wear, int Max)> _theirsWorn = new();
 
     public uint MessageId => ServerPacketHeader.RpTradeComposer;
 
     public RpTradeComposer(int tradeId, int partnerId, string partnerName, RpTrades.Side mine, RpTrades.Side theirs,
-        bool mineFits, bool theirsFits, string notice)
+        bool mineFits, bool theirsFits, string notice,
+        List<(string Item, int Wear, int Max)>? mineWorn = null, List<(string Item, int Wear, int Max)>? theirsWorn = null)
     {
         _open = true;
         _tradeId = tradeId;
@@ -38,6 +42,8 @@ public class RpTradeComposer : IServerPacket
         _mineFits = mineFits;
         _theirsFits = theirsFits;
         _notice = notice ?? "";
+        _mineWorn = mineWorn ?? new();
+        _theirsWorn = theirsWorn ?? new();
     }
 
     private RpTradeComposer(int result, string message)
@@ -76,5 +82,18 @@ public class RpTradeComposer : IServerPacket
         packet.WriteBoolean(_mineFits);
         packet.WriteBoolean(_theirsFits);
         packet.WriteString(_notice);
+        // pixelrp durability: how worn each weapon or suit of armour on offer
+        // is, yours then theirs, in the order the swap hands them over - for
+        // the bar on it (RpTrades.OfferWear).
+        foreach (var worn in new[] { _mineWorn, _theirsWorn })
+        {
+            packet.WriteInteger(worn.Count);
+            foreach (var (item, wear, max) in worn)
+            {
+                packet.WriteString(item);
+                packet.WriteInteger(wear);
+                packet.WriteInteger(max);
+            }
+        }
     }
 }

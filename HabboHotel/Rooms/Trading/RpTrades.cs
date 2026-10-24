@@ -50,6 +50,7 @@ public static class RpTrades
         public int Slot { get; set; }
         public string Item { get; set; } = "";
         public int Count { get; set; }
+        public int Wear { get; set; }
     }
 
     public const int OfferSlots = 10;
@@ -445,14 +446,20 @@ public static class RpTrades
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var rows = connection.Query<Row>(
-            "SELECT `user_id` AS UserId, `slot` AS Slot, `item` AS Item, `count` AS `Count` FROM `user_rp_inventory` " +
+            "SELECT `user_id` AS UserId, `slot` AS Slot, `item` AS Item, `count` AS `Count`, `wear` AS Wear FROM `user_rp_inventory` " +
             "WHERE `user_id` IN @ids ORDER BY `user_id`, `slot` FOR UPDATE",
             new { ids }, transaction).ToList();
         var plans = new Dictionary<int, (Dictionary<int, (string Item, int Count)> Before, Dictionary<int, (string Item, int Count)> After)>();
+        // pixelrp durability: the weapons and armour that leave each side, and
+        // the slots they arrive in on the other (RpDurability).
+        var leaving = new Dictionary<int, List<(string Item, int Slot)>>();
+        var arriving = new Dictionary<int, List<(string Item, int Slot)>>();
         foreach (var side in session.Sides)
         {
             var before = rows.Where(row => row.UserId == side.UserId).ToDictionary(row => row.Slot, row => (row.Item, row.Count));
-            var after = Plan(before, side.Offer, session.Theirs(side.UserId).Offer, unlocked[side.UserId], out var missing);
+            var left = new List<(string Item, int Slot)>();
+            var arrived = new List<(string Item, int Slot)>();
+            var after = Plan(before, side.Offer, session.Theirs(side.UserId).Offer, unlocked[side.UserId], out var missing, left, arrived);
             if (after == null)
             {
                 transaction.Rollback();
@@ -462,16 +469,34 @@ public static class RpTrades
                 return Shortfall(side, missing);
             }
             plans[side.UserId] = (before, after);
+            leaving[side.UserId] = left;
+            arriving[side.UserId] = arrived;
         }
+        // Each weapon or suit of armour arrives as worn as the one that left
+        // the other side - a worn bat is not made new by changing hands - and
+        // what stayed keeps its own wear.
+        var wearBefore = rows.ToDictionary(row => (row.UserId, row.Slot), row => row.Wear);
         foreach (var (userId, (before, after)) in plans)
-            Write(connection, transaction, userId, before, after);
+        {
+            var giver = session.Theirs(userId).UserId;
+            var handed = leaving[giver].GroupBy(entry => entry.Item)
+                .ToDictionary(group => group.Key, group => new Queue<int>(group.Select(entry => wearBefore.GetValueOrDefault((giver, entry.Slot)))));
+            var wearAfter = after.Keys.ToDictionary(slot => slot, slot => wearBefore.GetValueOrDefault((userId, slot)));
+            foreach (var (_, slot) in leaving[userId])
+                wearAfter[slot] = 0;
+            foreach (var (item, slot) in arriving[userId])
+                wearAfter[slot] = (handed.TryGetValue(item, out var queue) && queue.Count > 0) ? queue.Dequeue() : 0;
+            Write(connection, transaction, userId, before, after,
+                before.Keys.ToDictionary(slot => slot, slot => wearBefore.GetValueOrDefault((userId, slot))), wearAfter);
+        }
         transaction.Commit();
         return null;
     }
 
     /// <summary>One backpack from what was read to what it becomes, a row at a time, each write on exactly the row it expects.</summary>
     private static void Write(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int userId,
-        Dictionary<int, (string Item, int Count)> before, Dictionary<int, (string Item, int Count)> after)
+        Dictionary<int, (string Item, int Count)> before, Dictionary<int, (string Item, int Count)> after,
+        Dictionary<int, int> wearBefore, Dictionary<int, int> wearAfter)
     {
         foreach (var (slot, was) in before)
         {
@@ -479,17 +504,17 @@ public static class RpTrades
                 Exactly(connection.Execute(
                     "DELETE FROM `user_rp_inventory` WHERE `user_id` = @userId AND `slot` = @slot AND `item` = @item AND `count` = @count LIMIT 1",
                     new { userId, slot, item = was.Item, count = was.Count }, transaction));
-            else if (now != was)
+            else if (now != was || wearAfter.GetValueOrDefault(slot) != wearBefore.GetValueOrDefault(slot))
                 Exactly(connection.Execute(
-                    "UPDATE `user_rp_inventory` SET `item` = @item, `count` = @count " +
+                    "UPDATE `user_rp_inventory` SET `item` = @item, `count` = @count, `wear` = @wear " +
                     "WHERE `user_id` = @userId AND `slot` = @slot AND `item` = @wasItem AND `count` = @wasCount LIMIT 1",
-                    new { userId, slot, item = now.Item, count = now.Count, wasItem = was.Item, wasCount = was.Count }, transaction));
+                    new { userId, slot, item = now.Item, count = now.Count, wear = wearAfter.GetValueOrDefault(slot), wasItem = was.Item, wasCount = was.Count }, transaction));
         }
         foreach (var (slot, now) in after)
             if (!before.ContainsKey(slot))
                 Exactly(connection.Execute(
-                    "INSERT INTO `user_rp_inventory` (`user_id`, `slot`, `item`, `count`) VALUES (@userId, @slot, @item, @count)",
-                    new { userId, slot, item = now.Item, count = now.Count }, transaction));
+                    "INSERT INTO `user_rp_inventory` (`user_id`, `slot`, `item`, `count`, `wear`) VALUES (@userId, @slot, @item, @count, @wear)",
+                    new { userId, slot, item = now.Item, count = now.Count, wear = wearAfter.GetValueOrDefault(slot) }, transaction));
     }
 
     private static void Exactly(int affected)
@@ -515,9 +540,9 @@ public static class RpTrades
     private static int Carried(List<(int Slot, string Item, int Count)> inventory, string item) =>
         inventory.Where(row => row.Item == item && row.Slot >= 1 && row.Slot <= Habbo.RpCarrySlots).Sum(row => row.Count);
 
-    /// <summary>How many offer slots these counts fill: stacks of ten, weapons one each.</summary>
+    /// <summary>How many offer slots these counts fill: stacks of ten, weapons and armour one each.</summary>
     public static int Cells(Dictionary<string, int> offer) =>
-        offer.Sum(entry => RpWeapons.IsWeapon(entry.Key) ? entry.Value : (entry.Value + Habbo.RpStackCap - 1) / Habbo.RpStackCap);
+        offer.Sum(entry => RpDurability.NeverStacks(entry.Key) ? entry.Value : (entry.Value + Habbo.RpStackCap - 1) / Habbo.RpStackCap);
 
     /// <summary>Whether `incoming` fits once `outgoing` has left (Plan).</summary>
     private static bool Fits(List<(int Slot, string Item, int Count)> inventory, Dictionary<string, int> outgoing,
@@ -533,29 +558,38 @@ public static class RpTrades
     /// held anywhere is refused. Null when it cannot be done, with `missing`
     /// the offered item that is not all there (null when it is a matter of room).
     /// The one rule for the window's fit, Ready and the swap itself.
+    ///
+    /// The swap also wants to know where each weapon or suit of armour went,
+    /// to move its wear with it (RpDurability): `left` gets the slots they were
+    /// taken from, `arrived` the slots they were put in, each in order.
     /// </summary>
     private static Dictionary<int, (string Item, int Count)>? Plan(Dictionary<int, (string Item, int Count)> before,
-        Dictionary<string, int> outgoing, Dictionary<string, int> incoming, int unlockedSlots, out string? missing)
+        Dictionary<string, int> outgoing, Dictionary<string, int> incoming, int unlockedSlots, out string? missing,
+        List<(string Item, int Slot)>? left = null, List<(string Item, int Slot)>? arrived = null)
     {
         missing = null;
         var slots = new Dictionary<int, (string Item, int Count)>(before);
         bool IsCarry(int slot) => slot >= 1 && slot <= Habbo.RpCarrySlots;
         foreach (var (item, count) in outgoing)
         {
-            var left = count;
+            var remaining = count;
             foreach (var slot in slots.Where(pair => IsCarry(pair.Key) && pair.Value.Item == item)
                          .Select(pair => pair.Key).OrderByDescending(slot => slot).ToList())
             {
-                var take = Math.Min(left, slots[slot].Count);
-                left -= take;
+                var take = Math.Min(remaining, slots[slot].Count);
+                remaining -= take;
                 if (slots[slot].Count - take <= 0)
+                {
                     slots.Remove(slot);
+                    if (RpDurability.IsDurable(item))
+                        left?.Add((item, slot));
+                }
                 else
                     slots[slot] = (item, slots[slot].Count - take);
-                if (left == 0)
+                if (remaining == 0)
                     break;
             }
-            if (left > 0)
+            if (remaining > 0)
             {
                 missing = item;
                 return null;
@@ -567,7 +601,7 @@ public static class RpTrades
             {
                 if (RpInventoryStore.IsOnePerPlayer(item) && slots.Values.Any(row => row.Item == item))
                     return null;
-                var stack = RpWeapons.IsWeapon(item)
+                var stack = RpDurability.NeverStacks(item)
                     ? 0
                     : slots.Where(pair => IsCarry(pair.Key) && pair.Value.Item == item && pair.Value.Count < Habbo.RpStackCap)
                         .Select(pair => pair.Key).OrderBy(slot => slot).FirstOrDefault();
@@ -580,6 +614,8 @@ public static class RpTrades
                 if (free == 0)
                     return null;
                 slots[free] = (item, 1);
+                if (RpDurability.IsDurable(item))
+                    arrived?.Add((item, free));
             }
         }
         return slots;
@@ -667,8 +703,12 @@ public static class RpTrades
         // Whether each side's offer fits the other backpack, worked out once
         // for both windows: the window says so before Ready is pressed.
         var fits = new Dictionary<int, bool>();
+        var worn = new Dictionary<int, List<(string Item, int Wear, int Max)>>();
         foreach (var side in session.Sides)
+        {
             fits[side.UserId] = OfferFits(session, side);
+            worn[side.UserId] = OfferWear(side);
+        }
         foreach (var side in session.Sides)
         {
             var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(side.UserId);
@@ -676,8 +716,33 @@ public static class RpTrades
                 continue;
             var other = session.Theirs(side.UserId);
             client.Send(new RpTradeComposer(session.Id, other.UserId, other.Name, side, other,
-                fits[side.UserId], fits[other.UserId], (noticeFor == 0 || noticeFor == side.UserId) ? notice : ""));
+                fits[side.UserId], fits[other.UserId], (noticeFor == 0 || noticeFor == side.UserId) ? notice : "",
+                worn[side.UserId], worn[other.UserId]));
         }
+    }
+
+    /// <summary>
+    /// pixelrp durability: how worn each weapon or suit of armour on offer is -
+    /// the very ones the swap will hand over, the highest carry slot first
+    /// (Plan) - so both windows can draw its bar and say its durability on
+    /// hover (RpDurability).
+    /// </summary>
+    private static List<(string Item, int Wear, int Max)> OfferWear(Side side)
+    {
+        var worn = new List<(string Item, int Wear, int Max)>();
+        if (!side.Offer.Keys.Any(RpDurability.IsDurable))
+            return worn;
+        var inventory = RpInventoryStore.Load(side.UserId);
+        var wear = (inventory as RpInventoryList)?.Wear;
+        foreach (var (item, count) in side.Offer)
+        {
+            if (!RpDurability.IsDurable(item))
+                continue;
+            foreach (var slot in inventory.Where(row => row.Item == item && row.Slot >= 1 && row.Slot <= Habbo.RpCarrySlots)
+                         .Select(row => row.Slot).OrderByDescending(slot => slot).Take(count))
+                worn.Add((item, wear?.GetValueOrDefault(slot) ?? 0, RpDurability.MaxOf(item)));
+        }
+        return worn;
     }
 
     /// <summary>Whether what `giver` offers fits the other side's backpack once their own offer has left it.</summary>

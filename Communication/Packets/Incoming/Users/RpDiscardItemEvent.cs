@@ -22,7 +22,7 @@ internal class RpDiscardItemEvent : IPacketEvent
         if (habbo == null)
             return Task.CompletedTask;
         var weaponSlot = Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
-        if ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot)
+        if ((slot < 1 || slot > Plus.HabboHotel.Users.Habbo.RpCarrySlots) && slot != weaponSlot && slot != Plus.HabboHotel.Users.RpDurability.ArmorSlot)
             return Task.CompletedTask;
         // pixelrp trading: nothing leaves the backpack while a trade is open.
         if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
