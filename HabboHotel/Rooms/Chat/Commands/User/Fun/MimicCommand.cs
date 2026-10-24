@@ -33,7 +33,7 @@ internal class MimicCommand : ITargetChatCommand
         // pixelrp uniforms: neither out of one, nor into a copy of one.
         if (UniformManager.RefuseChange(session))
             return Task.CompletedTask;
-        if (target.WearingUniform)
+        if (UniformManager.InUniform(target))
         {
             session.SendWhisper("You can't copy someone's uniform.");
             return Task.CompletedTask;
@@ -45,19 +45,22 @@ internal class MimicCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
         session.GetHabbo().Gender = targetUser.GetClient().GetHabbo().Gender;
-        session.GetHabbo().Look = targetUser.GetClient().GetHabbo().Look;
+        // pixelrp body armour: their own clothes, not the vest over them - and
+        // a vest of our own stays on top (UniformManager.SetOwnLook).
+        var look = UniformManager.OwnLookOf(targetUser.GetClient().GetHabbo());
+        UniformManager.SetOwnLook(session.GetHabbo(), look);
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `users` SET `gender` = @gender, `look` = @look WHERE `id` = @id LIMIT 1");
             dbClient.AddParameter("gender", session.GetHabbo().Gender);
-            dbClient.AddParameter("look", session.GetHabbo().Look);
+            dbClient.AddParameter("look", look);
             dbClient.AddParameter("id", session.GetHabbo().Id);
             dbClient.RunQuery();
         }
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user != null)
         {
-            session.Send(new AvatarAspectUpdateComposer(session.GetHabbo().Look, session.GetHabbo().Gender));
+            session.Send(new AvatarAspectUpdateComposer(look, session.GetHabbo().Gender));
             session.Send(new UserChangeComposer(user, true));
             room.SendPacket(new UserChangeComposer(user, false));
         }

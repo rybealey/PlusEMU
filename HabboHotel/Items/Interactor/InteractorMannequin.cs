@@ -28,9 +28,11 @@ internal class InteractorMannequin : IFurniInteractor
                 : "m").ToUpper();
             var newFig = new Dictionary<string, string>();
             newFig.Clear();
+            // pixelrp body armour: dressed from their own look, not the vest over it
+            var ownLook = UniformManager.OwnLookOf(session.GetHabbo());
             foreach (var man in mannequinFigure.Split('.'))
             {
-                foreach (var fig in session.GetHabbo().Look.Split('.'))
+                foreach (var fig in ownLook.Split('.'))
                 {
                     if (fig.Split('-')[0] == man.Split('-')[0])
                     {
@@ -49,11 +51,13 @@ internal class InteractorMannequin : IFurniInteractor
             }
             var final = "";
             foreach (var str in newFig.Values) final += $"{str}.";
-            session.GetHabbo().Look = final.TrimEnd('.');
+            final = final.TrimEnd('.');
+            // theirs to keep, with any vest back on top
+            UniformManager.SetOwnLook(session.GetHabbo(), final);
             using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
             {
                 dbClient.SetQuery($"UPDATE users SET look = @look, gender = @gender WHERE id = '{session.GetHabbo().Id}' LIMIT 1");
-                dbClient.AddParameter("look", session.GetHabbo().Look);
+                dbClient.AddParameter("look", final);
                 dbClient.AddParameter("gender", session.GetHabbo().Gender);
                 dbClient.RunQuery();
             }

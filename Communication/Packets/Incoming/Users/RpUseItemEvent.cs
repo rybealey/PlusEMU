@@ -132,7 +132,10 @@ public class RpUseItemEvent : IPacketEvent
             }
             else
                 habbo.MoveRpItem(slot, RpDurability.ArmorSlot);
-            session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
+            var worn = habbo.LoadRpInventory();
+            // the vest goes on (or comes off) with it
+            RpDurability.SyncVest(habbo, worn);
+            session.Send(new RpInventoryComposer(worn));
             return;
         }
         // pixelrp Clothing Store: a limited-edition token ("clothing:<id>:<edition>")

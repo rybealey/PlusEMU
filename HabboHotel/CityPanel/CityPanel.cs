@@ -440,6 +440,9 @@ public static class CityPlayers
             var inventory = habbo.LoadRpInventory();
             if (weaponTouched)
                 RpWeapons.ApplyToHand(habbo, inventory);
+            // worn armour taken away: the vest goes with it (RpDurability)
+            if (slot == RpDurability.ArmorSlot)
+                RpDurability.SyncVest(habbo, inventory);
             client!.Send(new RpInventoryComposer(inventory));
         }
         return null;

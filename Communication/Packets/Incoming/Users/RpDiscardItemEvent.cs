@@ -37,6 +37,9 @@ internal class RpDiscardItemEvent : IPacketEvent
         // Binning the equipped weapon empties the hand with it.
         if (slot == weaponSlot)
             Plus.HabboHotel.Users.RpWeapons.ApplyToHand(habbo, after);
+        // and binning worn armour takes the vest off
+        if (slot == Plus.HabboHotel.Users.RpDurability.ArmorSlot)
+            Plus.HabboHotel.Users.RpDurability.SyncVest(habbo, after);
         session.Send(new RpInventoryComposer(after));
         return Task.CompletedTask;
     }

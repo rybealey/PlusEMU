@@ -124,25 +124,51 @@ public static class UniformManager
         return rankId > 0 ? Get(KindRank, rankId, habbo.Gender) : "";
     }
 
+    /// <summary>Whether the player is in a uniform proper - not just body armour's vest.</summary>
+    public static bool InUniform(Habbo habbo) => DueFor(habbo).Length > 0;
+
+    /// <summary>
+    /// A look with one part put over it: that part's set type replaced, or
+    /// added when the look has none. Body armour's vest, which covers only the
+    /// jacket and leaves everything else as it is.
+    /// </summary>
+    public static string Overlay(string look, string part)
+    {
+        var type = part.Split('-')[0];
+        var kept = (look ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries)
+            .Where(entry => !string.Equals(entry.Split('-')[0], type, StringComparison.OrdinalIgnoreCase));
+        return string.Join(".", kept.Append(part));
+    }
+
     /// <summary>
     /// Put on (or take off) whatever uniform the player is due, in memory, and
     /// say whether their look changed. Sends nothing: ShiftManager.ApplyMotto
     /// sends the look with the motto, and <see cref="Refresh"/> sends it
     /// everywhere else.
+    ///
+    /// pixelrp body armour: worn in the backpack's Armor slot, its vest
+    /// (RpDurability.VestPart) goes over the top the same way, and comes off
+    /// with it - over the player's own clothes, or a police uniform. Any other
+    /// uniform (another corporation's, a prisoner's) hides it, though the
+    /// armour is still worn (Twist, 2026-10-25).
     /// </summary>
     public static bool Dress(Habbo? habbo)
     {
         if (habbo == null)
             return false;
         var due = DueFor(habbo);
+        var vestShows = habbo.WearingArmor && (due.Length == 0 || (ShiftManager.IsPoliceOnDuty(habbo.Id) && !JailState.IsJailed(habbo.Id)));
+        var vest = vestShows ? RpDurability.VestFor(habbo) : "";
         var before = habbo.Look;
-        if (due.Length > 0)
+        if (due.Length > 0 || vest.Length > 0)
         {
             // The look underneath is remembered once, when the first uniform
             // goes on - switching from a rank's to the prisoner's keeps it.
             if (!habbo.WearingUniform)
                 habbo.OwnLook = habbo.Look;
-            habbo.Look = Merge(habbo.OwnLook ?? habbo.Look, due);
+            var own = habbo.OwnLook ?? habbo.Look;
+            var dressed = due.Length > 0 ? Merge(own, due) : own;
+            habbo.Look = vest.Length > 0 ? Overlay(dressed, vest) : dressed;
             habbo.WearingUniform = true;
         }
         else if (habbo.WearingUniform)
@@ -170,14 +196,64 @@ public static class UniformManager
 
     /// <summary>
     /// A way of changing clothes that would save the worn look as the player's
-    /// own. True, having told them, while a uniform is on.
+    /// own. True, having told them, while a uniform is on. Body armour's vest
+    /// does not stop it: the change is theirs, and the vest goes back on top
+    /// (<see cref="SetOwnLook"/>).
     /// </summary>
     public static bool RefuseChange(GameClient? client)
     {
-        if (client?.GetHabbo()?.WearingUniform != true)
+        var habbo = client?.GetHabbo();
+        if (habbo?.WearingUniform != true || !InUniform(habbo))
             return false;
-        client.SendWhisper("You can't change clothes while you're in uniform.");
+        client!.SendWhisper("You can't change clothes while you're in uniform.");
         return true;
+    }
+
+    /// <summary>The player's own look - what to change clothes from - without anything worn over it.</summary>
+    public static string OwnLookOf(Habbo habbo) => habbo.WearingUniform ? (habbo.OwnLook ?? habbo.Look) : habbo.Look;
+
+    /// <summary>
+    /// The player's own look has changed (Change Looks, a mannequin, :mimic,
+    /// :faceless) - the caller saves it as theirs - and anything worn over it
+    /// goes back on top: body armour's vest always shows over the outfit
+    /// (Twist, 2026-10-25). A uniform refuses the change before it gets here.
+    /// </summary>
+    public static void SetOwnLook(Habbo habbo, string look)
+    {
+        if (habbo.WearingUniform)
+        {
+            habbo.OwnLook = look;
+            Dress(habbo);
+        }
+        else
+            habbo.Look = look;
+    }
+
+    /// <summary>
+    /// A look chosen in Change Looks while body armour is worn. The editor
+    /// starts from the look as it is shown, vest and all, so a vest that comes
+    /// back untouched is the armour's, not theirs: their own jacket goes back
+    /// in its place (none, if they had none). A jacket they changed is theirs.
+    /// </summary>
+    public static string WithoutVest(Habbo habbo, string figure)
+    {
+        if (!habbo.WearingArmor || string.IsNullOrEmpty(figure))
+            return figure;
+        var vest = RpDurability.VestPart.Split('-');
+        var parts = figure.Split('.', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var index = parts.FindIndex(part =>
+        {
+            var fields = part.Split('-');
+            return fields.Length > 1 && string.Equals(fields[0], vest[0], StringComparison.OrdinalIgnoreCase) && fields[1] == vest[1];
+        });
+        if (index < 0)
+            return figure;
+        parts.RemoveAt(index);
+        var ownJacket = (habbo.OwnLook ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(part => string.Equals(part.Split('-')[0], vest[0], StringComparison.OrdinalIgnoreCase));
+        if (ownJacket != null)
+            parts.Add(ownJacket);
+        return string.Join(".", parts);
     }
 
     /// <summary>

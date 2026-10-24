@@ -83,5 +83,8 @@ public static class GangUtility
         // player who founds, joins or leaves a gang while standing in a turf
         // sees the panel's button change without re-entering the room.
         TurfManager.OnMembershipChanged(userId, gang?.GangId ?? 0);
+        // pixelrp body armour: the vest is in the gang's primary colour, so it
+        // changes with the gang - or goes back to grey without one.
+        Users.RpDurability.OnGangChanged(userId, gang?.Colour1);
     }
 }

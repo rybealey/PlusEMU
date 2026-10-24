@@ -32,7 +32,9 @@ internal class FacelessCommand : IChatCommand
         if (UniformManager.RefuseChange(session))
             return;
         string[] headParts;
-        var figureParts = session.GetHabbo().Look.Split('.');
+        // pixelrp body armour: their own look, not the vest over it
+        var look = UniformManager.OwnLookOf(session.GetHabbo());
+        var figureParts = look.Split('.');
         foreach (var part in figureParts)
         {
             if (part.StartsWith("hd"))
@@ -42,16 +44,17 @@ internal class FacelessCommand : IChatCommand
                     headParts[1] = "99999";
                 else
                     return;
-                session.GetHabbo().Look = session.GetHabbo().Look.Replace(part, $"hd-{headParts[1]}-{headParts[2]}");
+                look = look.Replace(part, $"hd-{headParts[1]}-{headParts[2]}");
                 break;
             }
         }
         // pixelrp: staff keep club clothing access even without an active VIP subscription.
         // pixelrp: HC/club clothing is not VIP-gated.
-        session.GetHabbo().Look = _figureDataManager.ProcessFigure(session.GetHabbo().Look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().WearsAnyClothing);
+        look = _figureDataManager.ProcessFigure(look, session.GetHabbo().Gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().WearsAnyClothing);
+        UniformManager.SetOwnLook(session.GetHabbo(), look);
         using (var dbClient = _database.GetQueryReactor())
         {
-            dbClient.RunQuery($"UPDATE `users` SET `look` = '{session.GetHabbo().Look}' WHERE `id` = '{session.GetHabbo().Id}' LIMIT 1");
+            dbClient.RunQuery($"UPDATE `users` SET `look` = '{look}' WHERE `id` = '{session.GetHabbo().Id}' LIMIT 1");
         }
         session.Send(new UserChangeComposer(user, true));
         session.GetHabbo().CurrentRoom.SendPacket(new UserChangeComposer(user, false));

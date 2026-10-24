@@ -22,7 +22,9 @@ namespace Plus.HabboHotel.Users;
 /// and in its hover bubble (RpInventoryComposer sends it).
 ///
 /// Body armour is worn in the backpack's Armor frame (<see cref="ArmorSlot"/>),
-/// a reserved row like the Weapon frame, and only armour goes there.
+/// a reserved row like the Weapon frame, and only armour goes there. While it
+/// is worn the avatar wears a vest over their clothes (<see cref="VestPart"/>,
+/// <see cref="SyncVest"/>).
 /// </summary>
 public static class RpDurability
 {
@@ -33,6 +35,72 @@ public static class RpDurability
 
     /// <summary>How much of each hit worn armour soaks.</summary>
     public const double ArmorSoak = 0.2;
+
+    /// <summary>
+    /// The vest an avatar wears while body armour is worn (Twist, 2026-10-25):
+    /// jacket_U_kevlar, figure set 3420 - its set type and id; the colour is
+    /// the wearer's (<see cref="VestFor"/>).
+    /// </summary>
+    public const string VestPart = "cc-3420";
+
+    /// <summary>
+    /// The vest's colour outside a gang: its palette's own grey. In a gang it
+    /// takes the gang's primary colour (Twist, 2026-10-25), matched to the
+    /// nearest colour of the jacket palette (<see cref="VestPalette"/>).
+    /// </summary>
+    private const int VestDefaultColour = 1408;
+
+    /// <summary>The figure palette jackets (cc) are coloured from.</summary>
+    private const int VestPalette = 3;
+
+    /// <summary>A gang colour's nearest palette colour, worked out once per colour.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, int> PaletteMatches = new();
+
+    /// <summary>The vest this player wears with their armour, in their gang's colour.</summary>
+    public static string VestFor(Habbo habbo) => $"{VestPart}-{(habbo.VestColour > 0 ? habbo.VestColour : VestDefaultColour)}";
+
+    /// <summary>
+    /// A gang changed for this player - joined, left, recoloured, disbanded
+    /// (GangUtility.BroadcastGangMembership): a vest they are wearing takes
+    /// the new colour, or its grey again.
+    /// </summary>
+    public static void OnGangChanged(int userId, int? gangColour)
+    {
+        var habbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.GetHabbo();
+        if (habbo == null || !habbo.WearingArmor)
+            return;
+        habbo.VestColour = gangColour.HasValue ? PaletteColourFor(gangColour.Value) : 0;
+        Corporations.UniformManager.Refresh(habbo.Client);
+    }
+
+    /// <summary>
+    /// The jacket palette's colour nearest a gang's RGB colour - by the
+    /// "redmean" distance, which weighs red, green and blue the way the eye
+    /// does. The grey when the palette cannot be read.
+    /// </summary>
+    private static int PaletteColourFor(int rgb) => PaletteMatches.GetOrAdd(rgb & 0xFFFFFF, colour =>
+    {
+        if (PlusEnvironment.FigureManager == null || !PlusEnvironment.FigureManager.TryGetPalette(VestPalette, out var palette))
+            return VestDefaultColour;
+        var (r1, g1, b1) = ((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF);
+        var best = VestDefaultColour;
+        var bestDistance = long.MaxValue;
+        foreach (var candidate in palette.Colors.Values)
+        {
+            if (!candidate.Selectable || !int.TryParse(candidate.Value, System.Globalization.NumberStyles.HexNumber, null, out var hex))
+                continue;
+            var (r2, g2, b2) = ((hex >> 16) & 0xFF, (hex >> 8) & 0xFF, hex & 0xFF);
+            long redMean = (r1 + r2) / 2;
+            long dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
+            var distance = (((512 + redMean) * dr * dr) >> 8) + (4 * dg * dg) + (((767 - redMean) * db * db) >> 8);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = candidate.Id;
+            }
+        }
+        return best;
+    });
 
     /// <summary>The damage each item is good for before it breaks.</summary>
     private static readonly Dictionary<string, int> MaxWear = new()
@@ -100,6 +168,31 @@ public static class RpDurability
         Tell(attacker, broke ? item : null, weapon: true);
     }
 
+    /// <summary>
+    /// Read off the backpack whether the player wears body armour, and dress
+    /// them to match: the vest goes on over their own clothes (or a uniform)
+    /// while it is worn, and their own jacket comes back when it is not -
+    /// in memory only, so their saved look is never touched
+    /// (UniformManager.Dress). After anything that changes the Armor slot, and
+    /// at login.
+    /// </summary>
+    public static void SyncVest(Habbo habbo, List<(int Slot, string Item, int Count)>? inventory = null)
+    {
+        if (habbo == null)
+            return;
+        habbo.WearingArmor = (inventory ?? habbo.LoadRpInventory()).Any(entry => entry.Slot == ArmorSlot && entry.Item == BodyArmorItem);
+        // in their gang's colour (OnGangChanged keeps it up to date after)
+        if (habbo.WearingArmor)
+        {
+            var gang = Gangs.GangUtility.GetGang(habbo.Id);
+            habbo.VestColour = gang != null ? PaletteColourFor(gang.Colour1) : 0;
+        }
+        if (habbo.Client != null)
+            Corporations.UniformManager.Refresh(habbo.Client);
+        else
+            Corporations.UniformManager.Dress(habbo);
+    }
+
     /// <summary>What sits in one of the player's slots, and its wear.</summary>
     private static (string Item, int Wear) Worn(int userId, int slot)
     {
@@ -136,9 +229,11 @@ public static class RpDurability
         var inventory = habbo.LoadRpInventory();
         if (broken != null)
         {
-            // a broken weapon leaves the hand with it
+            // a broken weapon leaves the hand with it, broken armour the vest
             if (weapon)
                 RpWeapons.ApplyToHand(habbo, inventory);
+            else
+                SyncVest(habbo, inventory);
             client.SendWhisper($"Your {NameOf(broken)} broke.");
         }
         client.Send(new RpInventoryComposer(inventory));

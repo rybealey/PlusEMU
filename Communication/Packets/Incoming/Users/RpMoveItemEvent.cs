@@ -84,6 +84,9 @@ internal class RpMoveItemEvent : IPacketEvent
         var after = habbo.LoadRpInventory();
         if (to == weaponSlot || from == weaponSlot)
             Plus.HabboHotel.Users.RpWeapons.ApplyToHand(habbo, after);
+        // armour put on or taken off: the vest with it
+        if (to == armorSlot || from == armorSlot)
+            Plus.HabboHotel.Users.RpDurability.SyncVest(habbo, after);
         session.Send(new RpInventoryComposer(after));
         return Task.CompletedTask;
     }

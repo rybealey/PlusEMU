@@ -113,6 +113,13 @@ public class Habbo
     // written with a uniform, and nothing may save one while it is on.
     public bool WearingUniform { get; set; }
     public string? OwnLook { get; set; }
+    // pixelrp body armour (RpDurability.SyncVest): worn in the backpack's
+    // Armor slot, it puts the vest on the look the same way - in memory, over
+    // the player's own (and any uniform).
+    public bool WearingArmor { get; set; }
+    // and the vest's colour: their gang's primary colour, matched to the
+    // clothing palette (0 for none - the vest's own grey)
+    public int VestColour { get; set; }
 
     public string Gender { get; set; } = string.Empty;
 

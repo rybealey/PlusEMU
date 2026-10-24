@@ -34,8 +34,11 @@ internal class UpdateFigureDataEvent : IPacketEvent
         // pixelrp: staff keep club clothing access even without an active VIP subscription.
         // pixelrp: HC/club clothing is not VIP-gated - everyone passes the
         // club check (sellable-clothing ownership still applies).
-        var look = _figureManager.ProcessFigure(packet.ReadString(), gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().WearsAnyClothing);
-        if (look == session.GetHabbo().Look)
+        // pixelrp body armour: the vest drawn over their clothes is not theirs
+        // to save, and stays on top of whatever they pick (UniformManager.WithoutVest).
+        var chosen = UniformManager.WithoutVest(session.GetHabbo(), packet.ReadString());
+        var look = _figureManager.ProcessFigure(chosen, gender, session.GetHabbo().Clothing.GetClothingParts, true, session.GetHabbo().WearsAnyClothing);
+        if (look == UniformManager.OwnLookOf(session.GetHabbo()))
             return Task.CompletedTask;
         if ((DateTime.Now - session.GetHabbo().LastClothingUpdateTime).TotalSeconds <= 2.0)
         {
@@ -54,7 +57,7 @@ internal class UpdateFigureDataEvent : IPacketEvent
             return Task.CompletedTask;
         }
         _questManager.ProgressUserQuest(session, QuestType.ProfileChangeLook);
-        session.GetHabbo().Look = _figureManager.FilterFigure(look);
+        UniformManager.SetOwnLook(session.GetHabbo(), _figureManager.FilterFigure(look));
         session.GetHabbo().Gender = gender.ToLower();
         using (var dbClient = _database.GetQueryReactor())
         {
