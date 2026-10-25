@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Users;
@@ -53,6 +54,8 @@ public static class RpMarket
 
     private static readonly object Lock = new();
 
+    private static NLog.ILogger Log => NLog.LogManager.GetLogger("Plus.HabboHotel.Users.Banking.RpMarket");
+
     private static int Now => (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     public sealed class MarketRow
@@ -92,13 +95,24 @@ public static class RpMarket
     {
         if (session?.GetHabbo() == null)
             return;
-        var notice = action switch
+        string notice;
+        try
         {
-            ListItem => List(session, a, b, c),
-            BuyItem => Buy(session, a),
-            TakeBack => Take(session, a),
-            _ => string.Empty
-        };
+            notice = action switch
+            {
+                ListItem => List(session, a, b, c),
+                BuyItem => Buy(session, a),
+                TakeBack => Take(session, a),
+                _ => string.Empty
+            };
+        }
+        catch (Exception e)
+        {
+            // Each step puts back what it took when a later one fails; this
+            // only stops a surprise from leaving the window without an answer.
+            ExceptionLogger.LogException(e);
+            notice = "Something went wrong - try again.";
+        }
         Send(session, false, notice);
     }
 
@@ -139,7 +153,15 @@ public static class RpMarket
         return RpTrades.StateRefusal(session);
     }
 
-    /// <summary>Put `quantity` of what sits in one carry slot up for sale at `price` each.</summary>
+    /// <summary>
+    /// Put `quantity` of what sits in one carry slot up for sale at `price` each.
+    ///
+    /// The items leave the backpack in ONE guarded statement (TakeFromSlot):
+    /// only if that slot still holds that item, at least that many and - for a
+    /// weapon or armour - the same wear. A trade, the deposit box or using one
+    /// in between, and nothing is taken. If the listing then cannot be written,
+    /// the items go straight back.
+    /// </summary>
     private static string List(GameClient session, int slot, int quantity, int price)
     {
         var habbo = session.GetHabbo();
@@ -159,7 +181,7 @@ public static class RpMarket
         lock (Lock)
         {
             var entry = habbo.LoadRpInventory().FirstOrDefault(row => row.Slot == slot);
-            if (string.IsNullOrEmpty(entry.Item))
+            if (string.IsNullOrEmpty(entry.Item) || entry.Count < 1)
                 return string.Empty;
             if (!RpTrades.Tradeable(entry.Item))
                 return "Police equipment cannot be sold.";
@@ -170,22 +192,42 @@ public static class RpMarket
             if (live >= MaxListings)
                 return $"You can only have {MaxListings} listings up at once.";
 
+            var count = Math.Clamp(quantity, 1, entry.Count);
             var wear = RpDurability.IsDurable(entry.Item) ? RpInventoryStore.WearOf(habbo.Id, slot) : 0;
-            var (item, removed) = RpInventoryStore.Discard(habbo.Id, slot, Math.Clamp(quantity, 1, entry.Count));
-            if (removed <= 0 || item != entry.Item)
-                return string.Empty;
+            if (!TakeFromSlot(connection, habbo.Id, slot, entry.Item, count, wear))
+                return "Your backpack changed - try again.";
 
-            connection.Execute(
-                "INSERT INTO `rp_market_listings` (`seller_id`, `seller_name`, `item`, `wear`, `price`, `listed_qty`, `left_qty`, `sold_qty`, `listed_at`, `ended_at`) " +
-                "VALUES (@me, @name, @item, @wear, @price, @count, @count, 0, @now, 0)",
-                new { me = habbo.Id, name = habbo.Username, item, wear, price, count = removed, now = Now });
+            try
+            {
+                connection.Execute(
+                    "INSERT INTO `rp_market_listings` (`seller_id`, `seller_name`, `item`, `wear`, `price`, `listed_qty`, `left_qty`, `sold_qty`, `listed_at`, `ended_at`) " +
+                    "VALUES (@me, @name, @item, @wear, @price, @count, @count, 0, @now, 0)",
+                    new { me = habbo.Id, name = habbo.Username, item = entry.Item, wear, price, count, now = Now });
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+                GiveBack(habbo, entry.Item, count, wear, "a listing that could not be saved");
+                session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
+                return "That could not be listed - your items are back in your backpack.";
+            }
             session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
-            var each = removed > 1 ? " each" : string.Empty;
-            return $"{Capital(Named(item, removed))} is now for sale at {TextHandling.GetMoney(price)}{each}.";
+            var each = count > 1 ? " each" : string.Empty;
+            return $"{Capital(Named(entry.Item, count))} is now for sale at {TextHandling.GetMoney(price)}{each}.";
         }
     }
 
-    /// <summary>Buy one of a listing with the cash in hand. Its money goes into the seller's checking account.</summary>
+    /// <summary>
+    /// Buy one of a listing with the cash in hand. Its money goes into the
+    /// seller's checking account.
+    ///
+    /// The ONE item is claimed first, in a guarded statement that only lands on
+    /// the listing exactly as it was read - so nothing reaches the backpack
+    /// until it is this buyer's, and two buyers can never get the same one. If
+    /// the backpack then cannot take it, the claim is undone and it goes back
+    /// on sale. Only once it is in the backpack is the cash taken and the
+    /// seller paid.
+    /// </summary>
     private static string Buy(GameClient session, int listingId)
     {
         var habbo = session.GetHabbo();
@@ -206,29 +248,46 @@ public static class RpMarket
                 return "That is no longer for sale.";
             if (row.SellerId == habbo.Id)
                 return "That is your own listing.";
+            if (!RpTrades.Tradeable(row.Item) || row.Price < 1)
+                return "That cannot be bought.";
             if (habbo.Credits < row.Price)
                 return $"You need {TextHandling.GetMoney(row.Price)} in cash to buy that.";
 
-            var slot = RpInventoryStore.Add(habbo.Id, row.Item, habbo.RpUnlockedSlots, row.Wear);
-            if (slot == Habbo.RpAlreadyHeld)
-                return "You can only carry one of those.";
+            var left = row.LeftQty - 1;
+            var claimed = connection.Execute(
+                "UPDATE `rp_market_listings` SET `left_qty` = @left, `sold_qty` = `sold_qty` + 1, `ended_at` = @ended " +
+                "WHERE `id` = @id AND `ended_at` = 0 AND `left_qty` = @was LIMIT 1",
+                new { left, ended = left <= 0 ? Now : 0, id = row.Id, was = row.LeftQty });
+            if (claimed != 1)
+                return "That is no longer for sale.";
+
+            int slot;
+            try
+            {
+                slot = RpInventoryStore.Add(habbo.Id, row.Item, habbo.RpUnlockedSlots, row.Wear);
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+                slot = -100;
+            }
             if (slot < 0)
-                return "Your backpack is full.";
+            {
+                Unclaim(connection, row);
+                if (slot == Habbo.RpAlreadyHeld)
+                    return "You can only carry one of those.";
+                return slot == -1 ? "Your backpack is full." : "Something went wrong - nothing was bought.";
+            }
 
             // Habbo.Credits is the authority; the users row is the crash hedge,
             // the relative update the ATM makes (BankUtility.PersistHandCredits).
             habbo.Credits -= row.Price;
-            connection.Execute("UPDATE `users` SET `credits` = `credits` - @price WHERE `id` = @me LIMIT 1",
-                new { price = row.Price, me = habbo.Id });
-
-            var left = row.LeftQty - 1;
-            connection.Execute(
-                "UPDATE `rp_market_listings` SET `left_qty` = @left, `sold_qty` = `sold_qty` + 1, `ended_at` = @ended WHERE `id` = @id LIMIT 1",
-                new { left, ended = left <= 0 ? Now : 0, id = row.Id });
-            connection.Execute(
+            Try(() => connection.Execute("UPDATE `users` SET `credits` = `credits` - @price WHERE `id` = @me LIMIT 1",
+                new { price = row.Price, me = habbo.Id }));
+            Try(() => connection.Execute(
                 "INSERT INTO `rp_market_sales` (`listing_id`, `seller_id`, `buyer_id`, `buyer_name`, `item`, `wear`, `price`, `sold_at`) " +
                 "VALUES (@listing, @seller, @buyer, @buyerName, @item, @wear, @price, @now)",
-                new { listing = row.Id, seller = row.SellerId, buyer = habbo.Id, buyerName = habbo.Username, item = row.Item, wear = row.Wear, price = row.Price, now = Now });
+                new { listing = row.Id, seller = row.SellerId, buyer = habbo.Id, buyerName = habbo.Username, item = row.Item, wear = row.Wear, price = row.Price, now = Now }));
 
             var paid = BankUtility.CreditMarketSale(row.SellerId, row.SellerName, row.Price,
                 $"Marketplace: sold {RpTrades.ItemName(row.Item)}", out sellerAccount);
@@ -236,7 +295,10 @@ public static class RpMarket
             // The seller has no account any more: the money goes into their
             // hand instead, so a sale never vanishes.
             if (paid == BankResult.NoAccount)
-                PayIntoHand(row.SellerId, row.Price);
+                Try(() => PayIntoHand(row.SellerId, row.Price));
+            else if (!paidBank)
+                Log.Error("Marketplace sale of listing {0}: seller {1} was NOT paid {2} ({3}) - pay them by hand.",
+                    row.Id, row.SellerId, row.Price, paid);
         }
 
         session.Send(new CreditBalanceComposer(habbo.Credits));
@@ -256,7 +318,13 @@ public static class RpMarket
         return $"You bought {Named(row.Item, 1)} for {TextHandling.GetMoney(row.Price)}.";
     }
 
-    /// <summary>Take what is left of one of your listings back into the backpack.</summary>
+    /// <summary>
+    /// Take what is left of one of your listings back into the backpack.
+    ///
+    /// The listing is closed FIRST, in a guarded statement, so nothing reaches
+    /// the backpack while it is still on sale - it cannot be bought and taken
+    /// back at once. What the backpack cannot hold goes back on sale.
+    /// </summary>
     private static string Take(GameClient session, int listingId)
     {
         var habbo = session.GetHabbo();
@@ -268,33 +336,106 @@ public static class RpMarket
         {
             using var connection = PlusEnvironment.DatabaseManager.Connection();
             var row = connection.QueryFirstOrDefault<MarketRow>(
-                $"SELECT {Columns} FROM `rp_market_listings` WHERE `id` = @id AND `seller_id` = @me AND `ended_at` = 0 LIMIT 1",
+                $"SELECT {Columns} FROM `rp_market_listings` WHERE `id` = @id AND `seller_id` = @me AND `ended_at` = 0 AND `left_qty` > 0 LIMIT 1",
                 new { id = listingId, me = habbo.Id });
             if (row == null)
                 return string.Empty;
 
+            var claimed = connection.Execute(
+                "UPDATE `rp_market_listings` SET `left_qty` = 0, `ended_at` = @now " +
+                "WHERE `id` = @id AND `seller_id` = @me AND `ended_at` = 0 AND `left_qty` = @was LIMIT 1",
+                new { now = Now, id = row.Id, me = habbo.Id, was = row.LeftQty });
+            if (claimed != 1)
+                return string.Empty;
+
             var returned = 0;
             var result = 0;
-            while (returned < row.LeftQty)
+            try
             {
-                result = RpInventoryStore.Add(habbo.Id, row.Item, habbo.RpUnlockedSlots, row.Wear);
-                if (result < 0)
-                    break;
-                returned++;
+                while (returned < row.LeftQty)
+                {
+                    result = RpInventoryStore.Add(habbo.Id, row.Item, habbo.RpUnlockedSlots, row.Wear);
+                    if (result < 0)
+                        break;
+                    returned++;
+                }
             }
-            if (returned == 0)
-                return result == Habbo.RpAlreadyHeld ? "You can only carry one of those." : "Your backpack is full.";
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+            }
 
             var left = row.LeftQty - returned;
-            if (left <= 0 && row.SoldQty == 0)
-                connection.Execute("DELETE FROM `rp_market_listings` WHERE `id` = @id LIMIT 1", new { id = row.Id });
-            else
-                connection.Execute("UPDATE `rp_market_listings` SET `left_qty` = @left, `ended_at` = @ended WHERE `id` = @id LIMIT 1",
-                    new { left, ended = left <= 0 ? Now : 0, id = row.Id });
+            if (left > 0)
+                Try(() => connection.Execute("UPDATE `rp_market_listings` SET `left_qty` = @left, `ended_at` = 0 WHERE `id` = @id LIMIT 1",
+                    new { left, id = row.Id }));
+            else if (row.SoldQty == 0)
+                Try(() => connection.Execute("DELETE FROM `rp_market_listings` WHERE `id` = @id LIMIT 1", new { id = row.Id }));
             session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
+
+            if (returned == 0)
+                return result == Habbo.RpAlreadyHeld ? "You can only carry one of those." : "Your backpack is full.";
             return left > 0
                 ? $"Took back {returned} - your backpack is full."
                 : $"{Capital(Named(row.Item, returned))} is back in your backpack.";
+        }
+    }
+
+    /// <summary>
+    /// Takes `count` of `item` out of one backpack slot in a single guarded
+    /// statement - only if the slot still holds that item, enough of it and,
+    /// for a weapon or armour, the same wear. True when it was taken.
+    /// </summary>
+    private static bool TakeFromSlot(IDbConnection connection, int userId, int slot, string item, int count, int wear)
+    {
+        var sameWear = RpDurability.IsDurable(item) ? " AND `wear` = @wear" : string.Empty;
+        var args = new { userId, slot, item, count, wear };
+        var taken = connection.Execute(
+                "UPDATE `user_rp_inventory` SET `count` = `count` - @count " +
+                $"WHERE `user_id` = @userId AND `slot` = @slot AND `item` = @item AND `count` > @count{sameWear} LIMIT 1", args) == 1
+            || connection.Execute(
+                "DELETE FROM `user_rp_inventory` " +
+                $"WHERE `user_id` = @userId AND `slot` = @slot AND `item` = @item AND `count` = @count{sameWear} LIMIT 1", args) == 1;
+        // The last equipped vape gone empties the hand, as RpInventoryStore.Discard does.
+        if (taken && item == RpVape.Item)
+            RpVape.SyncHand(userId);
+        return taken;
+    }
+
+    /// <summary>Items back into a backpack after something failed; anything that will not fit is logged for staff.</summary>
+    private static void GiveBack(Habbo habbo, string item, int count, int wear, string why)
+    {
+        var given = 0;
+        try
+        {
+            while (given < count && RpInventoryStore.Add(habbo.Id, item, habbo.RpUnlockedSlots, wear) >= 0)
+                given++;
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+        }
+        if (given < count)
+            Log.Error("Marketplace: {0} of {1} could not go back into {2}'s backpack after {3} - give them back by hand.",
+                count - given, item, habbo.Username, why);
+    }
+
+    /// <summary>A claimed item goes back on sale, its listing as it was.</summary>
+    private static void Unclaim(IDbConnection connection, MarketRow row) =>
+        Try(() => connection.Execute(
+            "UPDATE `rp_market_listings` SET `left_qty` = `left_qty` + 1, `sold_qty` = `sold_qty` - 1, `ended_at` = 0 WHERE `id` = @id LIMIT 1",
+            new { id = row.Id }));
+
+    /// <summary>A write that must not stop the rest: logged, not thrown.</summary>
+    private static void Try(Action write)
+    {
+        try
+        {
+            write();
+        }
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
         }
     }
 
