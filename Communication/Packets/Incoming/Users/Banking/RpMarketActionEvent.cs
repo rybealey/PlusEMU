@@ -13,7 +13,8 @@ internal class RpMarketActionEvent : IPacketEvent
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        if (session?.GetHabbo() == null)
+        // Four ints or it is not the window's: ignored, never read past its end.
+        if (session?.GetHabbo() == null || packet.Buffer.Length < 4 * sizeof(int))
             return Task.CompletedTask;
 
         var action = packet.ReadInt();

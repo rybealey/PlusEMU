@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
@@ -29,6 +30,13 @@ namespace Plus.HabboHotel.Users.Banking;
 ///
 /// Every change runs under one lock. The market is small, and one lock makes
 /// "two people buy the last one" impossible rather than unlikely.
+///
+/// The window's packet (RpMarketActionEvent) is answered only for somebody who
+/// opened the market with :mp this session - so everything the command checks
+/// (its permission, being in a room) holds for every action too - and changes
+/// are spaced at least <see cref="ActionGapMs"/> apart, refreshes
+/// <see cref="RefreshGapMs"/>. Nothing the packet carries is trusted beyond a
+/// slot, a count, a price and a listing id, each checked here.
 /// </summary>
 public static class RpMarket
 {
@@ -53,6 +61,22 @@ public static class RpMarket
     private const int SoldShownSeconds = 72 * 3600;
 
     private static readonly object Lock = new();
+
+    /// <summary>How long the market stays open after :mp or the last action - an hour of idle, then :mp again.</summary>
+    private const long SessionMs = 60 * 60 * 1000;
+
+    /// <summary>The least time between two changes (list, buy, take back) from one player.</summary>
+    private const long ActionGapMs = 300;
+
+    /// <summary>The least time between two refreshes from one player; each one reads the market twice.</summary>
+    private const long RefreshGapMs = 1000;
+
+    /// <summary>Who opened the market with :mp, and when they last used it.</summary>
+    private static readonly ConcurrentDictionary<int, long> Opened = new();
+
+    private static readonly ConcurrentDictionary<int, long> LastAction = new();
+
+    private static readonly ConcurrentDictionary<int, long> LastRefresh = new();
 
     private static NLog.ILogger Log => NLog.LogManager.GetLogger("Plus.HabboHotel.Users.Banking.RpMarket");
 
@@ -87,14 +111,60 @@ public static class RpMarket
             session.SendWhisper(refusal);
             return;
         }
+        Opened[session.GetHabbo().Id] = Environment.TickCount64;
         Send(session, true);
+    }
+
+    /// <summary>Logout: the market is shut for them, and their timers go.</summary>
+    public static void Forget(int userId)
+    {
+        Opened.TryRemove(userId, out _);
+        LastAction.TryRemove(userId, out _);
+        LastRefresh.TryRemove(userId, out _);
     }
 
     /// <summary>One action from the window (RpMarketActionEvent). Answers with the whole market again.</summary>
     public static void Handle(GameClient session, int action, int a, int b, int c)
     {
-        if (session?.GetHabbo() == null)
+        if (session == null)
             return;
+        var habbo = session.GetHabbo();
+        if (habbo == null || action < Refresh || action > TakeBack)
+            return;
+
+        // Only for somebody who opened the market with :mp; the window never
+        // sends without it, so anything else did not come from the window.
+        var now = Environment.TickCount64;
+        if (!Opened.TryGetValue(habbo.Id, out var opened))
+        {
+            Log.Warn("Marketplace action {0} from {1} (id {2}) without the market open.", action, habbo.Username, habbo.Id);
+            return;
+        }
+        if (now - opened > SessionMs)
+        {
+            Opened.TryRemove(habbo.Id, out _);
+            Send(session, false, "The marketplace closed after an hour - type :mp to open it again.");
+            return;
+        }
+        Opened[habbo.Id] = now;
+
+        if (action == Refresh)
+        {
+            if (LastRefresh.TryGetValue(habbo.Id, out var refreshed) && now - refreshed < RefreshGapMs)
+                return;
+            LastRefresh[habbo.Id] = now;
+            Send(session, false);
+            return;
+        }
+        // Too soon after the last change: answered, so the window's buttons
+        // come back, but nothing is done.
+        if (LastAction.TryGetValue(habbo.Id, out var acted) && now - acted < ActionGapMs)
+        {
+            Send(session, false);
+            return;
+        }
+        LastAction[habbo.Id] = now;
+
         string notice;
         try
         {

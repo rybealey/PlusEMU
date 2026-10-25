@@ -803,6 +803,8 @@ public class Habbo
             // pixelrp banking: and the ATM they were standing at - that is
             // session state too, and nothing else ever took the entry out.
             LogoutStep(() => Banking.AtmSessions.End(Id));
+            // pixelrp marketplace: an open market is session state the same way.
+            LogoutStep(() => Banking.RpMarket.Forget(Id));
             // pixelrp gym: the online clock stops here, and the training done
             // since the last save is kept.
             LogoutStep(() => Rooms.Gym.GymState.OnLogout(this));
