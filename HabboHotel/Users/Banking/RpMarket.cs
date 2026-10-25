@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
 using System.Data;
 using Dapper;
+using Plus.Communication.Packets.Outgoing.Avatar;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.Core;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Trading;
 using Plus.Utilities;
 
@@ -33,7 +36,9 @@ namespace Plus.HabboHotel.Users.Banking;
 ///
 /// The window's packet (RpMarketActionEvent) is answered only for somebody who
 /// opened the market with :mp this session - so everything the command checks
-/// (its permission, being in a room) holds for every action too - and changes
+/// (its permission, being in a room) holds for every action too - or who is on
+/// a Marketplace point (furni with the `marketplace` behaviour: step on and it
+/// opens, step off and it closes and stops answering again), and changes
 /// are spaced at least <see cref="ActionGapMs"/> apart, refreshes
 /// <see cref="RefreshGapMs"/>. Nothing the packet carries is trusted beyond a
 /// slot, a count, a price and a listing id, each checked here.
@@ -113,6 +118,67 @@ public static class RpMarket
         }
         Opened[session.GetHabbo().Id] = Environment.TickCount64;
         Send(session, true);
+    }
+
+    /// <summary>
+    /// Whether the player is standing on a Marketplace point - furni with the
+    /// `marketplace` behaviour, like the Armoury's action point (item 11562).
+    /// </summary>
+    public static bool IsAtMarket(Room? room, RoomUser? user)
+    {
+        if (room == null || user == null)
+            return false;
+        var items = room.GetGameMap()?.GetAllRoomItemForSquare(user.X, user.Y);
+        return items != null && items.Any(item => item?.Definition?.InteractionType == InteractionType.Marketplace);
+    }
+
+    /// <summary>
+    /// <see cref="Open"/> for the step onto a Marketplace point (Twist,
+    /// 2026-10-26). The step fires on the movement thread and Open reads the
+    /// database, so - as DepositBox.OpenSoon - it runs on RoomTickWriter's
+    /// thread, in order with <see cref="CloseSoon"/>, and only for somebody
+    /// still standing on one by then.
+    /// </summary>
+    public static void OpenSoon(GameClient? client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+        RoomTickWriter.QueueOrdered(() =>
+        {
+            // Same session as the step - a relog in between is a new one.
+            if (client!.GetHabbo() != habbo)
+                return;
+            var room = habbo.CurrentRoom;
+            if (!IsAtMarket(room, room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)))
+                return;
+            Open(client);
+        });
+    }
+
+    /// <summary>
+    /// Off a Marketplace point: the window comes down and the market is shut
+    /// for them until they step back on or type :mp. A close needs no
+    /// database, so the click to walk sends it at once (OwnWalk).
+    /// </summary>
+    public static void Close(GameClient? client)
+    {
+        var habbo = client?.GetHabbo();
+        if (habbo == null)
+            return;
+        Opened.TryRemove(habbo.Id, out _);
+        client!.Send(new InClientLinkComposer("marketplace/hide"));
+    }
+
+    /// <summary>
+    /// <see cref="Close"/> for the step off. Through the same queue as
+    /// <see cref="OpenSoon"/>, so it can never overtake the open it follows.
+    /// </summary>
+    public static void CloseSoon(GameClient? client)
+    {
+        if (client?.GetHabbo() == null)
+            return;
+        RoomTickWriter.QueueOrdered(() => Close(client));
     }
 
     /// <summary>Logout: the market is shut for them, and their timers go.</summary>

@@ -35,8 +35,9 @@ public static class OwnWalk
     }
 
     /// <summary>
-    /// The ATM, the deposit box and the dressing booth's clothes editor close
-    /// at the click to walk (Twist, 2026-10-25). Their own closes fire when the
+    /// The ATM, the deposit box, the Marketplace on a Marketplace point and the
+    /// dressing booth's clothes editor close at the click to walk (Twist,
+    /// 2026-10-25). Their own closes fire when the
     /// step off the tile LANDS - RoomUser.X/Y stays the tile being left until
     /// then - so they trailed the avatar by half a second or more. Those stay,
     /// for being moved by somebody else; a second close is harmless.
@@ -54,6 +55,8 @@ public static class OwnWalk
         // moment ago, the step-off close queued behind it closes it again.
         if (items.Any(item => item?.Definition?.InteractionType == InteractionType.DepositBox))
             DepositBox.Close(session);
+        if (items.Any(item => item?.Definition?.InteractionType == InteractionType.Marketplace))
+            RpMarket.Close(session);
         if (items.Any(item => item?.Definition?.InteractionType == InteractionType.DressingBooth))
             session.Send(new InClientLinkComposer("avatar-editor/hide"));
     }

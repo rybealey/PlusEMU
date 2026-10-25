@@ -1317,6 +1317,10 @@ public class Item
         // here: opening reads the database (DepositBox.OpenSoon).
         if (Definition.InteractionType == InteractionType.DepositBox)
             Users.Banking.DepositBox.OpenSoon(user.GetClient());
+        // So does the Marketplace on a Marketplace point - soon, for the same
+        // reason (RpMarket.OpenSoon).
+        if (Definition.InteractionType == InteractionType.Marketplace)
+            Users.Banking.RpMarket.OpenSoon(user.GetClient());
         // Gym equipment: a step on inside the workout cooldown is refused.
         if (Definition.InteractionType is InteractionType.GymStamina or InteractionType.GymStrength)
             Rooms.Gym.GymState.SteppedOn(user, this);
@@ -1352,6 +1356,9 @@ public class Item
         // (DepositBox.CloseSoon), so the two always arrive in order.
         if (Definition.InteractionType == InteractionType.DepositBox)
             Users.Banking.DepositBox.CloseSoon(user.GetClient());
+        // ...as does the Marketplace, behind its open (RpMarket.CloseSoon).
+        if (Definition.InteractionType == InteractionType.Marketplace)
+            Users.Banking.RpMarket.CloseSoon(user.GetClient());
         // ...and a workout on gym equipment ends with the step off it.
         if (Definition.InteractionType is InteractionType.GymStamina or InteractionType.GymStrength)
             Rooms.Gym.GymState.SteppedOff(room, user, this);

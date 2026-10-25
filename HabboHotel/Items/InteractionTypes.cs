@@ -262,6 +262,8 @@ public static class InteractionTypes
                 return InteractionType.SnackDispenser;
             case "bin_search":
                 return InteractionType.BinSearch;
+            case "marketplace":
+                return InteractionType.Marketplace;
             default:
             {
                 //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);

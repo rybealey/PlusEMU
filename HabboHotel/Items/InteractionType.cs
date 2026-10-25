@@ -208,5 +208,10 @@ public enum InteractionType
     // pixelrp: a bin to search through - 10 seconds, then one reward from the
     // City Panel's table, and it stays searched (state 1) for 15 minutes
     // (BinSearch). Only in PixelRP-owned rooms. The PixelRP Bin (migration 273).
-    BinSearch
+    BinSearch,
+
+    // pixelrp: a Marketplace point. Step on it and the Marketplace opens; step
+    // off and it closes (RpMarket). :mp still opens it anywhere. The Armoury's
+    // action point, item 11562, by its own behaviour (migration 313).
+    Marketplace
 }
