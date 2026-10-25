@@ -181,6 +181,10 @@ public class SsoTicketEvent : IPacketEvent
             // pixelrp: the city's furni, for the client to download in the
             // background - first visits draw furni, not placeholders
             session.Send(Plus.HabboHotel.Rooms.KeyRooms.CityFurni());
+            // pixelrp: the looks of everyone online, for the client to download
+            // their clothes in the background - the people in the next room
+            // are drawn in their own clothes at once, not a moment later
+            session.Send(Plus.Communication.Packets.Outgoing.Rooms.Engine.RpPlayerLooksComposer.ForLogin(session));
             // pixelrp: the hotel says happy birthday on the day (phone Settings >
             // Account; month + day only).
             var birthday = BirthdayUtility.GetBirthday(session.GetHabbo().Id);
