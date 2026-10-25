@@ -31,6 +31,9 @@ public class RoomUserManager
     private Room _room;
     private int _secondaryPrivateUserId;
     private ConcurrentDictionary<int, RoomUser> _users;
+    // pixelrp: the same players by their user id - see GetRoomUserByHabbo. Kept
+    // by AddAvatarToRoom and the leave; bots and pets are never in it.
+    private ConcurrentDictionary<int, RoomUser> _usersByHabbo;
 
     // pixelrp instant-first-step: serializes TryInstantFirstStep against OnCycle's tick.
     private readonly object _cycleLock = new();
@@ -49,6 +52,7 @@ public class RoomUserManager
     {
         _room = room;
         _users = new();
+        _usersByHabbo = new();
         _pets = new();
         _bots = new();
         _primaryPrivateUserId = 0;
@@ -231,6 +235,7 @@ public class RoomUserManager
         session.GetHabbo().CurrentRoom = _room;
         if (!_users.TryAdd(personalId, user))
             return false;
+        _usersByHabbo[user.HabboId] = user;
         var model = _room.GetGameMap().Model;
         if (model == null)
             return false;
@@ -688,6 +693,8 @@ public class RoomUserManager
         {
             //uhmm, could put the below stuff in but idk.
         }
+        // Only this entry: a newer one for the same player is left alone.
+        _usersByHabbo?.TryRemove(new KeyValuePair<int, RoomUser>(user.HabboId, user));
         user.InternalRoomId = -1;
         OnRemove(user);
         // pixelrp :invisible: once they're out, whoever they brought in who
@@ -835,12 +842,22 @@ public class RoomUserManager
     public void BroadcastGymBots() =>
         _room.SendPacket(new Communication.Packets.Outgoing.Rooms.AI.Bots.RpGymBotsComposer(GymVirtualIds()));
 
+    /// <summary>
+    /// pixelrp: a player in this room by user id, from _usersByHabbo. This
+    /// copied the room's whole list (ConcurrentDictionary.Values takes every
+    /// lock and builds a fresh list) and walked it, for nearly every packet a
+    /// player sends - 281 callers, every walk click among them. The same
+    /// answer: a player still in the room, whose session is that user.
+    /// </summary>
     public RoomUser GetRoomUserByHabbo(int id)
     {
-        var user = GetUserList().Where(x => x != null && x.GetClient() != null && x.GetClient().GetHabbo() != null && x.GetClient().GetHabbo().Id == id).FirstOrDefault();
-        if (user != null)
-            return user;
-        return null;
+        var byHabbo = _usersByHabbo;
+        var users = _users;
+        if (byHabbo == null || users == null || !byHabbo.TryGetValue(id, out var user) || user == null)
+            return null;
+        if (!users.TryGetValue(user.InternalRoomId, out var inRoom) || inRoom != user)
+            return null;
+        return user.GetClient()?.GetHabbo()?.Id == id ? user : null;
     }
 
     /// <summary>
@@ -2138,11 +2155,13 @@ public class RoomUserManager
             dbClient.RunQuery($"UPDATE `rooms` SET `users_now` = '0' WHERE `id` = '{_room.Id}' LIMIT 1");
         }
         _users.Clear();
+        _usersByHabbo.Clear();
         _pets.Clear();
         _bots.Clear();
         UserCount = 0;
         PetCount = 0;
         _users = null;
+        _usersByHabbo = null;
         _pets = null;
         _bots = null;
         _room = null;
