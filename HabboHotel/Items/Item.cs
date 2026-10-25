@@ -842,6 +842,9 @@ public class Item
                     case InteractionType.BinSearch:
                         Plus.HabboHotel.Rooms.BinSearch.Tick(this);
                         break;
+                    case InteractionType.Atm:
+                        Users.Banking.AtmSessions.Tick(this);
+                        break;
                     case InteractionType.VendingMachine:
                         if (LegacyDataString == "1")
                         {

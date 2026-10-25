@@ -242,6 +242,8 @@ public static class ServerPacketHeader
     public const uint RpRoomFloorOpacityComposer = 4229;
     // pixelrp: everyone's looks at login - for the client to download their clothes ahead
     public const uint RpPlayerLooksComposer = 4230;
+    // pixelrp: the ATM window closes - its user walked away from the machine (AtmSessions.Tick)
+    public const uint RpAtmCloseComposer = 4231;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

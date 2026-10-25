@@ -18,15 +18,17 @@ namespace Plus.HabboHotel.Items.Interactor;
 /// across the room and clicking sends them walking instead of opening it. A
 /// bank you can use from anywhere is not a bank, it is a button.
 ///
-/// Deliberately stateless. Unlike the vending machine there is no animation to
-/// hold and no InteractingUser to pin, so two people can use the same machine
-/// at once - which is what a room with one ATM and a queue needs.
+/// No InteractingUser to pin. Unlike the vending machine there is no animation
+/// to hold, so two people can use the same machine at once - which is what a
+/// room with one ATM and a queue needs. Who is at it lives in AtmSessions, and
+/// the machine ticks while anybody is, to close the window of whoever steps
+/// off the tile they used it from (AtmSessions.Tick).
 /// </summary>
 public class InteractorAtm : IFurniInteractor
 {
     public void OnPlace(GameClient session, Item item) { }
 
-    public void OnRemove(GameClient session, Item item) { }
+    public void OnRemove(GameClient session, Item item) => AtmSessions.CloseAll(item);
 
     public void OnTrigger(GameClient session, Item item, int request, bool hasRights)
     {
@@ -59,7 +61,11 @@ public class InteractorAtm : IFurniInteractor
             return;
         }
 
-        AtmSessions.Start(habbo.Id, room.Id);
+        AtmSessions.Start(habbo.Id, room.Id, item.Id, user.X, user.Y);
+        // Start the machine ticking unless it already is for somebody else -
+        // queued twice it would tick twice a cycle for as long as it is in use.
+        if (item.UpdateCounter <= 0)
+            item.RequestUpdate(1, true);
         session.Send(new RpAtmOpenComposer(account, habbo.Credits));
     }
 

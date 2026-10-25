@@ -772,6 +772,7 @@
     "RpUserStatsComposer": 4227,
     "RpRoomFloorOpacityComposer": 4229,
     "RpPlayerLooksComposer": 4230,
+    "RpAtmCloseComposer": 4231,
     "RpNavigatorZonesComposer": 4182,
     "RpMessengerReceiptComposer": 3906,
     "RpMessengerFriendTypingComposer": 3932,
