@@ -434,6 +434,7 @@
     "RpGetUserStatsEvent": 4226,
     "RpSetFloorOpacityEvent": 4228,
     "RpMarketActionEvent": 4232,
+    "RpClientLagReportEvent": 4234,
     "RpSupportOpenEvent": 4046,
     "RpSupportStartEvent": 4047,
     "RpSupportSendEvent": 4048,

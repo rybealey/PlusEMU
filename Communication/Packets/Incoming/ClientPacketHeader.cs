@@ -622,6 +622,8 @@ public static class ClientPacketHeader
     public const uint RpSetFloorOpacityEvent = 4228;
     // pixelrp: the Marketplace window - refresh, list, buy, take back (RpMarket, 311_Marketplace.sql)
     public const uint RpMarketActionEvent = 4232;
+    // pixelrp: the client's lag recorder, staff only - written to the log (RpClientLagReportEvent)
+    public const uint RpClientLagReportEvent = 4234;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
