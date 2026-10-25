@@ -481,10 +481,13 @@ public class Room : RoomData
                 IdleTime++;
             else if (IdleTime > 0)
                 IdleTime = 0;
-            // Asked once, as the room reaches the unload time: a key room left
-            // loaded counts on past it, and is not asked (or its furni searched
-            // for an arrow) again every tick it stays empty.
-            if (IdleTime == IdleUnloadTicks && !KeyRooms.StaysLoaded(this))
+            // Asked as the room reaches the unload time, then again every time
+            // as long again: a key room left loaded counts on past it, and is
+            // not asked (or its furni searched for an arrow) every tick it
+            // stays empty - but one that stops being a key room while empty
+            // (its corporation gone, its arrow picked up, given away by the
+            // PixelRP account) still unloads, within five minutes.
+            if (IdleTime >= IdleUnloadTicks && (IdleTime % IdleUnloadTicks) == 0 && !KeyRooms.StaysLoaded(this))
             {
                 PlusEnvironment.Game.RoomManager.UnloadRoom(Id);
                 return;

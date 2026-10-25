@@ -8,8 +8,8 @@ namespace Plus.HabboHotel.Rooms;
 
 /// <summary>
 /// pixelrp: the rooms that are always loaded - every corporation's rooms
-/// (their headquarters, the hospital among them), the jail, and every room
-/// with an arrow in it.
+/// (their headquarters, the hospital among them), the jail, and every PixelRP
+/// room (the city: owned by the PixelRP account) with an arrow in it.
 ///
 /// WHY. A room nobody is in is unloaded after a while (Room.IdleUnloadTicks),
 /// and the next person in waits while it is read back from the database: every
@@ -23,6 +23,12 @@ namespace Plus.HabboHotel.Rooms;
 /// so it costs memory, not ticking. And an edit made to one straight in the
 /// database, not through the game, is not seen until the room is reloaded:
 /// :unload in it, or a restart.
+///
+/// Arrows count only in the city (Twist, 2026-10-25): arrows are on sale from
+/// Builder up, so any room anyone put one in stayed loaded for good, and the
+/// city is growing. A player's or staff member's own room with an arrow loads
+/// when someone goes in, like any room; "Set as public room" makes one part of
+/// the city.
 /// </summary>
 public static class KeyRooms
 {
@@ -34,7 +40,8 @@ public static class KeyRooms
     /// </summary>
     public static bool StaysLoaded(Room room) =>
         room.CorporationId > 0 || room.IsJailRoom
-        || room.GetRoomItemHandler().GetFloor.Any(item => item.Definition?.InteractionType == InteractionType.Arrow);
+        || (PixelRpRooms.IsPixelRpRoom(room)
+            && room.GetRoomItemHandler().GetFloor.Any(item => item.Definition?.InteractionType == InteractionType.Arrow));
 
     /// <summary>
     /// Every furni type in the loaded key rooms, for a player logging in to
@@ -78,10 +85,12 @@ public static class KeyRooms
             {
                 // rp_jail_room is ENUM('0','1'): compared to a bare 1 MySQL would
                 // read it by position and match the '0' rows - every non-jail room.
+                // The same rooms StaysLoaded keeps: arrows only in the city.
                 dbClient.SetQuery("SELECT `id` FROM `rooms` WHERE `corporation_id` > 0 OR `rp_jail_room` = '1'"
-                    + " OR `id` IN (SELECT `items`.`room_id` FROM `items`"
+                    + " OR (`owner` = @pixelrp AND `id` IN (SELECT `items`.`room_id` FROM `items`"
                     + " JOIN `furniture` ON `furniture`.`id` = `items`.`base_item`"
-                    + " WHERE `furniture`.`interaction_type` = 'arrow')");
+                    + " WHERE `furniture`.`interaction_type` = 'arrow'))");
+                dbClient.AddParameter("pixelrp", PixelRpRooms.AccountId);
                 table = dbClient.GetTable();
             }
             if (table == null)
