@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Users.Banking;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
 namespace Plus.HabboHotel.Users.Banking;
@@ -39,6 +40,21 @@ public static class AtmSessions
         Open[userId] = new Session(roomId, itemId, x, y, Now + LifetimeSeconds);
 
     public static void End(int userId) => Open.TryRemove(userId, out _);
+
+    /// <summary>
+    /// The player clicked to walk (OwnWalk.Started): the window closes at the
+    /// click. <see cref="Tick"/> cannot see it sooner than the step off the
+    /// tile LANDS - RoomUser.X/Y stays the tile being left until then - which
+    /// made the close trail the avatar by half a second or more (Twist,
+    /// 2026-10-25). The tick stays, for being moved by somebody else.
+    /// </summary>
+    public static void WalkedAway(GameClient session)
+    {
+        var habbo = session?.GetHabbo();
+        if (habbo == null || !Open.TryRemove(habbo.Id, out _))
+            return;
+        session!.Send(new RpAtmCloseComposer());
+    }
 
     /// <summary>
     /// True only while the player is still in the room the machine is in and
