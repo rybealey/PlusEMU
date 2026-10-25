@@ -244,6 +244,8 @@ public static class ServerPacketHeader
     public const uint RpPlayerLooksComposer = 4230;
     // pixelrp: the ATM window closes - its user walked away from the machine (AtmSessions.Tick)
     public const uint RpAtmCloseComposer = 4231;
+    // pixelrp: the Marketplace as one player sees it (RpMarket.Send)
+    public const uint RpMarketComposer = 4233;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

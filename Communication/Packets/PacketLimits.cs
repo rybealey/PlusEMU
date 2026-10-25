@@ -78,6 +78,7 @@ internal static class PacketLimits
         // RP trades (RpTradeActionEvent) keep the default: RpTrades has its
         // own 100ms gap, and items are added to a trade one quick click at a time.
         [typeof(RpAtmTransactionEvent)] = Money,
+        [typeof(RpMarketActionEvent)] = Money,
         [typeof(RpBankTransferEvent)] = Money,
         [typeof(RpPaySendEvent)] = Money,
         [typeof(MakeOfferEvent)] = Money,

@@ -296,6 +296,43 @@ public static class BankUtility
     }
 
     /// <summary>
+    /// pixelrp Marketplace: a sale's money into the seller's checking account,
+    /// online or not (RpMarket.Buy). Pay's rule for somebody offline: their
+    /// row is read to log the balance and dropped from the cache again, since
+    /// the cache is what the online paths write from.
+    /// </summary>
+    public static BankResult CreditMarketSale(int userId, string username, long amount, string source, out BankAccount? account)
+    {
+        account = null;
+        if (amount <= 0)
+            return BankResult.InvalidAmount;
+        lock (LockFor(userId))
+        {
+            try
+            {
+                using var connection = PlusEnvironment.DatabaseManager.Connection();
+                var wasLoaded = Accounts.ContainsKey(userId);
+                var rows = connection.Execute(
+                    "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` + @amount WHERE `user_id` = @userId LIMIT 1",
+                    new { userId, amount });
+                if (rows == 0)
+                    return BankResult.NoAccount;
+                account = Refresh(connection, userId);
+                if (!wasLoaded)
+                    Accounts.TryRemove(userId, out _);
+                LogMovement(connection, userId, username, BankTransactionKind.PayIn, BankAccountKind.Current,
+                    amount, account?.Current ?? 0, Fit(source));
+                return BankResult.Ok;
+            }
+            catch (Exception e)
+            {
+                Log.Error("Paying a marketplace sale into {0}'s account failed: {1}", userId, e.Message);
+                return BankResult.Failed;
+            }
+        }
+    }
+
+    /// <summary>
     /// Between this character's own two accounts, and nowhere else. There is
     /// deliberately no target id anywhere in this path - a transfer has no
     /// recipient to forge.

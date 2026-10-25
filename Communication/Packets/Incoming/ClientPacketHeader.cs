@@ -620,6 +620,8 @@ public static class ClientPacketHeader
     public const uint RpGetUserStatsEvent = 4226;
     // pixelrp: the Room tool's Floor opacity slider (RoomFloorOpacity, 306_FloorOpacity.sql)
     public const uint RpSetFloorOpacityEvent = 4228;
+    // pixelrp: the Marketplace window - refresh, list, buy, take back (RpMarket, 311_Marketplace.sql)
+    public const uint RpMarketActionEvent = 4232;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

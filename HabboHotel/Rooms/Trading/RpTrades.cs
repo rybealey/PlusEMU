@@ -118,7 +118,8 @@ public static class RpTrades
         return StateRefusal(session!);
     }
 
-    private static string? StateRefusal(GameClient session)
+    /// <summary>The trading gates without the "already trading" one - the Marketplace asks these too.</summary>
+    public static string? StateRefusal(GameClient session)
     {
         var habbo = session.GetHabbo();
         if (KnockedOut.Is(session))

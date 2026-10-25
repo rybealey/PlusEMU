@@ -145,7 +145,7 @@ public static class JailState
         // Police work - a jailed officer is a prisoner first.
         "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort", "charge", "pardon", "arrest",
         // Trading, and handing things over.
-        "offer", "sell", "give", "heal",
+        "offer", "sell", "give", "heal", "mp",
         // Out of the room behind somebody.
         "follow",
         // Down and off to the hospital (SuicideCommand).
