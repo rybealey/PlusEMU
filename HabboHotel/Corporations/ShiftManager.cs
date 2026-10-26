@@ -466,7 +466,7 @@ public static class ShiftManager
                 // does not depend on the disconnect save that runs after this.
                 if (TryDepositWage(session, habbo))
                     continue;
-                habbo.Credits += session.RankPay;
+                habbo.ChangeCreditsInMemory(session.RankPay);
                 PersistCredits(session.UserId, session.RankPay);
                 Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, session.RankPay, $"Wage - {session.CorpName}");
             }
@@ -689,7 +689,7 @@ public static class ShiftManager
                 client.SendWhisper($"{TextHandling.GetMoney(session.RankPay)} has been paid into your checking account.");
                 continue;
             }
-            habbo.Credits += session.RankPay;
+            habbo.ChangeCreditsInMemory(session.RankPay);
             PersistCredits(session.UserId, session.RankPay);
             Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, session.RankPay, $"Wage - {session.CorpName}");
             client.Send(new CreditBalanceComposer(habbo.Credits));

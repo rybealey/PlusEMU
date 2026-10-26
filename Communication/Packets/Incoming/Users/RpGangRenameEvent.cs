@@ -75,7 +75,7 @@ internal class RpGangRenameEvent : IPacketEvent
         if (_groupManager.TryGetGroup(actor.GangId, out var group))
             group.Name = name;
 
-        habbo.Credits -= cost;
+        habbo.ChangeCredits(-cost);
         Plus.HabboHotel.Users.Banking.CoinLedger.Record(habbo, -cost, "Gang rename");
         session.Send(new CreditBalanceComposer(habbo.Credits));
         session.SendWhisper($"Your gang is now called {name}.");

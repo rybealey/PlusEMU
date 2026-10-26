@@ -37,11 +37,9 @@ internal class SyncUserCurrencyCommand : IRconCommand
             case "coins":
             case "credits":
             {
-                using var dbClient = _database.GetQueryReactor();
-                dbClient.SetQuery("UPDATE `users` SET `credits` = @credits WHERE `id` = @id LIMIT 1");
-                dbClient.AddParameter("credits", client.GetHabbo().Credits);
-                dbClient.AddParameter("id", userId);
-                dbClient.RunQuery();
+                // pixelrp: nothing to sync - every change is written as it
+                // happens (Habbo.ChangeCredits), and memory's total written
+                // over the database could only undo one landing at that moment.
                 break;
             }
             case "pixels":

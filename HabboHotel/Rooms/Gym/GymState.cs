@@ -589,7 +589,7 @@ public static class GymState
         if (habbo.Credits < MembershipCost)
             return false;
 
-        habbo.Credits -= MembershipCost;
+        habbo.ChangeCreditsInMemory(-MembershipCost);
         CoinLedger.Record(habbo, -MembershipCost, "Gym membership");
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
             connection.Execute("UPDATE `users` SET `credits` = `credits` - @amount WHERE `id` = @userId LIMIT 1",

@@ -64,6 +64,16 @@ internal class Authenticator : IAuthenticator
             if (!canLogin)
                 return AuthenticationError.LoginProhibited;
 
+            // pixelrp: and never loaded while its last session is still on its
+            // way out. CanLogin closes a session still open, but one already
+            // closing on its own thread carries on there - and its save landed
+            // AFTER this load read the database, so the new session started
+            // from the balance before whatever the old one had just spent or
+            // given away, and kept it. Waits for that save; refuses if it
+            // never comes.
+            if (!await PreviousSessionGone(userId))
+                return AuthenticationError.LoginProhibited;
+
             var habbo = await _userDataFactory.Create(userId);
             if (habbo == null)
                 return AuthenticationError.NoAccountFound;
@@ -170,6 +180,34 @@ internal class Authenticator : IAuthenticator
     {
         using var connection = _database.Connection();
         return await connection.ExecuteScalarAsync<int>("SELECT id FROM users WHERE auth_ticket = @sso", new { sso });
+    }
+
+    private const int PreviousSessionWaitMs = 15000;
+
+    /// <summary>
+    /// pixelrp: true once this character's previous session is gone - its
+    /// logout saved (Habbo.LeavingTask) and it off the online list. A session
+    /// still on the list with no logout begun by the deadline is a dead one,
+    /// which RegisterClient displaces as it always has; a logout that never
+    /// finishes saving refuses the login rather than load from under it.
+    /// </summary>
+    private async Task<bool> PreviousSessionGone(int userId)
+    {
+        var deadline = Environment.TickCount64 + PreviousSessionWaitMs;
+        while (true)
+        {
+            var leaving = Habbo.LeavingTask(userId);
+            if (!leaving.IsCompleted)
+            {
+                var left = deadline - Environment.TickCount64;
+                if (left <= 0 || await Task.WhenAny(leaving, Task.Delay((int)left)) != leaving)
+                    return false;
+                continue;
+            }
+            if (_gameClientManager.GetClientByUserId(userId) == null || Environment.TickCount64 >= deadline)
+                return true;
+            await Task.Delay(50);
+        }
     }
 
     private async Task<bool> CanLogin(int userId)

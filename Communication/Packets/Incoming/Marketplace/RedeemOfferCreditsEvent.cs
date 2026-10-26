@@ -30,7 +30,7 @@ internal class RedeemOfferCreditsEvent : IPacketEvent
             foreach (DataRow row in table.Rows) creditsOwed += Convert.ToInt32(row["asking_price"]);
             if (creditsOwed >= 1)
             {
-                session.GetHabbo().Credits += creditsOwed;
+                session.GetHabbo().ChangeCredits(creditsOwed);
                 Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), creditsOwed, "Marketplace sales");
                 session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
             }

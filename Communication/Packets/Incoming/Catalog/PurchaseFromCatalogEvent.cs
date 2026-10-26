@@ -205,7 +205,7 @@ public class PurchaseFromCatalogEvent : IPacketEvent
         }
         if (item.CostCredits > 0)
         {
-            session.GetHabbo().Credits -= totalCreditsCost;
+            session.GetHabbo().ChangeCredits(-totalCreditsCost);
             Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), -totalCreditsCost, $"Catalog - {item.CatalogName}");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         }

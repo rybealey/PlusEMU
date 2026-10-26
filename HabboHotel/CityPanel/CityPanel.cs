@@ -353,7 +353,7 @@ public static class CityPlayers
         if (habbo != null)
         {
             delta = Math.Max(delta, -habbo.Credits);
-            habbo.Credits += delta;
+            habbo.ChangeCreditsInMemory(delta);
             client!.Send(new CreditBalanceComposer(habbo.Credits));
             CoinLedger.Record(habbo, delta, source);
             dbClient.SetQuery("UPDATE `users` SET `credits` = GREATEST(0, `credits` + @delta) WHERE `id` = @id LIMIT 1");

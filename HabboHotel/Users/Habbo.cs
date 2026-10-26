@@ -123,7 +123,46 @@ public class Habbo
 
     public string Gender { get; set; } = string.Empty;
 
-    public int Credits { get; set; }
+    // pixelrp: cash on hand - read freely, changed through ChangeCredits.
+    private int _credits;
+
+    public int Credits
+    {
+        get => Volatile.Read(ref _credits);
+        set => Volatile.Write(ref _credits, value);
+    }
+
+    /// <summary>
+    /// pixelrp: the way cash on hand changes - in memory and, as a RELATIVE
+    /// update, in users.credits at once, so the database is never behind what
+    /// a player holds.
+    ///
+    /// Cash used to be written whole at logout, last of all and after the
+    /// player had already left the online list. A login in between read the
+    /// balance from before whatever they had just spent or given away, and the
+    /// two sessions' saves then fought over it - a way to duplicate cash. Now
+    /// every change is written as it happens and the logout never writes cash,
+    /// so no old total can land over a newer one. Atomic in memory: the owner's
+    /// own packets and other players' (a :give, a sale, a wage) can land at once.
+    /// </summary>
+    public void ChangeCredits(int delta)
+    {
+        if (delta == 0)
+            return;
+        ChangeCreditsInMemory(delta);
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("UPDATE `users` SET `credits` = `credits` + @delta WHERE `id` = @id LIMIT 1");
+        dbClient.AddParameter("delta", delta);
+        dbClient.AddParameter("id", Id);
+        dbClient.RunQuery();
+    }
+
+    /// <summary>
+    /// pixelrp: only the in-memory half of ChangeCredits, for a caller that
+    /// writes the same relative change to users.credits itself, inside its own
+    /// lock or transaction (the bank, the Marketplace, wages).
+    /// </summary>
+    public void ChangeCreditsInMemory(int delta) => Interlocked.Add(ref _credits, delta);
 
     public int Duckets { get; set; }
 
@@ -709,8 +748,9 @@ public class Habbo
         get
         {
             _habboSaved = true;
+            // pixelrp: no credits - see ChangeCredits.
             return
-                $"UPDATE `users` SET `online` = false, `last_online` = '{UnixTimestamp.GetNow()}', `activity_points` = '{Duckets}', `credits` = '{Credits}', `vip_points` = '{Diamonds}', `home_room` = '{HomeRoom}', `gotw_points` = '{GotwPoints}', `time_muted` = '{TimeMuted}',`friend_bar_state` = '{FriendBarStateUtility.GetInt(FriendbarState)}' WHERE id = '{Id}' LIMIT 1;UPDATE `user_statistics` SET `roomvisits` = '{HabboStats.RoomVisits}', `onlineTime` = '{OnlineTimeTotal}', `respect` = '{HabboStats.Respect}', `respectGiven` = '{HabboStats.RespectGiven}', `giftsGiven` = '{HabboStats.GiftsGiven}', `giftsReceived` = '{HabboStats.GiftsReceived}', `dailyRespectPoints` = '{HabboStats.DailyRespectPoints}', `dailyPetRespectPoints` = '{HabboStats.DailyPetRespectPoints}', `AchievementScore` = '{HabboStats.AchievementPoints}', `quest_id` = '{HabboStats.QuestId}', `quest_progress` = '{HabboStats.QuestProgress}', `groupid` = '{HabboStats.FavouriteGroupId}',`forum_posts` = '{HabboStats.ForumPosts}' WHERE `id` = '{Id}' LIMIT 1;";
+                $"UPDATE `users` SET `online` = false, `last_online` = '{UnixTimestamp.GetNow()}', `activity_points` = '{Duckets}', `vip_points` = '{Diamonds}', `home_room` = '{HomeRoom}', `gotw_points` = '{GotwPoints}', `time_muted` = '{TimeMuted}',`friend_bar_state` = '{FriendBarStateUtility.GetInt(FriendbarState)}' WHERE id = '{Id}' LIMIT 1;UPDATE `user_statistics` SET `roomvisits` = '{HabboStats.RoomVisits}', `onlineTime` = '{OnlineTimeTotal}', `respect` = '{HabboStats.Respect}', `respectGiven` = '{HabboStats.RespectGiven}', `giftsGiven` = '{HabboStats.GiftsGiven}', `giftsReceived` = '{HabboStats.GiftsReceived}', `dailyRespectPoints` = '{HabboStats.DailyRespectPoints}', `dailyPetRespectPoints` = '{HabboStats.DailyPetRespectPoints}', `AchievementScore` = '{HabboStats.AchievementPoints}', `quest_id` = '{HabboStats.QuestId}', `quest_progress` = '{HabboStats.QuestProgress}', `groupid` = '{HabboStats.FavouriteGroupId}',`forum_posts` = '{HabboStats.ForumPosts}' WHERE `id` = '{Id}' LIMIT 1;";
         }
     }
 
@@ -765,6 +805,15 @@ public class Habbo
 
 
     public event EventHandler? Disconnected;
+    /// <summary>
+    /// pixelrp: characters whose logout has begun and not yet been saved, for
+    /// the login gate (Authenticator.PreviousSessionGone): a character is never
+    /// loaded from the database while its last session is still writing to it.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, TaskCompletionSource> Leaving = new();
+
+    public static Task LeavingTask(int userId) => Leaving.TryGetValue(userId, out var leaving) ? leaving.Task : Task.CompletedTask;
+
     public void OnDisconnect()
     {
         if (_disconnected)
@@ -776,6 +825,8 @@ public class Habbo
                 return;
             _logoutStarted = true;
         }
+        var leaving = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Leaving[Id] = leaving;
 
         // pixelrp: every step below runs on its own (LogoutStep). They used to
         // run bare, one after another, so a single throw - a database pool
@@ -847,12 +898,18 @@ public class Habbo
                 LogoutStep(() =>
                 {
                     using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+                    // pixelrp: no credits - every change was written as it
+                    // happened (ChangeCredits), and a total written now could
+                    // only be older than one already in.
                     dbClient.RunQuery(
-                        $"UPDATE `users` SET `online` = false, `last_online` = '{(int)UnixTimestamp.GetNow()}', `activity_points` = '{Duckets}', `credits` = '{Credits}', `vip_points` = '{Diamonds}', `home_room` = '{HomeRoom}', `gotw_points` = '{GotwPoints}', `time_muted` = '{TimeMuted}',`friend_bar_state` = '{FriendBarStateUtility.GetInt(FriendbarState)}', `bubble_id` = '{CustomBubbleId}' WHERE id = '{Id}' LIMIT 1;UPDATE `user_statistics` SET `roomvisits` = '{HabboStats.RoomVisits}', `onlineTime` = '{OnlineTimeTotal}', `respect` = '{HabboStats.Respect}', `respectGiven` = '{HabboStats.RespectGiven}', `giftsGiven` = '{HabboStats.GiftsGiven}', `giftsReceived` = '{HabboStats.GiftsReceived}', `dailyRespectPoints` = '{HabboStats.DailyRespectPoints}', `dailyPetRespectPoints` = '{HabboStats.DailyPetRespectPoints}', `AchievementScore` = '{HabboStats.AchievementPoints}', `quest_id` = '{HabboStats.QuestId}', `quest_progress` = '{HabboStats.QuestProgress}', `groupid` = '{HabboStats.FavouriteGroupId}',`forum_posts` = '{HabboStats.ForumPosts}' WHERE `id` = '{Id}' LIMIT 1;");
+                        $"UPDATE `users` SET `online` = false, `last_online` = '{(int)UnixTimestamp.GetNow()}', `activity_points` = '{Duckets}', `vip_points` = '{Diamonds}', `home_room` = '{HomeRoom}', `gotw_points` = '{GotwPoints}', `time_muted` = '{TimeMuted}',`friend_bar_state` = '{FriendBarStateUtility.GetInt(FriendbarState)}', `bubble_id` = '{CustomBubbleId}' WHERE id = '{Id}' LIMIT 1;UPDATE `user_statistics` SET `roomvisits` = '{HabboStats.RoomVisits}', `onlineTime` = '{OnlineTimeTotal}', `respect` = '{HabboStats.Respect}', `respectGiven` = '{HabboStats.RespectGiven}', `giftsGiven` = '{HabboStats.GiftsGiven}', `giftsReceived` = '{HabboStats.GiftsReceived}', `dailyRespectPoints` = '{HabboStats.DailyRespectPoints}', `dailyPetRespectPoints` = '{HabboStats.DailyPetRespectPoints}', `AchievementScore` = '{HabboStats.AchievementPoints}', `quest_id` = '{HabboStats.QuestId}', `quest_progress` = '{HabboStats.QuestProgress}', `groupid` = '{HabboStats.FavouriteGroupId}',`forum_posts` = '{HabboStats.ForumPosts}' WHERE `id` = '{Id}' LIMIT 1;");
                     if (Permissions.HasRight("mod_tickets"))
                         dbClient.RunQuery($"UPDATE `moderation_tickets` SET `status` = 'open', `moderator_id` = '0' WHERE `status` ='picked' AND `moderator_id` = '{Id}'");
                 });
             }
+            // pixelrp: saved - a login of this character may load it now.
+            Leaving.TryRemove(new KeyValuePair<int, TaskCompletionSource>(Id, leaving));
+            leaving.TrySetResult();
             // pixelrp: the Wanted list only carries players who are HERE, so
             // leaving has to be announced or the rest of the hotel keeps a row for
             // somebody who has gone - and with the clock frozen it would sit there
@@ -923,7 +980,7 @@ public class Habbo
                     creditUpdate += subData.Credits;
                     ducketUpdate += subData.Duckets;
                 }
-                Credits += creditUpdate;
+                ChangeCredits(creditUpdate);
                 Duckets += ducketUpdate;
                 Client.Send(new CreditBalanceComposer(Credits));
                 Client.Send(new HabboActivityPointNotificationComposer(Duckets, ducketUpdate));

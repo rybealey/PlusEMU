@@ -40,15 +40,10 @@ internal class GiveUserCurrencyCommand : IRconCommand
             case "coins":
             case "credits":
             {
-                client.GetHabbo().Credits += amount;
+                // pixelrp: written as a relative change (ChangeCredits), not
+                // memory's total over whatever the database holds.
+                client.GetHabbo().ChangeCredits(amount);
                 Plus.HabboHotel.Users.Banking.CoinLedger.Record(client.GetHabbo(), amount, "Given by RCON");
-                using (var dbClient = _database.GetQueryReactor())
-                {
-                    dbClient.SetQuery("UPDATE `users` SET `credits` = @credits WHERE `id` = @id LIMIT 1");
-                    dbClient.AddParameter("credits", client.GetHabbo().Credits);
-                    dbClient.AddParameter("id", userId);
-                    dbClient.RunQuery();
-                }
                 client.Send(new CreditBalanceComposer(client.GetHabbo().Credits));
                 break;
             }

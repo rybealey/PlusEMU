@@ -578,7 +578,7 @@ public static class BinSearch
                 var logId = Log(search, key, amount);
                 if (key == BinRewards.Coins)
                 {
-                    habbo.Credits += amount;
+                    habbo.ChangeCredits(amount);
                     CoinLedger.Record(habbo, amount, "Searched a bin");
                     given = amount;
                 }

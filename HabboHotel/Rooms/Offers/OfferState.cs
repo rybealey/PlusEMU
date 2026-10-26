@@ -730,8 +730,8 @@ public static class OfferState
         if (seller.Credits > int.MaxValue - amount)
             return false;
 
-        buyer.Credits -= (int)amount;
-        seller.Credits += (int)amount;
+        buyer.ChangeCredits(-(int)amount);
+        seller.ChangeCredits((int)amount);
         Plus.HabboHotel.Users.Banking.CoinLedger.Record(buyer, -(int)amount, $"Bought from {seller.Username}"); Plus.HabboHotel.Users.Banking.CoinLedger.Record(seller, (int)amount, $"Sold to {buyer.Username}");
         buyer.Client?.Send(new CreditBalanceComposer(buyer.Credits));
         seller.Client?.Send(new CreditBalanceComposer(seller.Credits));

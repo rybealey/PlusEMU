@@ -56,7 +56,7 @@ public class RedeemVoucherEvent : IPacketEvent
         voucher.UpdateUses();
         if (voucher.Type == VoucherType.Credit)
         {
-            session.GetHabbo().Credits += voucher.Value;
+            session.GetHabbo().ChangeCredits(voucher.Value);
             Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), voucher.Value, "Voucher");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         }

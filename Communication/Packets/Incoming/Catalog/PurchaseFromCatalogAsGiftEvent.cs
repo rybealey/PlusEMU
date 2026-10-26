@@ -221,7 +221,7 @@ public class PurchaseFromCatalogAsGiftEvent : IPacketEvent
         session.Send(new PurchaseOkComposer(item, presentData));
         if (item.CostCredits > 0)
         {
-            session.GetHabbo().Credits -= item.CostCredits;
+            session.GetHabbo().ChangeCredits(-item.CostCredits);
             Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), -item.CostCredits, $"Catalog gift - {item.CatalogName}");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         }

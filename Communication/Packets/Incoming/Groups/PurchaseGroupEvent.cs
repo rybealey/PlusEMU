@@ -38,7 +38,7 @@ internal class PurchaseGroupEvent : IPacketEvent
             session.SendNotification($"A group costs {TextHandling.GetMoney(groupCost)}! You only have {TextHandling.GetMoney(session.GetHabbo().Credits)}!");
             return Task.CompletedTask;
         }
-        session.GetHabbo().Credits -= groupCost;
+        session.GetHabbo().ChangeCredits(-groupCost);
         Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), -groupCost, "Group purchase");
         session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         if (!RoomFactory.TryGetData(roomId, out var room))

@@ -38,7 +38,7 @@ internal class CreditFurniRedeemEvent : RoomPacketEvent
         var value = exchange.Definition.BehaviourData;
         if (value > 0)
         {
-            session.GetHabbo().Credits += value;
+            session.GetHabbo().ChangeCredits(value);
             Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), value, "Redeemed credit furni");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         }

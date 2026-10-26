@@ -10,6 +10,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Trading;
+using Plus.HabboHotel.Users.Accounts;
 using Plus.Utilities;
 
 namespace Plus.HabboHotel.Users.Banking;
@@ -265,9 +266,12 @@ public static class RpMarket
         try
         {
             using var connection = PlusEnvironment.DatabaseManager.Connection();
+            // Not your own, nor your other characters' - they cannot be bought
+            // from here (Buy).
             var browse = connection.Query<MarketRow>(
                 $"SELECT {Columns} FROM `rp_market_listings` WHERE `ended_at` = 0 AND `left_qty` > 0 AND `seller_id` <> @me " +
-                $"ORDER BY `id` DESC LIMIT {BrowseLimit}", new { me = habbo.Id }).ToList();
+                "AND `seller_id` NOT IN (SELECT `id` FROM `users` WHERE `id` = @root OR `parent_id` = @root) " +
+                $"ORDER BY `id` DESC LIMIT {BrowseLimit}", new { me = habbo.Id, root = AccountUtility.RootOf(habbo.Id) }).ToList();
             var mine = connection.Query<MarketRow>(
                 $"SELECT {Columns} FROM `rp_market_listings` WHERE `seller_id` = @me " +
                 "AND (`ended_at` = 0 OR (`sold_qty` > 0 AND `ended_at` >= @since)) " +
@@ -382,7 +386,13 @@ public static class RpMarket
                 new { id = listingId });
             if (row == null)
                 return "That is no longer for sale.";
-            if (row.SellerId == habbo.Id)
+            // pixelrp: nor one of your own account's characters'. Bought by a
+            // sibling, a listing moved a backpack's items and a hand's cash
+            // between one person's characters, which a trade and Pixel Cash
+            // both refuse - and with the price paid into the seller's checking
+            // it passed Pixel Cash's daily cap and harvested each new
+            // character's starting cash.
+            if (row.SellerId == habbo.Id || AccountUtility.SameAccount(row.SellerId, habbo.Id))
                 return "That is your own listing.";
             if (!RpTrades.Tradeable(row.Item) || row.Price < 1)
                 return "That cannot be bought.";
@@ -415,9 +425,9 @@ public static class RpMarket
                 return slot == -1 ? "Your backpack is full." : "Something went wrong - nothing was bought.";
             }
 
-            // Habbo.Credits is the authority; the users row is the crash hedge,
-            // the relative update the ATM makes (BankUtility.PersistHandCredits).
-            habbo.Credits -= row.Price;
+            // The users row takes the same relative change, as the ATM's does
+            // (Habbo.ChangeCredits, BankUtility.PersistHandCredits).
+            habbo.ChangeCreditsInMemory(-row.Price);
             Try(() => connection.Execute("UPDATE `users` SET `credits` = `credits` - @price WHERE `id` = @me LIMIT 1",
                 new { price = row.Price, me = habbo.Id }));
             Try(() => connection.Execute(
@@ -581,7 +591,7 @@ public static class RpMarket
         var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
         var habbo = client?.GetHabbo();
         if (habbo != null)
-            habbo.Credits += amount;
+            habbo.ChangeCreditsInMemory(amount);
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         connection.Execute("UPDATE `users` SET `credits` = `credits` + @amount WHERE `id` = @userId LIMIT 1", new { amount, userId });
     }

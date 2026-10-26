@@ -644,9 +644,8 @@ public static class BankUtility
                 // refuse the deposit outright.
                 var credited = amount - fee;
 
-                // Habbo.Credits is the authority; the users row is a crash
-                // hedge that the logout save will rewrite from memory anyway.
-                habbo.Credits -= (int)amount;
+                // The users row takes the same relative change (Habbo.ChangeCredits).
+                habbo.ChangeCreditsInMemory(-(int)amount);
                 PersistHandCredits(connection, habbo.Id, -amount);
                 CoinLedger.Record(habbo, -(int)amount, "Bank deposit");
 
@@ -658,7 +657,7 @@ public static class BankUtility
                     // Put it back: the bank never took it. The whole amount,
                     // fee included - nothing was charged for a deposit that
                     // did not happen.
-                    habbo.Credits += (int)amount;
+                    habbo.ChangeCreditsInMemory((int)amount);
                     PersistHandCredits(connection, habbo.Id, amount);
                     message = "You do not have a bank account.";
                     CoinLedger.Record(habbo, (int)amount, "Bank deposit refunded - no account");
@@ -740,7 +739,7 @@ public static class BankUtility
                     return BankResult.InsufficientFunds;
                 }
                 account = Refresh(connection, habbo.Id);
-                habbo.Credits += (int)amount;
+                habbo.ChangeCreditsInMemory((int)amount);
                 PersistHandCredits(connection, habbo.Id, amount);
                 CoinLedger.Record(habbo, (int)amount, "Bank withdrawal");
                 LogMovement(connection, habbo.Id, habbo.Username, BankTransactionKind.Withdraw,
@@ -863,9 +862,9 @@ public static class BankUtility
     }
 
     /// <summary>
-    /// The crash hedge on the hand balance, exactly the shape ShiftManager
-    /// uses: a RELATIVE update alongside the in-memory change, which the
-    /// absolute logout save then writes the same total over.
+    /// The hand balance's own record, exactly the shape ShiftManager uses: a
+    /// RELATIVE update alongside the in-memory change. The logout no longer
+    /// writes cash at all (Habbo.ChangeCredits), so this is what keeps it.
     /// </summary>
     private static void PersistHandCredits(IDbConnection connection, int userId, long delta) =>
         connection.Execute("UPDATE `users` SET `credits` = `credits` + @delta WHERE `id` = @userId LIMIT 1",
