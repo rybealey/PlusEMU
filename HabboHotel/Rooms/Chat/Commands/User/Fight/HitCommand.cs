@@ -138,7 +138,7 @@ internal class HitCommand : ITargetChatCommand
         // Away from the keyboard is out of the fight (RoomUser.IsAfk).
         if (targetUser.IsAfk)
         {
-            session.SendWhisper($"{target.Username} is AFK and cannot be fought.");
+            session.SendWhisper("You cannot hit an AFK player.");
             return Task.CompletedTask;
         }
 

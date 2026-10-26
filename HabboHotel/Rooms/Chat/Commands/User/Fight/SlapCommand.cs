@@ -135,7 +135,7 @@ internal class SlapCommand : ITargetChatCommand
             // Away from the keyboard is out of the fight (RoomUser.IsAfk).
             if (targetUser.IsAfk)
             {
-                session.SendWhisper($"{target.Username} is AFK and cannot be fought.");
+                session.SendWhisper("You cannot slap an AFK player.");
                 return Task.CompletedTask;
             }
         }

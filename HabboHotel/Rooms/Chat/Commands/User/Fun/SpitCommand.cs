@@ -161,7 +161,7 @@ internal class SpitCommand : ITargetChatCommand
             // Away from the keyboard is out of the fight (RoomUser.IsAfk).
             if (targetUser.IsAfk)
             {
-                session.SendWhisper($"{target.Username} is AFK and cannot be spat at.");
+                session.SendWhisper("You cannot spit at an AFK player.");
                 return Task.CompletedTask;
             }
         }
