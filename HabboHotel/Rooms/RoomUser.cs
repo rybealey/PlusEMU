@@ -1003,8 +1003,8 @@ public class RoomUser
         // pixelrp: nothing goes into a hand holding a stun gun, and the stun
         // gun's handitem goes into no hand this way - see StunGunDrawn. Every
         // caller here only hands something OUT (a machine, a bot, wired,
-        // :carry, an offer's prop), so a refusal loses nothing; the one that
-        // moves an item between hands, GiveHandItemEvent, asks CanCarry first.
+        // :carry, an offer's prop), so a refusal loses nothing. Nothing moves
+        // an item between hands: Give hand item is gone (2026-10-27).
         if (!CanCarry(item))
             return;
         CarryItemId = item;
@@ -1029,8 +1029,7 @@ public class RoomUser
     /// pixelrp: the phone is open on screen, so it is in the player's hand.
     ///
     /// Not a normal carry. CarryTimer stays at 0, so the room cycle's countdown
-    /// has nothing to expire and GiveHandItemEvent refuses it - nobody hands
-    /// their phone to a stranger. A phone is held until its owner closes it.
+    /// has nothing to expire. A phone is held until its owner closes it.
     /// (Dropping is gone hotel-wide, so there is nothing left to guard there.)
     ///
     /// Anything else being carried is replaced and does not come back: you put
