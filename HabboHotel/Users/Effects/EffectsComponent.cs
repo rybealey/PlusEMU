@@ -86,10 +86,7 @@ public sealed class EffectsComponent
 
     public void ApplyEffect(int effectId)
     {
-        if (_habbo == null || _habbo.CurrentRoom == null)
-            return;
-        var user = _habbo.CurrentRoom.GetRoomUserManager().GetRoomUserByHabbo(_habbo.Id);
-        if (user == null)
+        if (_habbo == null)
             return;
         // pixelrp: the police beacon is only worn while PoliceBeacon has it
         // lit (or by staff, through :enable). Cuffs or an escort put on during
@@ -101,9 +98,18 @@ public sealed class EffectsComponent
         // The vape's puff likewise, only while RpVape has it showing.
         if (effectId == RpVape.EffectId && !RpVape.IsPuffing(_habbo.Id) && !_habbo.Permissions.HasRight("mod_tool"))
             effectId = 0;
+        // pixelrp: recorded whether or not there is a room to show it in. A
+        // change made between rooms - a staff member clocked off in the hotel
+        // view, a Freeze team's colour coming off on the way out - used to be
+        // dropped, and the next room was shown the old one (it shows
+        // CurrentEffect on entry).
         CurrentEffect = effectId;
-        if (user.IsDancing)
-            _habbo.CurrentRoom.SendPacket(new DanceComposer(user, 0));
+        var user = _habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(_habbo.Id);
+        if (user == null)
+            return;
+        user.StopDancing();
+        // being sent now, so not again by the tick after the dance it stopped
+        user.EffectReapplyTimer = 0;
         _habbo.CurrentRoom.SendPacket(new AvatarEffectComposer(user.VirtualId, effectId));
     }
 

@@ -51,7 +51,9 @@ internal class GiveHandItemEvent : RoomPacketEvent
                     _questManager.ProgressUserQuest(session, QuestType.GiveCoffee);
                 targetUser.CarryItem(user.CarryItemId);
                 user.CarryItem(0);
-                targetUser.DanceId = 0;
+                // pixelrp: a dance keeps what is in the hand (DanceEvent), so
+                // taking a drink no longer ends one - it only ever did on the
+                // server, which every screen and newcomer then disagreed about.
             }
         }
         else if (user.CarryItemId > 0 && user.CarryTimer > 0)

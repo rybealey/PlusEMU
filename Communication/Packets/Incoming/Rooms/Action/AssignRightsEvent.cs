@@ -40,10 +40,11 @@ internal class AssignRightsEvent : RoomPacketEvent
         var roomUser = room.GetRoomUserManager().GetRoomUserByHabbo(userId);
         if (roomUser != null && !roomUser.IsBot)
         {
-            roomUser.SetStatus("flatctrl 1");
-            roomUser.UpdateNeeded = true;
-            if (roomUser.GetClient() != null)
-                roomUser.GetClient().Send(new YouAreControllerComposer(1));
+            // pixelrp: the badge as entry gives it (RoomUserManager.ApplyRoomRights),
+            // worked out from the rights as they now are. Set here by hand under
+            // its own key ("flatctrl 1"), it never matched entry's "flatctrl", so a
+            // badge given one way was never taken off the other.
+            room.GetRoomUserManager().PushRoomRights(roomUser.GetClient());
             session.Send(new FlatControllerAddedComposer(room.RoomId, roomUser.GetClient().GetHabbo().Id, roomUser.GetClient().GetHabbo().Username));
         }
         else

@@ -29,7 +29,18 @@ internal class DanceCommand : IChatCommand
                 session.SendWhisper("The dance ID must be between 0 and 4!");
                 return;
             }
-            session.GetHabbo().CurrentRoom.SendPacket(new DanceComposer(thisUser, danceId));
+            // pixelrp: kept as well as shown, so whoever comes in later sees it
+            // too - and the enable hidden while dancing and put back after, as
+            // the dance menu does (DanceEvent).
+            if (danceId == 0)
+            {
+                thisUser.StopDancing();
+                return;
+            }
+            if (session.GetHabbo().Effects.CurrentEffect > 0)
+                room.SendPacket(new AvatarEffectComposer(thisUser.VirtualId, 0));
+            thisUser.DanceId = danceId;
+            room.SendPacket(new DanceComposer(thisUser, danceId));
         }
         else
             session.SendWhisper("Please enter a valid dance ID.");

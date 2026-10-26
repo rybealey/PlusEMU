@@ -42,6 +42,19 @@ public static class RpInventoryStore
                 list.Add((slot, Convert.ToString(row["item"]), Convert.ToInt32(row["count"])));
                 list.Wear[slot] = Convert.ToInt32(row["wear"]);
             }
+        // pixelrp: an item an older move left in slot 0, back in sight (SlotRows).
+        var stranded = list.FindIndex(entry => entry.Slot == 0);
+        if (stranded >= 0)
+        {
+            var free = SlotRows.RecoverStranded("user_rp_inventory", userId, list.Select(entry => entry.Slot).ToList(), Habbo.RpCarrySlots);
+            if (free > 0)
+            {
+                list[stranded] = (free, list[stranded].Item, list[stranded].Count);
+                if (list.Wear.Remove(0, out var wear))
+                    list.Wear[free] = wear;
+                list.Sort((a, b) => a.Slot.CompareTo(b.Slot));
+            }
+        }
         return list;
     }
 
@@ -120,26 +133,9 @@ public static class RpInventoryStore
 
     /// <summary>
     /// Moves the item in `from` into `to`, swapping when the target slot is
-    /// occupied. The three-step dance through temp slot 0 (never a real slot -
-    /// they're 1-based) satisfies the (user_id, slot) primary key.
+    /// occupied - all or nothing (SlotRows).
     /// </summary>
-    public static void Move(int userId, int from, int to)
-    {
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = 0 WHERE `user_id` = @id AND `slot` = @from");
-        dbClient.AddParameter("id", userId);
-        dbClient.AddParameter("from", from);
-        dbClient.RunQuery();
-        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = @from WHERE `user_id` = @id AND `slot` = @to");
-        dbClient.AddParameter("id", userId);
-        dbClient.AddParameter("from", from);
-        dbClient.AddParameter("to", to);
-        dbClient.RunQuery();
-        dbClient.SetQuery("UPDATE `user_rp_inventory` SET `slot` = @to WHERE `user_id` = @id AND `slot` = 0");
-        dbClient.AddParameter("id", userId);
-        dbClient.AddParameter("to", to);
-        dbClient.RunQuery();
-    }
+    public static void Move(int userId, int from, int to) => SlotRows.Move("user_rp_inventory", userId, from, to);
 
     /// <summary>Removes one of whatever sits in the slot. The item key, or null when it is empty.</summary>
     public static string Consume(int userId, int slot)

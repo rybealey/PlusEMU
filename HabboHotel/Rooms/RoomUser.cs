@@ -301,6 +301,25 @@ public class RoomUser
     }
 
     /// <summary>
+    /// pixelrp: stop dancing, and tell the room. A wave, the "67" gesture, a
+    /// goal and a Freeze win each set DanceId to 0
+    /// without a word to anyone, so every screen kept the dance going while
+    /// the server had it stopped - and whoever came in later saw them
+    /// standing still. Putting on an effect did the opposite: it told the
+    /// room and kept DanceId, so a newcomer saw a dance nobody else did.
+    /// </summary>
+    public void StopDancing()
+    {
+        if (DanceId <= 0)
+            return;
+        DanceId = 0;
+        GetRoom()?.SendPacket(new DanceComposer(this, 0));
+        // The dance hid the enable (DanceEvent); the room tick puts it back.
+        if ((GetClient()?.GetHabbo()?.Effects?.CurrentEffect ?? 0) > 0)
+            EffectReapplyTimer = 2;
+    }
+
+    /// <summary>
     /// pixelrp: the sticky build height from :bh, in tiles, or null for normal
     /// auto-stacking.
     ///

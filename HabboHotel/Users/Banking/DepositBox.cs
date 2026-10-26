@@ -51,6 +51,17 @@ public static class DepositBox
         if (table != null)
             foreach (System.Data.DataRow row in table.Rows)
                 list.Add((Convert.ToInt32(row["slot"]), Convert.ToString(row["item"]) ?? "", Convert.ToInt32(row["count"])));
+        // pixelrp: an item an older rearrange left in slot 0, back in sight (SlotRows).
+        var stranded = list.FindIndex(entry => entry.Item1 == 0);
+        if (stranded >= 0)
+        {
+            var free = SlotRows.RecoverStranded("user_rp_deposit_box", userId, list.Select(entry => entry.Item1).ToList(), VipSlots);
+            if (free > 0)
+            {
+                list[stranded] = (free, list[stranded].Item2, list[stranded].Item3);
+                list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+            }
+        }
         return list;
     }
 
@@ -163,22 +174,8 @@ public static class DepositBox
             return "";
         if (Load(habbo.Id).All(row => row.Slot != from))
             return "";
-        // Through slot 0 (never a real slot) for the (user_id, slot) key -
-        // the backpack's MoveRpItem dance.
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `slot` = 0 WHERE `user_id` = @id AND `slot` = @from");
-        dbClient.AddParameter("id", habbo.Id);
-        dbClient.AddParameter("from", from);
-        dbClient.RunQuery();
-        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `slot` = @from WHERE `user_id` = @id AND `slot` = @to");
-        dbClient.AddParameter("id", habbo.Id);
-        dbClient.AddParameter("from", from);
-        dbClient.AddParameter("to", to);
-        dbClient.RunQuery();
-        dbClient.SetQuery("UPDATE `user_rp_deposit_box` SET `slot` = @to WHERE `user_id` = @id AND `slot` = 0");
-        dbClient.AddParameter("id", habbo.Id);
-        dbClient.AddParameter("to", to);
-        dbClient.RunQuery();
+        // The backpack's move, all or nothing (SlotRows).
+        SlotRows.Move("user_rp_deposit_box", habbo.Id, from, to);
         return "";
     }
 

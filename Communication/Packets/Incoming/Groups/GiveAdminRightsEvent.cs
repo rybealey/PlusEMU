@@ -40,14 +40,11 @@ internal class GiveAdminRightsEvent : IPacketEvent
         if (_roomManager.TryGetRoom(group.RoomId, out var room))
         {
             var user = room.GetRoomUserManager().GetRoomUserByHabbo(userId);
+            // pixelrp: the badge as entry gives it (RoomUserManager.ApplyRoomRights), from
+            // the group as it now is - set by hand under its own key
+            // ("flatctrl 1"/"flatctrl 3") it never matched entry's "flatctrl".
             if (user != null)
-            {
-                if (!user.Statusses.ContainsKey("flatctrl 3"))
-                    user.SetStatus("flatctrl 3");
-                user.UpdateNeeded = true;
-                if (user.GetClient() != null)
-                    user.GetClient().Send(new YouAreControllerComposer(3));
-            }
+                room.GetRoomUserManager().PushRoomRights(user.GetClient());
         }
         session.Send(new GroupMemberUpdatedComposer(groupId, habbo, 1));
         return Task.CompletedTask;

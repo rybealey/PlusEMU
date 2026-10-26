@@ -32,9 +32,14 @@ internal class MassDanceCommand : IChatCommand
             {
                 if (u == null)
                     continue;
-                if (u.CarryItemId > 0)
-                    u.CarryItemId = 0;
-                u.DanceId = danceId;
+                // pixelrp: hands are left alone - a dance keeps what is in the
+                // hand (DanceEvent), and emptying it here told nobody, so every
+                // screen still showed the drink while a newcomer saw none. A
+                // bot's dance is BotData's: the room shows newcomers that one.
+                if (u.IsBot)
+                    u.BotData.DanceId = danceId;
+                else
+                    u.DanceId = danceId;
                 room.SendPacket(new DanceComposer(u, danceId));
             }
         }

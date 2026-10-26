@@ -80,7 +80,7 @@ public class Freeze
             if (user.Team == winners)
             {
                 user.UnIdle();
-                user.DanceId = 0;
+                user.StopDancing();
                 _room.SendPacket(new ActionComposer(user.VirtualId, 1));
             }
             if (ExitTeleports.Count > 0)

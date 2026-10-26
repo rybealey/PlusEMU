@@ -185,6 +185,11 @@ public class RoomUserManager
         // Outside _cycleLock: both take the room's MovementLock.
         if (user.RpKnockedOut)
         {
+            // pixelrp: a medkit stops with them. Being revived is what gets a
+            // knocked-out player up, so a kit still running only filled the
+            // health bar of somebody lying frozen on the floor (:kill, a last
+            // slap or spit, :sethealth 0 - a :hit already ruined it).
+            user.GetClient()?.GetHabbo()?.RpHealthRegen.Stop();
             Movement.MovementV2Bridge.Halt(user);
             Chat.Commands.User.Police.PoliceState.OnKnockout(_room, user);
             // The hospital's clock starts here: a few minutes for a paramedic

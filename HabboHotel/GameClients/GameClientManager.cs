@@ -35,9 +35,11 @@ public class GameClientManager : IGameClientManager
 
     public void OnCycle() { }
 
-    public GameClient? GetClientByUserId(int userId) => _userIdRegister.ContainsKey(userId) ? _userIdRegister[userId] : null;
+    // pixelrp: one lookup, not a check and a read - a player logging out
+    // between the two threw KeyNotFoundException at whoever asked.
+    public GameClient? GetClientByUserId(int userId) => _userIdRegister.TryGetValue(userId, out var client) ? client : null;
 
-    public GameClient? GetClientByUsername(string username) => _usernameRegister.ContainsKey(username.ToLower()) ? _usernameRegister[username.ToLower()] : null;
+    public GameClient? GetClientByUsername(string username) => _usernameRegister.TryGetValue(username.ToLower(), out var client) ? client : null;
 
     public bool UpdateClientUsername(GameClient client, string oldUsername, string newUsername)
     {

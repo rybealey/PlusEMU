@@ -24,15 +24,9 @@ internal class RemoveAllRightsEvent : RoomPacketEvent
         // pixelrp: staff only - owners no longer clear rights
         if (!instance.CanManageSettings(session))
             return Task.CompletedTask;
-        foreach (var userId in new List<int>(instance.UsersWithRights))
+        var hadRights = new List<int>(instance.UsersWithRights);
+        foreach (var userId in hadRights)
         {
-            var user = instance.GetRoomUserManager().GetRoomUserByHabbo(userId);
-            if (user != null && !user.IsBot)
-            {
-                user.RemoveStatus("flatctrl 1");
-                user.UpdateNeeded = true;
-                user.GetClient().Send(new YouAreControllerComposer(0));
-            }
             using (var dbClient = _database.GetQueryReactor())
             {
                 dbClient.SetQuery("DELETE FROM `room_rights` WHERE `user_id` = @uid AND `room_id` = @rid LIMIT 1");
@@ -46,6 +40,16 @@ internal class RemoveAllRightsEvent : RoomPacketEvent
         }
         if (instance.UsersWithRights.Count > 0)
             instance.UsersWithRights.Clear();
+        // pixelrp: the badge as entry gives it (RoomUserManager.ApplyRoomRights),
+        // worked out from the rights as they now are. Set here by hand under
+        // its own key ("flatctrl 1"), it never matched entry's "flatctrl", so a
+        // badge given one way was never taken off the other.
+        foreach (var userId in hadRights)
+        {
+            var user = instance.GetRoomUserManager().GetRoomUserByHabbo(userId);
+            if (user != null && !user.IsBot)
+                instance.GetRoomUserManager().PushRoomRights(user.GetClient());
+        }
         return Task.CompletedTask;
     }
 }

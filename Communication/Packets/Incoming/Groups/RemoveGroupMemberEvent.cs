@@ -47,13 +47,11 @@ internal class RemoveGroupMemberEvent : IPacketEvent
                 if (!_roomManager.TryGetRoom(group.RoomId, out var room))
                     return Task.CompletedTask;
                 var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+                // pixelrp: the badge as entry gives it (RoomUserManager.ApplyRoomRights), from
+                // the group as it now is - set by hand under its own key
+                // ("flatctrl 1"/"flatctrl 3") it never matched entry's "flatctrl".
                 if (user != null)
-                {
-                    user.RemoveStatus("flatctrl 1");
-                    user.UpdateNeeded = true;
-                    if (user.GetClient() != null)
-                        user.GetClient().Send(new YouAreControllerComposer(0));
-                }
+                    room.GetRoomUserManager().PushRoomRights(user.GetClient());
             }
             using (var connection = _database.Connection())
             {
@@ -74,12 +72,7 @@ internal class RemoveGroupMemberEvent : IPacketEvent
                         return Task.CompletedTask;
                     var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
                     if (user != null)
-                    {
-                        user.RemoveStatus("flatctrl 1");
-                        user.UpdateNeeded = true;
-                        if (user.GetClient() != null)
-                            user.GetClient().Send(new YouAreControllerComposer(0));
-                    }
+                        room.GetRoomUserManager().PushRoomRights(user.GetClient());
                 }
                 if (session.GetHabbo().InRoom && session.GetHabbo().CurrentRoom != null)
                 {

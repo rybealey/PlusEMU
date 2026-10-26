@@ -438,7 +438,7 @@ public class Room : RoomData
             {
                 key = item.Definition.ItemName.Split(new[] { '_' })[2];
                 user.UnIdle();
-                user.DanceId = 0;
+                user.StopDancing();
                 PlusEnvironment.Game.AchievementManager.ProgressAchievement(user.GetClient(), "ACH_FootballGoalScored", 1);
                 SendPacket(new ActionComposer(user.VirtualId, 1));
             }
@@ -691,7 +691,9 @@ public class Room : RoomData
         // CarryItemId with no timer still goes unsent.
         if (unit.CarryItemId > 0 && (unit.CarryTimer > 0 || unit.CarryItemId == unit.RestingHandItemId))
             session.Send(new CarryObjectComposer(unit.VirtualId, unit.CarryItemId));
-        if (!unit.IsBot && !unit.IsPet && unit.CurrentEffect > 0)
+        // pixelrp: not while dancing - a dance hides the enable for the room
+        // (DanceEvent), so a newcomer saw both where everyone else saw one.
+        if (!unit.IsBot && !unit.IsPet && unit.CurrentEffect > 0 && !unit.IsDancing)
             session.Send(new AvatarEffectComposer(unit.VirtualId, unit.CurrentEffect));
         else if (unit.IsBot && !unit.IsPet)
             // Bots always wear the identifier effect so entering players can spot them.

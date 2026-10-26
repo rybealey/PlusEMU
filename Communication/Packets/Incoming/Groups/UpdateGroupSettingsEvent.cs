@@ -67,18 +67,10 @@ internal class UpdateGroupSettingsEvent : IPacketEvent
         {
             if (room.OwnerId == user.UserId || group.IsAdmin(user.UserId) || !group.IsMember(user.UserId))
                 continue;
-            if (furniOptions == 1)
-            {
-                user.RemoveStatus("flatctrl 1");
-                user.UpdateNeeded = true;
-                user.GetClient().Send(new YouAreControllerComposer(0));
-            }
-            else if (furniOptions == 0 && !user.Statusses.ContainsKey("flatctrl 1"))
-            {
-                user.SetStatus("flatctrl 1");
-                user.UpdateNeeded = true;
-                user.GetClient().Send(new YouAreControllerComposer(1));
-            }
+            // pixelrp: the badge as entry gives it (RoomUserManager.ApplyRoomRights), from
+            // the group as it now is - set by hand under its own key
+            // ("flatctrl 1"/"flatctrl 3") it never matched entry's "flatctrl".
+            room.GetRoomUserManager().PushRoomRights(user.GetClient());
         }
         session.Send(new GroupInfoComposer(group, session));
         return Task.CompletedTask;

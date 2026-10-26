@@ -115,8 +115,7 @@ public class ShoutEvent : IPacketEvent
         // gesture is visible; the room cycle reapplies it two ticks later.
         if (message.Trim() == "67")
         {
-            if (user.DanceId > 0)
-                user.DanceId = 0;
+            user.StopDancing();
             if (session.GetHabbo().Effects.CurrentEffect > 0)
             {
                 room.SendPacket(new AvatarEffectComposer(user.VirtualId, 0));

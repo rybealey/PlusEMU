@@ -29,14 +29,18 @@ public class ActionEvent : RoomPacketEvent
         // counting as activity (see the idle check in the room cycle).
         if (action == 5 && Plus.HabboHotel.Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id))
             return Task.CompletedTask;
-        if (user.DanceId > 0)
-            user.DanceId = 0;
-        // pixelrp :invisible: the Ghost enable stays on through a wave. This
-        // only tells the room "no effect" - CurrentEffect is untouched, so the
-        // tick never sends it back, and the one sign of being out of sight
-        // would be gone until they changed rooms.
+        user.StopDancing();
+        // pixelrp :invisible: the Ghost enable stays on through a wave. Any
+        // other is paused for the gesture and put back by the room tick once
+        // it has played (EffectReapplyTimer, as for "67") - this only tells
+        // the room "no effect", CurrentEffect is untouched, and nothing used to
+        // send it again: a passive, staff-duty or cuffed player who waved lost
+        // it from every screen, their own too, until they changed rooms.
         if (session.GetHabbo().Effects.CurrentEffect > 0 && !session.GetHabbo().IsInvisible)
+        {
             room.SendPacket(new AvatarEffectComposer(user.VirtualId, 0));
+            user.EffectReapplyTimer = 2;
+        }
         user.UnIdle();
         room.SendPacket(new ActionComposer(user.VirtualId, action));
         if (action == 5) // idle

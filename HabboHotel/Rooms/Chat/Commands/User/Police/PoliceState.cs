@@ -711,6 +711,21 @@ public static class PoliceState
             suspectUser ??= manager?.GetRoomUserByHabbo(suspectId);
             MovementV2Bridge.Unpair(room, captorUser, suspectUser);
 
+            // pixelrp: the suspect is let go wherever they are. The travel
+            // watchdog (TickTravel) ends an escort from the captor's room once
+            // the suspect has failed to follow them through an arrow - into a
+            // full or locked room - so the suspect, still in the room they were
+            // left in, was never found here: they stayed frozen, a patient kept
+            // the ambulance, and a knocked-out one stood. Their own room's link
+            // is undone the same way as above, there.
+            var suspectHabbo = suspectUser?.GetClient()?.GetHabbo() ?? PlusEnvironment.Game.ClientManager.GetClientByUserId(suspectId)?.GetHabbo();
+            if (suspectUser == null && suspectHabbo?.CurrentRoom is { } suspectRoom && suspectRoom != room)
+            {
+                suspectUser = suspectRoom.GetRoomUserManager()?.GetRoomUserByHabbo(suspectId);
+                if (suspectUser != null)
+                    MovementV2Bridge.Unpair(suspectRoom, null, suspectUser);
+            }
+
             if (kind == EscortKind.Medical)
             {
                 // Put the patient down first, then take the ambulances off
@@ -725,6 +740,11 @@ public static class PoliceState
                 if (restorePose)
                     RestoreKnockoutPose(suspectUser);
                 RestoreEffect(suspectUser);
+                // pixelrp: between rooms there is nobody to show it on, but the
+                // next room is shown CurrentEffect on entry - so the ambulance
+                // comes off there instead of arriving with them.
+                if (suspectUser == null && suspectHabbo?.Effects?.CurrentEffect == AmbulanceEffectId && EffectBeforeEscort.TryGetValue(suspectId, out var underneath))
+                    suspectHabbo.Effects.CurrentEffect = underneath;
                 RestoreEffect(captorUser);
                 // Back to walking pace. Like the speed-up it lands on the next
                 // walk, so a medic who lets go mid-stride finishes that stride
@@ -1264,13 +1284,26 @@ public static class PoliceState
     /// </summary>
     public static void Forget(Room? room, int habboId)
     {
+        // pixelrp: what they wear goes with what put it on. A stun and a cuff
+        // do not follow anyone out of a room, but the birds and the cuffs
+        // stayed on - CurrentEffect, which every next room is shown on entry -
+        // so a suspect who walked out through an arrow was free and still
+        // looked cuffed everywhere until a relog. What the cuffs covered comes
+        // back; under the birds there was nothing (Release).
+        var effects = PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.GetHabbo()?.Effects;
+        if (effects != null)
+        {
+            if (effects.CurrentEffect == CuffEffectId && Cuffed.ContainsKey(habboId))
+                effects.CurrentEffect = EffectBeforeCuff.TryGetValue(habboId, out var underneath) ? underneath : NoEffectId;
+            else if (effects.CurrentEffect == StunEffectId && (Stunned.ContainsKey(habboId) || Disoriented.ContainsKey(habboId)))
+                effects.CurrentEffect = NoEffectId;
+        }
         Stunned.TryRemove(habboId, out _);
         Disoriented.TryRemove(habboId, out _);
         Cuffed.TryRemove(habboId, out _);
-        // The snapshot under the cuffs goes with them. Nothing to restore - the
-        // player is on their way out - but this registry is process-global and
-        // keyed by player id, so an entry left behind is one that never
-        // expires, which is the hazard this whole method exists for.
+        // The snapshot under the cuffs goes with them: this registry is
+        // process-global and keyed by player id, so an entry left behind is
+        // one that never expires, which is the hazard this whole method exists for.
         EffectBeforeCuff.TryRemove(habboId, out _);
         Travelling.TryRemove(habboId, out _);
         if (IsEscorting(habboId))

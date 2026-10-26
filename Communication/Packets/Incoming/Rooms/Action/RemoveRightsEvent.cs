@@ -27,12 +27,6 @@ internal class RemoveRightsEvent : RoomPacketEvent
             if (userId > 0 && room.UsersWithRights.Contains(userId))
             {
                 var user = room.GetRoomUserManager().GetRoomUserByHabbo(userId);
-                if (user != null && !user.IsBot)
-                {
-                    user.RemoveStatus("flatctrl 1");
-                    user.UpdateNeeded = true;
-                    user.GetClient().Send(new YouAreControllerComposer(0));
-                }
                 using (var dbClient = _database.GetQueryReactor())
                 {
                     dbClient.SetQuery("DELETE FROM `room_rights` WHERE `user_id` = @uid AND `room_id` = @rid LIMIT 1");
@@ -42,6 +36,12 @@ internal class RemoveRightsEvent : RoomPacketEvent
                 }
                 if (room.UsersWithRights.Contains(userId))
                     room.UsersWithRights.Remove(userId);
+                // pixelrp: the badge as entry gives it (RoomUserManager.ApplyRoomRights),
+                // worked out from the rights as they now are. Set here by hand under
+                // its own key ("flatctrl 1"), it never matched entry's "flatctrl", so a
+                // badge given one way was never taken off the other.
+                if (user != null && !user.IsBot)
+                    room.GetRoomUserManager().PushRoomRights(user.GetClient());
                 session.Send(new FlatControllerRemovedComposer(room, userId));
             }
         }
