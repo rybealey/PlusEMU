@@ -23,6 +23,20 @@ public class WsSessionProxy : WsSession
     // same limit as a packet while it does. Only touched on this session's receive thread.
     private long _bytesSinceMessage;
 
+    // pixelrp: when this connection last sent anything at all - a packet, a
+    // WebSocket pong, any part of either - for the dead-connection sweep
+    // (WebsocketGameServer). Monotonic milliseconds.
+    private long _lastHeardMs = Environment.TickCount64;
+
+    // pixelrp: the WebSocket upgrade is done, so a ping may be sent; one sent
+    // before it would land in the middle of the HTTP handshake.
+    private volatile bool _wsOpen;
+
+    public bool IsWsOpen => _wsOpen;
+
+    /// <summary>How long it is since this connection last sent anything.</summary>
+    public long SilentMs => Environment.TickCount64 - Interlocked.Read(ref _lastHeardMs);
+
     public WsSessionProxy(WsServer server, GameClient client) : base(server)
     {
         _client = client;
@@ -73,6 +87,12 @@ public class WsSessionProxy : WsSession
         });
     }
 
+    public override void OnWsConnected(HttpRequest request)
+    {
+        base.OnWsConnected(request);
+        _wsOpen = true;
+    }
+
     protected override void OnDisconnected() => _client.OnDisconnected();
 
     // pixelrp: raw bytes off the socket, before the WebSocket layer. Held to the same limit
@@ -80,6 +100,7 @@ public class WsSessionProxy : WsSession
     // receive thread.
     protected override void OnReceived(byte[] buffer, long offset, long size)
     {
+        Interlocked.Exchange(ref _lastHeardMs, Environment.TickCount64);
         try
         {
             _bytesSinceMessage += size;
@@ -103,4 +124,7 @@ public class WsSessionProxy : WsSession
         _bytesSinceMessage = 0;
         _client.OnReceived(buffer, offset, size);
     }
+
+    // pixelrp: the answer to the sweep's ping is a whole WebSocket frame too.
+    public override void OnWsPong(byte[] buffer, long offset, long size) => _bytesSinceMessage = 0;
 }

@@ -106,6 +106,14 @@ public class Room : RoomData
 
     public int UserCount => _roomUserManager.GetRoomUsers().Count;
 
+    // pixelrp: when RoomManager.TryLoadRoom last handed this room to somebody
+    // (monotonic ms) - the idle unload leaves a room alone for a while after.
+    private long _handedOutMs;
+
+    public void MarkHandedOut() => Interlocked.Exchange(ref _handedOutMs, Environment.TickCount64);
+
+    public bool HandedOutWithin(long ms) => Environment.TickCount64 - Interlocked.Read(ref _handedOutMs) < ms;
+
     public uint RoomId => Id;
 
     public bool CanTradeInRoom => true;
@@ -487,11 +495,11 @@ public class Room : RoomData
             // stays empty - but one that stops being a key room while empty
             // (its corporation gone, its arrow picked up, given away by the
             // PixelRP account) still unloads, within five minutes.
-            if (IdleTime >= IdleUnloadTicks && (IdleTime % IdleUnloadTicks) == 0 && !KeyRooms.StaysLoaded(this))
-            {
-                PlusEnvironment.Game.RoomManager.UnloadRoom(Id);
+            // pixelrp: UnloadIdleRoom, not UnloadRoom: it stays loaded for
+            // anyone handed it on their way in.
+            if (IdleTime >= IdleUnloadTicks && (IdleTime % IdleUnloadTicks) == 0 && !KeyRooms.StaysLoaded(this)
+                && PlusEnvironment.Game.RoomManager.UnloadIdleRoom(this))
                 return;
-            }
             if (IdleTime >= QuietAfterTicks)
             {
                 // Going quiet is where it used to be unloaded, so it is where

@@ -1,9 +1,9 @@
-using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Rooms.Movement;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 
@@ -70,11 +70,10 @@ internal class HitCommand : ITargetChatCommand
     private const int AggressionOnSwing = 100;
 
     /// <summary>
-    /// Last swing per player id. Commands are DI singletons, so this instance
-    /// field is shared hotel-wide; concurrent because rooms tick on their own
-    /// threads. A swing that missed still counts - it was still a punch.
+    /// Each player's punching cooldown (PlayerCooldown, which forgives a slow
+    /// connection). A swing that missed still counts - it was still a punch.
     /// </summary>
-    private readonly ConcurrentDictionary<int, DateTime> _lastHit = new();
+    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
 
     // A missing username, an offline target and a target in another room are
     // all answered by CommandManager before Execute runs.
@@ -143,25 +142,15 @@ internal class HitCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (_lastHit.TryGetValue(habbo.Id, out var last))
+        if (_cooldown.IsWaiting(habbo.Id, out var secondsLeft))
         {
-            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
-            if (elapsed < CooldownSeconds)
-            {
-                // Counts DOWN the seconds still to wait, the same way :slap
-                // does: [3/3] the instant you retry, [1/3] with under a second
-                // to go.
-                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
-                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
-                return Task.CompletedTask;
-            }
+            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            return Task.CompletedTask;
         }
 
         // Past here the punch is thrown, so it costs the cooldown and makes the
         // attacker aggressive whether or not it connects.
-        _lastHit[habbo.Id] = DateTime.UtcNow;
-        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
-        Plus.Utilities.StaleEntries.Sweep(_lastHit, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
+        _cooldown.Start(habbo.Id);
         habbo.RpAggression = AggressionOnSwing;
 
         // The attacker's own tile plus the four sharing an edge with it: at most

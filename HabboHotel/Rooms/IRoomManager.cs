@@ -13,6 +13,9 @@ public interface IRoomManager
     void UnloadRoom(uint roomId);
     void ReloadRoom(Room room);
     bool TryLoadRoom(uint roomId, out Room room);
+    bool UnloadIdleRoom(Room room);
+    void WarmInBackground(uint roomId);
+    void WarmInBackground(Func<IEnumerable<uint>> findRooms);
     List<Room> SearchGroupRooms(string query);
     List<Room> SearchTaggedRooms(string query);
     List<Room> GetPopularRooms(int category, int amount = 50);

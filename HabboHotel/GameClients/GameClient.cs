@@ -305,6 +305,9 @@ public abstract class GameClient
     {
         if (_habbo != null)
             _habbo.AuthorizedRoomEntryId = roomId;
+        // pixelrp: a cold room loads while the forward makes its round trip to
+        // the client and back, not after it.
+        PlusEnvironment.Game.RoomManager.WarmInBackground(roomId);
         Send(new RoomForwardComposer(roomId));
     }
 

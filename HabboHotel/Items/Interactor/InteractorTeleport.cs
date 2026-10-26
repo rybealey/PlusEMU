@@ -58,6 +58,18 @@ public class InteractorTeleport : IFurniInteractor
             return;
         user.LastInteraction = UnixTimestamp.GetNow();
 
+        // pixelrp: the room the twin stands in starts loading now, while the
+        // player walks in and the booth counts down, instead of once the trip
+        // has begun and they have left this room. Found on the warm-up worker:
+        // finding it may ask the database.
+        var fromRoom = item.GetRoom();
+        var boothId = item.Id;
+        PlusEnvironment.Game.RoomManager.WarmInBackground(() =>
+        {
+            var twinId = ItemTeleporterFinder.GetLinkedTele(boothId);
+            return twinId == 0 ? Array.Empty<uint>() : new[] { ItemTeleporterFinder.GetTeleRoomId(twinId, fromRoom) };
+        });
+
         // Alright. But is this user in the right position?
         if (user.Coordinate == item.Coordinate || user.Coordinate == item.SquareInFront)
         {

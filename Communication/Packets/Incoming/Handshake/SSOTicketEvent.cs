@@ -356,7 +356,11 @@ public class SsoTicketEvent : IPacketEvent
                     // down and load the whole room a second time on every login.
                     // Authorise the room as the forward would, without sending it.
                     if (target == session.GetHabbo().HomeRoom)
+                    {
                         session.GetHabbo().AuthorizedRoomEntryId = target;
+                        // pixelrp: and loaded while the client asks for it, as a forward would be
+                        PlusEnvironment.Game.RoomManager.WarmInBackground(target);
+                    }
                     else
                         session.SendRoomForward(target);
                 }

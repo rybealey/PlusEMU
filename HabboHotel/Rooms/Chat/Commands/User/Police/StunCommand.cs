@@ -1,10 +1,10 @@
 using Plus.HabboHotel.Corporations;
-using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Accounts;
 using Plus.HabboHotel.Rooms.Movement;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
@@ -61,7 +61,8 @@ internal class StunCommand : ITargetChatCommand
 
     private const int AggressionOnShot = 100;
 
-    private readonly ConcurrentDictionary<int, DateTime> _lastShot = new();
+    /// <summary>Each officer's stun gun cooldown (PlayerCooldown, which forgives a slow connection).</summary>
+    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -154,22 +155,15 @@ internal class StunCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (_lastShot.TryGetValue(habbo.Id, out var last))
+        if (_cooldown.IsWaiting(habbo.Id, out var secondsLeft))
         {
-            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
-            if (elapsed < CooldownSeconds)
-            {
-                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
-                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
-                return Task.CompletedTask;
-            }
+            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            return Task.CompletedTask;
         }
 
         // The trigger is pulled from here on, hit or miss - and a miss spends a
         // shot as surely as a hit does.
-        _lastShot[habbo.Id] = DateTime.UtcNow;
-        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
-        Plus.Utilities.StaleEntries.Sweep(_lastShot, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
+        _cooldown.Start(habbo.Id);
         var shotsLeft = PoliceState.FireStunGun(habbo.Id);
         habbo.RpAggression = AggressionOnShot;
 

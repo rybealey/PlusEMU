@@ -1,7 +1,7 @@
-﻿using System.Collections.Concurrent;
-using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fun;
 
@@ -47,12 +47,11 @@ internal class SuperPushCommand : ITargetChatCommand
     private const int PushDistance = 3;
 
     /// <summary>
-    /// Last successful super push per player id. Commands are DI singletons, so
-    /// this instance field is shared hotel-wide; concurrent because rooms tick
-    /// on their own threads. Only successful pushes are recorded, so one that
-    /// missed for range or had nowhere to go costs nothing.
+    /// Each player's super push cooldown (PlayerCooldown, which forgives a slow
+    /// connection). Only successful pushes start it, so one that missed for
+    /// range or had nowhere to go costs nothing.
     /// </summary>
-    private readonly ConcurrentDictionary<int, DateTime> _lastSuperPush = new();
+    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -85,16 +84,10 @@ internal class SuperPushCommand : ITargetChatCommand
         if (thisUser == null)
             return Task.CompletedTask;
 
-        if (_lastSuperPush.TryGetValue(session.GetHabbo().Id, out var last))
+        if (_cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
         {
-            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
-            if (elapsed < CooldownSeconds)
-            {
-                // Counts DOWN the seconds still to wait, same as :push and :slap.
-                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
-                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
-                return Task.CompletedTask;
-            }
+            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            return Task.CompletedTask;
         }
 
         // Same tile, or one step in any direction including the diagonals.
@@ -178,9 +171,7 @@ internal class SuperPushCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        _lastSuperPush[session.GetHabbo().Id] = DateTime.UtcNow;
-        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
-        Plus.Utilities.StaleEntries.Sweep(_lastSuperPush, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
+        _cooldown.Start(session.GetHabbo().Id);
         // Pushed: an officer's trip to a call is off.
         Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
         targetUser.MoveTo(destinationX, destinationY);

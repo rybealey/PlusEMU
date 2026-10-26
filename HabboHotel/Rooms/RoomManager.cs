@@ -15,9 +15,27 @@ public class RoomManager : IRoomManager
     private readonly IDatabase _database;
     private readonly ILanguageManager _languageManager;
 
-    private readonly object _roomLoadingSync;
+    /// <summary>
+    /// pixelrp: one gate per room for loading it (TryLoadRoom) and for the idle
+    /// unload (UnloadIdleRoom). It was one lock for the whole hotel, so a room
+    /// being loaded held up every other room's load behind it - the database
+    /// read of every item, bot and pet - and two players going into two cold
+    /// rooms waited on each other. Now only loads of the same room queue, and
+    /// the second finds the first's room.
+    /// </summary>
+    private readonly ConcurrentDictionary<uint, object> _roomGates = new();
 
-    private readonly Dictionary<string, RoomModel> _roomModels;
+    // Loads run side by side now, and the custom models are added by them.
+    private readonly ConcurrentDictionary<string, RoomModel> _roomModels;
+
+    /// <summary>
+    /// pixelrp: rooms to load ahead of somebody arriving (WarmInBackground), on
+    /// one worker of their own - a load is a database read, and neither the
+    /// packet threads nor the thread pool should wait on one nobody is waiting
+    /// for yet. Bounded: a warm-up that does not fit is skipped, and the room
+    /// loads on entry as it always did.
+    /// </summary>
+    private readonly BlockingCollection<Func<IEnumerable<uint>>> _warmQueue = new(256);
 
     private readonly ConcurrentDictionary<uint, Room> _rooms;
 
@@ -39,7 +57,7 @@ public class RoomManager : IRoomManager
         _languageManager = languageManager;
         _roomModels = new();
         _rooms = new();
-        _roomLoadingSync = new();
+        new Thread(WarmRooms) { IsBackground = true, Name = "RoomWarm" }.Start();
     }
 
     public int Count => _rooms.Count;
@@ -108,8 +126,8 @@ public class RoomManager : IRoomManager
         foreach (DataRow row in data.Rows)
         {
             var model = Convert.ToString(row["id"]);
-            _roomModels.Add(model, new(model, Convert.ToInt32(row["door_x"]), Convert.ToInt32(row["door_y"]), (double)row["door_z"], Convert.ToInt32(row["door_dir"]),
-                Convert.ToString(row["heightmap"]), ConvertExtensions.EnumToBool(row["club_only"].ToString()), Convert.ToInt32(row["wall_height"]), false));
+            _roomModels[model] = new(model, Convert.ToInt32(row["door_x"]), Convert.ToInt32(row["door_y"]), (double)row["door_z"], Convert.ToInt32(row["door_dir"]),
+                Convert.ToString(row["heightmap"]), ConvertExtensions.EnumToBool(row["club_only"].ToString()), Convert.ToInt32(row["wall_height"]), false);
         }
     }
 
@@ -123,11 +141,8 @@ public class RoomManager : IRoomManager
         if (row == null)
             return false;
         var model = Convert.ToString(row["id"]);
-        if (!_roomModels.ContainsKey(model))
-        {
-            _roomModels.Add(model, new(model, Convert.ToInt32(row["door_x"]), Convert.ToInt32(row["door_y"]), Convert.ToDouble(row["door_z"]), Convert.ToInt32(row["door_dir"]),
-                Convert.ToString(row["heightmap"]), ConvertExtensions.EnumToBool(row["club_only"].ToString()), Convert.ToInt32(row["wall_height"]), true));
-        }
+        _roomModels.TryAdd(model, new(model, Convert.ToInt32(row["door_x"]), Convert.ToInt32(row["door_y"]), Convert.ToDouble(row["door_z"]), Convert.ToInt32(row["door_dir"]),
+            Convert.ToString(row["heightmap"]), ConvertExtensions.EnumToBool(row["club_only"].ToString()), Convert.ToInt32(row["wall_height"]), true));
         return true;
     }
 
@@ -138,17 +153,14 @@ public class RoomManager : IRoomManager
             LoadModel(id);
             return;
         }
-        _roomModels.Remove(id);
+        _roomModels.TryRemove(id, out _);
         LoadModel(id);
     }
 
     public bool TryGetModel(string id, out RoomModel model)
     {
-        if (_roomModels.ContainsKey(id))
-        {
-            model = _roomModels[id];
+        if (_roomModels.TryGetValue(id, out model))
             return true;
-        }
 
         // Try to load this model.
         if (LoadModel(id))
@@ -195,23 +207,14 @@ public class RoomManager : IRoomManager
 
     public bool TryLoadRoom(uint roomId, out Room room)
     {
-        Room inst = null;
-        if (_rooms.TryGetValue(roomId, out inst))
+        var gate = GateFor(roomId);
+        lock (gate)
         {
-            if (!inst.Unloaded)
-            {
-                room = inst;
-                return true;
-            }
-            room = null;
-            return false;
-        }
-        lock (_roomLoadingSync)
-        {
-            if (_rooms.TryGetValue(roomId, out inst))
+            if (_rooms.TryGetValue(roomId, out var inst))
             {
                 if (!inst.Unloaded)
                 {
+                    inst.MarkHandedOut();
                     room = inst;
                     return true;
                 }
@@ -220,17 +223,88 @@ public class RoomManager : IRoomManager
             }
             if (!RoomFactory.TryGetData(roomId, out var data))
             {
+                // No such room: its gate goes, or any id a client cares to ask
+                // about (room settings take one straight off the wire) stays
+                // in the map for good. Only ever for a room that is not there,
+                // so no two loads of a real room can end up on two gates.
+                _roomGates.TryRemove(new KeyValuePair<uint, object>(roomId, gate));
                 room = null;
                 return false;
             }
             var myInstance = new Room(data);
             if (_rooms.TryAdd(roomId, myInstance))
             {
+                myInstance.MarkHandedOut();
                 room = myInstance;
                 return true;
             }
             room = null;
             return false;
+        }
+    }
+
+    private object GateFor(uint roomId) => _roomGates.GetOrAdd(roomId, _ => new object());
+
+    /// <summary>
+    /// How long after a room was last handed out (TryLoadRoom) the idle unload
+    /// leaves it be: a player handed a room is on their way in.
+    /// </summary>
+    private const long EntryGraceMs = 30_000;
+
+    /// <summary>
+    /// pixelrp: the unload of a room left empty (Room.ProcessRoom). It came
+    /// from the room's own tick with no hold on anyone entering it, so a player
+    /// handed the room a moment before (TryLoadRoom) could arrive in it after
+    /// it was disposed - its map gone, the entry throwing. Under the room's
+    /// gate it either goes before anyone is handed it, and they load it fresh,
+    /// or after, and it sees them coming and stays. False when it stayed.
+    /// </summary>
+    public bool UnloadIdleRoom(Room room)
+    {
+        lock (GateFor(room.Id))
+        {
+            if (room.HandedOutWithin(EntryGraceMs) || room.UserCount > 0)
+                return false;
+            if (_rooms.TryRemove(new KeyValuePair<uint, Room>(room.Id, room)))
+                room.Dispose();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// pixelrp: load a room somebody is about to enter while they are still
+    /// on their way (a forward, a booth), so their entry finds it loaded. It
+    /// otherwise loaded on the entry itself, after they had already left the
+    /// room they were in.
+    /// </summary>
+    public void WarmInBackground(uint roomId)
+    {
+        if (roomId != 0 && !_rooms.ContainsKey(roomId))
+            _warmQueue.TryAdd(() => new[] { roomId });
+    }
+
+    /// <summary>
+    /// As <see cref="WarmInBackground(uint)"/>, for rooms that take a database
+    /// read to find - looked for on the worker, not the caller's thread.
+    /// </summary>
+    public void WarmInBackground(Func<IEnumerable<uint>> findRooms) => _warmQueue.TryAdd(findRooms);
+
+    private void WarmRooms()
+    {
+        foreach (var findRooms in _warmQueue.GetConsumingEnumerable())
+        {
+            try
+            {
+                foreach (var roomId in findRooms())
+                {
+                    if (roomId != 0 && !_rooms.ContainsKey(roomId))
+                        TryLoadRoom(roomId, out _);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Loading a room ahead of an entry failed.");
+            }
         }
     }
 

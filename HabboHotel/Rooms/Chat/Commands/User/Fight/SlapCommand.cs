@@ -1,8 +1,8 @@
-﻿using System.Collections.Concurrent;
-using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+﻿using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 
@@ -60,12 +60,11 @@ internal class SlapCommand : ITargetChatCommand
     private const int AggressionOnSlap = 100;
 
     /// <summary>
-    /// Last successful slap per player id. Commands are DI singletons, so this
-    /// instance field is shared hotel-wide; concurrent because rooms tick on
-    /// their own threads. Only successful slaps are recorded, so one that missed
-    /// for range costs nothing.
+    /// Each player's slap cooldown (PlayerCooldown, which forgives a slow
+    /// connection). Only successful slaps start it, so one that missed for range
+    /// costs nothing.
     /// </summary>
-    private readonly ConcurrentDictionary<int, DateTime> _lastSlap = new();
+    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
 
     // Missing username, an offline target and a target in another room are all
     // answered by CommandManager before Execute runs, so they are not repeated
@@ -134,18 +133,10 @@ internal class SlapCommand : ITargetChatCommand
             }
         }
 
-        if (_lastSlap.TryGetValue(session.GetHabbo().Id, out var last))
+        if (_cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
         {
-            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
-            if (elapsed < CooldownSeconds)
-            {
-                // Counts DOWN the seconds still to wait: [5/5] the instant you
-                // retry, [1/5] with under a second to go. Ceiling stops it ever
-                // reading [0/5] while the gate is still shut.
-                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
-                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
-                return Task.CompletedTask;
-            }
+            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            return Task.CompletedTask;
         }
 
         // The slapper's own tile plus the four sharing an edge with it, exactly
@@ -165,9 +156,7 @@ internal class SlapCommand : ITargetChatCommand
         // Only a slap that lands says what it cost: in a safe zone it is pure
         // flavour and nobody loses health, so claiming damage there would be a
         // lie. Worded like :hit's hit line, which the same reader sees.
-        _lastSlap[session.GetHabbo().Id] = DateTime.UtcNow;
-        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
-        Plus.Utilities.StaleEntries.Sweep(_lastSlap, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
+        _cooldown.Start(session.GetHabbo().Id);
         room.SendPacket(new ChatComposer(thisUser.VirtualId, hurts
             ? $"*slaps {target.Username} across the face, causing {Damage} damage*"
             : $"*slaps {target.Username} across the face*", 0, FightBubble));

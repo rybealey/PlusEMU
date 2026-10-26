@@ -14,6 +14,11 @@ namespace Plus.Communication.Packets.Incoming.Users;
 /// a weapon or a vape (RpWeapons.IsEquippable) - so a swap out of it is refused
 /// unless what comes back in is one. The Armor frame (RpDurability.ArmorSlot)
 /// works the same for body armour.
+///
+/// The client shows a move the moment it is dropped (RpInventoryView), so a
+/// move refused here answers with the backpack as it really is, whisper or no
+/// whisper - it used to answer a refusal with nothing, which left nothing to
+/// put the client's copy right with.
 /// </summary>
 internal class RpMoveItemEvent : IPacketEvent
 {
@@ -29,45 +34,41 @@ internal class RpMoveItemEvent : IPacketEvent
         if (habbo == null)
             return Task.CompletedTask;
         if (!IsSlot(from) || !IsSlot(to) || from == to)
-            return Task.CompletedTask;
+            return Refuse(session);
         // pixelrp trading: the backpack is frozen while a trade is open, the
         // same as use and discard. Rearranging slots was the one move that was
         // not, which let an offered stack be shuffled out from under the swap.
         if (Plus.HabboHotel.Rooms.Trading.RpTrades.IsTrading(habbo.Id))
         {
-            session.SendWhisper(Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
-            return Task.CompletedTask;
+            return Refuse(session, Plus.HabboHotel.Rooms.Trading.RpTrades.FrozenMessage);
         }
         var inventory = habbo.LoadRpInventory();
         var source = inventory.FirstOrDefault(entry => entry.Slot == from);
         if (string.IsNullOrEmpty(source.Item))
-            return Task.CompletedTask;
+            return Refuse(session);
         var target = inventory.FirstOrDefault(entry => entry.Slot == to);
         var targetOccupied = !string.IsNullOrEmpty(target.Item);
         var weaponSlot = Plus.HabboHotel.Users.RpWeapons.WeaponSlot;
         var armorSlot = Plus.HabboHotel.Users.RpDurability.ArmorSlot;
         var armor = Plus.HabboHotel.Users.RpDurability.BodyArmorItem;
         if (to != weaponSlot && to != armorSlot && (to > habbo.RpUnlockedSlots) && !targetOccupied)
-            return Task.CompletedTask;
+            return Refuse(session);
         // pixelrp: the Armor frame holds body armour and nothing else, from either side.
         if ((to == armorSlot && source.Item != armor) || (from == armorSlot && targetOccupied && target.Item != armor))
         {
-            session.SendWhisper("Only body armor goes in the Armor slot.");
-            return Task.CompletedTask;
+            return Refuse(session, "Only body armor goes in the Armor slot.");
         }
         // The Weapon frame holds weapons and the vape and nothing else, from either side.
         if ((to == weaponSlot && !Plus.HabboHotel.Users.RpWeapons.IsEquippable(source.Item))
             || (from == weaponSlot && targetOccupied && !Plus.HabboHotel.Users.RpWeapons.IsEquippable(target.Item)))
         {
-            session.SendWhisper("Only a weapon or a vape goes in the Weapon slot.");
-            return Task.CompletedTask;
+            return Refuse(session, "Only a weapon or a vape goes in the Weapon slot.");
         }
         // Drawing or holstering is something your hands do; cuffs stop it,
         // the same as they stop using anything in the backpack.
         if ((to == weaponSlot || from == weaponSlot || to == armorSlot || from == armorSlot) && Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.IsCuffed(habbo.Id))
         {
-            session.SendWhisper("Your hands are cuffed.");
-            return Task.CompletedTask;
+            return Refuse(session, "Your hands are cuffed.");
         }
         // pixelrp police: the stun gun is drawn only by a police officer, on
         // duty or off - dragged onto the Weapon slot, or swapped in by dragging
@@ -77,8 +78,7 @@ internal class RpMoveItemEvent : IPacketEvent
         if (drawing == Plus.HabboHotel.Users.RpWeapons.StunGunItem
             && !Plus.HabboHotel.Corporations.PoliceUtility.MayDrawStunGun(habbo.Id))
         {
-            session.SendWhisper("Only police officers can draw a stun gun.");
-            return Task.CompletedTask;
+            return Refuse(session, "Only police officers can draw a stun gun.");
         }
         habbo.MoveRpItem(from, to);
         var after = habbo.LoadRpInventory();
@@ -88,6 +88,14 @@ internal class RpMoveItemEvent : IPacketEvent
         if (to == armorSlot || from == armorSlot)
             Plus.HabboHotel.Users.RpDurability.SyncVest(habbo, after);
         session.Send(new RpInventoryComposer(after));
+        return Task.CompletedTask;
+    }
+
+    private static Task Refuse(GameClient session, string whisper = null)
+    {
+        if (whisper != null)
+            session.SendWhisper(whisper);
+        session.Send(new RpInventoryComposer(session.GetHabbo().LoadRpInventory()));
         return Task.CompletedTask;
     }
 }
