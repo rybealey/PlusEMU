@@ -199,6 +199,7 @@ public static class ItemFunctionOverrides
         HeightMarker = source.HeightMarker,
         LayAcross = source.LayAcross,
         SitRotation = source.SitRotation,
+        SitHeight = source.SitHeight,
         EffectId = source.EffectId,
         WiredType = source.WiredType,
         IsRare = source.IsRare,

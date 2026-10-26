@@ -117,6 +117,16 @@ public class ItemDefinition
     /// and RoomUserManager's seat case.
     /// </summary>
     public int SitRotation { get; set; }
+
+    /// <summary>
+    /// pixelrp: how high above the furni's base an avatar sits on it, in tiles,
+    /// or -1 for the stack height - see 315_FurniSitHeight.sql. Read it through
+    /// EffectiveSitHeight.
+    /// </summary>
+    public double SitHeight { get; set; } = -1;
+
+    /// <summary>pixelrp: the height a sitter is actually drawn at.</summary>
+    public double EffectiveSitHeight => SitHeight >= 0 ? SitHeight : Height;
     public int EffectId { get; set; }
 
     /// TODO @80O: Should be removed, use unique interaction name instead.

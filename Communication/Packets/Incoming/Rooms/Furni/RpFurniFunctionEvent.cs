@@ -90,6 +90,9 @@ internal class RpFurniFunctionEvent : IPacketEvent
         var lengthSent = packet.HasDataRemaining() ? packet.ReadInt() : 0;
         // pixelrp: Sit facing, after the size. Null keeps what the furni has.
         int? sitRotationSent = packet.HasDataRemaining() ? packet.ReadInt() : null;
+        // pixelrp: Sit height in hundredths, after Sit facing. Below 0 is "the
+        // stack height"; null keeps what the furni has.
+        int? sitHeightSent = packet.HasDataRemaining() ? packet.ReadInt() : null;
 
         var habbo = session.GetHabbo();
         if (habbo == null || !habbo.Permissions.HasCommand("rp_furni_function"))
@@ -158,6 +161,12 @@ internal class RpFurniFunctionEvent : IPacketEvent
         // a seat never does, so it takes the even one below.
         var sitRotation = sitRotationSent.HasValue ? ((sitRotationSent.Value % 8) + 8) % 8 / 2 * 2 : definition.SitRotation;
         var sitRotationChanged = sitRotation != definition.SitRotation;
+        var sitHeight = sitHeightSent.HasValue
+            ? (sitHeightSent.Value < 0 ? -1d : Math.Min(sitHeightSent.Value, MaximumHeight) / 100d)
+            : definition.SitHeight;
+        // Where a sitter is drawn, before and after - a new stack height moves
+        // them too while the furni has no sit height of its own.
+        var seatedHeightChanged = (sitHeight >= 0 ? sitHeight : height) != definition.EffectiveSitHeight;
         var changes = new List<(string Field, string Old, string New)>();
         void Track(string field, string oldValue, string newValue)
         {
@@ -177,6 +186,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         Track("height_marker", Bit(definition.HeightMarker), Bit(heightMarker));
         Track("lay_across", Bit(definition.LayAcross), Bit(layAcross));
         Track("sit_rotation", definition.SitRotation.ToString(), sitRotation.ToString());
+        Track("sit_height", Num(definition.SitHeight), Num(sitHeight));
         Track("interaction_type", definition.InteractionTypeName ?? "default", interactionName);
         Track("interaction_modes_count", definition.Modes.ToString(), modes.ToString());
         Track("effect_id", definition.EffectId.ToString(), effectId.ToString());
@@ -189,7 +199,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         using (var dbClient = _database.GetQueryReactor())
         {
             dbClient.SetQuery("UPDATE `furniture` SET `public_name` = @publicName, `width` = @width, `length` = @length, `is_walkable` = @walkable, `walk_mask` = @walkMask, `can_sit` = @seat, " +
-                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, `lay_across` = @layAcross, `sit_rotation` = @sitRotation, " +
+                              "`can_stack` = @stackable, `stack_height` = @height, `height_adjustable` = @adjustable, `height_marker` = @heightMarker, `lay_across` = @layAcross, `sit_rotation` = @sitRotation, `sit_height` = @sitHeight, " +
                               "`interaction_type` = @interaction, `interaction_modes_count` = @modes, " +
                               "`effect_id` = @effect, `behaviour_data` = @behaviour, `vending_ids` = @vending " +
                               "WHERE `id` = @definitionId LIMIT 1");
@@ -205,6 +215,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
             dbClient.AddParameter("heightMarker", Bit(heightMarker));
             dbClient.AddParameter("layAcross", Bit(layAcross));
             dbClient.AddParameter("sitRotation", sitRotation);
+            dbClient.AddParameter("sitHeight", sitHeight);
             dbClient.AddParameter("interaction", interactionName);
             dbClient.AddParameter("modes", modes);
             dbClient.AddParameter("effect", effectId);
@@ -262,6 +273,7 @@ internal class RpFurniFunctionEvent : IPacketEvent
         definition.HeightMarker = heightMarker;
         definition.LayAcross = layAcross;
         definition.SitRotation = sitRotation;
+        definition.SitHeight = sitHeight;
         definition.InteractionType = interactionType;
         definition.InteractionTypeName = interactionName;
         definition.Modes = modes;
@@ -315,21 +327,23 @@ internal class RpFurniFunctionEvent : IPacketEvent
             foreach (var placed in handler.GetFloor.Where(x => x.Definition?.Id == definition.Id).ToList())
             {
                 // A scoped copy's private clone was taken before this edit,
-                // and only behaviour is scoped - so size and sit facing follow.
+                // and only behaviour is scoped - so size and sitting follow.
                 if (placed.HasOwnDefinition)
                 {
                     placed.Definition.Width = width;
                     placed.Definition.Length = length;
                     placed.Definition.WalkMask = walkMask;
                     placed.Definition.SitRotation = sitRotation;
+                    placed.Definition.SitHeight = sitHeight;
                 }
                 if (sizeChanged)
                     placed.SetState(placed.GetX, placed.GetY, placed.GetZ,
                         Gamemap.GetAffectedTiles(length, width, placed.GetX, placed.GetY, placed.Rotation));
             }
             loaded.GetGameMap().GenerateMaps();
-            // Anyone already sitting turns now rather than on their next move.
-            if (sitRotationChanged)
+            // Anyone already sitting turns, or moves up or down, now rather than
+            // on their next move.
+            if (sitRotationChanged || seatedHeightChanged)
                 loaded.GetRoomUserManager().UpdateUserStatusses();
             // The music panel's "is there a jukebox here" flag is only rebroadcast
             // when one is placed or removed, so a furni that BECAME a jukebox - or

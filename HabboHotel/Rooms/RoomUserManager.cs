@@ -1819,8 +1819,10 @@ public class RoomUserManager
                 {
                     if (!user.Statusses.ContainsKey("sit"))
                     {
+                        // pixelrp: the furni's Sit height, which is its stack
+                        // height unless the Function tool gave it one of its own.
                         if (!user.Statusses.ContainsKey("sit"))
-                            user.Statusses.Add("sit", TextHandling.GetString(item.Definition.Height));
+                            user.Statusses.Add("sit", TextHandling.GetString(item.Definition.EffectiveSitHeight));
                     }
                     user.Z = item.GetZ;
                     // pixelrp: plus the furni's Sit facing turn, for artwork

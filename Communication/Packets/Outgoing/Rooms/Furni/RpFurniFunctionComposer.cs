@@ -79,5 +79,8 @@ public class RpFurniFunctionComposer : IServerPacket
         packet.WriteBoolean(_definition.LayAcross);
         // After it for the same reason.
         packet.WriteInteger(_definition.SitRotation);
+        // Sit height in hundredths like the stack height, -1 for "the stack
+        // height". After Sit facing for the same reason again.
+        packet.WriteInteger(_definition.SitHeight < 0 ? -1 : (int)Math.Round(_definition.SitHeight * 100));
     }
 }
