@@ -15,7 +15,7 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 ///     included, so the command is not a way around them;
 ///   - deactivating matches the x on the HUD passive tag
 ///     (RpPassiveCancelEvent), which discards the remaining time without
-///     refunding the smoothie.
+///     refunding the smoothie - and, like it, only in a safe zone.
 ///
 /// Already being passive takes priority: :passive while passive turns it OFF
 /// and never looks for a second smoothie, so it cannot be spent by accident.
@@ -67,6 +67,13 @@ internal class PassiveCommand : IChatCommand
         // smoothie at all.
         if (habbo.RpPassiveSeconds > 0)
         {
+            // Only in a safe zone, as the HUD's cancel (RpPassiveCancelEvent).
+            if (!room.IsSafeZone)
+            {
+                session.SendWhisper("You can only disable passive in a safe zone.");
+                return;
+            }
+
             habbo.RpPassiveSeconds = 0;
             habbo.RpPassiveLastTick = 0;
             habbo.SaveRpStats();

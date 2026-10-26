@@ -18,6 +18,14 @@ internal class RpPassiveCancelEvent : IPacketEvent
         habbo.EnsureRpStatsLoaded();
         if (habbo.RpPassiveSeconds <= 0)
             return Task.CompletedTask;
+        // pixelrp: passive ends early only in a safe zone, where a smoothie
+        // starts it - never on the spot to open a fight outside one. Kept in
+        // step with :passive.
+        if (habbo.CurrentRoom is not { IsSafeZone: true })
+        {
+            session.SendWhisper("You can only disable passive in a safe zone.");
+            return Task.CompletedTask;
+        }
         habbo.RpPassiveSeconds = 0;
         habbo.RpPassiveLastTick = 0;
         habbo.SaveRpStats();
