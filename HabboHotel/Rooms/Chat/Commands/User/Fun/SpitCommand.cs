@@ -157,6 +157,13 @@ internal class SpitCommand : ITargetChatCommand
                 session.SendWhisper(KnockedOut.TargetRefusal);
                 return Task.CompletedTask;
             }
+
+            // Away from the keyboard is out of the fight (RoomUser.IsAfk).
+            if (targetUser.IsAfk)
+            {
+                session.SendWhisper($"{target.Username} is AFK and cannot be spat at.");
+                return Task.CompletedTask;
+            }
         }
 
         if (_lastSpit.TryGetValue(habbo.Id, out var last))

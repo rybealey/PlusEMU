@@ -41,7 +41,8 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// Passive players (a smoothie, or City Government on duty) cannot be hit -
 /// the untouchable that IsRpPassive has always promised and that nothing
 /// could honour until damage existed. A smoothie stops you hitting too; staff
-/// on duty may hit (Habbo.CannotFight).
+/// on duty may hit (Habbo.CannotFight). Nor can an AFK player (RoomUser.IsAfk)
+/// - asleep five minutes - though a stun still lands on them.
 /// </summary>
 internal class HitCommand : ITargetChatCommand
 {
@@ -131,6 +132,13 @@ internal class HitCommand : ITargetChatCommand
         if (target.RpHealth <= 0)
         {
             session.SendWhisper(KnockedOut.TargetRefusal);
+            return Task.CompletedTask;
+        }
+
+        // Away from the keyboard is out of the fight (RoomUser.IsAfk).
+        if (targetUser.IsAfk)
+        {
+            session.SendWhisper($"{target.Username} is AFK and cannot be fought.");
             return Task.CompletedTask;
         }
 

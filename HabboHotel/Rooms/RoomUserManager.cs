@@ -1548,7 +1548,7 @@ public class RoomUserManager
                     // are on duty even sitting still at a desk, so idling neither
                     // draws the Zzz nor ends their shift. The count carries on, so
                     // once they clock off they drop off at the next check.
-                    if (!user.IsBot && !user.IsAsleep && user.IdleTime >= 600
+                    if (!user.IsBot && !user.IsAsleep && user.IdleTime >= RoomUser.SleepAfterTicks
                         && !Corporations.ShiftManager.IsStaffOnDuty(user.UserId))
                     {
                         user.IsAsleep = true;

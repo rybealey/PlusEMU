@@ -131,6 +131,13 @@ internal class SlapCommand : ITargetChatCommand
                 session.SendWhisper(KnockedOut.TargetRefusal);
                 return Task.CompletedTask;
             }
+
+            // Away from the keyboard is out of the fight (RoomUser.IsAfk).
+            if (targetUser.IsAfk)
+            {
+                session.SendWhisper($"{target.Username} is AFK and cannot be fought.");
+                return Task.CompletedTask;
+            }
         }
 
         if (_cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))

@@ -90,6 +90,21 @@ public class RoomUser
     public int HabboId;
     public int HorseId = 0;
     public int IdleTime; //byte
+
+    /// <summary>
+    /// pixelrp: room ticks (500 ms) of doing nothing before the room puts a
+    /// player to sleep - five minutes.
+    /// </summary>
+    public const int SleepAfterTicks = 600;
+
+    /// <summary>
+    /// pixelrp: AFK - asleep AND idle the full five minutes. Nothing damages
+    /// them (:hit, :slap, :spit refuse); a stun still lands. The five minutes
+    /// are the point: :idle and the Idle button give the Zzz at once, and a
+    /// player losing a fight could otherwise put themselves out of reach.
+    /// </summary>
+    public bool IsAfk => IsAsleep && IdleTime >= SleepAfterTicks;
+
     public bool InteractingGate;
     public int InternalRoomId;
     public bool IsAsleep;
