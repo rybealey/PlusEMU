@@ -113,6 +113,16 @@ public class SsoTicketEvent : IPacketEvent
             }
 
             session.Send(new AuthenticationOkComposer());
+            // pixelrp: who the player is, ahead of the home room below. The
+            // client holds everything after AuthenticationOk until its screens
+            // are up, then handles the held messages - entering the home room,
+            // and the room comes straight back - BEFORE sending its own held
+            // InfoRetrieve. So the first room's avatars used to arrive before
+            // the client knew its own user id: nobody was marked as the player,
+            // and the HUD showed the default 100 health for the whole first
+            // room after every login. InfoRetrieve still answers; the second
+            // copy changes nothing.
+            session.Send(new UserObjectComposer(session.GetHabbo()));
 
             // pixelrp discord sync: linked players get their Online role (and
             // any drifted state) refreshed shortly after login.
