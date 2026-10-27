@@ -332,15 +332,25 @@ public class CommandManager : ICommandManager
         return merged.ToString();
     }
 
+    /// <summary>
+    /// pixelrp: queued (RoomTickWriter), not written here - Parse logs every
+    /// staff command before running it, so a staff :hit waited on this insert
+    /// before its line went out. Rows still go in the order they were logged,
+    /// stamped with when it happened.
+    /// </summary>
     public void LogCommand(int userId, string data, string machineId)
     {
-        using var dbClient = _database.GetQueryReactor();
-        dbClient.SetQuery("INSERT INTO `logs_client_staff` (`user_id`,`data_string`,`machine_id`, `timestamp`) VALUES (@UserId,@Data,@MachineId,@Timestamp)");
-        dbClient.AddParameter("UserId", userId);
-        dbClient.AddParameter("Data", data);
-        dbClient.AddParameter("MachineId", machineId ?? string.Empty);
-        dbClient.AddParameter("Timestamp", PlusEnvironment.GetUnixTimestamp());
-        dbClient.RunQuery();
+        var timestamp = PlusEnvironment.GetUnixTimestamp();
+        RoomTickWriter.QueueOrdered(() =>
+        {
+            using var dbClient = _database.GetQueryReactor();
+            dbClient.SetQuery("INSERT INTO `logs_client_staff` (`user_id`,`data_string`,`machine_id`, `timestamp`) VALUES (@UserId,@Data,@MachineId,@Timestamp)");
+            dbClient.AddParameter("UserId", userId);
+            dbClient.AddParameter("Data", data);
+            dbClient.AddParameter("MachineId", machineId ?? string.Empty);
+            dbClient.AddParameter("Timestamp", timestamp);
+            dbClient.RunQuery();
+        });
     }
 
     public bool TryGetCommand(string command, out ICommandBase chatCommand) => _commands.TryGetValue(command, out chatCommand);
