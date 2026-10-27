@@ -176,10 +176,13 @@ public class RoomUserManager
         if (user == null)
             return;
         // Every hit on somebody already down lands here too; only the moment
-        // they go down is a death.
-        var wasOut = user.RpKnockedOut;
+        // they go down is a death. pixelrp (Twist, 2026-10-27): read under the
+        // lock, beside the change - two knockouts landing at once could each
+        // read "not out" before either set it, and both send a paramedic call.
+        bool wasOut;
         lock (_cycleLock)
         {
+            wasOut = user.RpKnockedOut;
             user.UpdateRpKnockoutState();
             SerializeStatusUpdates();
         }
