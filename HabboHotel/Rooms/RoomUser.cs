@@ -108,6 +108,13 @@ public class RoomUser
     public bool InteractingGate;
     public int InternalRoomId;
     public bool IsAsleep;
+
+    /// <summary>
+    /// pixelrp: the room has been told this player is typing
+    /// (StartTypingEvent) and not yet that they stopped - so a stop is passed
+    /// on only after a start that was, and a start only once.
+    /// </summary>
+    public bool IsTyping;
     public bool IsJumping;
     public bool IsLying = false;
 

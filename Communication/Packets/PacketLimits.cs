@@ -56,11 +56,17 @@ internal static class PacketLimits
     /// never came, a HUD target the server never heard) and, kept up, disconnected for flooding.</summary>
     public static readonly PacketLimit Selection = new(10, 40, Shared: false);
 
+    /// <summary>Starting to type, which shows a bubble over the player to the whole room. The client sends
+    /// one per line, so 3 a second is never reached by hand; a modified client toggling it went to every
+    /// player in the room 10 times a second. Stopping is not limited (see CancelTypingEvent).</summary>
+    public static readonly PacketLimit Typing = new(3, 6);
+
     private static readonly Dictionary<Type, PacketLimit> Listed = new()
     {
         [typeof(ChatEvent)] = Chat,
         [typeof(ShoutEvent)] = Chat,
         [typeof(WhisperEvent)] = Chat,
+        [typeof(StartTypingEvent)] = Typing,
 
         [typeof(PurchaseFromCatalogEvent)] = Buying,
         [typeof(PurchaseFromCatalogAsGiftEvent)] = Buying,

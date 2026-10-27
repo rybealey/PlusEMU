@@ -16,6 +16,12 @@ public class StartTypingEvent : IPacketEvent
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return Task.CompletedTask;
+        // pixelrp (Twist, 2026-10-27): once per start. The client sends one per
+        // line; a start limited away (PacketLimits.Typing) never sets this, so
+        // its stop is not passed on either (CancelTypingEvent).
+        if (user.IsTyping)
+            return Task.CompletedTask;
+        user.IsTyping = true;
         session.GetHabbo().CurrentRoom.SendPacket(new UserTypingComposer(user.VirtualId, true));
         return Task.CompletedTask;
     }
