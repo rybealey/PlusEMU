@@ -77,7 +77,9 @@ public class ShoutEvent : IPacketEvent
             session.SendWhisper("Oops, you're currently muted.");
             return;
         }
-        if (!session.GetHabbo().Permissions.HasRight("mod_tool"))
+        // pixelrp: only what is said counts towards flood control - a :command
+        // does not (RoomUser.IncrementAndCheckFlood).
+        if (!session.GetHabbo().Permissions.HasRight("mod_tool") && !_commandManager.IsCommand(session, message))
         {
             if (user.IncrementAndCheckFlood(out var muteTime))
             {

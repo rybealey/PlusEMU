@@ -1369,7 +1369,6 @@ public class RoomUserManager
                     // at the hour. Idleness puts them to sleep (below) and no
                     // more; the game stays connected until they close it.
                     user.IdleTime++;
-                    user.HandleSpamTicks();
                     // pixelrp aggression decay: a full bar (100) drains over 45
                     // seconds (500ms tick -> 100/90 per tick); broadcast each
                     // tick while active so every HUD strip tracks it live.

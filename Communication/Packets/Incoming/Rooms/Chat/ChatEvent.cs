@@ -57,22 +57,21 @@ public class ChatEvent : IPacketEvent
         if (message.Length > 100)
             message = message.Substring(0, 100);
         var colour = packet.ReadInt();
-        await ProcessAsync(session, room, user, message, colour, countFlood: true);
+        await ProcessAsync(session, room, user, message, colour);
     }
 
     /// <summary>
     /// Everything a line of room chat does once it has been read off the wire:
     /// the style check, mutes, flood control, the chatlog, and then either
     /// running it as a command or saying it. Shared with RpFireMacroEvent, which
-    /// runs several lines from one macro key and counts that press against
-    /// flood control once rather than once per line - hence countFlood.
+    /// runs several lines from one macro key.
     /// </summary>
     /// <returns>
     /// false when nothing more should be processed after this line - the player
     /// is flood-muted, muted, or was banned for the message - so a macro's
     /// remaining lines stop with it. true otherwise.
     /// </returns>
-    public async Task<bool> ProcessAsync(GameClient session, Room room, RoomUser user, string message, int colour, bool countFlood)
+    public async Task<bool> ProcessAsync(GameClient session, Room room, RoomUser user, string message, int colour)
     {
         if (!_chatStyleManager.TryGetStyle(colour, out var style) ||
             style.RequiredRight.Length > 0 && !session.GetHabbo().Permissions.HasRight(style.RequiredRight))
@@ -98,7 +97,9 @@ public class ChatEvent : IPacketEvent
             customBubble = 0;
         user.LastBubble = customBubble == 0 ? colour : customBubble;
 
-        if (countFlood && !session.GetHabbo().Permissions.HasRight("mod_tool"))
+        // pixelrp: only what is said counts towards flood control - a :command
+        // does not (RoomUser.IncrementAndCheckFlood).
+        if (!session.GetHabbo().Permissions.HasRight("mod_tool") && !_commandManager.IsCommand(session, message))
         {
             if (user.IncrementAndCheckFlood(out var muteTime))
             {

@@ -263,6 +263,26 @@ public class CommandManager : ICommandManager
     }
 
     /// <summary>
+    /// pixelrp: whether <see cref="Parse"/> takes this line as a command rather
+    /// than leaving it to be said - the same checks it makes before it runs
+    /// anything (a known command the player may use, or :commands), with
+    /// nothing run, logged or answered. Flood control counts only what is said
+    /// (ChatEvent, ShoutEvent), so a line it calls a command must never reach
+    /// the room as chat - an unknown command, or a staff one typed by a player,
+    /// is said, and counted.
+    /// </summary>
+    public bool IsCommand(GameClient session, string message)
+    {
+        if (session?.GetHabbo() == null || !message.StartsWith(_prefix))
+            return false;
+        if (message.TrimEnd().Equals($"{_prefix}commands", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var split = message.Substring(1).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return split.Length > 0 && _commands.TryGetValue(split[0].ToLower(), out var command) &&
+               (string.IsNullOrEmpty(command.PermissionRequired) || session.GetHabbo().Permissions.HasCommand(command.PermissionRequired));
+    }
+
+    /// <summary>
     /// Registers a Chat Command.
     ///
     /// NO IN-TREE CALLERS, AND IT STILL HAS TO EXIST. Every command in this

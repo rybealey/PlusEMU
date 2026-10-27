@@ -13,6 +13,12 @@ public interface ICommandManager
     Task<bool> Parse(GameClient session, string message);
 
     /// <summary>
+    /// Whether <see cref="Parse"/> would take this line as a command rather than
+    /// leave it to be said, without running anything.
+    /// </summary>
+    bool IsCommand(GameClient session, string message);
+
+    /// <summary>
     /// Registers a Chat Command.
     /// </summary>
     /// <param name="commandText">Text to type for this command.</param>

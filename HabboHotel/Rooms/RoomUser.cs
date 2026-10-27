@@ -67,8 +67,6 @@ public class RoomUser
     // pixelrp: >0 while an enable is paused for the "67" gesture; the room
     // cycle counts it down and reapplies the effect at zero.
     public int EffectReapplyTimer;
-    public int ChatSpamCount;
-    public int ChatSpamTicks = 16;
     public ItemEffectType CurrentItemEffect;
     public int DanceId;
     public bool FastWalking = false;
@@ -538,36 +536,36 @@ public class RoomUser
         }
     }
 
-    public void HandleSpamTicks()
-    {
-        if (ChatSpamTicks >= 0)
-        {
-            ChatSpamTicks--;
-            if (ChatSpamTicks == -1) ChatSpamCount = 0;
-        }
-    }
-
-    // pixelrp: one gentle hotel-wide flood rule - 10 messages inside the
-    // window (8 ticks, about 4 seconds) mutes for 5 seconds, the same for
-    // everyone. It was 6 messages and a 20 second mute (7 gold VIP, 10 silver,
-    // 3 event staff). Rooms have no flood setting of their own: the stored
-    // chat_extra_flood was never read, and the Room tool no longer offers it.
-    private const int FloodMessageLimit = 10;
+    // pixelrp (Twist, 2026-10-27): one hotel-wide flood rule, two lines a
+    // second - a fifth line within 2 seconds of the four before it mutes for 5
+    // seconds, the same for everyone. Only what is said counts: a :command is
+    // not counted (ChatEvent, ShoutEvent), and the fighting ones have cooldowns
+    // of their own. It was 10 lines in a window of about 4 seconds, counted in
+    // room ticks (and before that 6 lines and a 20 second mute). Rooms have no
+    // flood setting of their own: the stored chat_extra_flood was never read,
+    // and the Room tool no longer offers it.
+    private const int FloodLineLimit = 4;
+    private const int FloodWindowMs = 2000;
     private const int FloodMuteSeconds = 5;
+
+    // When the last FloodLineLimit lines were said, oldest at _floodNext; 0 is none.
+    private readonly long[] _floodLineTimes = new long[FloodLineLimit];
+    private int _floodNext;
 
     public bool IncrementAndCheckFlood(out int muteTime)
     {
         muteTime = 0;
-        ChatSpamCount++;
-        if (ChatSpamTicks == -1)
-            ChatSpamTicks = 8;
-        else if (ChatSpamCount >= FloodMessageLimit)
+        var now = Environment.TickCount64;
+        var oldest = _floodLineTimes[_floodNext];
+        if (oldest != 0 && now - oldest < FloodWindowMs)
         {
             muteTime = FloodMuteSeconds;
             GetClient().GetHabbo().FloodTime = UnixTimestamp.GetNow() + muteTime;
-            ChatSpamCount = 0;
+            Array.Clear(_floodLineTimes);
             return true;
         }
+        _floodLineTimes[_floodNext] = now;
+        _floodNext = (_floodNext + 1) % FloodLineLimit;
         return false;
     }
 

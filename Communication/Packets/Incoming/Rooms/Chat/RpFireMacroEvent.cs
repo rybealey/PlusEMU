@@ -10,11 +10,9 @@ namespace Plus.Communication.Packets.Incoming.Rooms.Chat;
 ///
 /// Every line takes the same path a typed line of chat takes
 /// (ChatEvent.ProcessAsync), so commands, mutes, the chatlog and the word filter
-/// behave identically. The one difference is flood control: the press counts
-/// ONCE for its commands, because one key running three commands is one action,
-/// and counting each would mute a player for pressing their own macro twice. A
-/// plain line of chat in the batch still counts like any other line of chat, so
-/// a macro can never say more than typing could.
+/// behave identically - flood control included: its commands never count
+/// towards it, as no command does, and a plain line of chat in the batch counts
+/// like any other line of chat, so a macro can never say more than typing could.
 ///
 /// Processing stops at the first line that must end it (flood-muted, muted,
 /// banned), and whenever the player is no longer in the room the press started
@@ -59,7 +57,6 @@ public class RpFireMacroEvent : IPacketEvent
                 lines.Add(line);
         }
 
-        var commandCounted = false;
         foreach (var line in lines)
         {
             if (session.GetHabbo() == null || session.GetHabbo().CurrentRoom != room)
@@ -68,13 +65,7 @@ public class RpFireMacroEvent : IPacketEvent
             if (user == null)
                 return;
 
-            // Commands share one flood count per press; plain chat counts per line.
-            var isCommand = line.StartsWith(":", StringComparison.CurrentCulture);
-            var countFlood = !isCommand || !commandCounted;
-            if (isCommand)
-                commandCounted = true;
-
-            if (!await _chat.ProcessAsync(session, room, user, line, colour, countFlood))
+            if (!await _chat.ProcessAsync(session, room, user, line, colour))
                 return;
         }
     }
