@@ -52,6 +52,18 @@ public static class HospitalAdmission
     /// <summary>Player id -> the minutes left they were last told.</summary>
     private static readonly ConcurrentDictionary<int, int> Warned = new();
 
+    /// <summary>
+    /// The HMMC's headquarters room as last read (<see cref="HeadquartersRoomId"/>),
+    /// 0 for none; when it was read (Environment.TickCount64), 0 for never; and
+    /// whether a read is on its way.
+    /// </summary>
+    private static uint _hqId;
+    private static long _hqReadAt;
+    private static int _hqReading;
+
+    /// <summary>How old the headquarters room may be before it is read again.</summary>
+    private const long HqFreshMs = 60_000;
+
     /// <summary>Somebody has just hit zero. Start their clock.</summary>
     public static void OnKnockout(RoomUser user)
     {
@@ -60,6 +72,7 @@ public static class HospitalAdmission
         Downed[user.UserId] = DateTime.UtcNow;
         CollectAt.TryRemove(user.UserId, out _);
         Warned.TryRemove(user.UserId, out _);
+        ReadHeadquartersSoon();
     }
 
     /// <summary>
@@ -137,6 +150,7 @@ public static class HospitalAdmission
         {
             Downed[id] = DateTime.UtcNow;
             Warned.TryRemove(id, out _);
+            ReadHeadquartersSoon();
             return;
         }
 
@@ -197,7 +211,10 @@ public static class HospitalAdmission
     /// </summary>
     private static void Admit(Room room, RoomUser user, Habbo habbo)
     {
-        var hqId = HeadquartersRoomId();
+        // As read off the tick (ReadHeadquartersSoon) - only if it never has
+        // been, the database down at every knockout, is it read here.
+        var hqId = Interlocked.Read(ref _hqReadAt) != 0 ? Volatile.Read(ref _hqId) : HeadquartersRoomId();
+        ReadHeadquartersSoon();
         if (hqId == 0)
             return;
 
@@ -277,11 +294,39 @@ public static class HospitalAdmission
     }
 
     /// <summary>
-    /// The HMMC's headquarters room, or 0.
-    ///
-    /// Read fresh, and only when an admission actually fires - which is rare -
-    /// rather than cached or asked per tick. A hospital that moves house
-    /// should not need a restart to be found.
+    /// pixelrp (Twist, 2026-10-27): read the headquarters room again soon, on
+    /// the writer's thread, unless it was read in the last minute. Asked at
+    /// every knockout, a minute or more before anybody is collected, so an
+    /// admission finds it already read. It was read in the admission itself,
+    /// and that runs on the room tick inside _cycleLock - which the movement
+    /// sender needs for every room - so walking stopped hotel-wide for as long
+    /// as the database took to answer.
+    /// </summary>
+    private static void ReadHeadquartersSoon()
+    {
+        var readAt = Interlocked.Read(ref _hqReadAt);
+        if (readAt != 0 && (Environment.TickCount64 - readAt) < HqFreshMs)
+            return;
+        if (Interlocked.Exchange(ref _hqReading, 1) == 1)
+            return;
+        RoomTickWriter.QueueOrdered(() =>
+        {
+            try
+            {
+                Volatile.Write(ref _hqId, HeadquartersRoomId());
+                Interlocked.Exchange(ref _hqReadAt, Environment.TickCount64);
+            }
+            finally
+            {
+                Volatile.Write(ref _hqReading, 0);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The HMMC's headquarters room, or 0. Read again at most once a minute
+    /// (<see cref="ReadHeadquartersSoon"/>), so a hospital that moves house
+    /// is found without a restart.
     /// </summary>
     private static uint HeadquartersRoomId()
     {
