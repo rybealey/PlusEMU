@@ -516,8 +516,10 @@ public class RoomUser
             {
                 if (user == null || user.IsBot)
                     continue;
+                // pixelrp: on to the next - one player mid-logout stopped the
+                // line reaching everyone after them in the list
                 if (user.GetClient() == null || user.GetClient().GetHabbo() == null)
-                    return;
+                    continue;
                 if (!user.GetClient().GetHabbo().AllowPetSpeech)
                     user.GetClient().Send(new ChatComposer(VirtualId, message, 0, 0));
             }
@@ -529,7 +531,7 @@ public class RoomUser
                 if (user == null || user.IsBot)
                     continue;
                 if (user.GetClient() == null || user.GetClient().GetHabbo() == null)
-                    return;
+                    continue;
                 if (!user.GetClient().GetHabbo().AllowBotSpeech)
                     user.GetClient().Send(new ChatComposer(VirtualId, message, 0, colour == 0 ? 2 : colour));
             }
