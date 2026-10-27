@@ -70,6 +70,19 @@ internal class RpMoveItemEvent : IPacketEvent
         {
             return Refuse(session, "Your hands are cuffed.");
         }
+        // pixelrp (Twist, 2026-10-27): out cold or in a cell, nothing is drawn
+        // or put on - the same as using it (RpUseItemEvent), which a drag got
+        // round. Anything ending up in the Weapon or Armor frame counts, a swap
+        // out of one included; taking a thing off stays allowed.
+        var equipping = to == weaponSlot || to == armorSlot || ((from == weaponSlot || from == armorSlot) && targetOccupied);
+        if (equipping && Plus.HabboHotel.Rooms.KnockedOut.Is(session))
+        {
+            return Refuse(session, Plus.HabboHotel.Rooms.KnockedOut.Refusal);
+        }
+        if (equipping && Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JailState.IsJailed(habbo.Id))
+        {
+            return Refuse(session, "You can't do that in jail.");
+        }
         // pixelrp police: the stun gun is drawn only by a police officer, on
         // duty or off - dragged onto the Weapon slot, or swapped in by dragging
         // whatever is there onto it. Only firing it needs the shift. Putting
