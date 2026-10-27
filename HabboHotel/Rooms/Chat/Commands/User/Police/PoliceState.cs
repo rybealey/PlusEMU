@@ -394,7 +394,7 @@ public static class PoliceState
             return false;               // they already carry a pair; this one is lost
         if (slot == -1)
         {
-            client.SendWhisper("Your handcuffs came back, but your backpack is full - they were left behind.");
+            client.SendWhisper("Backpack full - no room for your handcuffs.");
             return false;
         }
         client.Send(new Plus.Communication.Packets.Outgoing.Users.RpInventoryComposer(officer.LoadRpInventory()));
