@@ -1,6 +1,7 @@
 ﻿using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fun;
 
@@ -21,6 +22,13 @@ internal class PullCommand : ITargetChatCommand
     /// PushCommand's FightBubble.
     /// </summary>
     private const int FightBubble = 4;
+
+    /// <summary>
+    /// :push's cooldown, not one of its own - a pull waits on :push and
+    /// :spush and they wait on it, a minute either way (Twist, 2026-10-28). Only a pull
+    /// that happens starts it, so one that was too far costs nothing.
+    /// </summary>
+    private static PlayerCooldown Cooldown => PushCommand.Cooldown;
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -48,6 +56,11 @@ internal class PullCommand : ITargetChatCommand
         var thisUser = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (thisUser == null)
             return Task.CompletedTask;
+        if (Cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
+        {
+            session.SendWhisper(Cooldown.Refusal(secondsLeft));
+            return Task.CompletedTask;
+        }
         if (thisUser.SetX - 1 == room.GetGameMap().Model.DoorX)
         {
             session.SendWhisper("Please don't pull that user out of the room :(!");
@@ -60,6 +73,7 @@ internal class PullCommand : ITargetChatCommand
             // its list, and a player's selected style is almost never on it -
             // the same message in style 0 reads "Actor: *pulls Target...*".
             // Matches :push, which this is the other half of.
+            Cooldown.Start(session.GetHabbo().Id);
             room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*pulls {target.Username} to them*", 0, FightBubble));
             // Pulled: an officer's trip to a call is off.
             Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);

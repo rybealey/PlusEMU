@@ -4,7 +4,8 @@ namespace Plus.Utilities;
 
 /// <summary>
 /// pixelrp: a per-player command cooldown that is fair to a slow connection -
-/// the :hit (shared with :slap and :spit), :stun, :push and :spush timers.
+/// the :hit (shared with :slap and :spit), :stun and :push (shared with :pull
+/// and :spush) timers.
 ///
 /// A player who uses a command again the moment its cooldown is up sends it
 /// over a connection whose delay wobbles. When the last use arrived a little

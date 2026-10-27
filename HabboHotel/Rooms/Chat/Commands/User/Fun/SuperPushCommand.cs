@@ -40,18 +40,16 @@ internal class SuperPushCommand : ITargetChatCommand
     /// </summary>
     private const int FightBubble = 4;
 
-    /// <summary>Seconds a player must wait between super pushes.</summary>
-    private const int CooldownSeconds = 5;
-
     /// <summary>How far a super push travels when nothing is in the way.</summary>
     private const int PushDistance = 3;
 
     /// <summary>
-    /// Each player's super push cooldown (PlayerCooldown, which forgives a slow
-    /// connection). Only successful pushes start it, so one that missed for
-    /// range or had nowhere to go costs nothing.
+    /// :push's cooldown, not one of its own - a super push waits on the push
+    /// and :pull and they wait on it, a minute either way (Twist, 2026-10-28).
+    /// Only successful pushes start it, so one that missed for range or had
+    /// nowhere to go costs nothing.
     /// </summary>
-    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
+    private static PlayerCooldown Cooldown => PushCommand.Cooldown;
 
     public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
     {
@@ -84,9 +82,9 @@ internal class SuperPushCommand : ITargetChatCommand
         if (thisUser == null)
             return Task.CompletedTask;
 
-        if (_cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
+        if (Cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
         {
-            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            session.SendWhisper(Cooldown.Refusal(secondsLeft));
             return Task.CompletedTask;
         }
 
@@ -171,7 +169,7 @@ internal class SuperPushCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        _cooldown.Start(session.GetHabbo().Id);
+        Cooldown.Start(session.GetHabbo().Id);
         // Pushed: an officer's trip to a call is off.
         Plus.HabboHotel.Corporations.EmergencyCalls.CancelTrip(target.Id);
         targetUser.MoveTo(destinationX, destinationY);
