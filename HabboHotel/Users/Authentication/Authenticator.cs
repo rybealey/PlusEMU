@@ -182,7 +182,15 @@ internal class Authenticator : IAuthenticator
         return await connection.ExecuteScalarAsync<int>("SELECT id FROM users WHERE auth_ticket = @sso", new { sso });
     }
 
-    private const int PreviousSessionWaitMs = 15000;
+    // pixelrp (Twist, 2026-10-27): 3 seconds, not 15. The whole login runs in
+    // SSOTicketEvent, which PacketManager disconnects once it has taken 5
+    // seconds - so a wait past that was cut off mid-way with no reason given,
+    // while the login carried on alone in the background. Ending the wait
+    // here leaves the rest of the login (loading the player, the first
+    // messages) its last two seconds, and a refusal of its own, logged, in
+    // place of a timeout. A ticket is used up either way; the website's
+    // Reconnect fetches a new one.
+    private const int PreviousSessionWaitMs = 3000;
 
     /// <summary>
     /// pixelrp: true once this character's previous session is gone - its
