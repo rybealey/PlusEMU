@@ -63,9 +63,9 @@ internal class HitCommand : ITargetChatCommand
     /// <summary>Blue bubble, the one every combat action shares.</summary>
     private const int FightBubble = 4;
 
-    /// <summary>Seconds between punches. Shorter than the five :slap and the
-    /// social commands use - a fight has to be able to trade blows.</summary>
-    private const int CooldownSeconds = 3;
+    /// <summary>Seconds between punches. Shorter than the five the social
+    /// commands use - a fight has to be able to trade blows.</summary>
+    private const int CooldownSeconds = 4;
 
     /// <summary>What a swing sets the attacker's aggression to.</summary>
     private const int AggressionOnSwing = 100;
@@ -73,8 +73,12 @@ internal class HitCommand : ITargetChatCommand
     /// <summary>
     /// Each player's punching cooldown (PlayerCooldown, which forgives a slow
     /// connection). A swing that missed still counts - it was still a punch.
+    ///
+    /// :slap and :spit deal damage too, so they run on this same clock (Twist,
+    /// 2026-10-28): a punch shuts them off until it runs out, and either of
+    /// them the punch - none can slip a hit in between the others'.
     /// </summary>
-    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
+    internal static readonly PlayerCooldown Cooldown = new(CooldownSeconds);
 
     // A missing username, an offline target and a target in another room are
     // all answered by CommandManager before Execute runs.
@@ -150,15 +154,15 @@ internal class HitCommand : ITargetChatCommand
             return Task.CompletedTask;
         }
 
-        if (_cooldown.IsWaiting(habbo.Id, out var secondsLeft))
+        if (Cooldown.IsWaiting(habbo.Id, out var secondsLeft))
         {
-            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            session.SendWhisper(Cooldown.Refusal(secondsLeft));
             return Task.CompletedTask;
         }
 
         // Past here the punch is thrown, so it costs the cooldown and makes the
         // attacker aggressive whether or not it connects.
-        _cooldown.Start(habbo.Id);
+        Cooldown.Start(habbo.Id);
         habbo.RpAggression = AggressionOnSwing;
 
         // The attacker's own tile plus the four sharing an edge with it: at most

@@ -1,10 +1,10 @@
-using System.Collections.Concurrent;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fun;
 
@@ -55,9 +55,6 @@ internal class SpitCommand : ITargetChatCommand
     /// </summary>
     private const int FightBubble = 4;
 
-    /// <summary>Seconds between spits. :slap's five - the same weight of act.</summary>
-    private const int CooldownSeconds = 5;
-
     /// <summary>Health a spit takes off, in an unsafe zone.</summary>
     private const int Damage = 1;
 
@@ -87,7 +84,11 @@ internal class SpitCommand : ITargetChatCommand
     /// </summary>
     private static uint _ghostId = int.MaxValue;
 
-    private readonly ConcurrentDictionary<int, DateTime> _lastSpit = new();
+    /// <summary>
+    /// :hit's cooldown, not one of its own - a spit deals damage, so it waits
+    /// on the punch and the punch waits on it (Twist, 2026-10-28).
+    /// </summary>
+    private static PlayerCooldown Cooldown => Fight.HitCommand.Cooldown;
 
     /// <summary>
     /// Injected rather than reached through PlusEnvironment.Game.ItemManager,
@@ -166,15 +167,10 @@ internal class SpitCommand : ITargetChatCommand
             }
         }
 
-        if (_lastSpit.TryGetValue(habbo.Id, out var last))
+        if (Cooldown.IsWaiting(habbo.Id, out var secondsLeft))
         {
-            var elapsed = (DateTime.UtcNow - last).TotalSeconds;
-            if (elapsed < CooldownSeconds)
-            {
-                var remaining = (int)Math.Ceiling(CooldownSeconds - elapsed);
-                session.SendWhisper($"Cooldown [{remaining}/{CooldownSeconds}]");
-                return Task.CompletedTask;
-            }
+            session.SendWhisper(Cooldown.Refusal(secondsLeft));
+            return Task.CompletedTask;
         }
 
         var landed = InReach(thisUser, targetUser);
@@ -185,9 +181,7 @@ internal class SpitCommand : ITargetChatCommand
         // The cooldown is spent either way. A miss is a turn taken, not a
         // free retry - otherwise the right move is to spam it from across the
         // room until somebody wanders into range.
-        _lastSpit[habbo.Id] = DateTime.UtcNow;
-        // pixelrp: and nobody whose cooldown has run out stays in the map (StaleEntries).
-        Plus.Utilities.StaleEntries.Sweep(_lastSpit, (_, at) => (DateTime.UtcNow - at).TotalSeconds >= CooldownSeconds);
+        Cooldown.Start(habbo.Id);
 
         // Where the mess ends up: their tile if it carried, the spitter's own
         // if it did not.

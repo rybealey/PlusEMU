@@ -49,10 +49,6 @@ internal class SlapCommand : ITargetChatCommand
     /// </summary>
     private const int FightBubble = 4;
 
-    /// <summary>Seconds a player must wait between slaps. Longer than :hit's
-    /// three, to go with the lighter damage.</summary>
-    private const int CooldownSeconds = 5;
-
     /// <summary>Health a slap takes off, in an unsafe zone.</summary>
     private const int Damage = 1;
 
@@ -60,11 +56,12 @@ internal class SlapCommand : ITargetChatCommand
     private const int AggressionOnSlap = 100;
 
     /// <summary>
-    /// Each player's slap cooldown (PlayerCooldown, which forgives a slow
-    /// connection). Only successful slaps start it, so one that missed for range
-    /// costs nothing.
+    /// :hit's cooldown, not one of its own - a slap deals damage, so it waits
+    /// on the punch and the punch waits on it, as :spit does (Twist,
+    /// 2026-10-28). Only successful slaps start it, so one that missed for
+    /// range costs nothing.
     /// </summary>
-    private readonly PlayerCooldown _cooldown = new(CooldownSeconds);
+    private static PlayerCooldown Cooldown => HitCommand.Cooldown;
 
     // Missing username, an offline target and a target in another room are all
     // answered by CommandManager before Execute runs, so they are not repeated
@@ -140,9 +137,9 @@ internal class SlapCommand : ITargetChatCommand
             }
         }
 
-        if (_cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
+        if (Cooldown.IsWaiting(session.GetHabbo().Id, out var secondsLeft))
         {
-            session.SendWhisper(_cooldown.Refusal(secondsLeft));
+            session.SendWhisper(Cooldown.Refusal(secondsLeft));
             return Task.CompletedTask;
         }
 
@@ -163,7 +160,7 @@ internal class SlapCommand : ITargetChatCommand
         // Only a slap that lands says what it cost: in a safe zone it is pure
         // flavour and nobody loses health, so claiming damage there would be a
         // lie. Worded like :hit's hit line, which the same reader sees.
-        _cooldown.Start(session.GetHabbo().Id);
+        Cooldown.Start(session.GetHabbo().Id);
         room.SendPacket(new ChatComposer(thisUser.VirtualId, hurts
             ? $"*slaps {target.Username} across the face, causing {Damage} damage*"
             : $"*slaps {target.Username} across the face*", 0, FightBubble));

@@ -4,12 +4,12 @@ namespace Plus.Utilities;
 
 /// <summary>
 /// pixelrp: a per-player command cooldown that is fair to a slow connection -
-/// the :hit, :slap, :stun, :push and :spush timers.
+/// the :hit (shared with :slap and :spit), :stun, :push and :spush timers.
 ///
 /// A player who uses a command again the moment its cooldown is up sends it
 /// over a connection whose delay wobbles. When the last use arrived a little
 /// late and this one a little early, the server saw the gap come up short -
-/// 2.8 seconds of :hit's three - and refused it, which on a slow connection
+/// 3.8 seconds of :hit's four - and refused it, which on a slow connection
 /// happened fight after fight. Up to <see cref="JitterAllowance"/> early is
 /// let through, and the next cooldown then runs from when this one was due,
 /// not from when the command arrived, so over a whole fight nobody uses a
