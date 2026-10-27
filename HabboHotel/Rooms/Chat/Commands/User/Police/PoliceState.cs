@@ -769,8 +769,9 @@ public static class PoliceState
                 // Back to walking pace. Like the speed-up it lands on the next
                 // walk, so a medic who lets go mid-stride finishes that stride
                 // at ambulance speed rather than having the timeline they are
-                // standing on re-divided underneath them.
-                MovementV2Bridge.SetWalkPace(captorUser, MovementSettings.IntervalMs);
+                // standing on re-divided underneath them. A medic who had
+                // :fastwalk on goes back to that, not to walking pace.
+                MovementV2Bridge.SetWalkPace(captorUser, captorUser?.FastWalking == true ? MovementSettings.EscortIntervalMs : MovementSettings.IntervalMs);
                 // The snapshot is keyed by player id and outlives the RoomUser,
                 // so a party who has already left is dropped explicitly rather
                 // than left to sit in the dictionary for the emulator's uptime.
