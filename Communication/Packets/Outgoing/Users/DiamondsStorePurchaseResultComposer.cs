@@ -3,7 +3,8 @@ using Plus.HabboHotel.GameClients;
 namespace Plus.Communication.Packets.Outgoing.Users;
 
 // pixelrp: result of a DiamondsStore purchase attempt.
-// status: 0 = ok, 1 = not enough diamonds, 2 = backpack full.
+// status: 0 = ok, 1 = not enough diamonds, 2 = backpack full, 3 = not
+// delivered for another reason (nothing charged).
 public class DiamondsStorePurchaseResultComposer : IServerPacket
 {
     private readonly int _status;

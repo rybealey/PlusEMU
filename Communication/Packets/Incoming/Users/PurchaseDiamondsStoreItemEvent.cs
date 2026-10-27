@@ -30,10 +30,13 @@ internal class PurchaseDiamondsStoreItemEvent : IPacketEvent
         // nor take them without handing it over.
         habbo.Diamonds -= item.EffectivePrice;
         var slot = habbo.AddRpItem(item.ItemKey);
-        if (slot == -1)
+        // Every failure, not only a full backpack: one it may hold only one of
+        // (Habbo.RpAlreadyHeld) and a write the database refused (RpAddFailed)
+        // took the diamonds and delivered nothing.
+        if (slot < 0)
         {
             habbo.Diamonds += item.EffectivePrice;
-            session.Send(new DiamondsStorePurchaseResultComposer(2, itemKey));
+            session.Send(new DiamondsStorePurchaseResultComposer(slot == -1 ? 2 : 3, itemKey));
             return Task.CompletedTask;
         }
         using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
