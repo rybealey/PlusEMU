@@ -264,7 +264,8 @@ public static class PoliceState
     /// </summary>
     private static readonly HashSet<string> DisorientedCannot = new(StringComparer.OrdinalIgnoreCase)
     {
-        "hit", "slap", "stun", "fb", "ps"
+        // pixelrp (Twist, 2026-10-27): :spit deals damage too, so it goes with the rest.
+        "hit", "slap", "spit", "stun", "fb", "ps"
     };
 
     public static bool IsDisoriented(int habboId) => Disoriented.ContainsKey(habboId);
@@ -336,8 +337,9 @@ public static class PoliceState
     /// </summary>
     private static readonly HashSet<string> CuffedCannot = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Fighting.
-        "hit", "slap",
+        // Fighting, and shoving people about - pixelrp (Twist, 2026-10-27): a
+        // cuffed suspect could :push the officer off the Arrest Point.
+        "hit", "slap", "push", "spush", "pull",
         // Doing to somebody else what was done to you.
         "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort", "arrest",
         // Trading, and handing things over.
@@ -397,6 +399,11 @@ public static class PoliceState
             client.SendWhisper("Backpack full - no room for your handcuffs.");
             return false;
         }
+        // pixelrp (Twist, 2026-10-27): any other refusal - the write itself
+        // failed (Habbo.RpAddFailed) - is not a pair back either. It used to
+        // count as one, so the officer was told the cuffs were returned.
+        if (slot < 0)
+            return false;
         client.Send(new Plus.Communication.Packets.Outgoing.Users.RpInventoryComposer(officer.LoadRpInventory()));
         return true;
     }
@@ -726,6 +733,16 @@ public static class PoliceState
                     MovementV2Bridge.Unpair(suspectRoom, null, suspectUser);
             }
 
+            // pixelrp (Twist, 2026-10-27): and the captor the same way. Ended
+            // from the patient's side - their logout (Forget), their revive
+            // (OnRevive) - the room given is the patient's, so a medic in
+            // another room was never found here and kept the ambulance and its
+            // pace. There is no shadow link to undo in the medic's room: the
+            // two are only paired in a room they are both in.
+            var captorHabbo = captorUser?.GetClient()?.GetHabbo() ?? PlusEnvironment.Game.ClientManager.GetClientByUserId(captorId)?.GetHabbo();
+            if (captorUser == null && captorHabbo?.CurrentRoom is { } captorRoom && captorRoom != room)
+                captorUser = captorRoom.GetRoomUserManager()?.GetRoomUserByHabbo(captorId);
+
             if (kind == EscortKind.Medical)
             {
                 // Put the patient down first, then take the ambulances off
@@ -746,6 +763,9 @@ public static class PoliceState
                 if (suspectUser == null && suspectHabbo?.Effects?.CurrentEffect == AmbulanceEffectId && EffectBeforeEscort.TryGetValue(suspectId, out var underneath))
                     suspectHabbo.Effects.CurrentEffect = underneath;
                 RestoreEffect(captorUser);
+                // ...and a medic between rooms the same as the patient above.
+                if (captorUser == null && captorHabbo?.Effects?.CurrentEffect == AmbulanceEffectId && EffectBeforeEscort.TryGetValue(captorId, out var captorUnderneath))
+                    captorHabbo.Effects.CurrentEffect = captorUnderneath;
                 // Back to walking pace. Like the speed-up it lands on the next
                 // walk, so a medic who lets go mid-stride finishes that stride
                 // at ambulance speed rather than having the timeline they are

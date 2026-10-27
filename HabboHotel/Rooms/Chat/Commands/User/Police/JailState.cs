@@ -140,8 +140,10 @@ public static class JailState
     /// </summary>
     private static readonly HashSet<string> JailedCannot = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Fighting, and shoving people about.
-        "hit", "slap", "push", "spush", "pull",
+        // Fighting, and shoving people about. pixelrp (Twist, 2026-10-27):
+        // :spit too - it deals damage, and a jail that is not a safe zone let
+        // prisoners spit each other down.
+        "hit", "slap", "spit", "push", "spush", "pull",
         // Police work - a jailed officer is a prisoner first.
         "stun", "fb", "ps", "cuff", "uncuff", "escort", "unescort", "charge", "pardon", "arrest",
         // Trading, and handing things over.
