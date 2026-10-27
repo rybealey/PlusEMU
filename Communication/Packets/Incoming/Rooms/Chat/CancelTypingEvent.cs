@@ -12,7 +12,8 @@ public class CancelTypingEvent : IPacketEvent
         var room = session.GetHabbo().CurrentRoom;
         if (room == null)
             return Task.CompletedTask;
-        var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Username);
+        // pixelrp: by id (the room's index), not by searching names
+        var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null)
             return Task.CompletedTask;
         session.GetHabbo().CurrentRoom.SendPacket(new UserTypingComposer(user.VirtualId, false));
