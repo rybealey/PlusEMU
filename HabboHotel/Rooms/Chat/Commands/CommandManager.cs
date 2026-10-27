@@ -10,6 +10,8 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands;
 
 public class CommandManager : ICommandManager
 {
+    private static readonly NLog.ILogger Log = NLog.LogManager.GetLogger("Plus.HabboHotel.Rooms.Chat.Commands.CommandManager");
+
     private readonly IGameClientManager _gameClientManager;
     private readonly IDatabase _database;
     /// <summary>
@@ -176,90 +178,107 @@ public class CommandManager : ICommandManager
             session.GetHabbo().ChatCommand = command;
             session.GetHabbo().CurrentRoom.GetWired().TriggerEvent(WiredBoxType.TriggerUserSaysCommand, session.GetHabbo(), this);
 
-            if (command is IChatCommand chatCommand)
+            // pixelrp: a command that throws must never cost the player their
+            // connection - chat is handled async, and a handler whose task
+            // fails is disconnected (PacketManager.ExecutePacketAsync). A
+            // command missing the rest of what it needs (":ban" with no
+            // length, ":givebadge" with no badge) throws reading it, and the
+            // HUD target makes those easy to send, so that is answered with
+            // the usage; anything else is a bug, logged with its stack.
+            try
             {
-                chatCommand.Execute(session, session.GetHabbo().CurrentRoom, parameters);
+                await RunAsync(session, key, command, parameters);
             }
-            else if (command is ITargetChatCommand targetChatCommand)
+            catch (Exception e) when (e is IndexOutOfRangeException or FormatException or OverflowException or ArgumentOutOfRangeException)
             {
-                // pixelrp: who it is aimed at. A name typed first wins. Failing
-                // that, the player's HUD target (Habbo.RpHudTargetId) - so
-                // ":kiss" alone kisses whoever is selected, and ":charge theft"
-                // charges them, every word kept for the command. "x" is the
-                // client's shorthand for the HUD target, swapped for the name
-                // before sending; one that arrives as a bare "x" means the
-                // client had nobody selected, and it is dropped the same way.
-                var typed = parameters.Length > 0 ? parameters[0] : null;
-                var typedX = typed != null && typed.Equals("x", StringComparison.OrdinalIgnoreCase);
-                GameClient? target = null;
-                if (typed != null && !typedX)
-                {
-                    target = _gameClientManager.GetClientByUsername(typed);
-                    if (target != null)
-                        parameters = parameters[1..];
-                }
-                else if (typedX)
-                {
-                    parameters = parameters[1..];
-                }
-
-                // pixelrp: a bot's name ("bot-Name" - the HUD target's "x" types
-                // one) is plainly a name, so it never falls back to the selected
-                // player: no player command here acts on a bot.
-                var typedBot = Rooms.AI.BotNames.IsBotName(typed);
-                if (target?.GetHabbo() == null && !typedBot)
-                {
-                    var hudTargetId = session.GetHabbo().RpHudTargetId;
-                    target = hudTargetId > 0 ? _gameClientManager.GetClientByUserId(hudTargetId) : null;
-                }
-
-                if (target?.GetHabbo() == null)
-                {
-                    // Nothing typed (or only "x") and nobody selected; or a name
-                    // that is not online, with nobody selected to fall back on.
-                    session.SendWhisper(typed == null || typedX ? targetChatCommand.NoTargetMessage
-                        : typedBot ? "You can't use this command on a bot."
-                        : $"User {typed} seems to be offline.");
-                    return true;
-                }
-
-                var targetHabbo = target.GetHabbo();
-                // pixelrp :invisible: to a player command of anyone who can't
-                // see them, someone out of sight is somewhere else - typed or
-                // the HUD target selected before they went. The same answer
-                // word for word, so it can't be used to find them out. A
-                // command that reaches another room already works on them.
-                var outOfSight = IsPlayerCommand(command) && targetHabbo.IsInvisible && !session.GetHabbo().IsInvisible;
-                if (targetChatCommand.MustBeInSameRoom && (session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom || outOfSight))
-                {
-                    session.SendWhisper(targetChatCommand.IsRanged ? RangeMessages.NotInRoom : $"You must be in the same room as {targetHabbo.Username} to execute this command.");
-                    return true;
-                }
-
-                // pixelrp: a player command used ON somebody out cold - one
-                // check here and one sentence, as for being out cold yourself.
-                if (IsPlayerCommand(command) && !TargetKnockedOutCan.Contains(key) && KnockedOut.Is(target))
-                {
-                    session.SendWhisper(KnockedOut.TargetRefusal);
-                    return true;
-                }
-
-                // A command missing the rest of what it needs (":ban" with no
-                // length, ":givebadge" with no badge) throws reading it, and a
-                // packet that throws disconnects the player. The HUD target
-                // makes those easy to send, so answer with the usage instead.
-                try
-                {
-                    await targetChatCommand.Execute(session, session.GetHabbo().CurrentRoom, targetHabbo, parameters);
-                }
-                catch (Exception e) when (e is IndexOutOfRangeException or FormatException or OverflowException or ArgumentOutOfRangeException)
-                {
-                    session.SendWhisper($"Usage: :{key.ToLower()} {targetChatCommand.Parameters.Trim()}");
-                }
+                session.SendWhisper($"Usage: :{key.ToLower()} {command.Parameters.Trim()}");
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, $"Command :{key.ToLower()} failed for {session.GetHabbo()?.Username}");
+                session.SendWhisper("Something went wrong with that command.");
             }
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Runs a command <see cref="Parse"/> has cleared - for a target command,
+    /// once it has found who it is aimed at.
+    /// </summary>
+    private async Task RunAsync(GameClient session, string key, ICommandBase command, string[] parameters)
+    {
+        if (command is IChatCommand chatCommand)
+        {
+            chatCommand.Execute(session, session.GetHabbo().CurrentRoom, parameters);
+        }
+        else if (command is ITargetChatCommand targetChatCommand)
+        {
+            // pixelrp: who it is aimed at. A name typed first wins. Failing
+            // that, the player's HUD target (Habbo.RpHudTargetId) - so
+            // ":kiss" alone kisses whoever is selected, and ":charge theft"
+            // charges them, every word kept for the command. "x" is the
+            // client's shorthand for the HUD target, swapped for the name
+            // before sending; one that arrives as a bare "x" means the
+            // client had nobody selected, and it is dropped the same way.
+            var typed = parameters.Length > 0 ? parameters[0] : null;
+            var typedX = typed != null && typed.Equals("x", StringComparison.OrdinalIgnoreCase);
+            GameClient? target = null;
+            if (typed != null && !typedX)
+            {
+                target = _gameClientManager.GetClientByUsername(typed);
+                if (target != null)
+                    parameters = parameters[1..];
+            }
+            else if (typedX)
+            {
+                parameters = parameters[1..];
+            }
+
+            // pixelrp: a bot's name ("bot-Name" - the HUD target's "x" types
+            // one) is plainly a name, so it never falls back to the selected
+            // player: no player command here acts on a bot.
+            var typedBot = Rooms.AI.BotNames.IsBotName(typed);
+            if (target?.GetHabbo() == null && !typedBot)
+            {
+                var hudTargetId = session.GetHabbo().RpHudTargetId;
+                target = hudTargetId > 0 ? _gameClientManager.GetClientByUserId(hudTargetId) : null;
+            }
+
+            if (target?.GetHabbo() == null)
+            {
+                // Nothing typed (or only "x") and nobody selected; or a name
+                // that is not online, with nobody selected to fall back on.
+                session.SendWhisper(typed == null || typedX ? targetChatCommand.NoTargetMessage
+                    : typedBot ? "You can't use this command on a bot."
+                    : $"User {typed} seems to be offline.");
+                return;
+            }
+
+            var targetHabbo = target.GetHabbo();
+            // pixelrp :invisible: to a player command of anyone who can't
+            // see them, someone out of sight is somewhere else - typed or
+            // the HUD target selected before they went. The same answer
+            // word for word, so it can't be used to find them out. A
+            // command that reaches another room already works on them.
+            var outOfSight = IsPlayerCommand(command) && targetHabbo.IsInvisible && !session.GetHabbo().IsInvisible;
+            if (targetChatCommand.MustBeInSameRoom && (session.GetHabbo().CurrentRoom != targetHabbo.CurrentRoom || outOfSight))
+            {
+                session.SendWhisper(targetChatCommand.IsRanged ? RangeMessages.NotInRoom : $"You must be in the same room as {targetHabbo.Username} to execute this command.");
+                return;
+            }
+
+            // pixelrp: a player command used ON somebody out cold - one
+            // check here and one sentence, as for being out cold yourself.
+            if (IsPlayerCommand(command) && !TargetKnockedOutCan.Contains(key) && KnockedOut.Is(target))
+            {
+                session.SendWhisper(KnockedOut.TargetRefusal);
+                return;
+            }
+
+            await targetChatCommand.Execute(session, session.GetHabbo().CurrentRoom, targetHabbo, parameters);
+        }
     }
 
     /// <summary>
