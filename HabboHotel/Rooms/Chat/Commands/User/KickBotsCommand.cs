@@ -30,6 +30,13 @@ internal class KickBotsCommand : IChatCommand
         {
             if (user == null || user.IsPet || !user.IsBot)
                 continue;
+            // pixelrp: a :zombies stand-in has no row and nobody's bots to go
+            // back to - it just goes
+            if (Moderator.ZombiesCommand.IsZombie(user))
+            {
+                room.GetRoomUserManager().RemoveBot(user.VirtualId, false);
+                continue;
+            }
             RoomUser botUser = null;
             if (!room.GetRoomUserManager().TryGetBot(user.BotData.Id, out botUser))
                 return;

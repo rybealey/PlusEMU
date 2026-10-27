@@ -26,6 +26,10 @@ internal class PickUpBotEvent : IPacketEvent
             return Task.CompletedTask;
         if (!room.GetRoomUserManager().TryGetBot(botId, out var botUser))
             return Task.CompletedTask;
+        // pixelrp: a :zombies stand-in has no row to own - it is not picked up
+        // into anyone's bots (bare :zombies takes it away)
+        if (HabboHotel.Rooms.Chat.Commands.Moderator.ZombiesCommand.IsZombie(botUser))
+            return Task.CompletedTask;
         // pixelrp: in a PixelRP room, a bot a staff member picks up becomes
         // theirs, like furni there (PixelRpRooms).
         var staffTakesIt = PixelRpRooms.StaffTakesIt(room, session);

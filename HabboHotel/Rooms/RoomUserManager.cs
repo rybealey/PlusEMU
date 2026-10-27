@@ -937,7 +937,8 @@ public class RoomUserManager
         // this loop never met one and no bot was ever saved (pets are UpdatePets').
         foreach (var user in GetUserList().ToList())
         {
-            if (user == null || !user.IsBot || user.IsPet)
+            // a :zombies stand-in lives in memory only - it has no row to write
+            if (user == null || !user.IsBot || user.IsPet || Chat.Commands.Moderator.ZombiesCommand.IsZombie(user))
                 continue;
             if (user.IsBot)
             {

@@ -9,6 +9,7 @@ public class GenericBot : BotAi
     private int _actionTimer;
     private int _patrolDirection = 1;
     private int _speechTimer;
+    private bool _speechStarted;
 
     public GenericBot(int virtualId)
     {
@@ -31,6 +32,15 @@ public class GenericBot : BotAi
     {
         if (GetBotData() == null)
             return;
+        // pixelrp (Twist, 2026-10-27): the first line comes at a random point
+        // of the bot's first interval, not on its first tick - a crowd put down
+        // together (:zombies) all spoke at once, as did every talking bot in a
+        // room that had just loaded.
+        if (!_speechStarted)
+        {
+            _speechStarted = true;
+            _speechTimer = Random.Shared.Next(0, GetBotData().SpeakingInterval + 1);
+        }
         if (_speechTimer <= 0)
         {
             // Only auto-speak when the bot has lines AND automatic chat is on.
