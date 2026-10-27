@@ -133,6 +133,9 @@ public static class ShiftManager
     /// <summary>The rank a player is clocked in at, or 0 when they are off duty. Uniforms follow it.</summary>
     public static int RankOf(int userId) => Sessions.TryGetValue(userId, out var session) ? session.RankId : 0;
 
+    /// <summary>The corporation a player is clocked in for, or 0 when they are off duty.</summary>
+    public static int CorpOf(int userId) => Sessions.TryGetValue(userId, out var session) ? session.CorpId : 0;
+
     /// <summary>On duty AND the corporation is City Government.</summary>
     public static bool IsStaffOnDuty(int userId) => Sessions.TryGetValue(userId, out var session) && session.IsStaffCorp;
 

@@ -1,4 +1,3 @@
-using Dapper;
 using Plus.HabboHotel.Corporations;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.GameClients;
@@ -33,16 +32,18 @@ internal class CorporationAlertCommand : IChatCommand
     public void Execute(GameClient session, Room room, string[] parameters)
     {
         var habbo = session.GetHabbo();
-        var employment = CorporationUtility.GetEmployment(habbo.Id);
-        if (employment == null || employment.CorpId == 0)
+        // pixelrp (Twist, 2026-10-27): from the shifts in memory - the sender
+        // must be clocked in, and the alert goes to whoever is clocked in for
+        // the same corporation, so the shifts say both. Every line used to read
+        // the sender's job and the corporation's whole staff list from the
+        // database. The job is only read to say why an off-duty sender can't.
+        var corpId = ShiftManager.CorpOf(habbo.Id);
+        if (corpId == 0)
         {
-            session.SendWhisper("You don't work for a corporation.");
-            session.Send(RpRetainChatPrefixComposer.Drop());
-            return;
-        }
-        if (!ShiftManager.IsOnDuty(habbo.Id))
-        {
-            session.SendWhisper("You must be clocked in to send a corporation alert.");
+            var employment = CorporationUtility.GetEmployment(habbo.Id);
+            session.SendWhisper(employment == null || employment.CorpId == 0
+                ? "You don't work for a corporation."
+                : "You must be clocked in to send a corporation alert.");
             session.Send(RpRetainChatPrefixComposer.Drop());
             return;
         }
@@ -54,20 +55,12 @@ internal class CorporationAlertCommand : IChatCommand
             return;
         }
 
-        List<int> employeeIds;
-        using (var connection = PlusEnvironment.DatabaseManager.Connection())
-        {
-            employeeIds = connection.Query<int>(
-                "SELECT `user_id` FROM `rp_corporation_employees` WHERE `corporation_id` = @corpId",
-                new { corpId = employment.CorpId }).ToList();
-        }
-
         var line = $"[{habbo.Username}]: {message}";
         // the alert went out - the sender's chat box keeps the prefix for the next one
         session.Send(new RpRetainChatPrefixComposer(":ca"));
-        foreach (var userId in employeeIds)
+        foreach (var (userId, corp, _) in ShiftManager.OnDuty())
         {
-            if (!ShiftManager.IsOnDuty(userId))
+            if (corp != corpId)
                 continue;
             var client = _gameClientManager.GetClientByUserId(userId);
             if (client?.GetHabbo() != null)
