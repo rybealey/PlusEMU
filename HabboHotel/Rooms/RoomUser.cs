@@ -536,15 +536,16 @@ public class RoomUser
         }
     }
 
-    // pixelrp (Twist, 2026-10-27): one hotel-wide flood rule, two lines a
-    // second - a fifth line within 2 seconds of the four before it mutes for 5
+    // pixelrp (Twist, 2026-10-27): one hotel-wide flood rule - a third line
+    // within 2 seconds of the two before it is not said and mutes for 5
     // seconds, the same for everyone. Only what is said counts: a :command is
     // not counted (ChatEvent, ShoutEvent), and the fighting ones have cooldowns
-    // of their own. It was 10 lines in a window of about 4 seconds, counted in
-    // room ticks (and before that 6 lines and a 20 second mute). Rooms have no
+    // of their own. Earlier the same day it was a fifth line within 2 seconds;
+    // before that 10 lines in a window of about 4 seconds, counted in room
+    // ticks (and before that 6 lines and a 20 second mute). Rooms have no
     // flood setting of their own: the stored chat_extra_flood was never read,
     // and the Room tool no longer offers it.
-    private const int FloodLineLimit = 4;
+    private const int FloodLineLimit = 2;
     private const int FloodWindowMs = 2000;
     private const int FloodMuteSeconds = 5;
 
