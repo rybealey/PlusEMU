@@ -27,9 +27,15 @@ public class RoomUserManager
     private ConcurrentDictionary<int, RoomUser> _bots;
     private ConcurrentDictionary<int, RoomUser> _pets;
 
+    // pixelrp: the ONE id counter for avatars, bots and pets here - each gets a
+    // single id, used as both its VirtualId and its InternalRoomId. There were
+    // two counters, one per id, and _users is keyed by InternalRoomId while
+    // GetRoomUserByVirtualId looks a unit up by VirtualId - so the moment the
+    // counters drifted apart (an entry that gave up between the two, or two
+    // entries at once taking them in opposite orders) every later lookup could
+    // find the wrong avatar, until the room unloaded.
     private int _primaryPrivateUserId;
     private Room _room;
-    private int _secondaryPrivateUserId;
     private ConcurrentDictionary<int, RoomUser> _users;
     // pixelrp: the same players by their user id - see GetRoomUserByHabbo. Kept
     // by AddAvatarToRoom and the leave; bots and pets are never in it.
@@ -56,7 +62,6 @@ public class RoomUserManager
         _pets = new();
         _bots = new();
         _primaryPrivateUserId = 0;
-        _secondaryPrivateUserId = 0;
         PetCount = 0;
         UserCount = 0;
     }
@@ -72,9 +77,8 @@ public class RoomUserManager
         // which is why "Copy my looks" (UserChangeComposer(BotData)) targeted the
         // wrong/missing avatar and never applied.
         bot.VirtualId = user.VirtualId;
-        var personalId = Interlocked.Increment(ref _secondaryPrivateUserId) - 1;
-        user.InternalRoomId = personalId;
-        _users.TryAdd(personalId, user);
+        user.InternalRoomId = user.VirtualId;
+        _users.TryAdd(user.InternalRoomId, user);
         var model = _room.GetGameMap().Model;
         if (bot.X > 0 && bot.Y > 0 && bot.X < model.MapSizeX && bot.Y < model.MapSizeY)
         {
@@ -235,10 +239,10 @@ public class RoomUserManager
             return false;
         user.UserId = session.GetHabbo().Id;
         session.GetHabbo().TentId = 0;
-        var personalId = Interlocked.Increment(ref _secondaryPrivateUserId) - 1;
-        user.InternalRoomId = personalId;
+        // the same id as the avatar's VirtualId - see _primaryPrivateUserId
+        user.InternalRoomId = user.VirtualId;
         session.GetHabbo().CurrentRoom = _room;
-        if (!_users.TryAdd(personalId, user))
+        if (!_users.TryAdd(user.InternalRoomId, user))
             return false;
         _usersByHabbo[user.HabboId] = user;
         var model = _room.GetGameMap().Model;
