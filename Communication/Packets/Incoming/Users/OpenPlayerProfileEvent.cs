@@ -35,9 +35,8 @@ internal class OpenPlayerProfileEvent : IPacketEvent
         if (userId > 0 && userId == PixelRpRooms.AccountId)
             return;
 
-        var targetData = _gameClientManager.GetClientByUserId(userId)?.GetHabbo();
-
-        targetData ??= await _userDataFactory.GetUserDataByIdAsync(userId);
+        var online = _gameClientManager.GetClientByUserId(userId)?.GetHabbo();
+        var targetData = online ?? await _userDataFactory.GetUserDataByIdAsync(userId);
 
         if (targetData == null)
         {
@@ -45,9 +44,18 @@ internal class OpenPlayerProfileEvent : IPacketEvent
             return;
         }
 
-        // Load HabboStats here
-        var habboStats = await _habboStatsService.LoadHabboStats(userId);
-        targetData.HabboStats = habboStats;
+        // pixelrp (Twist, 2026-10-27): an online player's stats are their live
+        // ones. They are saved only at logout, so the database row is the last
+        // logout's - and it used to be loaded over the live stats on every
+        // look at the profile, losing whatever respect, daily respects and
+        // quest progress had changed since. Loaded only for a player offline.
+        var habboStats = online?.HabboStats;
+        if (habboStats == null)
+        {
+            habboStats = await _habboStatsService.LoadHabboStats(userId);
+            if (online == null)
+                targetData.HabboStats = habboStats;
+        }
 
         var groups = _groupManager.GetGroupsForUser(targetData.Id);
         var friendCount = await _messengerDataLoader.GetFriendCount(userId);
