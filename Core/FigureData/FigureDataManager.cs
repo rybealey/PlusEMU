@@ -195,7 +195,7 @@ public class FigureDataManager : IFigureDataManager
                 }
             }
         }
-        // pixelrp: Moderators and up wear anything without buying it - every
+        // pixelrp: every staff rank wears anything without buying it - every
         // Clothing Store piece and every face (Habbo.WearsAnyClothing,
         // 2026-10-22). Everyone else still needs to own a purchasable set.
         if (clothingParts != null && !wearsAnything)
