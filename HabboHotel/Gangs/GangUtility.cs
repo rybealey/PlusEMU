@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Gangs;
 
@@ -30,6 +32,63 @@ public static class GangUtility
         public string RoleName { get; set; } = "";
     }
 
+    // pixelrp (Twist, 2026-10-27): memberships as last read, for what only
+    // SHOWS a player's gang or is asked again and again - the HUD target's gang
+    // card, :ga, the turf panel and its contest, :heal's same-gang check, the
+    // vest's colour - each of which read the database every time, on that
+    // player's own packet thread or the room's tick. What DECIDES by a gang
+    // (founding, inviting, joining, a claim, the gang shop) still reads GetGang.
+    // In-game changes refresh it at once: a join, leave, kick or disband goes
+    // through BroadcastGangMembership, and a rename, recolour, role edit or new
+    // owner through GangManager.BroadcastDetail (ForgetGang). Housekeeping
+    // writes straight to the database, so an entry is read again once it is
+    // MembershipFreshMs old whatever happens. The generation stops a read that
+    // raced a change from storing what it read before it (PartnershipUtility).
+    private static readonly ConcurrentDictionary<int, (GangMembership? Gang, long ReadAt)> Memberships = new();
+    private static readonly object MembershipsLock = new();
+    private static long _membershipsGeneration;
+    private const long MembershipFreshMs = 30_000;
+
+    /// <summary>This player's gang as last read - see <see cref="Memberships"/>. Null for none.</summary>
+    public static GangMembership? GetGangShown(int userId)
+    {
+        if (Memberships.TryGetValue(userId, out var known) && (Environment.TickCount64 - known.ReadAt) < MembershipFreshMs)
+            return known.Gang;
+        var generation = Interlocked.Read(ref _membershipsGeneration);
+        var gang = GetGang(userId);
+        lock (MembershipsLock)
+        {
+            if (Interlocked.Read(ref _membershipsGeneration) == generation)
+                Memberships[userId] = (gang, Environment.TickCount64);
+        }
+        StaleEntries.Sweep(Memberships, (_, entry) => (Environment.TickCount64 - entry.ReadAt) >= MembershipFreshMs);
+        return gang;
+    }
+
+    /// <summary>This player's gang has just been read after a change: keep it.</summary>
+    private static void RememberGang(int userId, GangMembership? gang)
+    {
+        lock (MembershipsLock)
+        {
+            Interlocked.Increment(ref _membershipsGeneration);
+            Memberships[userId] = (gang, Environment.TickCount64);
+        }
+    }
+
+    /// <summary>A gang's name, colours, roles or owner changed: its members are read again.</summary>
+    public static void ForgetGang(int gangId)
+    {
+        lock (MembershipsLock)
+        {
+            Interlocked.Increment(ref _membershipsGeneration);
+            foreach (var (userId, entry) in Memberships)
+            {
+                if (entry.Gang?.GangId == gangId)
+                    Memberships.TryRemove(userId, out _);
+            }
+        }
+    }
+
     public static GangMembership GetGang(int userId)
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
@@ -49,7 +108,7 @@ public static class GangUtility
             "SELECT `id` FROM `groups` WHERE `is_gang` = '1' AND `name` = @name LIMIT 1", new { name }) != null;
     }
 
-    public static RpUserGangComposer ComposeFor(int userId, GangMembership gang)
+    public static RpUserGangComposer ComposeFor(int userId, GangMembership? gang)
     {
         var cost = GangCost();
         if (gang == null)
@@ -78,6 +137,7 @@ public static class GangUtility
     public static void BroadcastGangMembership(int userId)
     {
         var gang = GetGang(userId);
+        RememberGang(userId, gang);
         PlusEnvironment.Game.ClientManager.SendPacket(ComposeFor(userId, gang));
         // pixelrp turfs: the one place every gang change passes through, so a
         // player who founds, joins or leaves a gang while standing in a turf

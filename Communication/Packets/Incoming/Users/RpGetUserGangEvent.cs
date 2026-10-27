@@ -15,7 +15,7 @@ internal class RpGetUserGangEvent : IPacketEvent
         var userId = packet.ReadInt();
         if (session.GetHabbo() == null || userId <= 0)
             return Task.CompletedTask;
-        session.Send(GangUtility.ComposeFor(userId, GangUtility.GetGang(userId)));
+        session.Send(GangUtility.ComposeFor(userId, GangUtility.GetGangShown(userId)));
         return Task.CompletedTask;
     }
 }

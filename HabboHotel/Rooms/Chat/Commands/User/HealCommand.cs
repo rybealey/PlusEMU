@@ -158,8 +158,8 @@ internal class HealCommand : ITargetChatCommand
     /// </summary>
     private static bool Entitled(Habbo habbo, Habbo target)
     {
-        var mine = GangUtility.GetGang(habbo.Id);
-        var theirs = GangUtility.GetGang(target.Id);
+        var mine = GangUtility.GetGangShown(habbo.Id);
+        var theirs = GangUtility.GetGangShown(target.Id);
         if (mine != null && theirs != null && mine.GangId != 0 && mine.GangId == theirs.GangId)
             return true;
 

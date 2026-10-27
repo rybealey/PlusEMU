@@ -221,7 +221,7 @@ public static class RpDurability
         // in their gang's colour (OnGangChanged keeps it up to date after)
         if (habbo.WearingArmor)
         {
-            var gang = Gangs.GangUtility.GetGang(habbo.Id);
+            var gang = Gangs.GangUtility.GetGangShown(habbo.Id);
             habbo.VestColour = gang != null ? PaletteColourFor(gang.Colour1) : 0;
         }
         if (habbo.Client != null)

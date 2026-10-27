@@ -273,7 +273,7 @@ public static class TurfManager
             // pixelrp :invisible: nor out of sight - they'd be named.
             if (user == null || user.IsBot || habbo == null || user.RpKnockedOut || user.IsAsleep || user.IsInvisible)
                 continue;
-            var theirs = capture.GangOf.GetOrAdd(habbo.Id, id => GangUtility.GetGang(id)?.GangId ?? 0);
+            var theirs = capture.GangOf.GetOrAdd(habbo.Id, id => GangUtility.GetGangShown(id)?.GangId ?? 0);
             if (theirs == 0 || theirs == capture.GangId)
                 continue;
             rivalNames.Add(habbo.Username);
@@ -501,7 +501,9 @@ public static class TurfManager
             colourB = Hex(owner.Colour2);
         }
         var heldFor = holding.GangId > 0 && holding.ClaimedAt > 0 ? Math.Max(0, (int)UnixTimestamp.GetNow() - holding.ClaimedAt) : 0;
-        var viewerGang = viewerId > 0 ? (GangUtility.GetGang(viewerId)?.GangId ?? 0) : 0;
+        // pixelrp: as last read (GetGangShown) - a contest broadcast asked the
+        // database once for every viewer in the room, on the room's tick
+        var viewerGang = viewerId > 0 ? (GangUtility.GetGangShown(viewerId)?.GangId ?? 0) : 0;
 
         if (!Captures.TryGetValue(room.RoomId, out var capture))
             return new TurfView(room.RoomId, true, holding.GangId, ownerName, colourA, colourB, heldFor,
@@ -555,11 +557,13 @@ public static class TurfManager
         ? $"{seconds / 60} minute{(seconds == 60 ? "" : "s")}"
         : $"{seconds / 60}:{seconds % 60:00}";
 
-    private static void GangAlert(int gangId, string line)
+    // pixelrp: the member list is read on the writer's thread, not the room's
+    // tick, where a contest's flip read it once per gang in a row
+    private static void GangAlert(int gangId, string line) => RoomTickWriter.QueueOrdered(() =>
     {
         foreach (var member in GangManager.GetMembers(gangId))
             PlusEnvironment.Game.ClientManager.GetClientByUserId(member.UserId)?.SendWhisper(line, AlertBubble);
-    }
+    });
 }
 
 /// <summary>

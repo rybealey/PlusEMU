@@ -271,6 +271,8 @@ public static class GangManager
     /// <summary>Every online member gets the detail composed for THEIR permissions.</summary>
     public static void BroadcastDetail(int gangId)
     {
+        // every gang edit passes through here - its members' gang cards are read again
+        GangUtility.ForgetGang(gangId);
         var snapshot = Load(gangId);
         if (snapshot == null)
             return;

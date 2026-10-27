@@ -38,7 +38,7 @@ internal class GangAlertCommand : IChatCommand
     public void Execute(GameClient session, Room room, string[] parameters)
     {
         var habbo = session.GetHabbo();
-        var gang = GangUtility.GetGang(habbo.Id);
+        var gang = GangUtility.GetGangShown(habbo.Id);
         if (gang == null)
         {
             session.SendWhisper("You're not in a gang.");
