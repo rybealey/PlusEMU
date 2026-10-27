@@ -1706,16 +1706,23 @@ public class RoomUserManager
     /// pixelrp: each player's bars as they stand now, to the room. Read when
     /// sent rather than when the tick moved them, so a hit landing in between
     /// is never overwritten by the tick's older numbers.
+    ///
+    /// pixelrp (Twist, 2026-10-27): all of them as ONE message to each viewer
+    /// (Room.SendPacketsBatched) - the same packets in the same order. Sent one
+    /// by one, a full room's bars were that many messages into every browser,
+    /// and the HUD drew itself again for each; now the client handles the tick's
+    /// bars together and the HUD draws once.
     /// </summary>
     private void SendTickStats(List<RoomUser> users)
     {
+        var packets = new List<Plus.Communication.Packets.IServerPacket>(users.Count);
         foreach (var user in users)
         {
             try
             {
                 if (user.GetClient()?.GetHabbo() is not { } habbo || habbo.CurrentRoom != _room)
                     continue;
-                _room.SendPacket(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
+                packets.Add(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
                     (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
             }
             catch (Exception e)
@@ -1723,6 +1730,7 @@ public class RoomUserManager
                 ExceptionLogger.LogException(e);
             }
         }
+        _room.SendPacketsBatched(packets);
     }
 
     /// <summary>

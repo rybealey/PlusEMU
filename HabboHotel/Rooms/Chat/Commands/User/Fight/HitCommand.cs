@@ -179,11 +179,14 @@ internal class HitCommand : ITargetChatCommand
         // bubble as an action when the text is wrapped in them, and it then
         // moves the opening marker ahead of the actor's name, rendering
         // "*Yavn swings at twist, causing 4 damage*".
+        var swing = new List<Plus.Communication.Packets.IServerPacket>(3);
+        var dealtByWeapon = 0;
         if (inReach)
         {
             // Strength is the gym's: the range grows with the attacker's level.
             var (minDamage, maxDamage) = Gym.GymState.PunchDamage(habbo.RpStrengthLevel);
             var dealt = Random.Shared.Next(minDamage, maxDamage + 1);
+            dealtByWeapon = dealt;
             // pixelrp durability: worn armour soaks its share and wears by the
             // whole hit; the bubble says what the target's health lost. The
             // weapon in the attacker's hand wears by the whole hit too, below.
@@ -211,25 +214,33 @@ internal class HitCommand : ITargetChatCommand
 
             // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.
             RoomTickWriter.QueueRpStats(target);
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
+            swing.Add(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
             // the only thing that moved on the target is their health
-            SendStats(room, targetUser, target);
-            RpDurability.WearWeapon(habbo, dealt);
+            swing.Add(StatsOf(targetUser, target));
         }
         else
-            room.SendPacket(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, but misses*", 0, FightBubble));
+            swing.Add(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, but misses*", 0, FightBubble));
 
         // The attacker's aggression moved either way.
-        SendStats(room, thisUser, habbo);
+        swing.Add(StatsOf(thisUser, habbo));
+
+        // pixelrp (Twist, 2026-10-27): the line and the bars as ONE message to
+        // each viewer (Room.SendPacketsBatched) - they went as two or three,
+        // and the HUD drew itself again for each. The weapon wears last, so
+        // the swing and a knockout show without waiting on its lookup.
+        room.SendPacketsBatched(swing);
 
         // Out of health is out of the fight: the same frozen lay :kill applies.
         if (target.RpHealth <= 0)
             room.GetRoomUserManager().ApplyRpKnockout(targetUser);
 
+        if (inReach)
+            RpDurability.WearWeapon(habbo, dealtByWeapon);
+
         return Task.CompletedTask;
     }
 
-    private static void SendStats(Room room, RoomUser user, Habbo habbo) =>
-        room.SendPacket(new RpStatsComposer(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
-            (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0));
+    private static RpStatsComposer StatsOf(RoomUser user, Habbo habbo) =>
+        new(user.VirtualId, habbo.RpHealth, habbo.RpHealthMax, habbo.RpEnergy, habbo.RpEnergyMax,
+            (int)Math.Round(habbo.RpAggression), habbo.IsRpPassive ? 1 : 0, habbo.Rank >= 5 ? 1 : 0);
 }
