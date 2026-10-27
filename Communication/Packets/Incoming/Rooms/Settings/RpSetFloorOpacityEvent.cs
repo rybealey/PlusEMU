@@ -23,9 +23,12 @@ internal class RpSetFloorOpacityEvent : IPacketEvent
     {
         var roomId = packet.ReadUInt();
         var opacity = packet.ReadInt();
-        if (!_roomManager.TryLoadRoom(roomId, out var room))
+        // pixelrp (Twist, 2026-10-27): the rank first - it is the player's own
+        // (Room.CanManageSettings reads nothing of the room), so a room is only
+        // ever loaded for somebody allowed to change it.
+        if (session.GetHabbo() == null || session.GetHabbo().Rank < Room.SettingsStaffRank)
             return Task.CompletedTask;
-        if (!room.CanManageSettings(session))
+        if (!_roomManager.TryLoadRoom(roomId, out var room))
             return Task.CompletedTask;
         RoomFloorOpacity.Set(room, opacity);
         // The room was sent it; a moderator setting it from elsewhere gets
