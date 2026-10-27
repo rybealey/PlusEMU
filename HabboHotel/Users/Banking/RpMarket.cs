@@ -90,6 +90,14 @@ public static class RpMarket
     /// <summary>Who opened the market with :mp, and when they last used it.</summary>
     private static readonly ConcurrentDictionary<int, long> Opened = new();
 
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-27): whose open market a Marketplace point
+    /// opened. Only those close with the step off, the click to walk and the
+    /// room change (<see cref="Close"/>) - a window opened with :mp stays open
+    /// across a point and a walk.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, byte> AtPoint = new();
+
     private static readonly ConcurrentDictionary<int, long> LastAction = new();
 
     private static readonly ConcurrentDictionary<int, long> LastRefresh = new();
@@ -129,8 +137,8 @@ public static class RpMarket
         "`price` AS Price, `listed_qty` AS ListedQty, `left_qty` AS LeftQty, `sold_qty` AS SoldQty, " +
         "`listed_at` AS ListedAt, `ended_at` AS EndedAt";
 
-    /// <summary>:mp - opens the window, or says why not.</summary>
-    public static void Open(GameClient session)
+    /// <summary>:mp - opens the window, or says why not. <paramref name="atPoint"/>: a Marketplace point opened it (<see cref="AtPoint"/>).</summary>
+    public static void Open(GameClient session, bool atPoint = false)
     {
         var refusal = Refusal(session);
         if (refusal != null)
@@ -138,7 +146,12 @@ public static class RpMarket
             session.SendWhisper(refusal);
             return;
         }
-        Opened[session.GetHabbo().Id] = Environment.TickCount64;
+        var id = session.GetHabbo().Id;
+        Opened[id] = Environment.TickCount64;
+        if (atPoint)
+            AtPoint[id] = 0;
+        else
+            AtPoint.TryRemove(id, out _);
         Send(session, true);
     }
 
@@ -174,22 +187,46 @@ public static class RpMarket
             var room = habbo.CurrentRoom;
             if (!IsAtMarket(room, room?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)))
                 return;
-            Open(client);
+            // pixelrp (Twist, 2026-10-27): a window already open from :mp is
+            // left as it is - the step on neither turns it back to Browse nor
+            // makes the step off close it.
+            if (Opened.TryGetValue(habbo.Id, out var since) && !AtPoint.ContainsKey(habbo.Id)
+                && (Environment.TickCount64 - since) <= SessionMs)
+                return;
+            Open(client, atPoint: true);
         });
     }
 
     /// <summary>
     /// Off a Marketplace point: the window comes down and the market is shut
     /// for them until they step back on or type :mp. A close needs no
-    /// database, so the click to walk sends it at once (OwnWalk).
+    /// database, so the click to walk sends it at once (OwnWalk). Only a
+    /// window a point opened (<see cref="AtPoint"/>); one opened with :mp is
+    /// left open.
     /// </summary>
     public static void Close(GameClient? client)
     {
         var habbo = client?.GetHabbo();
         if (habbo == null)
             return;
+        if (!AtPoint.TryRemove(habbo.Id, out _))
+            return;
         Opened.TryRemove(habbo.Id, out _);
         client!.Send(new InClientLinkComposer("marketplace/hide"));
+    }
+
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-27): the market has shut for them while the
+    /// window still shows - it lapsed, or the server forgot it (a restart) - so
+    /// the window comes down and they are told, rather than its buttons doing
+    /// nothing until they typed :mp again.
+    /// </summary>
+    private static void Shut(GameClient session, int userId)
+    {
+        Opened.TryRemove(userId, out _);
+        AtPoint.TryRemove(userId, out _);
+        session.Send(new InClientLinkComposer("marketplace/hide"));
+        session.SendWhisper("The marketplace closed - type :mp to open it again.");
     }
 
     /// <summary>
@@ -207,6 +244,7 @@ public static class RpMarket
     public static void Forget(int userId)
     {
         Opened.TryRemove(userId, out _);
+        AtPoint.TryRemove(userId, out _);
         LastAction.TryRemove(userId, out _);
         LastRefresh.TryRemove(userId, out _);
     }
@@ -226,12 +264,12 @@ public static class RpMarket
         if (!Opened.TryGetValue(habbo.Id, out var opened))
         {
             Log.Warn("Marketplace action {0} from {1} (id {2}) without the market open.", action, habbo.Username, habbo.Id);
+            Shut(session, habbo.Id);
             return;
         }
         if (now - opened > SessionMs)
         {
-            Opened.TryRemove(habbo.Id, out _);
-            Send(session, false, "The marketplace closed after an hour - type :mp to open it again.");
+            Shut(session, habbo.Id);
             return;
         }
         Opened[habbo.Id] = now;
@@ -245,10 +283,12 @@ public static class RpMarket
             return;
         }
         // Too soon after the last change: answered, so the window's buttons
-        // come back, but nothing is done.
+        // come back, but nothing is done - pixelrp (Twist, 2026-10-27): and
+        // it says so, where quick Buys on a stack used to buy fewer than were
+        // clicked without a word.
         if (LastAction.TryGetValue(habbo.Id, out var acted) && now - acted < ActionGapMs)
         {
-            Send(session, false);
+            Send(session, false, "Slow down - try again in a moment.");
             return;
         }
         LastAction[habbo.Id] = now;
