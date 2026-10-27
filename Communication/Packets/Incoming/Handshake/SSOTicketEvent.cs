@@ -152,6 +152,9 @@ public class SsoTicketEvent : IPacketEvent
             // puts it back on before their first room (RpDurability).
             Plus.HabboHotel.Corporations.UniformManager.CleanSavedLook(session.GetHabbo());
             Plus.HabboHotel.Users.RpDurability.SyncVest(session.GetHabbo(), rpInventory);
+            // pixelrp: the weapon equipped, remembered for the first room's hand
+            // (Habbo.WeaponHandItem) - nothing to read on the way in
+            session.GetHabbo().WeaponHandItem = Plus.HabboHotel.Users.RpWeapons.HandItemFor(Plus.HabboHotel.Users.RpWeapons.EquippedItem(rpInventory));
             // pixelrp: the stun gun's shots left, for the bar on it in the backpack.
             session.Send(new RpStunGunChargeComposer(
                 Plus.HabboHotel.Rooms.Chat.Commands.User.Police.PoliceState.StunGunShotsLeft(session.GetHabbo().Id),

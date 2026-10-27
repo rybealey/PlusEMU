@@ -121,6 +121,11 @@ public class Habbo
     // and the vest's colour: their gang's primary colour, matched to the
     // clothing palette (0 for none - the vest's own grey)
     public int VestColour { get; set; }
+    // pixelrp (Twist, 2026-10-27): the hand item of what is in the Weapon slot
+    // (0 for nothing), kept by RpWeapons.ApplyToHand from login on, so a room
+    // entered puts it in the hand at once instead of reading the backpack
+    // first. -1 until it is known.
+    public int WeaponHandItem { get; set; } = -1;
 
     public string Gender { get; set; } = string.Empty;
 

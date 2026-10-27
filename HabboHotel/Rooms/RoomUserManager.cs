@@ -381,9 +381,19 @@ public class RoomUserManager
         session.GetHabbo().EnsureRpStatsLoaded();
         _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().IsRpPassive ? 1 : 0, session.GetHabbo().Rank >= 5 ? 1 : 0));
         // pixelrp corporations: announce the entering player's employment.
-        var enteringEmployment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(session.GetHabbo().Id);
-        if (enteringEmployment != null)
-            _room.SendPacketAbout(session.GetHabbo(), Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(session.GetHabbo().Id, enteringEmployment));
+        // pixelrp (Twist, 2026-10-27): read just after, on the writer's
+        // thread - the job badge shows a moment after the avatar, and the
+        // room and the first step no longer wait on the database for it.
+        var entering = session.GetHabbo();
+        var enteredRoom = _room;
+        RoomTickWriter.QueueOrdered(() =>
+        {
+            if (entering.CurrentRoom != enteredRoom)
+                return;
+            var enteringEmployment = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployment(entering.Id);
+            if (enteringEmployment != null && entering.CurrentRoom == enteredRoom)
+                enteredRoom.SendPacketAbout(entering, Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(entering.Id, enteringEmployment));
+        });
         // Knocked-out players (0 health persists) re-enter laying and frozen.
         user.UpdateRpKnockoutState();
         ApplyRoomRights(session, user);
@@ -441,8 +451,27 @@ public class RoomUserManager
         // hand and the weapon waits for it to close - except a stun gun, which
         // is drawn over the phone (RoomUser.StunGunDrawn). An equipped vape is
         // held the same way (RpWeapons.IsEquippable).
-        var rpInventory = session.GetHabbo().LoadRpInventory();
-        user.SetWeaponHandItem(RpWeapons.HandItemFor(RpWeapons.EquippedItem(rpInventory)));
+        //
+        // pixelrp (Twist, 2026-10-27): from memory (Habbo.WeaponHandItem, kept
+        // by RpWeapons.ApplyToHand since login), so it is in the hand the moment
+        // they arrive without the backpack being read first - only when it is
+        // not known is it read here. Then the backpack is read on the writer's
+        // thread and the hand put right if anything changed the Weapon slot
+        // without telling ApplyToHand.
+        if (session.GetHabbo().WeaponHandItem < 0)
+            session.GetHabbo().WeaponHandItem = RpWeapons.HandItemFor(RpWeapons.EquippedItem(session.GetHabbo().LoadRpInventory()));
+        else
+        {
+            RoomTickWriter.QueueOrdered(() =>
+            {
+                if (entering.CurrentRoom != enteredRoom)
+                    return;
+                var inventory = entering.LoadRpInventory();
+                if (RpWeapons.HandItemFor(RpWeapons.EquippedItem(inventory)) != entering.WeaponHandItem)
+                    RpWeapons.ApplyToHand(entering, inventory);
+            });
+        }
+        user.SetWeaponHandItem(session.GetHabbo().WeaponHandItem);
         if (session.GetHabbo().PhoneOpen)
             user.SetPhoneInHand(true);
         // pixelrp Movement V2: enrol this user with the movement scheduler.

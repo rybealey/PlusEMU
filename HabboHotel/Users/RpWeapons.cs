@@ -88,12 +88,25 @@ public static class RpWeapons
     /// Bring the avatar's hand in line with what is equipped. Called after
     /// anything that can change the Weapon slot, and on room entry. A player
     /// not in a room has no hand to change; room entry catches them up.
+    ///
+    /// pixelrp (Twist, 2026-10-27): what is equipped is remembered on the
+    /// Habbo too (Habbo.WeaponHandItem), so a room entered puts it in the hand
+    /// at once (RoomUserManager.AddAvatarToRoom). Between rooms, with no
+    /// backpack read to hand, it is marked unknown rather than read for
+    /// nothing: the next entry reads it.
     /// </summary>
     public static void ApplyToHand(Habbo habbo, List<(int Slot, string Item, int Count)> inventory = null)
     {
-        var user = habbo?.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
-        if (user == null)
+        if (habbo == null)
             return;
-        user.SetWeaponHandItem(HandItemFor(EquippedItem(inventory ?? habbo.LoadRpInventory())));
+        var user = habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id);
+        if (user == null && inventory == null)
+        {
+            habbo.WeaponHandItem = -1;
+            return;
+        }
+        var handItem = HandItemFor(EquippedItem(inventory ?? habbo.LoadRpInventory()));
+        habbo.WeaponHandItem = handItem;
+        user?.SetWeaponHandItem(handItem);
     }
 }

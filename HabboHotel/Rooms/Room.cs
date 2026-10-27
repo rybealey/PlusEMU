@@ -660,7 +660,7 @@ public class Room : RoomData
     /// </summary>
     /// <param name="employment">pixelrp corporations: the unit's job, read by
     /// the caller - SendObjects reads the whole room's in one query.</param>
-    public void SendUnitTo(GameClient session, RoomUser unit, Plus.HabboHotel.Corporations.CorporationUtility.Employment employment)
+    public void SendUnitTo(GameClient session, RoomUser unit, Plus.HabboHotel.Corporations.CorporationUtility.Employment? employment)
     {
         session.Send(new UsersComposer(unit));
         // pixelrp RP stats: the entering client learns every player's
@@ -718,27 +718,22 @@ public class Room : RoomData
     public void SendObjects(GameClient session, bool ownAvatarSent = false)
     {
         var units = _roomUserManager.GetUserList().ToList();
-        // pixelrp: everyone's employment in ONE query, not one per player in
-        // the room - those ran one after another before the furni was sent.
-        var employments = Plus.HabboHotel.Corporations.CorporationUtility.GetEmployments(
-                units.Where(unit => unit != null && !unit.IsBot && !unit.IsPet && unit.GetClient()?.GetHabbo() != null)
-                    .Select(unit => unit.GetClient().GetHabbo().Id))
-            .GroupBy(employment => employment.UserId)
-            .ToDictionary(group => group.Key, group => group.First());
         // pixelrp :invisible: a newcomer who isn't invisible is sent nobody
         // who is (Invisibility) - not their avatar, their step or their status.
         var hidden = session.GetHabbo().IsInvisible ? null : HiddenUnits(units);
+        // the players sent, for their jobs just after (SendEmploymentsSoon)
+        var employed = new List<int>();
         foreach (var user in units)
         {
             if (user == null || (ownAvatarSent && user.GetClient() == session))
                 continue;
             if (hidden != null && hidden.Contains(user.VirtualId))
                 continue;
-            Plus.HabboHotel.Corporations.CorporationUtility.Employment employment = null;
             if (!user.IsBot && user.GetClient()?.GetHabbo() is { } habbo)
-                employments.TryGetValue(habbo.Id, out employment);
-            SendUnitTo(session, user, employment);
+                employed.Add(habbo.Id);
+            SendUnitTo(session, user, null);
         }
+        SendEmploymentsSoon(session, employed);
         // pixelrp Movement V2: the step every walking unit is on right now,
         // BEFORE the status list - so the newcomer's client draws walkers on
         // their real timing from the first frame, instead of guessing with
@@ -791,7 +786,32 @@ public class Room : RoomData
         GetJukeboxManager().SendState(session);
         // pixelrp: an on-duty worker who just entered a room they may no
         // longer work in is clocked out on the spot, not on the next tick.
-        Plus.HabboHotel.Corporations.ShiftManager.OnEnterRoom(session);
+        // pixelrp (Twist, 2026-10-27): just after the room, on the writer's
+        // thread - the check reads the job from the database (1-3 queries),
+        // and the room was held back for it. Only for somebody on duty.
+        if (Plus.HabboHotel.Corporations.ShiftManager.IsOnDuty(session.GetHabbo().Id))
+            RoomTickWriter.QueueOrdered(() => Plus.HabboHotel.Corporations.ShiftManager.OnEnterRoom(session));
+    }
+
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-27): the jobs of the players a newcomer was
+    /// just sent, read in one query on the writer's thread and sent after the
+    /// room - everyone's employment used to be read before the furni went, and
+    /// the room waited on it. A job badge shows a moment after its player.
+    /// </summary>
+    private void SendEmploymentsSoon(GameClient session, List<int> userIds)
+    {
+        if (userIds.Count == 0)
+            return;
+        RoomTickWriter.QueueOrdered(() =>
+        {
+            if (session.GetHabbo()?.CurrentRoom != this)
+                return;
+            foreach (var employment in Plus.HabboHotel.Corporations.CorporationUtility.GetEmployments(userIds)
+                         .GroupBy(employment => employment.UserId)
+                         .Select(group => group.First()))
+                session.Send(Plus.HabboHotel.Corporations.CorporationUtility.ComposeFor(employment.UserId, employment));
+        });
     }
 
     public void AddTent(uint tentId)
