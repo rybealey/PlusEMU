@@ -164,23 +164,19 @@ public static class RpDurability
     /// The damage a hit on <paramref name="target"/> takes off their health once
     /// their armour has soaked its share - all of it when they wear none. Wears
     /// the armour by the whole hit, and breaks it when that reaches its limit.
+    ///
+    /// pixelrp (Twist, 2026-10-27): whether they wear armour is read from
+    /// memory (Habbo.WearingArmor, which SyncVest keeps after every change to
+    /// the Armor frame), so the hit shows at once; the wear is written after,
+    /// on the writer's thread (<see cref="WearLater"/>). Every landed :hit,
+    /// :slap and :spit used to read and write the backpack first.
     /// </summary>
     public static int Absorb(Habbo target, int damage)
     {
-        if (target == null || damage <= 0)
+        if (target == null || damage <= 0 || !target.WearingArmor)
             return damage;
-        int soaked;
-        bool broke;
-        lock (GateFor(target.Id))
-        {
-            var (item, wear) = Worn(target.Id, ArmorSlot);
-            if (item != BodyArmorItem)
-                return damage;
-            soaked = (int)Math.Round(damage * ArmorSoak, MidpointRounding.AwayFromZero);
-            broke = Wear(target.Id, ArmorSlot, item, wear + damage);
-        }
-        Tell(target, broke ? BodyArmorItem : null, weapon: false);
-        return damage - soaked;
+        WearLater(target.Id, ArmorSlot, damage);
+        return damage - (int)Math.Round(damage * ArmorSoak, MidpointRounding.AwayFromZero);
     }
 
     /// <summary>
@@ -192,17 +188,46 @@ public static class RpDurability
     {
         if (attacker == null || damage <= 0)
             return;
+        WearLater(attacker.Id, RpWeapons.WeaponSlot, damage);
+    }
+
+    /// <summary>
+    /// Wear what is in the slot by <paramref name="damage"/> soon, in order
+    /// with the other queued writes (RoomTickWriter.QueueOrdered) - off the
+    /// hit, and off the player's next click, which waits for their last one to
+    /// finish. Only armour wears in the Armor frame, and only what wears in the
+    /// Weapon frame. The owner is sent their backpack again when the item
+    /// broke, or when the percentage it shows moved - not after every hit.
+    /// Whoever is logged in as that player then is told, so a relog meanwhile
+    /// still hears that their armour broke.
+    /// </summary>
+    private static void WearLater(int userId, int slot, int damage) => Rooms.RoomTickWriter.QueueOrdered(() =>
+    {
         string item;
+        int before;
         bool broke;
-        lock (GateFor(attacker.Id))
+        lock (GateFor(userId))
         {
-            int wear;
-            (item, wear) = Worn(attacker.Id, RpWeapons.WeaponSlot);
-            if (!IsDurable(item))
+            (item, before) = Worn(userId, slot);
+            if (slot == ArmorSlot ? item != BodyArmorItem : !IsDurable(item))
                 return;
-            broke = Wear(attacker.Id, RpWeapons.WeaponSlot, item, wear + damage);
+            broke = Wear(userId, slot, item, before + damage);
         }
-        Tell(attacker, broke ? item : null, weapon: true);
+        var habbo = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId)?.GetHabbo();
+        if (habbo != null && (broke || ShownPercent(item, before) != ShownPercent(item, before + damage)))
+            Tell(habbo, broke ? item : null, weapon: slot != ArmorSlot);
+    });
+
+    /// <summary>
+    /// The durability the backpack shows for this wear - the client's
+    /// DurabilityPercent, in the same floating-point steps, so the two round
+    /// alike (whole numbers part at 504 of 1200, among others).
+    /// </summary>
+    private static int ShownPercent(string item, int wear)
+    {
+        var max = MaxOf(item);
+        var left = Math.Max(0, max - wear);
+        return left >= max ? 100 : Math.Max(1, (int)Math.Floor(((double)left / max) * 100));
     }
 
     /// <summary>
