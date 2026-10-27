@@ -258,14 +258,36 @@ public static class MovementRegistry
             // BotsHoldPhase is on) share one cycleStart % 500?
             // Reading it off two unit lines by eye is exactly the kind of manual
             // comparison that hides an intermittent failure.
+            //
+            // pixelrp (Twist, 2026-10-28): a fast walker joins on its own,
+            // shorter pace (MovementController.JoinIntervalMs), so it can be a
+            // quarter-beat off the others and still be in step. In phase is
+            // then: every walker at walking pace shares one cycleStart % 500,
+            // and every walker - fast ones too - shares one cycleStart % the
+            // finest grid any of them joined on.
+            var fine = interval;
+            foreach (var unit in room.States.Values)
+            {
+                if (unit.HoldsPhase && (unit.Mode == MovementMode.Moving || unit.Mode == MovementMode.Pending) &&
+                    unit.IntervalMs > 0 && unit.IntervalMs < fine && interval % unit.IntervalMs == 0)
+                    fine = unit.IntervalMs;
+            }
             var inPhase = true;
             var observed = -1L;
+            var observedFine = -1L;
             foreach (var unit in room.States.Values)
             {
                 if (!unit.HoldsPhase ||
                     (unit.Mode != MovementMode.Moving && unit.Mode != MovementMode.Pending))
                     continue;
                 holders++;
+                var unitFine = ((unit.TimelineOrigin % fine) + fine) % fine;
+                if (observedFine < 0)
+                    observedFine = unitFine;
+                else if (observedFine != unitFine)
+                    inPhase = false;
+                if (unit.IntervalMs < interval)
+                    continue;
                 var unitPhase = ((unit.TimelineOrigin % interval) + interval) % interval;
                 if (observed < 0)
                     observed = unitPhase;
@@ -301,7 +323,7 @@ public static class MovementRegistry
                           $"dueIn={(walker.Queued ? walker.DueTick - now : 0)}ms " +
                           $"elapsing={(walker.Mode == MovementMode.Moving || walker.Mode == MovementMode.Pending ? walker.ElapsingEdgeIndex(now).ToString() : "-")} " +
                           $"real={walker.IsRealUser} align={walker.LastPhaseDecision} " +
-                          $"startDelay={walker.LastStartDelayMs}ms " +
+                          $"startDelay={walker.LastStartDelayMs}ms pace={walker.IntervalMs}ms " +
                           $"cycleStartPhase={((walker.TimelineOrigin % MovementSettings.IntervalMs) + MovementSettings.IntervalMs) % MovementSettings.IntervalMs} " +
                           $"tile={walker.Tile.X},{walker.Tile.Y} -> {walker.EdgeTo.X},{walker.EdgeTo.Y} " +
                           $"target={walker.Target.X},{walker.Target.Y} routeLeft={walker.Route.Length - walker.Route.Cursor}");

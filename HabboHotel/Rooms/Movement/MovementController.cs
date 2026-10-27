@@ -368,7 +368,14 @@ public static class MovementController
         // staged an interval later its tile has already changed.
         w.JoinStackedAtRequest = holder.Tile == w.Tile;
 
-        var interval = MovementSettings.IntervalMs;
+        // pixelrp (Twist, 2026-10-28): a fast walker - :fastwalk, an ambulance
+        // run, EscortIntervalMs a tile - joins on the next step of ITS OWN pace
+        // (JoinIntervalMs): a quarter-beat. Its pace divides the room's beat, so
+        // every one of its steps still lands on the room's grid - on each beat
+        // and half-way between - and a walker at walking pace still meets it a
+        // whole tile apart. It used to wait for the next full beat, up to 500
+        // ms: two tiles of standing at its pace, seen as a stop and then a rush.
+        var interval = JoinIntervalMs(w);
         var delta = ((room.PhaseAnchor - nowMs) % interval + interval) % interval;
 
         // ALWAYS JOINS. delta is 0..IntervalMs-1 by construction, so there is no
@@ -379,6 +386,21 @@ public static class MovementController
         w.LastPhaseDecision = PhaseDecision.Aligned;
         w.LastStartDelayMs = w.IsRealUser ? (int)delta : 0;
         return nowMs + delta;
+    }
+
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-28): the grid a walker joins the room's phase on
+    /// - its own pace when that is faster than walking pace and divides it
+    /// exactly (EscortIntervalMs, 250 of 500), else the room's beat. Read from
+    /// DesiredIntervalMs: BeginWalk latches IntervalMs from it only after
+    /// ResolveStartOrigin, for the walk this start time begins.
+    /// </summary>
+    internal static int JoinIntervalMs(MovementState w)
+    {
+        var pace = w.DesiredIntervalMs;
+        return pace > 0 && pace < MovementSettings.IntervalMs && MovementSettings.IntervalMs % pace == 0
+            ? pace
+            : MovementSettings.IntervalMs;
     }
 
     /// <summary>
