@@ -1753,18 +1753,27 @@ public class RoomUserManager
     /// Persists the given users' positions. This is what makes the restore survive terminations
     /// that never reach RemoveUserFromRoom - a crash, an OOM kill, a pulled network cable, or a
     /// disconnect while the user is between rooms.
+    ///
+    /// pixelrp (Twist, 2026-10-27): one transaction for the lot - one commit,
+    /// where each row was committed on its own (a flush to disk apiece, about
+    /// 25 a second with 50 walking). Every other transaction on `users` holds a
+    /// single row, so this one can't deadlock with them. A failed batch misses
+    /// this save for all of its rows; the next, two seconds on, catches up.
     /// </summary>
     private static void FlushPositions(List<object> positionSnapshots)
     {
         try
         {
             using var dbClient = PlusEnvironment.DatabaseManager.Connection();
+            dbClient.Open();
+            using var transaction = dbClient.BeginTransaction();
             foreach (var snapshot in positionSnapshots)
             {
                 dbClient.Execute(
                     "UPDATE `users` SET `last_room_id` = @roomId, `last_x` = @x, `last_y` = @y, `last_rot` = @rot, `home_room` = @roomId WHERE `id` = @userId LIMIT 1",
-                    snapshot);
+                    snapshot, transaction);
             }
+            transaction.Commit();
         }
         catch (Exception e)
         {
