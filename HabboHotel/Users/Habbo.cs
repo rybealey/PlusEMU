@@ -688,9 +688,16 @@ public class Habbo
     /// </summary>
     public const int RpAlreadyHeld = -2;
 
+    /// <summary>
+    /// pixelrp: AddRpItem's answer when the database refused the write, so
+    /// nothing was added (RpInventoryStore.Add).
+    /// </summary>
+    public const int RpAddFailed = -3;
+
     /// <summary>Adds one of an item (stacking onto an existing slot of the
     /// same item, else the first free carry slot). Returns the slot, -1 when
-    /// the backpack is full, or <see cref="RpAlreadyHeld"/>.</summary>
+    /// the backpack is full, <see cref="RpAlreadyHeld"/> or
+    /// <see cref="RpAddFailed"/>.</summary>
     public int AddRpItem(string item) => RpInventoryStore.Add(Id, item, RpUnlockedSlots);
 
     /// <summary>

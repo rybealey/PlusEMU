@@ -14,7 +14,9 @@ namespace Plus.Communication.Packets.Outgoing.Users.Banking;
 /// anonymous (Twist, 2026-10-25). `canSell` is whether they have a bank
 /// account, which selling needs. Then the note on their last action, the
 /// items that can never be listed (PoliceUtility.PoliceGear, greyed on the
-/// Sell tab), and the server's clock, for "listed today".
+/// Sell tab), the server's clock, for "listed today", and how long a listing is
+/// for sale (RpMarket.ListingSeconds), so My listings can say when one ends and
+/// mark the expired ones.
 /// </summary>
 public class RpMarketComposer : IServerPacket
 {
@@ -73,5 +75,6 @@ public class RpMarketComposer : IServerPacket
         foreach (var item in PoliceUtility.PoliceGear)
             packet.WriteString(item);
         packet.WriteInteger(_now);
+        packet.WriteInteger(RpMarket.ListingSeconds);
     }
 }

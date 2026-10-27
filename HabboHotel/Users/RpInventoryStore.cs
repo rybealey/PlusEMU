@@ -1,3 +1,5 @@
+using Dapper;
+using Plus.Core;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 
 namespace Plus.HabboHotel.Users;
@@ -71,12 +73,15 @@ public static class RpInventoryStore
     /// <summary>
     /// Adds one of an item (stacking onto an existing slot of the same item,
     /// else the first free carry slot). Returns the slot, -1 when the backpack
-    /// is full, or <see cref="Habbo.RpAlreadyHeld"/> for a one-per-player item
-    /// already held. <paramref name="wear"/> is how worn it already is - a
-    /// weapon or armour coming out of the deposit box keeps its wear
-    /// (RpDurability); anything new starts at 0.
+    /// is full, <see cref="Habbo.RpAlreadyHeld"/> for a one-per-player item
+    /// already held, or <see cref="Habbo.RpAddFailed"/> when the write did not
+    /// land. <paramref name="wear"/> is how worn it already is - a weapon or
+    /// armour coming out of the deposit box keeps its wear (RpDurability);
+    /// anything new starts at 0. <paramref name="fillVape"/> false is for a
+    /// vape coming back to the player it left (the deposit box, a Marketplace
+    /// listing taken back): it is the same vape, so it keeps their hits.
     /// </summary>
-    public static int Add(int userId, string item, int unlockedSlots, int wear = 0)
+    public static int Add(int userId, string item, int unlockedSlots, int wear = 0, bool fillVape = true)
     {
         var inventory = Load(userId);
         if (OnePerPlayer.Contains(item) && inventory.Any(entry => entry.Item == item))
@@ -87,31 +92,42 @@ public static class RpInventoryStore
         var existing = RpDurability.NeverStacks(item)
             ? default
             : inventory.FirstOrDefault(entry => entry.Item == item && entry.Count < Habbo.RpStackCap && entry.Slot >= 1 && entry.Slot <= Habbo.RpCarrySlots);
-        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
-        if (existing.Item == item && existing.Slot > 0 && existing.Slot <= unlockedSlots)
+        // pixelrp: through Dapper, so a write that fails says so. The query
+        // reactor only logs (QueryAdapter.RunQuery), and Add answered with a
+        // slot for an item that never arrived - the Marketplace took a buyer's
+        // cash for it, and a take-back ended the listing and lost its items.
+        try
         {
-            dbClient.SetQuery("UPDATE `user_rp_inventory` SET `count` = `count` + 1 WHERE `user_id` = @id AND `slot` = @slot");
-            dbClient.AddParameter("id", userId);
-            dbClient.AddParameter("slot", existing.Slot);
-            dbClient.RunQuery();
-            return existing.Slot;
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+            if (existing.Item == item && existing.Slot > 0 && existing.Slot <= unlockedSlots)
+            {
+                // Only onto that stack as it was read: moved, used up or full
+                // by now, and nothing lands on whatever is there instead.
+                var stacked = connection.Execute(
+                    "UPDATE `user_rp_inventory` SET `count` = `count` + 1 WHERE `user_id` = @id AND `slot` = @slot AND `item` = @item AND `count` < @cap",
+                    new { id = userId, slot = existing.Slot, item, cap = Habbo.RpStackCap });
+                return stacked == 1 ? existing.Slot : Habbo.RpAddFailed;
+            }
+            var used = inventory.Select(entry => entry.Slot).ToHashSet();
+            var slot = Enumerable.Range(1, unlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
+            if (slot == 0)
+                return -1;
+            // The slot filled in between: the (user_id, slot) key refuses it and that throws.
+            connection.Execute(
+                "INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`,`wear`) VALUES (@id,@slot,@item,1,@wear)",
+                new { id = userId, slot, item, wear = RpDurability.IsDurable(item) ? Math.Max(0, wear) : 0 });
+            // pixelrp: hits are counted per player (RpVape), so a vape coming
+            // into a backpack that holds none starts full. It goes into the
+            // hand only once it is equipped (RpWeapons.IsEquippable).
+            if (fillVape && item == RpVape.Item && !inventory.Any(entry => entry.Item == item))
+                RpVape.Refill(userId);
+            return slot;
         }
-        var used = inventory.Select(entry => entry.Slot).ToHashSet();
-        var slot = Enumerable.Range(1, unlockedSlots).FirstOrDefault(candidate => !used.Contains(candidate));
-        if (slot == 0)
-            return -1;
-        // pixelrp: hits are counted per player (RpVape), so a vape coming into
-        // a backpack that holds none starts full. It goes into the hand only
-        // once it is equipped (RpWeapons.IsEquippable).
-        if (item == RpVape.Item && !inventory.Any(entry => entry.Item == item))
-            RpVape.Refill(userId);
-        dbClient.SetQuery("INSERT INTO `user_rp_inventory` (`user_id`,`slot`,`item`,`count`,`wear`) VALUES (@id,@slot,@item,1,@wear)");
-        dbClient.AddParameter("id", userId);
-        dbClient.AddParameter("slot", slot);
-        dbClient.AddParameter("item", item);
-        dbClient.AddParameter("wear", RpDurability.IsDurable(item) ? Math.Max(0, wear) : 0);
-        dbClient.RunQuery();
-        return slot;
+        catch (Exception e)
+        {
+            ExceptionLogger.LogException(e);
+            return Habbo.RpAddFailed;
+        }
     }
 
     /// <summary>

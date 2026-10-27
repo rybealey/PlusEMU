@@ -24,7 +24,9 @@ namespace Plus.HabboHotel.Users;
 /// it again - and drawn as the green bar on the vape in the backpack
 /// (RpVapeChargeComposer). The seventh hit uses the vape up: one goes from the
 /// slot and the count starts again for the next. A vape coming into a backpack
-/// that holds none starts full (RpInventoryStore.Add, and trades).
+/// that holds none starts full (RpInventoryStore.Add, and trades) - but not
+/// one coming back to the player it left, out of their deposit box or a
+/// Marketplace listing taken back: that one keeps their hits (fillVape).
 ///
 /// The puff borrows the effect slot the way the police beacon does: whatever
 /// was worn comes back when it ends, if the puff is still what is worn.

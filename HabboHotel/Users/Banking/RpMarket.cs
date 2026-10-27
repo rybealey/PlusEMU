@@ -25,7 +25,10 @@ namespace Plus.HabboHotel.Users.Banking;
 ///
 /// A listed item LEAVES the backpack (RpInventoryStore.Discard) and lives in
 /// rp_market_listings until it sells or its seller takes it back, so nothing
-/// can be used, traded or stored while it is for sale. Weapons and armour keep
+/// can be used, traded or stored while it is for sale. A listing is up for
+/// <see cref="ListingSeconds"/> (five days); unsold by then it has expired -
+/// off Browse and not for sale, it waits on My listings, still holding its
+/// items, until its seller takes it back. Weapons and armour keep
 /// their wear (RpDurability) on the way in and out. Police gear never goes in
 /// (RpTrades.Tradeable), and the trading gates hold for every action: not
 /// knocked out, cuffed, jailed, banned from trading or in a trade.
@@ -51,11 +54,18 @@ public static class RpMarket
     public const int BuyItem = 2;
     public const int TakeBack = 3;
 
-    /// <summary>How many listings one player may have up at once - the same for everybody, VIP or not (Twist, 2026-10-25).</summary>
-    public const int MaxListings = 100;
+    /// <summary>How many listings one player may have up at once, expired ones included - the same for everybody, VIP or not (Twist, 2026-10-25; 50 from 100, 2026-10-27).</summary>
+    public const int MaxListings = 50;
 
     /// <summary>The most a listing may ask for one item (Twist, 2026-10-25).</summary>
     public const int MaxPrice = 200_000;
+
+    /// <summary>
+    /// How long a listing is for sale - five days from when it went up (Twist,
+    /// 2026-10-27). Nothing is written when it runs out: a listing whose
+    /// `listed_at` is that old is expired wherever it is read.
+    /// </summary>
+    public const int ListingSeconds = 5 * 24 * 3600;
 
     /// <summary>The newest listings sent to Browse; the window filters and sorts them itself.</summary>
     private const int BrowseLimit = 500;
@@ -87,6 +97,17 @@ public static class RpMarket
     private static NLog.ILogger Log => NLog.LogManager.GetLogger("Plus.HabboHotel.Users.Banking.RpMarket");
 
     private static int Now => (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    /// <summary>A listing that went up at or before this has expired.</summary>
+    private static int ExpiredBy => Now - ListingSeconds;
+
+    /// <summary>
+    /// Not while its seller is banned from trading (user_info.trading_locked,
+    /// :tradeban): a listing that was up before the ban waits, unsold, until
+    /// it ends - a ban stops what is already for sale too, not only new ones.
+    /// </summary>
+    private const string SellerMayTrade =
+        "NOT EXISTS (SELECT 1 FROM `user_info` WHERE `user_info`.`user_id` = `rp_market_listings`.`seller_id` AND `user_info`.`trading_locked` > @now)";
 
     public sealed class MarketRow
     {
@@ -267,15 +288,19 @@ public static class RpMarket
         {
             using var connection = PlusEnvironment.DatabaseManager.Connection();
             // Not your own, nor your other characters' - they cannot be bought
-            // from here (Buy).
+            // from here (Buy) - and nothing expired or from a trade-banned seller.
+            var expiredBy = ExpiredBy;
             var browse = connection.Query<MarketRow>(
-                $"SELECT {Columns} FROM `rp_market_listings` WHERE `ended_at` = 0 AND `left_qty` > 0 AND `seller_id` <> @me " +
-                "AND `seller_id` NOT IN (SELECT `id` FROM `users` WHERE `id` = @root OR `parent_id` = @root) " +
-                $"ORDER BY `id` DESC LIMIT {BrowseLimit}", new { me = habbo.Id, root = AccountUtility.RootOf(habbo.Id) }).ToList();
+                $"SELECT {Columns} FROM `rp_market_listings` WHERE `ended_at` = 0 AND `left_qty` > 0 AND `listed_at` > @expiredBy AND `seller_id` <> @me " +
+                $"AND `seller_id` NOT IN (SELECT `id` FROM `users` WHERE `id` = @root OR `parent_id` = @root) AND {SellerMayTrade} " +
+                $"ORDER BY `id` DESC LIMIT {BrowseLimit}", new { me = habbo.Id, root = AccountUtility.RootOf(habbo.Id), expiredBy, now = Now }).ToList();
+            // Expired ones first - they wait for the seller to take them back -
+            // then what is for sale, then what sold.
             var mine = connection.Query<MarketRow>(
                 $"SELECT {Columns} FROM `rp_market_listings` WHERE `seller_id` = @me " +
                 "AND (`ended_at` = 0 OR (`sold_qty` > 0 AND `ended_at` >= @since)) " +
-                $"ORDER BY (`ended_at` = 0) DESC, `id` DESC LIMIT {MineLimit}", new { me = habbo.Id, since = Now - SoldShownSeconds }).ToList();
+                "ORDER BY (`ended_at` = 0 AND `listed_at` <= @expiredBy) DESC, (`ended_at` = 0) DESC, `id` DESC " +
+                $"LIMIT {MineLimit}", new { me = habbo.Id, since = Now - SoldShownSeconds, expiredBy }).ToList();
             session!.Send(new RpMarketComposer(open, BankUtility.HasAccount(habbo.Id), browse, mine, notice, Now));
         }
         catch (Exception e)
@@ -327,6 +352,7 @@ public static class RpMarket
                 return "Police equipment cannot be sold.";
 
             using var connection = PlusEnvironment.DatabaseManager.Connection();
+            // Expired listings count too: they hold their items until taken back.
             var live = connection.ExecuteScalar<int>(
                 "SELECT COUNT(*) FROM `rp_market_listings` WHERE `seller_id` = @me AND `ended_at` = 0", new { me = habbo.Id });
             if (live >= MaxListings)
@@ -381,9 +407,12 @@ public static class RpMarket
         lock (Lock)
         {
             using var connection = PlusEnvironment.DatabaseManager.Connection();
+            // Not once it has expired or its seller has been banned from
+            // trading, though a window opened before still shows it.
+            var expiredBy = ExpiredBy;
             row = connection.QueryFirstOrDefault<MarketRow>(
-                $"SELECT {Columns} FROM `rp_market_listings` WHERE `id` = @id AND `ended_at` = 0 AND `left_qty` > 0 LIMIT 1",
-                new { id = listingId });
+                $"SELECT {Columns} FROM `rp_market_listings` WHERE `id` = @id AND `ended_at` = 0 AND `left_qty` > 0 AND `listed_at` > @expiredBy AND {SellerMayTrade} LIMIT 1",
+                new { id = listingId, expiredBy, now = Now });
             if (row == null)
                 return "That is no longer for sale.";
             // pixelrp: nor one of your own account's characters'. Bought by a
@@ -402,8 +431,8 @@ public static class RpMarket
             var left = row.LeftQty - 1;
             var claimed = connection.Execute(
                 "UPDATE `rp_market_listings` SET `left_qty` = @left, `sold_qty` = `sold_qty` + 1, `ended_at` = @ended " +
-                "WHERE `id` = @id AND `ended_at` = 0 AND `left_qty` = @was LIMIT 1",
-                new { left, ended = left <= 0 ? Now : 0, id = row.Id, was = row.LeftQty });
+                "WHERE `id` = @id AND `ended_at` = 0 AND `left_qty` = @was AND `listed_at` > @expiredBy LIMIT 1",
+                new { left, ended = left <= 0 ? Now : 0, id = row.Id, was = row.LeftQty, expiredBy });
             if (claimed != 1)
                 return "That is no longer for sale.";
 
@@ -430,6 +459,7 @@ public static class RpMarket
             habbo.ChangeCreditsInMemory(-row.Price);
             Try(() => connection.Execute("UPDATE `users` SET `credits` = `credits` - @price WHERE `id` = @me LIMIT 1",
                 new { price = row.Price, me = habbo.Id }));
+            CoinLedger.Record(habbo, -row.Price, LedgerSource("bought", row));
             Try(() => connection.Execute(
                 "INSERT INTO `rp_market_sales` (`listing_id`, `seller_id`, `buyer_id`, `buyer_name`, `item`, `wear`, `price`, `sold_at`) " +
                 "VALUES (@listing, @seller, @buyer, @buyerName, @item, @wear, @price, @now)",
@@ -441,7 +471,7 @@ public static class RpMarket
             // The seller has no account any more: the money goes into their
             // hand instead, so a sale never vanishes.
             if (paid == BankResult.NoAccount)
-                Try(() => PayIntoHand(row.SellerId, row.Price));
+                Try(() => PayIntoHand(row));
             else if (!paidBank)
                 Log.Error("Marketplace sale of listing {0}: seller {1} was NOT paid {2} ({3}) - pay them by hand.",
                     row.Id, row.SellerId, row.Price, paid);
@@ -465,11 +495,13 @@ public static class RpMarket
     }
 
     /// <summary>
-    /// Take what is left of one of your listings back into the backpack.
+    /// Take what is left of one of your listings back into the backpack - for
+    /// sale or expired, the same way.
     ///
     /// The listing is closed FIRST, in a guarded statement, so nothing reaches
     /// the backpack while it is still on sale - it cannot be bought and taken
-    /// back at once. What the backpack cannot hold goes back on sale.
+    /// back at once. What the backpack cannot hold stays listed as it was: back
+    /// on sale, or still expired, its `listed_at` untouched.
     /// </summary>
     private static string Take(GameClient session, int listingId)
     {
@@ -500,7 +532,8 @@ public static class RpMarket
             {
                 while (returned < row.LeftQty)
                 {
-                    result = RpInventoryStore.Add(habbo.Id, row.Item, habbo.RpUnlockedSlots, row.Wear);
+                    // Their own vape coming back: it keeps the hits they took, not a free refill.
+                    result = RpInventoryStore.Add(habbo.Id, row.Item, habbo.RpUnlockedSlots, row.Wear, fillVape: false);
                     if (result < 0)
                         break;
                     returned++;
@@ -519,10 +552,16 @@ public static class RpMarket
                 Try(() => connection.Execute("DELETE FROM `rp_market_listings` WHERE `id` = @id LIMIT 1", new { id = row.Id }));
             session.Send(new RpInventoryComposer(habbo.LoadRpInventory()));
 
+            var why = result switch
+            {
+                Habbo.RpAlreadyHeld => "you can only carry one of those",
+                -1 => "your backpack is full",
+                _ => "something went wrong - try again"
+            };
             if (returned == 0)
-                return result == Habbo.RpAlreadyHeld ? "You can only carry one of those." : "Your backpack is full.";
+                return $"{Capital(why)}.";
             return left > 0
-                ? $"Took back {returned} - your backpack is full."
+                ? $"Took back {returned} - {why}."
                 : $"{Capital(Named(row.Item, returned))} is back in your backpack.";
         }
     }
@@ -554,7 +593,7 @@ public static class RpMarket
         var given = 0;
         try
         {
-            while (given < count && RpInventoryStore.Add(habbo.Id, item, habbo.RpUnlockedSlots, wear) >= 0)
+            while (given < count && RpInventoryStore.Add(habbo.Id, item, habbo.RpUnlockedSlots, wear, fillVape: false) >= 0)
                 given++;
         }
         catch (Exception e)
@@ -585,16 +624,26 @@ public static class RpMarket
         }
     }
 
-    /// <summary>A sale's money into the seller's hand, when there is no account to put it in.</summary>
-    private static void PayIntoHand(int userId, int amount)
+    /// <summary>
+    /// A sale's money into the seller's hand, when there is no account to put
+    /// it in - and into the coin ledger, online or not (CoinLedger), the
+    /// balance it left read back from the row when they are offline.
+    /// </summary>
+    private static void PayIntoHand(MarketRow row)
     {
-        var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(userId);
+        var client = PlusEnvironment.Game.ClientManager.GetClientByUserId(row.SellerId);
         var habbo = client?.GetHabbo();
         if (habbo != null)
-            habbo.ChangeCreditsInMemory(amount);
+            habbo.ChangeCreditsInMemory(row.Price);
         using var connection = PlusEnvironment.DatabaseManager.Connection();
-        connection.Execute("UPDATE `users` SET `credits` = `credits` + @amount WHERE `id` = @userId LIMIT 1", new { amount, userId });
+        connection.Execute("UPDATE `users` SET `credits` = `credits` + @amount WHERE `id` = @userId LIMIT 1", new { amount = row.Price, userId = row.SellerId });
+        var after = habbo?.Credits ?? connection.ExecuteScalar<int>("SELECT `credits` FROM `users` WHERE `id` = @userId LIMIT 1", new { userId = row.SellerId });
+        CoinLedger.Record(row.SellerId, row.SellerName, row.Price, after, LedgerSource("sold", row) + " - no bank account");
     }
+
+    /// <summary>"Marketplace: bought Knife (listing 12)" - the listing ties a ledger row to rp_market_sales.</summary>
+    private static string LedgerSource(string verb, MarketRow row) =>
+        $"Marketplace: {verb} {RpTrades.ItemName(row.Item)} (listing {row.Id})";
 
     /// <summary>"Medkit ×3", or "a Knife" for one.</summary>
     private static string Named(string item, int count)

@@ -220,7 +220,9 @@ public static class DepositBox
         var wear = WearOf(habbo.Id, slot);
         while (moved < wanted)
         {
-            result = RpInventoryStore.Add(habbo.Id, entry.Item, habbo.RpUnlockedSlots, wear);
+            // pixelrp: their own vape coming back keeps the hits they took - a
+            // deposit and a withdraw was a free refill (RpVape).
+            result = RpInventoryStore.Add(habbo.Id, entry.Item, habbo.RpUnlockedSlots, wear, fillVape: false);
             if (result < 0)
                 break;
             RemoveOne(habbo.Id, slot);
@@ -228,7 +230,12 @@ public static class DepositBox
         }
         if (moved == wanted)
             return "";
-        var why = result == Habbo.RpAlreadyHeld ? "you can only carry one" : "your backpack is full";
+        var why = result switch
+        {
+            Habbo.RpAlreadyHeld => "you can only carry one",
+            -1 => "your backpack is full",
+            _ => "something went wrong - try again"
+        };
         return moved == 0 ? char.ToUpper(why[0]) + why[1..] + "." : $"Took out {moved} - {why}.";
     }
 
