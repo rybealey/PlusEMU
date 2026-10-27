@@ -141,8 +141,15 @@ public static class RpDurability
         { BodyArmorItem, 1200 }
     };
 
-    /// <summary>One wear change at a time, so two hits landing together cannot both break the same item.</summary>
-    private static readonly object Gate = new();
+    /// <summary>
+    /// One wear change at a time per player, so two hits landing together
+    /// cannot both break the same item. pixelrp (Twist, 2026-10-27): a lock per
+    /// player (by id, of a fixed few), not one for the hotel - every hit's
+    /// lookup used to queue behind every other hit's, whoever was fighting.
+    /// </summary>
+    private static readonly object[] Gates = Enumerable.Range(0, 64).Select(_ => new object()).ToArray();
+
+    private static object GateFor(int userId) => Gates[(userId & int.MaxValue) % Gates.Length];
 
     public static bool IsDurable(string item) => !string.IsNullOrEmpty(item) && MaxWear.ContainsKey(item);
 
@@ -164,7 +171,7 @@ public static class RpDurability
             return damage;
         int soaked;
         bool broke;
-        lock (Gate)
+        lock (GateFor(target.Id))
         {
             var (item, wear) = Worn(target.Id, ArmorSlot);
             if (item != BodyArmorItem)
@@ -187,7 +194,7 @@ public static class RpDurability
             return;
         string item;
         bool broke;
-        lock (Gate)
+        lock (GateFor(attacker.Id))
         {
             int wear;
             (item, wear) = Worn(attacker.Id, RpWeapons.WeaponSlot);
