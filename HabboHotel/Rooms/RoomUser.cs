@@ -69,7 +69,6 @@ public class RoomUser
     public int EffectReapplyTimer;
     public ItemEffectType CurrentItemEffect;
     public int DanceId;
-    public bool FastWalking = false;
     public int FreezeCounter;
     public bool Freezed;
     public bool FreezeInteracting;

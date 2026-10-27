@@ -217,6 +217,12 @@ public class Habbo
     /// the handitem back - see RoomUserManager.AddUserToRoom.</summary>
     public bool PhoneOpen { get; set; }
 
+    /// <summary>pixelrp: :fastwalk is on. On the session rather than the
+    /// RoomUser for the same reason as PhoneOpen: each room's movement state
+    /// starts at walking pace, and RoomUserManager.AddAvatarToRoom puts the
+    /// fast pace back. Off again at the next login.</summary>
+    public bool FastWalking { get; set; }
+
     public bool AllowMimic { get; set; }
 
     public bool IgnorePublicWhispers { get; set; }

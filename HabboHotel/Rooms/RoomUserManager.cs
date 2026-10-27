@@ -448,6 +448,11 @@ public class RoomUserManager
         // pixelrp Movement V2: enrol this user with the movement scheduler.
         // Bots and pets stay on V1, so this only enrols human users.
         Movement.MovementV2Bridge.OnUserEnter(_room, user);
+        // pixelrp :fastwalk follows the player from room to room. The enrol
+        // above starts this room's movement state at walking pace, so the fast
+        // pace is set again here. Before the escort, which sets a medic's own.
+        if (session.GetHabbo().FastWalking)
+            Movement.MovementV2Bridge.SetWalkPace(user, Movement.MovementSettings.EscortIntervalMs);
         // pixelrp police: an escort survives a room change. After the enrol,
         // because putting the pair back needs both units known to V2.
         Chat.Commands.User.Police.PoliceState.OnRoomEntered(_room, user);

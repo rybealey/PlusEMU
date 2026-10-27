@@ -10,20 +10,21 @@ internal class FastwalkCommand : IChatCommand
 
     public string Parameters => "";
 
-    public string Description => "Walk twice as fast until you leave the room.";
+    public string Description => "Walk twice as fast until you turn it off or log out.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+        var habbo = session.GetHabbo();
+        var user = room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id);
         if (user == null)
             return;
-        user.FastWalking = !user.FastWalking;
+        habbo.FastWalking = !habbo.FastWalking;
         // Movement V2 reads no FastWalking flag - its one per-walker speed is
         // the pace the ambulance run uses, so fast walk borrows that. It lands
-        // on the next walk, never mid-stride, and a new room starts at normal
-        // pace (and a new RoomUser with FastWalking off) by itself.
-        MovementV2Bridge.SetWalkPace(user, user.FastWalking ? MovementSettings.EscortIntervalMs : MovementSettings.IntervalMs);
-        session.SendWhisper(user.FastWalking
+        // on the next walk, never mid-stride. A new room's movement state
+        // starts at walking pace, and AddAvatarToRoom sets this one again.
+        MovementV2Bridge.SetWalkPace(user, habbo.FastWalking ? MovementSettings.EscortIntervalMs : MovementSettings.IntervalMs);
+        session.SendWhisper(habbo.FastWalking
             ? "Fast walk is on. It starts from your next walk."
             : "Fast walk is off.");
     }
