@@ -76,41 +76,51 @@ internal class MessengerEventSynchronizer : IAuthenticationTask
             return;
         }
 
-        await _messengerDataLoader.LogPrivateMessage(habbo.Id, args.Friend.Id, args.Message);
-        var target = _gameClientManager.GetClientByUserId(args.Friend.Id);
-        if (target == null)
+        // pixelrp (Twist, 2026-10-27): logged beside the delivery, not before
+        // it - a message waited for its chatlog row to be written before it was
+        // sent on. Every message is still logged, delivered or not.
+        var logged = _messengerDataLoader.LogPrivateMessage(habbo.Id, args.Friend.Id, args.Message);
+        try
         {
-            await _messengerDataLoader.LogPrivateOfflineMessage(habbo.Id, args.Friend.Id, args.Message);
-            return;
-        }
+            var target = _gameClientManager.GetClientByUserId(args.Friend.Id);
+            if (target == null)
+            {
+                await _messengerDataLoader.LogPrivateOfflineMessage(habbo.Id, args.Friend.Id, args.Message);
+                return;
+            }
 
-        if (target.GetHabbo().TimeMuted > 0)
+            if (target.GetHabbo().TimeMuted > 0)
+            {
+                habbo.Client.Send(new InstantMessageErrorComposer(MessengerMessageErrors.FriendMuted, args.Friend.Id));
+                return;
+            }
+
+            if (!target.GetHabbo().AllowConsoleMessages || target.GetHabbo().IgnoresComponent.IsIgnored(habbo.Id))
+            {
+                habbo.Client.Send(new InstantMessageErrorComposer(MessengerMessageErrors.FriendBusy, args.Friend.Id));
+                return;
+            }
+
+            // pixelrp: recipient has airplane mode on - don't deliver, and tell
+            // the sender's phone the message bounced.
+            if (target.GetHabbo().AirplaneMode)
+            {
+                habbo.Client.Send(new RpMessengerReceiptComposer(args.Friend.Id, RpMessengerReceiptComposer.NotDelivered));
+                return;
+            }
+
+            var messenger = target.GetHabbo().Messenger;
+            var friend = messenger.GetFriend(habbo.Id);
+            if (friend == null) return;
+            messenger.ReceiveMessage(friend, args.Message);
+            // pixelrp: the friend's client got the message live - tell the
+            // sender's phone it was delivered.
+            habbo.Client.Send(new RpMessengerReceiptComposer(args.Friend.Id, RpMessengerReceiptComposer.Delivered));
+        }
+        finally
         {
-            habbo.Client.Send(new InstantMessageErrorComposer(MessengerMessageErrors.FriendMuted, args.Friend.Id));
-            return;
+            await logged;
         }
-
-        if (!target.GetHabbo().AllowConsoleMessages || target.GetHabbo().IgnoresComponent.IsIgnored(habbo.Id))
-        {
-            habbo.Client.Send(new InstantMessageErrorComposer(MessengerMessageErrors.FriendBusy, args.Friend.Id));
-            return;
-        }
-
-        // pixelrp: recipient has airplane mode on - don't deliver, and tell
-        // the sender's phone the message bounced.
-        if (target.GetHabbo().AirplaneMode)
-        {
-            habbo.Client.Send(new RpMessengerReceiptComposer(args.Friend.Id, RpMessengerReceiptComposer.NotDelivered));
-            return;
-        }
-
-        var messenger = target.GetHabbo().Messenger;
-        var friend = messenger.GetFriend(habbo.Id);
-        if (friend == null) return;
-        messenger.ReceiveMessage(friend, args.Message);
-        // pixelrp: the friend's client got the message live - tell the
-        // sender's phone it was delivered.
-        habbo.Client.Send(new RpMessengerReceiptComposer(args.Friend.Id, RpMessengerReceiptComposer.Delivered));
     }
 
     private async Task OnFriendsUpdated(Habbo habbo, MessengerBuddiesModifiedEventArgs args)
