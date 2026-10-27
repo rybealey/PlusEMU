@@ -40,6 +40,10 @@ internal class MoveAvatarEvent : IPacketEvent
                 horse.MoveTo(moveX, moveY);
         }
         user.MoveTo(moveX, moveY);
+        // pixelrp (Twist, 2026-10-28): a walk to an arrow gets the room behind
+        // it loaded, and its furni downloading, on the way (ArrowAhead) - after
+        // the walk has gone to movement, which it does not touch.
+        Plus.HabboHotel.Rooms.ArrowAhead.OnWalk(session.GetHabbo(), room, moveX, moveY);
         return Task.CompletedTask;
     }
 }
