@@ -1,6 +1,7 @@
 using Plus.Communication.Packets.Incoming.Camera;
 using Plus.Communication.Packets.Incoming.Catalog;
 using Plus.Communication.Packets.Incoming.Groups;
+using Plus.Communication.Packets.Incoming.Inventory.AvatarEffects;
 using Plus.Communication.Packets.Incoming.Inventory.Trading;
 using Plus.Communication.Packets.Incoming.Marketplace;
 using Plus.Communication.Packets.Incoming.Rooms.AI.Pets;
@@ -61,12 +62,22 @@ internal static class PacketLimits
     /// player in the room 10 times a second. Stopping is not limited (see CancelTypingEvent).</summary>
     public static readonly PacketLimit Typing = new(3, 6);
 
+    /// <summary>Dancing, waving and the other expressions, and picking an effect - each goes to the
+    /// whole room, some as two to four messages. A person picks them a click at a time; at the default
+    /// 10 a second one macro doubled a busy room's traffic (Twist, 2026-10-28). A dance the limit drops
+    /// is taken back on the client after a few seconds (DanceNow).</summary>
+    public static readonly PacketLimit Cosmetic = new(2, 4);
+
     private static readonly Dictionary<Type, PacketLimit> Listed = new()
     {
         [typeof(ChatEvent)] = Chat,
         [typeof(ShoutEvent)] = Chat,
         [typeof(WhisperEvent)] = Chat,
         [typeof(StartTypingEvent)] = Typing,
+
+        [typeof(DanceEvent)] = Cosmetic,
+        [typeof(ActionEvent)] = Cosmetic,
+        [typeof(AvatarEffectSelectedEvent)] = Cosmetic,
 
         [typeof(PurchaseFromCatalogEvent)] = Buying,
         [typeof(PurchaseFromCatalogAsGiftEvent)] = Buying,
