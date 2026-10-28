@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Dapper;
 using MySqlConnector;
 using Plus.Communication.Packets.Outgoing.Users;
@@ -127,6 +128,23 @@ public static class PartnershipUtility
         return connection.ExecuteScalar<string>(
             "SELECT `username` FROM `users` WHERE `id` = @userId LIMIT 1",
             new { userId }) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-28): <see cref="RelationshipsFor"/>, only when it
+    /// needs nothing from the database - their partner already known, and
+    /// either none or online. False when it would read.
+    /// </summary>
+    public static bool TryRelationshipsInMemory(int userId, [NotNullWhen(true)] out Dictionary<int, (MessengerBuddy buddy, int count)>? relationships)
+    {
+        relationships = null;
+        var partnerId = 0;
+        if (userId > 0 && !Partners.TryGetValue(userId, out partnerId))
+            return false;
+        if (partnerId != 0 && PlusEnvironment.Game.ClientManager.GetClientByUserId(partnerId)?.GetHabbo() == null)
+            return false;
+        relationships = RelationshipsFor(userId);
+        return true;
     }
 
     /// <summary>

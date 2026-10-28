@@ -49,6 +49,20 @@ public static class GangUtility
     private static long _membershipsGeneration;
     private const long MembershipFreshMs = 30_000;
 
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-28): this player's gang as last read, only when
+    /// that is fresh enough to show (<see cref="GetGangShown"/>) - false when it
+    /// would have to be read from the database.
+    /// </summary>
+    public static bool TryGetGangShown(int userId, out GangMembership? gang)
+    {
+        gang = null;
+        if (!Memberships.TryGetValue(userId, out var known) || (Environment.TickCount64 - known.ReadAt) >= MembershipFreshMs)
+            return false;
+        gang = known.Gang;
+        return true;
+    }
+
     /// <summary>This player's gang as last read - see <see cref="Memberships"/>. Null for none.</summary>
     public static GangMembership? GetGangShown(int userId)
     {

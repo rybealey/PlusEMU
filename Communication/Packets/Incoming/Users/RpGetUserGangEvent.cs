@@ -1,5 +1,6 @@
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Gangs;
+using Plus.HabboHotel.Rooms;
 
 namespace Plus.Communication.Packets.Incoming.Users;
 
@@ -15,7 +16,18 @@ internal class RpGetUserGangEvent : IPacketEvent
         var userId = packet.ReadInt();
         if (session.GetHabbo() == null || userId <= 0)
             return Task.CompletedTask;
-        session.Send(GangUtility.ComposeFor(userId, GangUtility.GetGangShown(userId)));
+        if (GangUtility.TryGetGangShown(userId, out var gang))
+        {
+            session.Send(GangUtility.ComposeFor(userId, gang));
+            return Task.CompletedTask;
+        }
+        // pixelrp (Twist, 2026-10-28): not remembered, so read from the database
+        // on the writer's thread (RoomTickWriter), not here - this player's
+        // packets are handled one at a time, and the walk or click after this
+        // one waited on the read. Nothing is skipped or limited: the answer
+        // comes once it is read, and every gang reply names its player, so one
+        // that lands after a later reply is filed under the right one.
+        RoomTickWriter.QueueOrdered(() => session.Send(GangUtility.ComposeFor(userId, GangUtility.GetGangShown(userId))));
         return Task.CompletedTask;
     }
 }

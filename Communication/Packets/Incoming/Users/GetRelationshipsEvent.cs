@@ -1,5 +1,6 @@
 using Plus.Communication.Packets.Outgoing.Users;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Users.Relationships;
 
 namespace Plus.Communication.Packets.Incoming.Users;
@@ -15,7 +16,17 @@ internal class GetRelationshipsEvent : IPacketEvent
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var userId = packet.ReadInt();
-        session.Send(new GetRelationshipsComposer(userId, PartnershipUtility.RelationshipsFor(userId)));
+        if (PartnershipUtility.TryRelationshipsInMemory(userId, out var relationships))
+        {
+            session.Send(new GetRelationshipsComposer(userId, relationships));
+            return Task.CompletedTask;
+        }
+        // pixelrp (Twist, 2026-10-28): a partner not known yet, or offline, is
+        // read from the database on the writer's thread (RoomTickWriter), not
+        // here - this player's packets are handled one at a time, and the walk
+        // or click after opening an infostand waited on the read. The answer
+        // names its player, and the infostand keeps only the one it shows.
+        RoomTickWriter.QueueOrdered(() => session.Send(new GetRelationshipsComposer(userId, PartnershipUtility.RelationshipsFor(userId))));
         return Task.CompletedTask;
     }
 }
