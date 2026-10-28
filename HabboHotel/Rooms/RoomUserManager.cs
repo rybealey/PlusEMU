@@ -381,12 +381,12 @@ public class RoomUserManager
         session.GetHabbo().EnsureRpStatsLoaded();
         _room.SendPacket(new RpStatsComposer(user.VirtualId, session.GetHabbo().RpHealth, session.GetHabbo().RpHealthMax, session.GetHabbo().RpEnergy, session.GetHabbo().RpEnergyMax, (int)Math.Round(session.GetHabbo().RpAggression), session.GetHabbo().IsRpPassive ? 1 : 0, session.GetHabbo().Rank >= 5 ? 1 : 0));
         // pixelrp corporations: announce the entering player's employment.
-        // pixelrp (Twist, 2026-10-27): read just after, on the writer's
-        // thread - the job badge shows a moment after the avatar, and the
+        // pixelrp (Twist, 2026-10-27): read just after, on RoomTickWriter's
+        // read line - the job badge shows a moment after the avatar, and the
         // room and the first step no longer wait on the database for it.
         var entering = session.GetHabbo();
         var enteredRoom = _room;
-        RoomTickWriter.QueueOrdered(() =>
+        RoomTickWriter.QueueRead(() =>
         {
             if (entering.CurrentRoom != enteredRoom)
                 return;

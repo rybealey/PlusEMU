@@ -802,7 +802,7 @@ public class Room : RoomData
 
     /// <summary>
     /// pixelrp (Twist, 2026-10-27): the jobs of the players a newcomer was
-    /// just sent, read in one query on the writer's thread and sent after the
+    /// just sent, read in one query on RoomTickWriter's read line and sent after the
     /// room - everyone's employment used to be read before the furni went, and
     /// the room waited on it. A job badge shows a moment after its player.
     /// </summary>
@@ -810,7 +810,7 @@ public class Room : RoomData
     {
         if (userIds.Count == 0)
             return;
-        RoomTickWriter.QueueOrdered(() =>
+        RoomTickWriter.QueueRead(() =>
         {
             if (session.GetHabbo()?.CurrentRoom != this)
                 return;

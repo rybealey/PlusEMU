@@ -295,7 +295,7 @@ public static class HospitalAdmission
 
     /// <summary>
     /// pixelrp (Twist, 2026-10-27): read the headquarters room again soon, on
-    /// the writer's thread, unless it was read in the last minute. Asked at
+    /// RoomTickWriter's read line, unless it was read in the last minute. Asked at
     /// every knockout, a minute or more before anybody is collected, so an
     /// admission finds it already read. It was read in the admission itself,
     /// and that runs on the room tick inside _cycleLock - which the movement
@@ -309,7 +309,7 @@ public static class HospitalAdmission
             return;
         if (Interlocked.Exchange(ref _hqReading, 1) == 1)
             return;
-        RoomTickWriter.QueueOrdered(() =>
+        RoomTickWriter.QueueRead(() =>
         {
             try
             {

@@ -569,9 +569,9 @@ public static class TurfManager
         ? $"{seconds / 60} minute{(seconds == 60 ? "" : "s")}"
         : $"{seconds / 60}:{seconds % 60:00}";
 
-    // pixelrp: the member list is read on the writer's thread, not the room's
+    // pixelrp: the member list is read on RoomTickWriter's read line, not the room's
     // tick, where a contest's flip read it once per gang in a row
-    private static void GangAlert(int gangId, string line) => RoomTickWriter.QueueOrdered(() =>
+    private static void GangAlert(int gangId, string line) => RoomTickWriter.QueueRead(() =>
     {
         foreach (var member in GangManager.GetMembers(gangId))
             PlusEnvironment.Game.ClientManager.GetClientByUserId(member.UserId)?.SendWhisper(line, AlertBubble);

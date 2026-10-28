@@ -41,9 +41,26 @@ namespace Plus.HabboHotel.Rooms;
 /// A RESTART WAITS FOR IT (Drain, from PlusEnvironment's shutdown), so a
 /// deploy loses nothing; only a crash can lose what was still waiting - in
 /// practice the last few milliseconds.
+///
+/// READS SOMEBODY IS WAITING TO SEE (Twist, 2026-10-28) - a job badge, the
+/// gang or partner on a profile, a gang's turf alert - go on a line of their
+/// own (QueueRead, a second thread), so they never wait behind saves. Only
+/// reads that need no save to land first go there; anything whose order with
+/// a save matters stays on the ordered queue. A restart does not wait for
+/// them: there is nobody left to send them to.
+///
+/// BOTH LINES WARN when they fall behind - a job slower than SlowJobMs, or
+/// LongLine jobs waiting - as a [stall] line in the log, at most once every
+/// WarnEveryMs a line.
 /// </summary>
 public static class RoomTickWriter
 {
+    private static readonly NLog.ILogger Log = NLog.LogManager.GetLogger("Plus.HabboHotel.Rooms.RoomTickWriter");
+
+    private const long SlowJobMs = 250;
+    private const int LongLine = 200;
+    private const long WarnEveryMs = 10_000;
+
     private static readonly ConcurrentDictionary<int, Habbo> PendingStats = new();
     private static readonly ConcurrentDictionary<uint, Room> PendingCounts = new();
     private static readonly ConcurrentQueue<Action> Ordered = new();
@@ -51,6 +68,14 @@ public static class RoomTickWriter
     private static readonly object StartLock = new();
     private static Thread? _thread;
     private static int _busy;
+    private static int _orderedWaiting;
+    private static long _writesWarnedAt;
+
+    private static readonly ConcurrentQueue<Action> Reads = new();
+    private static readonly ManualResetEventSlim ReadWake = new(false);
+    private static Thread? _readThread;
+    private static int _readsWaiting;
+    private static long _readsWarnedAt;
 
     /// <summary>Save this player's RP stats soon, with whatever they are then.</summary>
     public static void QueueRpStats(Habbo? habbo)
@@ -73,8 +98,33 @@ public static class RoomTickWriter
     /// <summary>Make this write soon, after every ordered write queued before it.</summary>
     public static void QueueOrdered(Action write)
     {
+        WarnIfLong("Save queue", Interlocked.Increment(ref _orderedWaiting), ref _writesWarnedAt);
         Ordered.Enqueue(write);
         Signal();
+    }
+
+    /// <summary>
+    /// Read this soon, on the read line, after every read queued before it -
+    /// for a read that sends somebody what it finds and needs no queued save
+    /// to land first.
+    /// </summary>
+    public static void QueueRead(Action read)
+    {
+        WarnIfLong("Read queue", Interlocked.Increment(ref _readsWaiting), ref _readsWarnedAt);
+        Reads.Enqueue(read);
+        if (_readThread == null)
+        {
+            lock (StartLock)
+            {
+                if (_readThread == null)
+                {
+                    var thread = new Thread(ReadLoop) { IsBackground = true, Name = "PixelRPRoomReader" };
+                    thread.Start();
+                    _readThread = thread;
+                }
+            }
+        }
+        ReadWake.Set();
     }
 
     /// <summary>A room visit begins: one row, open until its exit is written.</summary>
@@ -158,17 +208,20 @@ public static class RoomTickWriter
                 foreach (var id in PendingStats.Keys)
                 {
                     if (PendingStats.TryRemove(id, out var habbo))
-                        Try(() => SaveRpStats(habbo));
+                        Timed("Save queue", () => SaveRpStats(habbo), ref _orderedWaiting, ref _writesWarnedAt);
                 }
 
                 foreach (var id in PendingCounts.Keys)
                 {
                     if (PendingCounts.TryRemove(id, out var room))
-                        Try(() => SaveUserCount(room));
+                        Timed("Save queue", () => SaveUserCount(room), ref _orderedWaiting, ref _writesWarnedAt);
                 }
 
                 while (Ordered.TryDequeue(out var write))
-                    Try(write);
+                {
+                    Interlocked.Decrement(ref _orderedWaiting);
+                    Timed("Save queue", write, ref _orderedWaiting, ref _writesWarnedAt);
+                }
             }
             catch (Exception e)
             {
@@ -179,6 +232,29 @@ public static class RoomTickWriter
             finally
             {
                 Volatile.Write(ref _busy, 0);
+            }
+        }
+    }
+
+    private static void ReadLoop()
+    {
+        while (true)
+        {
+            try
+            {
+                ReadWake.Wait(1000);
+                // Reset before taking any, as the write loop does.
+                ReadWake.Reset();
+                while (Reads.TryDequeue(out var read))
+                {
+                    Interlocked.Decrement(ref _readsWaiting);
+                    Timed("Read queue", read, ref _readsWaiting, ref _readsWarnedAt);
+                }
+            }
+            catch (Exception e)
+            {
+                ExceptionLogger.LogException(e);
+                Thread.Sleep(100);
             }
         }
     }
@@ -194,6 +270,30 @@ public static class RoomTickWriter
         {
             ExceptionLogger.LogException(e);
         }
+    }
+
+    // Try, and say so when one job held its line up (SlowJobMs).
+    private static void Timed(string line, Action job, ref int waiting, ref long warnedAt)
+    {
+        var started = Environment.TickCount64;
+        Try(job);
+        var took = Environment.TickCount64 - started;
+        if (took >= SlowJobMs && MayWarn(ref warnedAt))
+            Log.Warn($"[stall] {line}: one job took {took}ms ({Volatile.Read(ref waiting)} waiting behind it)");
+    }
+
+    private static void WarnIfLong(string line, int waiting, ref long warnedAt)
+    {
+        if (waiting >= LongLine && MayWarn(ref warnedAt))
+            Log.Warn($"[stall] {line}: {waiting} jobs waiting");
+    }
+
+    // At most one warning a line every WarnEveryMs, whichever thread asks.
+    private static bool MayWarn(ref long warnedAt)
+    {
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref warnedAt);
+        return (now - last) >= WarnEveryMs && Interlocked.CompareExchange(ref warnedAt, now, last) == last;
     }
 
     private static void SaveRpStats(Habbo habbo)
