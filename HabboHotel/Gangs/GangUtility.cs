@@ -79,6 +79,54 @@ public static class GangUtility
         return gang;
     }
 
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-28): read every one of these players whose gang
+    /// is not fresh in <see cref="Memberships"/> in ONE query, so the
+    /// <see cref="GetGangShown"/> calls straight after find them all in memory.
+    /// For the turf panel, which asks for everyone in the room on the room's
+    /// own tick - one query per player, a room's worth at once.
+    /// </summary>
+    public static void WarmGangsShown(IEnumerable<int> userIds)
+    {
+        var now = Environment.TickCount64;
+        var missing = userIds
+            .Where(id => id > 0 && !(Memberships.TryGetValue(id, out var known) && (now - known.ReadAt) < MembershipFreshMs))
+            .Distinct()
+            .ToList();
+        if (missing.Count == 0)
+            return;
+        var generation = Interlocked.Read(ref _membershipsGeneration);
+        var found = new Dictionary<int, GangMembership>();
+        using (var connection = PlusEnvironment.DatabaseManager.Connection())
+        {
+            // GetGang's query for many players at once; the first row per
+            // player, as its LIMIT 1 takes.
+            foreach (var row in connection.Query<GangMembershipOf>(
+                         "SELECT m.`user_id` AS UserId, g.`id` AS GangId, g.`name` AS Name, g.`colour1` AS Colour1, g.`colour2` AS Colour2, (g.`owner_id` = m.`user_id`) AS IsOwner, COALESCE(r.`name`, '') AS RoleName " +
+                         "FROM `group_memberships` m " +
+                         "INNER JOIN `groups` g ON g.`id` = m.`group_id` " +
+                         "LEFT JOIN `rp_gang_members` s ON s.`user_id` = m.`user_id` AND s.`gang_id` = m.`group_id` " +
+                         "LEFT JOIN `rp_gang_roles` r ON r.`id` = s.`role_id` " +
+                         "WHERE m.`user_id` IN @missing AND g.`is_gang` = '1'", new { missing }))
+                found.TryAdd(row.UserId, row);
+        }
+        lock (MembershipsLock)
+        {
+            // A change landed while this read: leave them to be read one by one.
+            if (Interlocked.Read(ref _membershipsGeneration) != generation)
+                return;
+            var readAt = Environment.TickCount64;
+            foreach (var userId in missing)
+                Memberships[userId] = (found.GetValueOrDefault(userId), readAt);
+        }
+    }
+
+    /// <summary>A membership and whose it is - for <see cref="WarmGangsShown"/>.</summary>
+    private class GangMembershipOf : GangMembership
+    {
+        public int UserId { get; set; }
+    }
+
     /// <summary>This player's gang has just been read after a change: keep it.</summary>
     private static void RememberGang(int userId, GangMembership? gang)
     {

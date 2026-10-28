@@ -267,7 +267,13 @@ public static class TurfManager
         var rivalNames = new List<string>();
         var rivalGangs = new HashSet<int>();
         var rivalGangOf = new Dictionary<string, int>();
-        foreach (var user in users.GetRoomUsers().ToList())
+        var present = users.GetRoomUsers().ToList();
+        // pixelrp (Twist, 2026-10-28): everyone new to this claim read in one
+        // query, not one each in the loop below - this is the room's tick.
+        GangUtility.WarmGangsShown(present
+            .Where(user => user != null && !user.IsBot && !capture.GangOf.ContainsKey(user.UserId))
+            .Select(user => user.UserId));
+        foreach (var user in present)
         {
             var habbo = user?.GetClient()?.GetHabbo();
             // pixelrp :invisible: nor out of sight - they'd be named.
@@ -474,7 +480,13 @@ public static class TurfManager
     {
         if (room == null)
             return;
-        foreach (var user in room.GetRoomUserManager().GetRoomUsers().ToList())
+        var viewers = room.GetRoomUserManager().GetRoomUsers().ToList();
+        // pixelrp (Twist, 2026-10-28): every viewer's gang that Describe would
+        // read from the database, read in one query first - a contest's
+        // broadcasts run on the room's tick.
+        if (room.IsTurf)
+            GangUtility.WarmGangsShown(viewers.Where(user => user != null && !user.IsBot).Select(user => user.UserId));
+        foreach (var user in viewers)
         {
             var client = user?.GetClient();
             if (user == null || user.IsBot || client?.GetHabbo() == null)
