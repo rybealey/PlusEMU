@@ -139,18 +139,30 @@ public sealed class PacketManager : IPacketManager, IDisposable
         if (_cancellationTokenSource.IsCancellationRequested)
             return;
 
-        var task = pak.Parse(session, packet); 
-        await task.WaitAsync(_maximumRunTimeInSec, _cancellationTokenSource.Token).ContinueWith(t =>
+        var task = pak.Parse(session, packet);
+        // pixelrp (Twist, 2026-10-28): a handler that has already finished - as
+        // every click, walk and chat handler does, synchronously - ends here.
+        // The ContinueWith that checked it always went through the thread pool,
+        // even for a finished task, and this player's next packet waited on that
+        // hop: microseconds on a quiet server, milliseconds once the pool is
+        // busy. A fault or the time limit is logged and disconnects as before,
+        // and a cancel (shutting down) does nothing, as before.
+        if (task.IsCompletedSuccessfully)
+            return;
+        try
         {
-            if (t.IsFaulted && t.Exception != null)
-            {
-                foreach (var e in t.Exception.Flatten().InnerExceptions)
-                {
-                    _logger.LogError("Error handling packet {packetId} for session {session} @ Habbo  {username}: {message} {stacktrace}", pak.GetType().Name, session.Id, session.GetHabbo()?.Username ?? string.Empty, e.Message, e.StackTrace);
-                    session.Disconnect();
-                }
-            }
-        });
+            await task.WaitAsync(_maximumRunTimeInSec, _cancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception error)
+        {
+            IEnumerable<Exception> errors = task.IsFaulted && task.Exception != null ? task.Exception.Flatten().InnerExceptions : new[] { error };
+            foreach (var e in errors)
+                _logger.LogError("Error handling packet {packetId} for session {session} @ Habbo  {username}: {message} {stacktrace}", pak.GetType().Name, session.Id, session.GetHabbo()?.Username ?? string.Empty, e.Message, e.StackTrace);
+            session.Disconnect();
+        }
     }
 
     public void Dispose()
