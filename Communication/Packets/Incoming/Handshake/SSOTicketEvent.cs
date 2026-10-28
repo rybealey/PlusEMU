@@ -81,9 +81,36 @@ public class SsoTicketEvent : IPacketEvent
         _logger = logger;
     }
 
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-28): how many logins run at once. A login is
+    /// some forty database round trips, nearly all of them holding a pooled
+    /// thread while they wait, and after a restart the whole hotel presses
+    /// Reconnect within seconds - two hundred logins at once held two hundred
+    /// threads and every database connection, and the rooms' ticks queued
+    /// behind them. Eight at a time get through a wave like that in a few
+    /// seconds; the rest wait their turn here without holding a thread.
+    /// </summary>
+    private static readonly SemaphoreSlim LoginsAtOnce = new(8);
+
     public async Task Parse(GameClient session, IIncomingPacket packet)
     {
         var sso = packet.ReadString();
+        await LoginsAtOnce.WaitAsync();
+        try
+        {
+            // Gone while it waited (a reload, a closed tab): nothing to log in.
+            if (session.IsDisconnected)
+                return;
+            await Login(session, sso);
+        }
+        finally
+        {
+            LoginsAtOnce.Release();
+        }
+    }
+
+    private async Task Login(GameClient session, string sso)
+    {
         var error = await _authenticate.AuthenticateUsingSSO(session, sso);
         if (error == null)
         {
@@ -168,7 +195,10 @@ public class SsoTicketEvent : IPacketEvent
             // (Room re-sends on entry) - a backpack, or the infostand of a piece
             // placed elsewhere, showed the old name again after every login.
             // The client holds any that land before its FurnitureData loads.
-            // Never allowed to cost the login.
+            // Never allowed to cost the login. One message for all of them
+            // (Twist, 2026-10-28): the list only grows - 174 on beta that day,
+            // each its own message to every player logging in.
+            session.BeginBatch();
             try
             {
                 foreach (var definitionId in _itemDataManager.EditedDefinitions.ToArray())
@@ -178,6 +208,10 @@ public class SsoTicketEvent : IPacketEvent
             catch (Exception e)
             {
                 _logger.LogWarning("Could not send edited furni to {user}: {message}", session.GetHabbo().Username, e.Message);
+            }
+            finally
+            {
+                session.EndBatch();
             }
             // pixelrp: quiet, because at login there is no room and a station
             // belongs to one. Room entry sends that room's real state. This is

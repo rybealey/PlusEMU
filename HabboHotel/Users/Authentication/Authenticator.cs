@@ -83,7 +83,7 @@ internal class Authenticator : IAuthenticator
             session.SetHabbo(habbo);
             // pixelrp: the connection can close during the awaits above - a
             // refresh on the loading screen, or PacketManager giving up on a slow
-            // login after 5 seconds - and then GameClient.OnDisconnected found no
+            // login after 30 seconds - and then GameClient.OnDisconnected found no
             // Habbo to log out. Carrying on registered a player nobody would ever
             // log out: online for good, and kept in memory by its process timer.
             // So stop here, before anything is registered: there is nothing to
@@ -183,8 +183,9 @@ internal class Authenticator : IAuthenticator
     }
 
     // pixelrp (Twist, 2026-10-27): 3 seconds, not 15. The whole login runs in
-    // SSOTicketEvent, which PacketManager disconnects once it has taken 5
-    // seconds - so a wait past that was cut off mid-way with no reason given,
+    // SSOTicketEvent, which PacketManager disconnected once it had taken 5
+    // seconds (30 since 2026-10-28, for a login waiting its turn in a wave of
+    // them) - so a wait past that was cut off mid-way with no reason given,
     // while the login carried on alone in the background. Ending the wait
     // here leaves the rest of the login (loading the player, the first
     // messages) its last two seconds, and a refusal of its own, logged, in

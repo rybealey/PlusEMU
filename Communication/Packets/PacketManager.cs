@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Plus.Communication.Attributes;
 using Plus.Communication.Packets.Incoming;
+using Plus.Communication.Packets.Incoming.Handshake;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Users.Security;
 using System.Diagnostics;
@@ -26,6 +27,14 @@ public sealed class PacketManager : IPacketManager, IDisposable
     /// </summary>
     private readonly TimeSpan _maximumRunTimeInSec; // 5 minutes in debug. 30 seconds in release.
     private readonly CancellationTokenSource _cancellationTokenSource = new();
+
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-28): a login waits its turn behind a whole
+    /// hotel reconnecting at once (SsoTicketEvent lets a few run at a time),
+    /// and once it starts its ticket is spent - cut off at the 5 seconds a
+    /// click gets, the player had to reload the website to try again.
+    /// </summary>
+    private static readonly TimeSpan LoginRunTime = TimeSpan.FromSeconds(30);
 
     public PacketManager(IEnumerable<IPacketEvent> incomingPackets, ILogger<PacketManager> logger)
     {
@@ -149,9 +158,10 @@ public sealed class PacketManager : IPacketManager, IDisposable
         // and a cancel (shutting down) does nothing, as before.
         if (task.IsCompletedSuccessfully)
             return;
+        var runTime = pak is SsoTicketEvent && LoginRunTime > _maximumRunTimeInSec ? LoginRunTime : _maximumRunTimeInSec;
         try
         {
-            await task.WaitAsync(_maximumRunTimeInSec, _cancellationTokenSource.Token);
+            await task.WaitAsync(runTime, _cancellationTokenSource.Token);
         }
         catch (OperationCanceledException)
         {
