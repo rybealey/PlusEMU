@@ -29,14 +29,12 @@ public static class RoomEntry
     public static void Send(GameClient session, Room room, IQuestManager questManager)
     {
         var roomUserManager = room.GetRoomUserManager();
-        // The room's shape first. The client builds the room the moment it has
-        // it - the end of the blank screen - so it does not wait on the database
-        // lookups AddAvatarToRoom makes for the entering player (their job, their
-        // inventory's weapon, a turf room's gang). Everything that used to arrive
-        // before the room existed and was dropped (this player's own avatar,
-        // effect and hand item) is now applied instead, and the copies
-        // SendObjects sends after it change nothing: the client skips an avatar
-        // it already has (RoomEngine.addRoomObjectUser).
+        // The room's shape first, so everything after it lands in a room that
+        // exists. Everything that used to arrive before the room existed and
+        // was dropped (this player's own avatar, effect and hand item) is now
+        // applied instead, and the copies SendObjects sends after it change
+        // nothing: the client skips an avatar it already has
+        // (RoomEngine.addRoomObjectUser).
         room.SendHeightmaps(session);
         // Wall and floor thickness and hidden walls: straight behind the shape
         // (the client drops it before the room exists), so the walls are drawn
@@ -45,15 +43,15 @@ public static class RoomEntry
         // And how see-through the floor is (RoomFloorOpacity), for the same
         // reason: the floor is drawn faded from the first frame.
         session.Send(new RpRoomFloorOpacityComposer(room.Id, room.FloorOpacity));
-        // ...and all of that out now, as a message of its own. A room entry
-        // goes as one batch (Habbo.EnterRoom), which held the shape back until
-        // the lookups below were done and the last packet written; flushed
-        // here, the client clears the old room and builds the new one's floor
-        // and walls while those run. The rest follows as one more message, and
-        // the room's players and furni fill in on the drawn floor as it lands.
-        // No batch is open when the client asked for the room itself
-        // (GetRoomEntryData), and then this does nothing.
-        session.FlushBatch();
+        // NOT flushed here any more (Twist, 2026-10-28 - "i want avatars to
+        // appear as soon as the room loads"). The shape went out on its own
+        // while the database lookups below ran; the avatars came in the next
+        // message, a frame after the floor - a frame a Mac spends building a
+        // big floor, so the room showed and the player appeared 0.4 s later.
+        // Those lookups are off this path now (the job, the weapon and the
+        // gang come from memory or after the room), so the shape waits only
+        // for the avatars: SendObjects flushes once everybody is written, and
+        // the floor and the people in the room arrive in one message.
         // Only add the avatar on a genuine first entry. A duplicated entry - the
         // login room-forward processed twice by the client under network latency -
         // arrives with the user already in the room from the first one.

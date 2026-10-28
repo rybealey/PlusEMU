@@ -741,6 +741,13 @@ public class Room : RoomData
         foreach (var catchUp in Movement.MovementV2Bridge.EntryCatchUp(this))
             SendUnlessHidden(session, catchUp, hidden);
         SendUnlessHidden(session, new UserUpdateComposer(_roomUserManager.GetUserList().ToList()), hidden);
+        // pixelrp (Twist, 2026-10-28): a room entry's first message ends here -
+        // the room's shape (RoomEntry), the newcomer and everybody already in
+        // it, where they stand and how - so the client draws the floor and the
+        // people on it in the same frame. The furni and the rest follow in the
+        // next message and fill in on the floor as before. Nothing happens when
+        // no batch is open.
+        session.FlushBatch();
         session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));
         // Opacity rides after the objects themselves, so the client has
         // something to apply it to. Only faded items travel; a room nobody
