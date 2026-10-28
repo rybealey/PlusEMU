@@ -17,7 +17,6 @@ internal class LookToEvent : RoomPacketEvent
         // around the room sends this, and a whisper per click would be noise.
         if (KnockedOut.Is(session))
             return Task.CompletedTask;
-        user.UnIdle();
         var x = packet.ReadInt();
         var y = packet.ReadInt();
         if (x == user.X && y == user.Y || user.IsWalking || user.RidingHorse)
@@ -33,6 +32,13 @@ internal class LookToEvent : RoomPacketEvent
         // more away, so this is exactly the look it would leave as it is.
         if (!user.Statusses.ContainsKey("sit") && !user.Statusses.ContainsKey("lay") && user.RotHead == rot && Math.Abs(user.RotBody - rot) < 2)
             return Task.CompletedTask;
+        // pixelrp (Twist, 2026-10-28): only a look that turns the player counts
+        // as being here. This ran first, so a look at their own tile, or at a
+        // player they already faced, reset the idle clock while nobody saw
+        // anything happen - sent every few minutes, it kept a player from ever
+        // falling asleep, and asleep is where wages (ShiftManager) and bank
+        // interest (BankUtility.Tick) stop.
+        user.UnIdle();
         var bodyBefore = user.RotBody;
         user.SetRot(rot, false);
         user.UpdateNeeded = true;
