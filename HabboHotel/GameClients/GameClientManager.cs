@@ -123,6 +123,9 @@ public class GameClientManager : IGameClientManager
     {
         // pixelrp: the connection layer tracks sessions itself — hotel-wide
         // sends must use the login register.
+        // pixelrp (Twist, 2026-10-28): composed once (SharedFrame), as a room
+        // broadcast is - it was composed again for every player online.
+        var frame = new SharedFrame(packet);
         foreach (var client in _userIdRegister.Values.ToList())
         {
             if (client == null || client.GetHabbo() == null)
@@ -132,7 +135,7 @@ public class GameClientManager : IGameClientManager
                 if (!client.GetHabbo().Permissions.HasRight(fuse))
                     continue;
             }
-            client.Send(packet);
+            frame.SendTo(client);
         }
     }
 
