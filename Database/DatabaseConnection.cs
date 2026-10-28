@@ -7,6 +7,8 @@ namespace Plus.Database;
 
 public class DatabaseConnection : IDatabaseClient
 {
+    private static readonly NLog.ILogger Log = NLog.LogManager.GetLogger("Plus.Database.DatabaseConnection");
+
     private readonly IQueryAdapter _adapter;
     private readonly MySqlConnection _con;
 
@@ -26,7 +28,11 @@ public class DatabaseConnection : IDatabaseClient
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.ToString());
+                // pixelrp (Twist, 2026-10-28): one line in the log, not the
+                // whole stack trace on the console - when the pool runs dry
+                // every waiting thread lands here at once, and each one held
+                // the console while it printed.
+                Log.Error("Could not open a database connection: {message}", e.Message);
             }
         }
     }
