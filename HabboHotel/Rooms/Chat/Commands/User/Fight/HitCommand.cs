@@ -17,11 +17,13 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// A swing always happens. What decides the outcome is REACH: the attacker's
 /// own tile plus the four sharing an edge with it (Manhattan distance &lt;= 1).
 /// On one of those the punch lands for 3-5, more with the attacker's gym
-/// Strength (GymState.PunchDamage: 18-20 at level 10); anywhere else it is
-/// thrown and missed, in public, for nothing. There is no dice roll - in range
-/// is always a hit. The shared tile counts because two players standing on one are as
-/// close as it gets. :slap reaches identically - one rule for how close a
-/// fight has to be - while :push still takes the whole 3x3 with diagonals.
+/// Strength (GymState.PunchDamage: 16-19 at level 10), and more again with a
+/// bat, knife or axe in hand (RpWeapons.MeleeOf: 18-20, 20-24, 19-21 at 10);
+/// anywhere else it is thrown and missed, in public, for nothing. There is no
+/// dice roll - in range is always a hit. The shared tile counts because two
+/// players standing on one are as close as it gets. :slap reaches
+/// identically - one rule for how close a fight has to be - while :push still
+/// takes the whole 3x3 with diagonals.
 ///
 /// Either way it is a fight, so it costs the cooldown and it makes the
 /// ATTACKER aggressive: 100, which the room tick then drains over 45 seconds
@@ -43,6 +45,12 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Fight;
 /// could honour until damage existed. A smoothie stops you hitting too; staff
 /// on duty may hit (Habbo.CannotFight). Nor can an AFK player (RoomUser.IsAfk)
 /// - asleep five minutes - though a stun still lands on them.
+///
+/// A CRITICAL HIT (Twist, 2026-10-29): one landed axe hit in four freezes the
+/// target for the stun gun's four seconds (PoliceState.Stun) - no extra
+/// damage, and it is a freeze like any other, so an officer may cuff them in
+/// it. Not on a hit that knocks them out, which already holds them still, nor
+/// on someone under escort, whose walking the escort owns (as :stun).
 /// </summary>
 internal class HitCommand : ITargetChatCommand
 {
@@ -69,6 +77,9 @@ internal class HitCommand : ITargetChatCommand
 
     /// <summary>What a swing sets the attacker's aggression to.</summary>
     private const int AggressionOnSwing = 100;
+
+    /// <summary>How long a critical hit freezes the target - the stun gun's (StunCommand.StunSeconds).</summary>
+    private const int CriticalStunSeconds = 4;
 
     /// <summary>
     /// Each player's punching cooldown (PlayerCooldown, which forgives a slow
@@ -182,13 +193,23 @@ internal class HitCommand : ITargetChatCommand
         // Leading AND trailing "*" matter: the client only treats a style-4
         // bubble as an action when the text is wrapped in them, and it then
         // moves the opening marker ahead of the actor's name, rendering
-        // "*Yavn swings at twist, causing 4 damage*".
+        // "*Yavn swings at twist, causing 4 damage*". A weapon in hand is
+        // named: "*Yavn swings their bat at twist, causing 20 damage*".
         var swing = new List<Plus.Communication.Packets.IServerPacket>(3);
         var dealtByWeapon = 0;
+        var critical = false;
+        var weapon = RpWeapons.MeleeOf(habbo);
+        var swingsAt = weapon.HasValue ? $"swings their {weapon.Value.Word} at {target.Username}" : $"swings at {target.Username}";
         if (inReach)
         {
-            // Strength is the gym's: the range grows with the attacker's level.
+            // Strength is the gym's: the range grows with the attacker's level,
+            // and a weapon adds its own on top.
             var (minDamage, maxDamage) = Gym.GymState.PunchDamage(habbo.RpStrengthLevel);
+            if (weapon.HasValue)
+            {
+                minDamage += weapon.Value.MinBonus;
+                maxDamage += weapon.Value.MaxBonus;
+            }
             var dealt = Random.Shared.Next(minDamage, maxDamage + 1);
             dealtByWeapon = dealt;
             // pixelrp durability: worn armour soaks its share and wears by the
@@ -218,12 +239,20 @@ internal class HitCommand : ITargetChatCommand
 
             // Queued (RoomTickWriter), not written here: the reply no longer waits on the database.
             RoomTickWriter.QueueRpStats(target);
-            swing.Add(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, causing {damage} damage*", 0, FightBubble));
+
+            // A critical hit, for a weapon that has them (the axe): only on a
+            // target still standing and not under escort - see the summary.
+            critical = weapon.HasValue && target.RpHealth > 0 && !Police.PoliceState.IsBeingEscorted(target.Id)
+                && Random.Shared.NextDouble() < weapon.Value.CriticalChance;
+
+            swing.Add(new ChatComposer(thisUser.VirtualId, critical
+                ? $"*{swingsAt}, causing a critical hit for {damage} damage*"
+                : $"*{swingsAt}, causing {damage} damage*", 0, FightBubble));
             // the only thing that moved on the target is their health
             swing.Add(StatsOf(targetUser, target));
         }
         else
-            swing.Add(new ChatComposer(thisUser.VirtualId, $"*swings at {target.Username}, but misses*", 0, FightBubble));
+            swing.Add(new ChatComposer(thisUser.VirtualId, $"*{swingsAt}, but misses*", 0, FightBubble));
 
         // The attacker's aggression moved either way.
         swing.Add(StatsOf(thisUser, habbo));
@@ -241,6 +270,9 @@ internal class HitCommand : ITargetChatCommand
         // Out of health is out of the fight: the same frozen lay :kill applies.
         if (target.RpHealth <= 0)
             room.GetRoomUserManager().ApplyRpKnockout(targetUser);
+        // A critical hit freezes them where they stand, birds and all.
+        else if (critical)
+            Police.PoliceState.Stun(room, targetUser, CriticalStunSeconds);
 
         if (inReach)
             RpDurability.WearWeapon(habbo, dealtByWeapon);

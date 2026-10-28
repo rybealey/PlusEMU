@@ -19,7 +19,8 @@ namespace Plus.HabboHotel.Rooms.Gym;
 /// STAMINA IS HEALTH. Max health is 100 + 10 per Stamina level, so 100 at
 /// level 0 and 200 at level 10; a level gained adds 10 to current health too,
 /// so a full bar stays full. STRENGTH IS :hit damage only (PunchDamage):
-/// 3-5 at level 0, 1.5 more per level, 18-20 at level 10.
+/// 3-5 at level 0, rising evenly to 16-19 at level 10. A bat, knife or axe
+/// in hand adds its own fixed amount on top (RpWeapons.MeleeOf).
 ///
 /// TRAINING is standing still on gym equipment - the treadmill trains
 /// Stamina, the crosstrainer Strength (behaviours GymStamina / GymStrength,
@@ -88,11 +89,14 @@ public static class GymState
     /// <summary>Seconds of training from level - 1 to `level`: 48 minutes for 1 down to 12 for 10, 300 in all.</summary>
     public static int SecondsForLevel(int level) => (52 - 4 * Math.Clamp(level, 1, MaxLevel)) * 60;
 
-    /// <summary>A landed punch's damage range, inclusive: 3-5, then 1.5 more per level (rounded down), 18-20 at 10.</summary>
+    /// <summary>
+    /// A landed punch's damage range, inclusive: 3-5 at level 0, rising evenly
+    /// (rounded down) to 16-19 at 10 - 9-12 at level 5 (Twist, 2026-10-29).
+    /// </summary>
     public static (int Min, int Max) PunchDamage(int strengthLevel)
     {
-        var bonus = 3 * Math.Clamp(strengthLevel, 0, MaxLevel) / 2;
-        return (3 + bonus, 5 + bonus);
+        var level = Math.Clamp(strengthLevel, 0, MaxLevel);
+        return (3 + 13 * level / 10, 5 + 14 * level / 10);
     }
 
     public static int MembershipLeft(Habbo habbo) => Math.Max(0, habbo.RpGymUntil - habbo.RpOnlineSeconds);

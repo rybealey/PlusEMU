@@ -47,7 +47,43 @@ public static class RpWeapons
         { StunGunItem, ("Stun Gun", StunGunHandItem) }
     };
 
+    /// <summary>
+    /// pixelrp (Twist, 2026-10-29): what an equipped weapon adds to a landed
+    /// :hit, on top of the punch (GymState.PunchDamage) at every Strength
+    /// level - at 10 a fist hits 16-19, a bat 18-20, an axe 19-21 and a knife
+    /// 20-24; through a vest 13-15, 14-16, 15-17 and 16-19, every weapon
+    /// clear of the next (Twist, 2026-10-29). The word is how the hit's bubble
+    /// names it. One axe hit in four
+    /// is a critical hit, which freezes the target (HitCommand). The stun gun
+    /// and the vape are no melee weapon: holding one, a :hit is a punch.
+    ///
+    /// backpack item key -> (word, added to the lowest, added to the highest, chance of a critical hit)
+    /// </summary>
+    private static readonly Dictionary<string, (string Word, int MinBonus, int MaxBonus, double CriticalChance)> MeleeWeapons = new()
+    {
+        { "baseball_bat", ("bat", 2, 1, 0) },
+        { "knife", ("knife", 4, 5, 0) },
+        { "axe", ("axe", 3, 2, 0.25) }
+    };
+
     public static bool IsWeapon(string item) => !string.IsNullOrEmpty(item) && Weapons.ContainsKey(item);
+
+    /// <summary>
+    /// The melee weapon this player has equipped, or null for a bare fist.
+    /// Read from what their hand rests on (Habbo.WeaponHandItem), so a punch
+    /// never waits on the backpack - only when that is not known yet, between
+    /// rooms, is the backpack read.
+    /// </summary>
+    public static (string Word, int MinBonus, int MaxBonus, double CriticalChance)? MeleeOf(Habbo habbo)
+    {
+        var handItem = habbo.WeaponHandItem >= 0 ? habbo.WeaponHandItem : HandItemFor(EquippedItem(habbo.LoadRpInventory()));
+        foreach (var (item, melee) in MeleeWeapons)
+        {
+            if (Weapons[item].HandItem == handItem)
+                return melee;
+        }
+        return null;
+    }
 
     /// <summary>
     /// What the Weapon slot takes: the weapons, and the vape - in the hand only
