@@ -227,6 +227,10 @@ internal class HitCommand : ITargetChatCommand
 
         // The attacker's aggression moved either way.
         swing.Add(StatsOf(thisUser, habbo));
+        // pixelrp (Twist, 2026-10-28): just sent, so the room tick's
+        // once-a-second aggression update (RoomUserManager) waits a second
+        // from here - it sent the same bars again straight after the swing.
+        thisUser.LastAggressionBroadcastMs = Environment.TickCount64;
 
         // pixelrp (Twist, 2026-10-27): the line and the bars as ONE message to
         // each viewer (Room.SendPacketsBatched) - they went as two or three,
