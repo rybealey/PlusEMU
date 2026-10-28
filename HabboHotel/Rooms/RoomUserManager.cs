@@ -576,11 +576,17 @@ public class RoomUserManager
                 }
                 // Dressing booth: the avatar editor is global client UI and would
                 // survive the room change; close it and reopen the curtain. The
-                // Marketplace on a Marketplace point closes too.
+                // Marketplace on a Marketplace point closes too, as does the
+                // Apartments window on an Apartments point, and the real estate
+                // board on a Real Estate point.
                 foreach (var tileItem in _room.GetGameMap().GetCoordinatedItems(new(user.X, user.Y)))
                 {
                     if (tileItem.Definition.InteractionType == InteractionType.Marketplace)
                         Plus.HabboHotel.Users.Banking.RpMarket.Close(session);
+                    if (tileItem.Definition.InteractionType == InteractionType.Apartments)
+                        RpApartments.Close(session);
+                    if (tileItem.Definition.InteractionType == InteractionType.RealEstate)
+                        RpRealEstate.Close(session);
                     if (tileItem.Definition.InteractionType != InteractionType.DressingBooth)
                         continue;
                     tileItem.LegacyDataString = "0";

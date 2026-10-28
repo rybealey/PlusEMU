@@ -213,5 +213,20 @@ public enum InteractionType
     // pixelrp: a Marketplace point. Step on it and the Marketplace opens; step
     // off and it closes (RpMarket). :mp still opens it anywhere. The Armoury's
     // action point, item 11562, by its own behaviour (migration 313).
-    Marketplace
+    Marketplace,
+
+    // pixelrp: an Apartments point. Step on it and the Apartments window opens
+    // - buy an apartment, or go to yours; step off and it closes
+    // (RpApartments). SF Apartments' action point, item 11561 (migration 322).
+    Apartments,
+
+    // pixelrp: an apartment's way out - the arrow on its door, made with the
+    // apartment. Walk onto it on purpose and you go back to the room the
+    // apartment was bought in (RpApartments.LeaveSoon).
+    ApartmentExit,
+
+    // pixelrp: a Real Estate point. Step on it and the real estate board opens
+    // - apartments players have listed for sale, to visit or buy; step off and
+    // it closes (RpRealEstate). SF Apartments' second action point, item 24928.
+    RealEstate
 }

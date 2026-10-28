@@ -248,6 +248,10 @@ public static class ServerPacketHeader
     public const uint RpMarketComposer = 4233;
     // pixelrp: the furni types of the room behind an arrow a player is walking to (ArrowAhead) - for the client to download ahead
     public const uint RpRoomFurniAheadComposer = 4235;
+    // pixelrp: the Apartments window as one player sees it (RpApartments.Send)
+    public const uint RpApartmentComposer = 4237;
+    // pixelrp: the real estate board as one player sees it (RpRealEstate.Send)
+    public const uint RpRealEstateComposer = 4239;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

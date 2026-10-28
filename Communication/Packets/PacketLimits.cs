@@ -7,6 +7,7 @@ using Plus.Communication.Packets.Incoming.Marketplace;
 using Plus.Communication.Packets.Incoming.Rooms.AI.Pets;
 using Plus.Communication.Packets.Incoming.Rooms.Avatar;
 using Plus.Communication.Packets.Incoming.Rooms.Chat;
+using Plus.Communication.Packets.Incoming.Rooms.Apartments;
 using Plus.Communication.Packets.Incoming.Rooms.Engine;
 using Plus.Communication.Packets.Incoming.Users;
 using Plus.Communication.Packets.Incoming.Users.Banking;
@@ -96,6 +97,8 @@ internal static class PacketLimits
         // own 100ms gap, and items are added to a trade one quick click at a time.
         [typeof(RpAtmTransactionEvent)] = Money,
         [typeof(RpMarketActionEvent)] = Money,
+        [typeof(RpApartmentActionEvent)] = Money,
+        [typeof(RpRealEstateActionEvent)] = Money,
         [typeof(RpBankTransferEvent)] = Money,
         [typeof(RpPaySendEvent)] = Money,
         [typeof(MakeOfferEvent)] = Money,

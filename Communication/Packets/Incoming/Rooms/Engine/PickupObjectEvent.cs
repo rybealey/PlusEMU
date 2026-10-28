@@ -42,6 +42,10 @@ internal class PickupObjectEvent : IPacketEvent
         // the button rather than to its owner. Off duty, neither answers.
         var canTakeAnyones = session.GetHabbo().Permissions.HasRight("room_item_take") &&
                              HabboHotel.Corporations.ShiftManager.IsStaffOnDuty(session.GetHabbo().Id);
+        // pixelrp: an apartment's arrow is its only way out (RpApartments) -
+        // its owner can move it but not pick it up; on-duty staff still can.
+        if (item.Definition.InteractionType == InteractionType.ApartmentExit && !canTakeAnyones)
+            return;
         // pixelrp: in a PixelRP room, furni a Builder or above picks up becomes
         // theirs - into their own inventory, never sent to PixelRP's, where
         // nobody could reach it (PixelRpRooms). Only used once itemRights

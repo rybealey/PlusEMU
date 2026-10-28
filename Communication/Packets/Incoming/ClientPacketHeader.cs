@@ -624,6 +624,12 @@ public static class ClientPacketHeader
     public const uint RpMarketActionEvent = 4232;
     // pixelrp: the client's lag recorder, staff only - written to the log (RpClientLagReportEvent)
     public const uint RpClientLagReportEvent = 4234;
+    // pixelrp: the Apartments window - refresh, buy, go to my apartment (RpApartments, 322_Apartments.sql)
+    public const uint RpApartmentActionEvent = 4236;
+    // pixelrp: the real estate board - refresh, buy, visit (RpRealEstate)
+    public const uint RpRealEstateActionEvent = 4238;
+    // pixelrp: the picture of an apartment its owner's client takes walking out (RpApartments.LeaveSoon)
+    public const uint RpApartmentSnapshotEvent = 4240;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

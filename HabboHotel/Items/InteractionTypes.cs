@@ -264,6 +264,12 @@ public static class InteractionTypes
                 return InteractionType.BinSearch;
             case "marketplace":
                 return InteractionType.Marketplace;
+            case "apartments":
+                return InteractionType.Apartments;
+            case "apartment_exit":
+                return InteractionType.ApartmentExit;
+            case "real_estate":
+                return InteractionType.RealEstate;
             default:
             {
                 //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);

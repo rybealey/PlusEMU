@@ -35,7 +35,9 @@ public static class OwnWalk
     }
 
     /// <summary>
-    /// The ATM, the deposit box, the Marketplace on a Marketplace point and the
+    /// The ATM, the deposit box, the Marketplace on a Marketplace point, the
+    /// Apartments window on an Apartments point, the real estate board on a
+    /// Real Estate point and the
     /// dressing booth's clothes editor close at the click to walk (Twist,
     /// 2026-10-25). Their own closes fire when the
     /// step off the tile LANDS - RoomUser.X/Y stays the tile being left until
@@ -57,6 +59,10 @@ public static class OwnWalk
             DepositBox.Close(session);
         if (items.Any(item => item?.Definition?.InteractionType == InteractionType.Marketplace))
             RpMarket.Close(session);
+        if (items.Any(item => item?.Definition?.InteractionType == InteractionType.Apartments))
+            RpApartments.Close(session);
+        if (items.Any(item => item?.Definition?.InteractionType == InteractionType.RealEstate))
+            RpRealEstate.Close(session);
         if (items.Any(item => item?.Definition?.InteractionType == InteractionType.DressingBooth))
             session.Send(new InClientLinkComposer("avatar-editor/hide"));
     }

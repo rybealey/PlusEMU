@@ -1321,6 +1321,16 @@ public class Item
         // reason (RpMarket.OpenSoon).
         if (Definition.InteractionType == InteractionType.Marketplace)
             Users.Banking.RpMarket.OpenSoon(user.GetClient());
+        // ...and the Apartments window on an Apartments point (RpApartments.OpenSoon).
+        if (Definition.InteractionType == InteractionType.Apartments)
+            Rooms.RpApartments.OpenSoon(user.GetClient());
+        // An apartment's arrow: a walk that ends on it goes back to where the
+        // apartment was bought (RpApartments.LeaveSoon).
+        if (Definition.InteractionType == InteractionType.ApartmentExit)
+            Rooms.RpApartments.LeaveSoon(user, this);
+        // ...and the real estate board on a Real Estate point (RpRealEstate.OpenSoon).
+        if (Definition.InteractionType == InteractionType.RealEstate)
+            Rooms.RpRealEstate.OpenSoon(user.GetClient());
         // Gym equipment: a step on inside the workout cooldown is refused.
         if (Definition.InteractionType is InteractionType.GymStamina or InteractionType.GymStrength)
             Rooms.Gym.GymState.SteppedOn(user, this);
@@ -1359,6 +1369,11 @@ public class Item
         // ...as does the Marketplace, behind its open (RpMarket.CloseSoon).
         if (Definition.InteractionType == InteractionType.Marketplace)
             Users.Banking.RpMarket.CloseSoon(user.GetClient());
+        // ...and the Apartments window (RpApartments.CloseSoon).
+        if (Definition.InteractionType == InteractionType.Apartments)
+            Rooms.RpApartments.CloseSoon(user.GetClient());
+        if (Definition.InteractionType == InteractionType.RealEstate)
+            Rooms.RpRealEstate.CloseSoon(user.GetClient());
         // ...and a workout on gym equipment ends with the step off it.
         if (Definition.InteractionType is InteractionType.GymStamina or InteractionType.GymStrength)
             Rooms.Gym.GymState.SteppedOff(room, user, this);
