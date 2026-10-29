@@ -62,6 +62,20 @@ public static class Flashbang
             session.SendWhisper("Your hands are cuffed.");
             return;
         }
+        // The backpack click skips CommandManager's combat switch, and slipped
+        // past a city-wide pause (Twist, 2026-10-29).
+        if (Plus.HabboHotel.CityPanel.CityWorld.CombatBlocks("fb"))
+        {
+            session.SendWhisper("Fighting is paused city-wide.");
+            return;
+        }
+        // The backpack click skips CommandManager's jury gate too: no fighting
+        // from the jury seats (JuryTrials.Blocks).
+        if (JuryTrials.Blocks(session, "fb"))
+        {
+            session.SendWhisper(JuryTrials.NoFightingWhisper);
+            return;
+        }
         // The backpack click comes here without passing CommandManager's gate.
         if (PoliceState.IsDisoriented(habbo.Id))
         {

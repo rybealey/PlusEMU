@@ -423,12 +423,21 @@ public static class JuryTrials
     private static bool KeptInJuryBox(int habboId) =>
         InJuryBox(habboId) || InJuryBox(PoliceState.CaptorOf(habboId));
 
-    /// <summary>The jury does not shove or drag anybody about either - it stays in its seats.</summary>
-    private static readonly HashSet<string> JurorCannot = new(StringComparer.OrdinalIgnoreCase) { "push", "spush", "pull" };
+    /// <summary>What a juror trying to fight is told (Twist, 2026-10-29).</summary>
+    public const string NoFightingWhisper = "You can't fight while you're on the jury.";
 
-    /// <summary>Whether sitting on the jury stops this command. (CommandManager, beside the cuffs' gate)</summary>
+    /// <summary>
+    /// Whether sitting on the jury stops this command: no fighting from the
+    /// jury seats (Twist, 2026-10-29) - every command the city-wide combat
+    /// switch stops (CityWorld.IsCombatCommand), the shoving and dragging that
+    /// would move a juror off their seat among them. (CommandManager, beside
+    /// the cuffs' gate). Police actions - :cuff, :escort, :arrest - are not
+    /// fighting and stay, and so does :stun, which a cop needs before a :cuff
+    /// (Twist, 2026-10-29).
+    /// </summary>
     public static bool Blocks(GameClient session, string commandKey) =>
-        JurorCannot.Contains(commandKey) && session?.GetHabbo() is { } habbo && HeldInJuryBox(habbo.CurrentRoom, habbo.Id);
+        CityWorld.IsCombatCommand(commandKey) && !string.Equals(commandKey, "stun", StringComparison.OrdinalIgnoreCase) &&
+        session?.GetHabbo() is { } habbo && HeldInJuryBox(habbo.CurrentRoom, habbo.Id);
 
     /// <summary>
     /// Is this tile a jury seat, which nobody may walk onto? Only the jury sits

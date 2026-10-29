@@ -157,11 +157,10 @@ public class CommandManager : ICommandManager
                 session.SendWhisper("You can't do that in jail.");
                 return true;
             }
-            // pixelrp jury: the jury stays in its seats, so it shoves nobody
-            // about either (JuryTrials).
+            // pixelrp jury: no fighting from the jury seats (JuryTrials).
             if (User.Police.JuryTrials.Blocks(session, key.ToLower()))
             {
-                session.SendWhisper("You can't do that on the jury.");
+                session.SendWhisper(User.Police.JuryTrials.NoFightingWhisper);
                 return true;
             }
             // pixelrp City Panel: staff can pause fighting city-wide. Backpack

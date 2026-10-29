@@ -36,6 +36,9 @@ public static class CityWorld
     /// <summary>Whether the combat switch stops this command. One gate in CommandManager.</summary>
     public static bool CombatBlocks(string commandKey) => IsCombatPaused && CombatCommands.Contains(commandKey);
 
+    /// <summary>Is this a fighting command, switch or no switch? The jury's seats stop the same set (JuryTrials.Blocks).</summary>
+    public static bool IsCombatCommand(string commandKey) => CombatCommands.Contains(commandKey);
+
     public static void SetCombatPaused(bool paused) => PlusEnvironment.SettingsManager.Set(CombatPausedKey, paused ? "1" : "0");
 
     /// <summary>
