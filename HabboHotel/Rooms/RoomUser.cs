@@ -509,8 +509,12 @@ public class RoomUser
             return;
         if (!IsBot)
             return;
+        // pixelrp (Twist, 2026-10-29): the line composed once for the room
+        // (SharedFrame), as a player's is - it was built again for every
+        // player in the room, 60 times over in a full one.
         if (IsPet)
         {
+            var frame = new SharedFrame(new ChatComposer(VirtualId, message, 0, 0));
             foreach (var user in GetRoom().GetRoomUserManager().GetUserList().ToList())
             {
                 if (user == null || user.IsBot)
@@ -520,11 +524,12 @@ public class RoomUser
                 if (user.GetClient() == null || user.GetClient().GetHabbo() == null)
                     continue;
                 if (!user.GetClient().GetHabbo().AllowPetSpeech)
-                    user.GetClient().Send(new ChatComposer(VirtualId, message, 0, 0));
+                    frame.SendTo(user.GetClient());
             }
         }
         else
         {
+            var frame = new SharedFrame(new ChatComposer(VirtualId, message, 0, colour == 0 ? 2 : colour));
             foreach (var user in GetRoom().GetRoomUserManager().GetUserList().ToList())
             {
                 if (user == null || user.IsBot)
@@ -532,7 +537,7 @@ public class RoomUser
                 if (user.GetClient() == null || user.GetClient().GetHabbo() == null)
                     continue;
                 if (!user.GetClient().GetHabbo().AllowBotSpeech)
-                    user.GetClient().Send(new ChatComposer(VirtualId, message, 0, colour == 0 ? 2 : colour));
+                    frame.SendTo(user.GetClient());
             }
         }
     }
@@ -657,6 +662,10 @@ public class RoomUser
             mentionPacket = shout
                 ? new ShoutComposer(VirtualId, message, emotion, 25, usernameColor, usernameIcon, usernameIconColor)
                 : (IServerPacket)new ChatComposer(VirtualId, message, emotion, 25, usernameColor, usernameIcon, usernameIconColor);
+        // pixelrp (Twist, 2026-10-29): everyone in the room, copied once for
+        // the line and used for the listeners and the bots below - it was
+        // copied four times per line.
+        var units = _mRoom.GetRoomUserManager().GetUserList().ToList();
         if (GetClient().GetHabbo().TentId > 0)
         {
             _mRoom.SendToTent(GetClient().GetHabbo().Id, GetClient().GetHabbo().TentId, packet);
@@ -679,9 +688,9 @@ public class RoomUser
             // not once per listener.
             var chatFrame = new SharedFrame(packet);
             var mentionFrame = mentionPacket != null ? new SharedFrame(mentionPacket) : null;
-            foreach (var user in _mRoom.GetRoomUserManager().GetRoomUsers().ToList())
+            foreach (var user in units)
             {
-                if (user == null || user.GetClient() == null || user.GetClient().GetHabbo() == null || user.GetClient().GetHabbo().IgnoresComponent.IsIgnored(_mClient.GetHabbo().Id))
+                if (user == null || user.IsBot || user.GetClient() == null || user.GetClient().GetHabbo() == null || user.GetClient().GetHabbo().IgnoresComponent.IsIgnored(_mClient.GetHabbo().Id))
                     continue;
                 // pixelrp :invisible: an invisible speaker is heard only by
                 // others who are invisible.
@@ -707,25 +716,14 @@ public class RoomUser
         // bartender or banker answers in public.
         if (IsInvisible)
             return;
-        if (shout)
+        foreach (var user in units)
         {
-            foreach (var user in _mRoom.GetRoomUserManager().GetUserList().ToList())
-            {
-                if (!user.IsBot)
-                    continue;
-                if (user.IsBot)
-                    user.BotAi.OnUserShout(this, message);
-            }
-        }
-        else
-        {
-            foreach (var user in _mRoom.GetRoomUserManager().GetUserList().ToList())
-            {
-                if (!user.IsBot)
-                    continue;
-                if (user.IsBot)
-                    user.BotAi.OnUserSay(this, message);
-            }
+            if (user is not { IsBot: true })
+                continue;
+            if (shout)
+                user.BotAi.OnUserShout(this, message);
+            else
+                user.BotAi.OnUserSay(this, message);
         }
     }
 

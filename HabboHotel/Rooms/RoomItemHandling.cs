@@ -960,7 +960,11 @@ public class RoomItemHandling
         {
             try
             {
-                _room.SendPacket(CycleRollers());
+                // pixelrp (Twist, 2026-10-29): everything the rollers moved
+                // this tick, in one message to each viewer (the same packets,
+                // in the same order) - each item and each rider used to be a
+                // room broadcast of its own.
+                _room.SendPacketsBatched(CycleRollers());
             }
             catch //(Exception e)
             {

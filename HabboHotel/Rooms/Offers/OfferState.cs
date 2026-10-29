@@ -802,6 +802,9 @@ public static class OfferState
 
     // ---- the clock -----------------------------------------------------------
 
+    private const long SweepEveryMs = 500;
+    private static long _lastSweepMs;
+
     /// <summary>
     /// Drop what has run out. Memory only - no database, no packets except to
     /// the two people concerned - so it is safe on the room cycle.
@@ -809,6 +812,15 @@ public static class OfferState
     public static void Tick()
     {
         if (Live.IsEmpty)
+            return;
+        // pixelrp (Twist, 2026-10-29): once per half second for the whole
+        // hotel. Every loaded room's tick calls this, so with 20 rooms up the
+        // same hotel-wide sweep ran 20 times over; the first room to get here
+        // does it and the rest go straight on. An offer runs out at most half
+        // a second late.
+        var nowMs = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastSweepMs);
+        if (nowMs - last < SweepEveryMs || Interlocked.CompareExchange(ref _lastSweepMs, nowMs, last) != last)
             return;
         var now = DateTime.UtcNow;
         foreach (var offer in Live.Values.Where(entry => entry.ExpiresAt <= now).ToList())
