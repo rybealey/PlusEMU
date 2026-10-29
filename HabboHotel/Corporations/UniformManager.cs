@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.Chat.Commands.User;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 using Plus.HabboHotel.Users;
 
@@ -150,14 +151,17 @@ public static class UniformManager
     /// (RpDurability.VestPart) goes over the top the same way, and comes off
     /// with it - over the player's own clothes, or a police uniform. Any other
     /// uniform (another corporation's, a prisoner's) hides it, though the
-    /// armour is still worn (Twist, 2026-10-25).
+    /// armour is still worn (Twist, 2026-10-25). So does :armour, for VIP and
+    /// staff (Twist, 2026-10-29) - and only while they can still use it, so a
+    /// lapsed VIP's vest shows again.
     /// </summary>
     public static bool Dress(Habbo? habbo)
     {
         if (habbo == null)
             return false;
         var due = DueFor(habbo);
-        var vestShows = habbo.WearingArmor && (due.Length == 0 || (ShiftManager.IsPoliceOnDuty(habbo.Id) && !JailState.IsJailed(habbo.Id)));
+        var hidden = habbo.ArmourHidden && habbo.Permissions?.HasCommand(ArmourCommand.Permission) == true;
+        var vestShows = habbo.WearingArmor && !hidden && (due.Length == 0 || (ShiftManager.IsPoliceOnDuty(habbo.Id) && !JailState.IsJailed(habbo.Id)));
         var vest = vestShows ? RpDurability.VestFor(habbo) : "";
         var before = habbo.Look;
         if (due.Length > 0 || vest.Length > 0)

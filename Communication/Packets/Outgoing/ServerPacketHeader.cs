@@ -252,6 +252,8 @@ public static class ServerPacketHeader
     public const uint RpApartmentComposer = 4237;
     // pixelrp: the real estate board as one player sees it (RpRealEstate.Send)
     public const uint RpRealEstateComposer = 4239;
+    // pixelrp: the :hotrooms window, the busiest rooms (HotRooms)
+    public const uint RpHotRoomsComposer = 4241;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

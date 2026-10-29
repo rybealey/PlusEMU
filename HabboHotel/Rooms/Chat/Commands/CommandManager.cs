@@ -37,11 +37,12 @@ public class CommandManager : ICommandManager
     ///
     /// :startwork is here so City Government staff can go on duty out cold
     /// (Twist, 2026-10-22); ShiftManager.StartShift refuses everybody else,
-    /// since only it knows the job.
+    /// since only it knows the job. :armour / :armor only hide or show the
+    /// vest, and :hotrooms only looks.
     /// </summary>
     private static readonly HashSet<string> KnockedOutCan = new(StringComparer.OrdinalIgnoreCase)
     {
-        "stats", "bal", "flagme",
+        "stats", "bal", "flagme", "armour", "armor", "hotrooms",
         "ga", "ca", "pa",
         "startwork"
     };
@@ -62,14 +63,15 @@ public class CommandManager : ICommandManager
 
     /// <summary>
     /// pixelrp :invisible: the player commands that still work while you're
-    /// invisible (Invisibility) - your own stats and balance, and clocking in
-    /// and out. Everything else in the roleplay is refused: nobody is hit,
-    /// cuffed or paid by someone they can't see. Staff commands are not player
-    /// commands, so they all still work.
+    /// invisible (Invisibility) - your own stats and balance, clocking in
+    /// and out, hiding your armour's vest, and the busiest rooms. Everything
+    /// else in the roleplay is refused: nobody is hit, cuffed or paid by
+    /// someone they can't see. Staff commands are not player commands, so
+    /// they all still work.
     /// </summary>
     private static readonly HashSet<string> InvisibleCan = new(StringComparer.OrdinalIgnoreCase)
     {
-        "stats", "bal", "startwork", "stopwork"
+        "stats", "bal", "startwork", "stopwork", "armour", "armor", "hotrooms"
     };
 
     private static bool IsPlayerCommand(ICommandBase command) =>

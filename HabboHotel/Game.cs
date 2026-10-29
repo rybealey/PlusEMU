@@ -181,6 +181,9 @@ public class Game : IGame
             // once a second, and an empty hotel returns on a dictionary check,
             // so this costs nothing at the 5ms poll rate.
             Jam.JamManager.Cycle();
+            // pixelrp: the :hotrooms window's updates - a dictionary check
+            // while nobody has it open, a look every few seconds otherwise.
+            Rooms.HotRooms.Cycle();
             var tTotal = sw.ElapsedMilliseconds;
             if (tTotal > 250)
                 Log.Warn($"[stall] Game cycle iteration took {tTotal}ms (roomManager={tRooms}ms, clientManager={tTotal - tRooms}ms)");

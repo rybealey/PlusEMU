@@ -55,8 +55,9 @@ internal static class CommandListLayout
     }
 
     // :wd is staff or VIP (277); it lists here, with the VIP tag, for both.
+    // So do :armour and :armor (325).
     private static readonly Group General = new("General", false, false,
-        "sit", "stand", "lay", "stats", "bal", "showbal", "passive", "suicide", "flagme", "mutebots", "mutepets", "wd");
+        "sit", "stand", "lay", "stats", "bal", "showbal", "passive", "suicide", "flagme", "mutebots", "mutepets", "wd", "armour", "armor");
 
     private static readonly Group JobsAndGangs = new("Jobs & gangs", false, false,
         "startwork", "stopwork", "hire", "fire", "quitjob", "ca", "heal", "ga", "leavegang");
@@ -94,11 +95,11 @@ internal static class CommandListLayout
 
     /// <summary>
     /// Commands a VIP membership unlocks (subscription_id 1 in
-    /// permissions_commands: 277 :wd, 278 :pull). Their description goes out
+    /// permissions_commands: 277 :wd, 278 :pull, 325 :armour). Their description goes out
     /// as "[VIP] ..." and the window shows a VIP tag. Keep in step with those
     /// rows.
     /// </summary>
-    private static readonly HashSet<string> Vip = new(StringComparer.OrdinalIgnoreCase) { "wd", "pull" };
+    private static readonly HashSet<string> Vip = new(StringComparer.OrdinalIgnoreCase) { "wd", "pull", "armour", "armor" };
 
     private static readonly Dictionary<string, Group> ByKey = Groups
         .SelectMany(group => group.Keys.Select(key => (key, group)))

@@ -121,6 +121,9 @@ public class Habbo
     // and the vest's colour: their gang's primary colour, matched to the
     // clothing palette (0 for none - the vest's own grey)
     public int VestColour { get; set; }
+    // and :armour hides the vest (still worn, still soaking) - from
+    // users.armour_hidden, so it stays hidden after logging out (325)
+    public bool ArmourHidden { get; set; }
     // pixelrp (Twist, 2026-10-27): the hand item of what is in the Weapon slot
     // (0 for nothing), kept by RpWeapons.ApplyToHand from login on, so a room
     // entered puts it in the hand at once instead of reading the backpack
