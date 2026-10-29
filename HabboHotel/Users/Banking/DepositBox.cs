@@ -1,9 +1,15 @@
+using System.Collections.Concurrent;
+using System.Data;
+using Dapper;
+using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Users;
+using Plus.Communication.Packets.Outgoing.Users.Banking;
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Users.Banking;
 
@@ -25,21 +31,44 @@ namespace Plus.HabboHotel.Users.Banking;
 ///
 /// Police equipment never goes in (PoliceUtility.PoliceGear): the window greys
 /// it out on the backpack side, from the list the box is sent with.
+///
+/// Slots are bought (2026-10-29): the first <see cref="BaseSlots"/> are open
+/// to everybody, and each one after costs <see cref="SlotPrice"/>, one at a
+/// time and in order, up to <see cref="MaxSlots"/> (user_rp_deposit_slots,
+/// migration 324). VIP opens none.
 /// </summary>
 public static class DepositBox
 {
     /// <summary>Open to everybody.</summary>
-    public const int BaseSlots = 16;
+    public const int BaseSlots = 4;
 
-    /// <summary>With VIP: one more row.</summary>
-    public const int VipSlots = 20;
+    /// <summary>Every slot the box has.</summary>
+    public const int MaxSlots = 24;
+
+    /// <summary>What each slot after the first <see cref="BaseSlots"/> costs.</summary>
+    public const int SlotPrice = 350;
 
     public const int Store = 0;
     public const int Withdraw = 1;
     /// <summary>Within the box: move an item to another slot, swapping with what is there.</summary>
     public const int Rearrange = 2;
+    /// <summary>Buy the next slot.</summary>
+    public const int Buy = 3;
 
-    public static int OpenSlots(Habbo habbo) => habbo.IsVip ? VipSlots : BaseSlots;
+    // One buy at a time per player: two quick clicks must not both buy the
+    // same next slot.
+    private static readonly ConcurrentDictionary<int, object> BuyLocks = new();
+
+    private static NLog.ILogger Log => NLog.LogManager.GetLogger("Plus.HabboHotel.Users.Banking.DepositBox");
+
+    /// <summary>How many slots the player has open: the first four and every one they bought.</summary>
+    public static int OpenSlots(Habbo habbo)
+    {
+        using var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor();
+        dbClient.SetQuery("SELECT `slots` FROM `user_rp_deposit_slots` WHERE `user_id` = @id LIMIT 1");
+        dbClient.AddParameter("id", habbo.Id);
+        return Math.Clamp(dbClient.GetInteger(), BaseSlots, MaxSlots);
+    }
 
     public static List<(int Slot, string Item, int Count)> Load(int userId)
     {
@@ -55,7 +84,7 @@ public static class DepositBox
         var stranded = list.FindIndex(entry => entry.Item1 == 0);
         if (stranded >= 0)
         {
-            var free = SlotRows.RecoverStranded("user_rp_deposit_box", userId, list.Select(entry => entry.Item1).ToList(), VipSlots);
+            var free = SlotRows.RecoverStranded("user_rp_deposit_box", userId, list.Select(entry => entry.Item1).ToList(), MaxSlots);
             if (free > 0)
             {
                 list[stranded] = (free, list[stranded].Item2, list[stranded].Item3);
@@ -158,15 +187,92 @@ public static class DepositBox
             Store => StoreItems(habbo, slot, all),
             Withdraw => WithdrawItems(habbo, slot, all),
             Rearrange => RearrangeItems(habbo, slot, toSlot),
+            Buy => BuySlot(client, habbo),
             _ => ""
         };
     }
 
     /// <summary>
+    /// The next slot, for <see cref="SlotPrice"/>: out of the cash in hand
+    /// when it covers it, else out of checking. Either way the money and the
+    /// slot are one transaction - neither happens without the other.
+    /// </summary>
+    private static string BuySlot(GameClient client, Habbo habbo)
+    {
+        lock (BuyLocks.GetOrAdd(habbo.Id, _ => new object()))
+        {
+            var open = OpenSlots(habbo);
+            // The window has no lock left to click by then.
+            if (open >= MaxSlots)
+                return "";
+            var next = open + 1;
+            var price = TextHandling.GetMoney(SlotPrice);
+
+            // Nothing to say when it worked: the slot opening in the window says it.
+            if (habbo.Credits >= SlotPrice && BuyWithCash(client, habbo, next))
+                return "";
+
+            var result = BankUtility.Spend(habbo.Id, habbo.Username, SlotPrice, $"Deposit box slot {next}",
+                (connection, transaction) => SetSlots(connection, transaction, habbo.Id, next), out var account);
+            switch (result)
+            {
+                case BankResult.Ok:
+                    client.Send(new RpBankAccountsComposer(account));
+                    Log.Info("Deposit box: {0} (id {1}) bought slot {2} for {3} from checking.", habbo.Username, habbo.Id, next, SlotPrice);
+                    return "";
+                case BankResult.NoAccount:
+                case BankResult.InsufficientFunds:
+                    return $"You need {price} in cash or in your bank account to buy another slot.";
+                default:
+                    return "That slot could not be bought - try again.";
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="BuySlot"/> out of the cash in hand - only while they still
+    /// hold it (Habbo.ChangeCredits keeps users.credits current, so the
+    /// database is the real test). False when it did not happen.
+    /// </summary>
+    private static bool BuyWithCash(GameClient client, Habbo habbo, int slots)
+    {
+        try
+        {
+            using var connection = PlusEnvironment.DatabaseManager.Connection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            if (!RpApartments.TakeCash(connection, transaction, habbo.Id, SlotPrice) || !SetSlots(connection, transaction, habbo.Id, slots))
+            {
+                transaction.Rollback();
+                return false;
+            }
+            transaction.Commit();
+        }
+        catch (Exception e)
+        {
+            Log.Error("Deposit box: buying slot {0} for {1} failed: {2}", slots, habbo.Id, e.Message);
+            return false;
+        }
+        habbo.ChangeCreditsInMemory(-SlotPrice);
+        CoinLedger.Record(habbo, -SlotPrice, $"Deposit box: bought slot {slots}");
+        client.Send(new CreditBalanceComposer(habbo.Credits));
+        Log.Info("Deposit box: {0} (id {1}) bought slot {2} for {3} cash.", habbo.Username, habbo.Id, slots, SlotPrice);
+        return true;
+    }
+
+    /// <summary>The player's open slots, now <paramref name="slots"/>.</summary>
+    private static bool SetSlots(IDbConnection connection, IDbTransaction transaction, int userId, int slots) =>
+        connection.Execute(
+            "INSERT INTO `user_rp_deposit_slots` (`user_id`, `slots`) VALUES (@userId, @slots) " +
+            "ON DUPLICATE KEY UPDATE `slots` = @slots",
+            new { userId, slots }, transaction) > 0;
+
+    /// <summary>
     /// Move the item in one box slot to another: into it when it is empty, a
     /// swap when it is not. Only open slots are a destination - an item may sit
-    /// in a VIP slot after the VIP ran out, and can be moved out of it, but
-    /// nothing new goes in.
+    /// in a slot that is not open (stored there before slots were sold, or
+    /// while VIP opened the last row), and can be moved out of it, but nothing
+    /// new goes in.
     /// </summary>
     private static string RearrangeItems(Habbo habbo, int from, int to)
     {

@@ -1,16 +1,18 @@
 using Plus.HabboHotel.Corporations;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.Banking;
 
 namespace Plus.Communication.Packets.Outgoing.Users;
 
 /// <summary>
 /// pixelrp: the bank deposit box (DepositBox) - open with its contents (on
 /// stepping onto one, and after every move), or closed (on stepping off).
-/// `openSlots` is how many slots the player may use (16, or 20 with VIP);
-/// `notice` is what to tell them about their last move ("" for nothing).
-/// Last, the items that cannot be stored (PoliceUtility.PoliceGear), which the
-/// window greys out on the backpack side - appended at the end, so a client
-/// from before it still reads everything ahead of it.
+/// `openSlots` is how many slots the player may use (the first four and every
+/// one they bought); `notice` is what to tell them about their last move (""
+/// for nothing). Then the items that cannot be stored (PoliceUtility.PoliceGear),
+/// which the window greys out on the backpack side, and last what one more
+/// slot costs - each appended at the end, so a client from before it still
+/// reads everything ahead of it.
 /// </summary>
 public class RpDepositBoxComposer : IServerPacket
 {
@@ -44,5 +46,6 @@ public class RpDepositBoxComposer : IServerPacket
         packet.WriteInteger(PoliceUtility.PoliceGear.Count);
         foreach (var item in PoliceUtility.PoliceGear)
             packet.WriteString(item);
+        packet.WriteInteger(DepositBox.SlotPrice);
     }
 }

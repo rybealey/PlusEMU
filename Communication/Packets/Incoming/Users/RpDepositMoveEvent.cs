@@ -6,7 +6,7 @@ namespace Plus.Communication.Packets.Incoming.Users;
 
 /// <summary>
 /// pixelrp: one move in the bank deposit box - a direction (DepositBox.Store /
-/// Withdraw / Rearrange), the slot it comes from, whether the whole stack goes
+/// Withdraw / Rearrange, or Buy for the next slot), the slot it comes from, whether the whole stack goes
 /// (a drag) or just one (a click), and for a rearrange the slot it goes to. DepositBox.Move holds every rule, starting with
 /// standing on a deposit box. Both sides are sent back after it.
 /// </summary>

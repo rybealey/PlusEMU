@@ -756,6 +756,54 @@ public static class BankUtility
     }
 
     /// <summary>
+    /// pixelrp: something bought straight out of checking (DepositBox.BuySlot).
+    /// `purchase` writes what was bought on the same connection and
+    /// transaction as the debit, so the money and the thing go together or
+    /// not at all; it returns false to call the whole thing off.
+    /// </summary>
+    public static BankResult Spend(int userId, string username, long amount, string source,
+        Func<IDbConnection, IDbTransaction, bool> purchase, out BankAccount? account)
+    {
+        account = null;
+        if (amount <= 0)
+            return BankResult.InvalidAmount;
+        lock (LockFor(userId))
+        {
+            try
+            {
+                using var connection = PlusEnvironment.DatabaseManager.Connection();
+                connection.Open();
+                using var transaction = connection.BeginTransaction();
+                var rows = connection.Execute(
+                    "UPDATE `rp_bank_accounts` SET `current_balance` = `current_balance` - @amount " +
+                    "WHERE `user_id` = @userId AND `current_balance` >= @amount LIMIT 1",
+                    new { userId, amount }, transaction);
+                if (rows == 0)
+                {
+                    transaction.Rollback();
+                    account = Refresh(connection, userId);
+                    return account == null ? BankResult.NoAccount : BankResult.InsufficientFunds;
+                }
+                if (!purchase(connection, transaction))
+                {
+                    transaction.Rollback();
+                    return BankResult.Failed;
+                }
+                transaction.Commit();
+                account = Refresh(connection, userId);
+                LogMovement(connection, userId, username, BankTransactionKind.Purchase,
+                    BankAccountKind.Current, -amount, account?.Current ?? 0, Fit(source));
+                return BankResult.Ok;
+            }
+            catch (Exception e)
+            {
+                Log.Error("A purchase from {0}'s checking failed: {1}", userId, e.Message);
+                return BankResult.Failed;
+            }
+        }
+    }
+
+    /// <summary>
     /// Balances are bigint in the database and 32-bit on the wire. Clamping
     /// here means a number too large to send arrives wrong rather than
     /// arriving negative, which is the difference between a display bug and

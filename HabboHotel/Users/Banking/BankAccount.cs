@@ -81,4 +81,6 @@ public static class BankTransactionKind
     public const string PayOut = "pay_out";
     /// <summary>Pixel Cash: received from another player.</summary>
     public const string PayIn = "pay_in";
+    /// <summary>Paid out of checking for something bought (BankUtility.Spend).</summary>
+    public const string Purchase = "purchase";
 }
