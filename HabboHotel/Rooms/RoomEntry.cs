@@ -78,8 +78,11 @@ public static class RoomEntry
         // with the room. The client used to ask for them when RoomEntryInfo
         // reached it, a round trip after everything else; it no longer asks.
         session.Send(new GetGuestRoomResultComposer(session, room, true, false));
-        var user = roomUserManager.GetRoomUserByHabbo(session.GetHabbo().Username);
-        if (user != null && session.GetHabbo().PetId == 0) room.SendPacket(new UserChangeComposer(user, false));
+        // pixelrp (Twist, 2026-10-29): no UserChange to the whole room here any
+        // more. It carried the newcomer's look, gender, motto and score - all
+        // of it already in the UsersComposer AddAvatarToRoom sent the room a
+        // moment before - so everyone in the room was sent it twice, and their
+        // clients set the same look again on every arrival.
         if (room.GetWired() != null)
             room.GetWired().TriggerEvent(WiredBoxType.TriggerRoomEnter, session.GetHabbo());
         if (UnixTimestamp.GetNow() < session.GetHabbo().FloodTime && session.GetHabbo().FloodTime != 0)

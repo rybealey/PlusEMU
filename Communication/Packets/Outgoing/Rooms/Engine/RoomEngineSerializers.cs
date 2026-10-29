@@ -1,4 +1,5 @@
-﻿using Plus.HabboHotel.GameClients;
+﻿using System.Globalization;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 
@@ -13,8 +14,11 @@ public static class RoomEngineSerializers
         packet.WriteInteger(item.GetX);
         packet.WriteInteger(item.GetY);
         packet.WriteInteger(item.Rotation);
-        packet.WriteString(FormattableString.Invariant($"{item.GetZ}"));
-        packet.WriteString(FormattableString.Invariant($"{item.Definition.Height}"));
+        // pixelrp (Twist, 2026-10-29): ToString, not FormattableString.Invariant
+        // - the same text, without the three throwaway objects that built it
+        // (twice per furni, so a 762-furni room's list made ~4,500 of them).
+        packet.WriteString(item.GetZ.ToString(CultureInfo.InvariantCulture));
+        packet.WriteString(item.Definition.Height.ToString(CultureInfo.InvariantCulture));
         packet.WriteUInt(0);
         // pixelrp: group furni is sent with its group's (or its turf owner's)
         // badge and colours, built now - see ItemBehaviourUtility.GroupFurniData.

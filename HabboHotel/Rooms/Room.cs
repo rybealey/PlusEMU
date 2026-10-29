@@ -748,11 +748,19 @@ public class Room : RoomData
         // next message and fill in on the floor as before. Nothing happens when
         // no batch is open.
         session.FlushBatch();
-        session.Send(new ObjectsComposer(GetRoomItemHandler().GetFloor.ToArray(), this));
+        // pixelrp (Twist, 2026-10-29): the room's furni read once for the
+        // newcomer and used for everything below. Each read of the room's
+        // furni copies the whole list under every one of the list's locks, so
+        // no furni can be put down or picked up in the room meanwhile - and it
+        // used to be read five times per entry (the floor three times, the
+        // walls twice).
+        var floor = GetRoomItemHandler().GetFloor.ToArray();
+        var wall = GetRoomItemHandler().GetWall.ToArray();
+        session.Send(new ObjectsComposer(floor, this));
         // Opacity rides after the objects themselves, so the client has
         // something to apply it to. Only faded items travel; a room nobody
         // has built in sends a count of zero.
-        var fadedItems = GetRoomItemHandler().GetFloor.Where(item => item.Alpha < 100).ToList();
+        var fadedItems = floor.Where(item => item.Alpha < 100).ToList();
         if (fadedItems.Count > 0)
             session.Send(new RpFurniAlphaComposer(fadedItems));
         // Definitions whose database record differs from the gamedata on disk,
@@ -776,7 +784,7 @@ public class Room : RoomData
         // Only definitions actually in this room travel, which is normally a
         // handful and often none.
         var edited = PlusEnvironment.Game?.ItemManager?.EditedDefinitions;
-        foreach (var definition in GetRoomItemHandler().GetWallAndFloor
+        foreach (var definition in floor.Concat(wall)
                      // the room's item collections can hold nulls - every
                      // other loop over them guards, so this one does too
                      .Where(item => item != null)
@@ -786,7 +794,7 @@ public class Room : RoomData
                                               || (edited != null && edited.Contains(definition.Id))))
                      .DistinctBy(definition => definition.Id))
             session.Send(new RpFurniFunctionComposer(definition));
-        session.Send(new ItemsComposer(GetRoomItemHandler().GetWall.ToArray(), this));
+        session.Send(new ItemsComposer(wall, this));
         // pixelrp jukebox: sent unconditionally, even with no jukebox in the
         // room — the packet is tiny and the client hides the panel itself
         // via present=false (see RoomJukeboxManager.BuildState).
