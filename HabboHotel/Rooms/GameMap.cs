@@ -1067,11 +1067,23 @@ public class Gamemap
     /// sitting or laying still follows the piece up (RoomUserManager takes
     /// item.GetZ for those). Raising something is a visual act; this is the
     /// one place that stops being true.
+    ///
+    /// Except an Action Point: it is a spot to stand on, so whatever height it
+    /// is set to is where somebody standing on it stands (Twist, 2026-10-30).
+    /// A step up of more than CanTraverse.MaxStepUp still cannot be walked.
     /// </summary>
     private double WalkSurfaceOf(Item item, int x, int y) =>
-        item.CustomHeight >= 0
+        item.CustomHeight >= 0 && !IsActionPoint(item)
             ? Model.SqFloorHeight[x, y] + item.OwnHeight
             : item.TotalHeight;
+
+    /// <summary>
+    /// The Action Point furni, by name: its interaction type is plain
+    /// 'default', and points given a behaviour of their own (the Marketplace,
+    /// Apartments and Real Estate points) keep it as their base item.
+    /// </summary>
+    private static bool IsActionPoint(Item item) =>
+        item.Definition.ItemName is "actionpoint" or "actionpoint01";
 
     public double SqAbsoluteHeight(int x, int y, List<Item> itemsOnSquare)
     {
