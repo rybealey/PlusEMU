@@ -14,6 +14,7 @@ using Plus.HabboHotel.Navigator;
 using Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 using Plus.HabboHotel.Rooms.Trading;
 using Plus.HabboHotel.Users.Banking;
+using Plus.Utilities;
 
 namespace Plus.HabboHotel.Rooms;
 
@@ -302,6 +303,14 @@ public static class RpApartments
             return RpTrades.FrozenMessage;
         return null;
     }
+
+    /// <summary>
+    /// <see cref="Refusal"/>, and a trading ban (:tradeban) on top - for the
+    /// real estate board, where an apartment and its furni change hands between
+    /// players for cash, as the Marketplace refuses a trading ban.
+    /// </summary>
+    internal static string? TradeRefusal(GameClient session) =>
+        Refusal(session) ?? ((session.GetHabbo().TradingLockExpiry > UnixTimestamp.GetNow()) ? "You are banned from trading." : null);
 
     /// <summary>Buy: the apartment itself (the centre lot) for somebody without one, otherwise one more lot.</summary>
     private static string BuyLot(GameClient session, Room lobby, int lot)
@@ -636,7 +645,7 @@ public static class RpApartments
     private static string ListForSale(GameClient session, int price)
     {
         var habbo = session.GetHabbo();
-        var refusal = Refusal(session);
+        var refusal = TradeRefusal(session);
         if (refusal != null)
             return refusal;
         if (price < 1)
@@ -669,7 +678,7 @@ public static class RpApartments
         habbo.ChangeCreditsInMemory(-ListingFee);
         CoinLedger.Record(habbo, -ListingFee, "Apartments: listing fee");
         session.Send(new CreditBalanceComposer(habbo.Credits));
-        return $"Your apartment is on the real estate board for {Money(price)}.";
+        return $"Your apartment is on the real estate board for {Money(price)}. Its furni stays put until you take it off.";
     }
 
     /// <summary>Take the apartment off the real estate board.</summary>
@@ -761,6 +770,29 @@ public static class RpApartments
                 }, null);
         });
     }
+
+    /// <summary>Whether this room is somebody's apartment - its floor then comes only from lots (SaveFloorPlanModelEvent).</summary>
+    public static bool IsApartment(uint roomId)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>("SELECT COUNT(*) FROM `rp_apartments` WHERE `room_id` = @room", new { room = roomId }) > 0;
+    }
+
+    /// <summary>
+    /// Whether this room is an apartment on the real estate board. Its furni
+    /// then stays put - nothing is picked up, ejected, cashed in or worn
+    /// (PickupObjectEvent, :pickall, :ejectall, CreditFurniRedeemEvent,
+    /// UseSellableClothingEvent) - so a buyer gets the furni a Visit showed
+    /// them; its owner takes it off the board to change it (Twist, 2026-10-29).
+    /// </summary>
+    public static bool IsListed(uint roomId)
+    {
+        using var connection = PlusEnvironment.DatabaseManager.Connection();
+        return connection.ExecuteScalar<int>("SELECT COUNT(*) FROM `rp_apartments` WHERE `room_id` = @room AND `list_price` > 0", new { room = roomId }) > 0;
+    }
+
+    /// <summary>What somebody reaching for furni in a listed apartment is told (<see cref="IsListed"/>).</summary>
+    public const string ListedFurniMessage = "You can't take furni out while this apartment is for sale.";
 
     /// <summary>This player's apartment, or null.</summary>
     internal static ApartmentRow? ApartmentOf(int userId)

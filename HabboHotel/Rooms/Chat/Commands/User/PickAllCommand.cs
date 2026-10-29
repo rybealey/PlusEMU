@@ -31,6 +31,12 @@ internal class PickAllCommand : IChatCommand
             session.SendWhisper("You need rights in this room to pick furniture up here.");
             return;
         }
+        // pixelrp: not out of an apartment on the real estate board (RpApartments.IsListed).
+        if (RpApartments.IsListed(room.RoomId))
+        {
+            session.SendWhisper(RpApartments.ListedFurniMessage);
+            return;
+        }
         var mine = room.GetRoomItemHandler().GetWallAndFloor.Count(item => item != null && item.UserId == session.GetHabbo().Id);
         if (mine == 0)
         {

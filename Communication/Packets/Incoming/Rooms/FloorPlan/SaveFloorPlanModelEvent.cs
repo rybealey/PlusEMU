@@ -21,6 +21,16 @@ internal class SaveFloorPlanModelEvent : RoomPacketEvent
     {
         if (!room.CanEditFloorplan(session))
             return Task.CompletedTask;
+        // pixelrp: an apartment's floor is the lots its owner bought
+        // (RpApartments: $5,000 for the first, $203,000 for all 25). Its owner
+        // passes the owner test above, and :floor opens the editor for them,
+        // whose 64x64 gave the whole grid and more for the first lot's price.
+        // Staff may still redraw somebody else's.
+        if (room.OwnerId == session.GetHabbo().Id && RpApartments.IsApartment(room.RoomId))
+        {
+            session.Send(new RoomNotificationComposer("floorplan_editor.error", "errors", "An apartment's floor is its lots - buy more at the Apartments point."));
+            return Task.CompletedTask;
+        }
         char[] validLetters =
         {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g',

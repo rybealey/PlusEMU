@@ -38,13 +38,23 @@ internal class PurchaseGroupEvent : IPacketEvent
             session.SendNotification($"A group costs {TextHandling.GetMoney(groupCost)}! You only have {TextHandling.GetMoney(session.GetHabbo().Credits)}!");
             return Task.CompletedTask;
         }
-        session.GetHabbo().ChangeCredits(-groupCost);
-        Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), -groupCost, "Group purchase");
-        session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
+        // pixelrp: the room is checked before the money, not after - a room
+        // that was not theirs used to cost the group's price for nothing.
         if (!RoomFactory.TryGetData(roomId, out var room))
             return Task.CompletedTask;
         if (room == null || room.OwnerId != session.GetHabbo().Id || room.Group != null)
             return Task.CompletedTask;
+        // Never an apartment (Twist, 2026-10-29): the group would stay on it
+        // once sold, its admins moving and ejecting the new owner's furni, and
+        // on a deleted room once sold back.
+        if (RpApartments.IsApartment(roomId))
+        {
+            session.SendNotification("A group can't be based in an apartment.");
+            return Task.CompletedTask;
+        }
+        session.GetHabbo().ChangeCredits(-groupCost);
+        Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), -groupCost, "Group purchase");
+        session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
         var badge = string.Empty;
         for (var i = 0; i < 5; i++) badge += BadgePartUtility.WorkBadgeParts(i == 0, packet.ReadInt().ToString(), packet.ReadInt().ToString(), packet.ReadInt().ToString());
         if (!_groupManager.TryCreateGroup(session.GetHabbo(), name, description, roomId, badge, mainColour, secondaryColour, out var group))

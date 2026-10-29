@@ -33,6 +33,12 @@ internal class UseSellableClothingEvent : IPacketEvent
             return Task.CompletedTask;
         if (item.UserId != session.GetHabbo().Id)
             return Task.CompletedTask;
+        // pixelrp: not used up in an apartment on the real estate board (RpApartments.IsListed).
+        if (Plus.HabboHotel.Rooms.RpApartments.IsListed(room.RoomId))
+        {
+            session.SendWhisper(Plus.HabboHotel.Rooms.RpApartments.ListedFurniMessage);
+            return Task.CompletedTask;
+        }
         if (item.Definition.InteractionType != InteractionType.PurchasableClothing)
         {
             session.SendNotification("Oops, this item isn't set as a sellable clothing item!");

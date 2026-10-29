@@ -30,6 +30,10 @@ namespace Plus.HabboHotel.Rooms;
 /// seller's checking account, online or not, as a Marketplace sale's does
 /// (BankUtility.CreditMarketSale), or into their hand without one.
 ///
+/// While it is listed nothing leaves it - no furni picked up, ejected, cashed
+/// in or worn (RpApartments.IsListed) - so a buyer gets the furni a Visit
+/// showed them (Twist, 2026-10-29).
+///
 /// `paid` (what selling back returns half of) is NOT the price a buyer paid:
 /// it stays what the lots cost from the hotel, so buying an apartment dear
 /// between friends and selling it back cannot make money from nothing.
@@ -72,10 +76,14 @@ public static class RpRealEstate
         public bool Mine { get; set; }
     }
 
-    /// <summary>Furni in the apartment that is not its door arrow.</summary>
+    /// <summary>
+    /// The owner's furni in the apartment, not its door arrow - what a buyer
+    /// gets with it. Furni other players put there stays theirs, so it is not
+    /// counted.
+    /// </summary>
     private const string FurniCount =
         "(SELECT COUNT(*) FROM `items` i LEFT JOIN `rp_item_function` f ON f.`item_id` = i.`id` AND f.`field` = 'interaction_type' AND f.`value` = 'apartment_exit' " +
-        "WHERE i.`room_id` = a.`room_id` AND f.`item_id` IS NULL)";
+        "WHERE i.`room_id` = a.`room_id` AND i.`user_id` = a.`user_id` AND f.`item_id` IS NULL)";
 
     private const string ListingColumns =
         "a.`room_id` AS RoomId, a.`user_id` AS OwnerId, u.`username` AS OwnerName, COALESCE(r.`caption`, '') AS RoomName, " +
@@ -85,6 +93,16 @@ public static class RpRealEstate
     private const string ListingFrom =
         "FROM `rp_apartments` a JOIN `users` u ON u.`id` = a.`user_id` LEFT JOIN `rooms` r ON r.`id` = a.`room_id` " +
         "LEFT JOIN `rooms` l ON l.`id` = a.`lobby_room_id` ";
+
+    /// <summary>
+    /// Not while its owner is banned from trading (user_info.trading_locked,
+    /// :tradeban), as the Marketplace's SellerMayTrade: a listing put up before
+    /// the ban is off the board, unsold and unvisited, until the ban ends.
+    /// </summary>
+    private const string OwnerMayTrade =
+        "NOT EXISTS (SELECT 1 FROM `user_info` t WHERE t.`user_id` = a.`user_id` AND t.`trading_locked` > @now)";
+
+    private static int Now => (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     /// <summary>Whether the player is standing on a Real Estate point.</summary>
     public static bool IsAtPoint(Room? room, RoomUser? user)
@@ -197,7 +215,8 @@ public static class RpRealEstate
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             listings = connection.Query<ListingRow>(
-                $"SELECT {ListingColumns} {ListingFrom} WHERE a.`list_price` > 0 ORDER BY a.`listed_at` DESC, a.`room_id` DESC LIMIT {ListingLimit}").ToList();
+                $"SELECT {ListingColumns} {ListingFrom} WHERE a.`list_price` > 0 AND {OwnerMayTrade} ORDER BY a.`listed_at` DESC, a.`room_id` DESC LIMIT {ListingLimit}",
+                new { now = Now }).ToList();
         }
         var root = AccountUtility.RootOf(habbo.Id);
         foreach (var listing in listings)
@@ -217,7 +236,7 @@ public static class RpRealEstate
     {
         using var connection = PlusEnvironment.DatabaseManager.Connection();
         return connection.QueryFirstOrDefault<ListingRow>(
-            $"SELECT {ListingColumns} {ListingFrom} WHERE a.`room_id` = @room AND a.`list_price` > 0 LIMIT 1", new { room = roomId });
+            $"SELECT {ListingColumns} {ListingFrom} WHERE a.`room_id` = @room AND a.`list_price` > 0 AND {OwnerMayTrade} LIMIT 1", new { room = roomId, now = Now });
     }
 
     /// <summary>
@@ -232,7 +251,7 @@ public static class RpRealEstate
     private static string BuyListing(GameClient session, uint roomId, int price)
     {
         var habbo = session.GetHabbo();
-        var refusal = RpApartments.Refusal(session);
+        var refusal = RpApartments.TradeRefusal(session);
         if (refusal != null)
             return refusal;
 

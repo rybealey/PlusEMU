@@ -1,4 +1,5 @@
-﻿using Plus.Communication.Packets.Outgoing.Inventory.Furni;
+﻿using Dapper;
+using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Core.Settings;
 using Plus.Database;
@@ -35,18 +36,29 @@ internal class CreditFurniRedeemEvent : RoomPacketEvent
             return Task.CompletedTask;
         if (exchange.Definition.InteractionType != InteractionType.Exchange)
             return Task.CompletedTask;
+        // pixelrp: only your own credit furni. Owning the room was the only
+        // test, and since Apartments every player owns one: a gold bar a
+        // friend with rights put down there was the owner's to cash in. The
+        // row goes first and it pays only once it is gone, so it pays once.
+        if (exchange.UserId != session.GetHabbo().Id)
+            return Task.CompletedTask;
+        // Nor out of an apartment on the real estate board (RpApartments.IsListed).
+        if (RpApartments.IsListed(room.RoomId))
+        {
+            session.SendWhisper(RpApartments.ListedFurniMessage);
+            return Task.CompletedTask;
+        }
+        int removed;
+        using (var connection = _database.Connection())
+            removed = connection.Execute("DELETE FROM `items` WHERE `id` = @id LIMIT 1", new { id = exchange.Id });
+        if (removed != 1)
+            return Task.CompletedTask;
         var value = exchange.Definition.BehaviourData;
         if (value > 0)
         {
             session.GetHabbo().ChangeCredits(value);
             Plus.HabboHotel.Users.Banking.CoinLedger.Record(session.GetHabbo(), value, "Redeemed credit furni");
             session.Send(new CreditBalanceComposer(session.GetHabbo().Credits));
-        }
-        using (var dbClient = _database.GetQueryReactor())
-        {
-            dbClient.SetQuery("DELETE FROM `items` WHERE `id` = @exchangeId LIMIT 1");
-            dbClient.AddParameter("exchangeId", exchange.Id);
-            dbClient.RunQuery();
         }
         session.Send(new FurniListUpdateComposer());
         room.GetRoomItemHandler().RemoveFurniture(null, exchange.Id);

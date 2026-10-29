@@ -46,6 +46,14 @@ internal class PickupObjectEvent : IPacketEvent
         // its owner can move it but not pick it up; on-duty staff still can.
         if (item.Definition.InteractionType == InteractionType.ApartmentExit && !canTakeAnyones)
             return;
+        // pixelrp: nothing leaves an apartment on the real estate board, so a
+        // buyer gets what a Visit showed them (RpApartments.IsListed); on-duty
+        // staff still can.
+        if (!canTakeAnyones && RpApartments.IsListed(room.RoomId))
+        {
+            session.SendWhisper(RpApartments.ListedFurniMessage);
+            return;
+        }
         // pixelrp: in a PixelRP room, furni a Builder or above picks up becomes
         // theirs - into their own inventory, never sent to PixelRP's, where
         // nobody could reach it (PixelRpRooms). Only used once itemRights

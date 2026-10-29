@@ -24,6 +24,12 @@ internal class EjectAllCommand : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
+        // pixelrp: not out of an apartment on the real estate board (RpApartments.IsListed).
+        if (RpApartments.IsListed(room.RoomId))
+        {
+            session.SendWhisper(RpApartments.ListedFurniMessage);
+            return;
+        }
         if (session.GetHabbo().Id == room.OwnerId)
         {
             //Let us check anyway.
