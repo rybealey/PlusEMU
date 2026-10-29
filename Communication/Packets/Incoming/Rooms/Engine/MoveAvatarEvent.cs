@@ -14,11 +14,19 @@ internal class MoveAvatarEvent : IPacketEvent
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null || !user.CanWalk)
             return Task.CompletedTask;
+        // pixelrp: the jury stays on the jury seats while court is in session
+        // (JuryTrials, Twist 2026-10-29).
+        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.HeldInJuryBox(user.UserId))
+            return Task.CompletedTask;
         // A player-initiated path ends any staff-forced :walk patrol or :wander.
         user.ForcedWalkAxis = null;
         user.ForcedWalkRandom = false;
         var moveX = packet.ReadInt();
         var moveY = packet.ReadInt();
+        // pixelrp: nobody walks onto a jury seat - only the jury sits there,
+        // put on them as court starts (JuryTrials, Twist 2026-10-29).
+        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.IsJurySeat(room, moveX, moveY))
+            return Task.CompletedTask;
         // A click on the tile you stand on does nothing - but only when you ARE
         // standing. While walking, RoomUser.X/Y is the current step's FROM tile
         // (server truth runs a step behind the drawn avatar), i.e. the tile you
