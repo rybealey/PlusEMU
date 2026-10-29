@@ -50,6 +50,8 @@ public class RpSavePrefsEvent : IPacketEvent
         "pixelrp.prefs.target.highlight",
         "pixelrp.prefs.target.colour",
         "pixelrp.environment.weather",
+        // Change Your Outfit: the custom colors last applied
+        "pixelrp.prefs.outfit.recent",
         // the music player and the profile song
         "pixelrp.jukebox.volume",
         "pixelrp.jukebox.muted",

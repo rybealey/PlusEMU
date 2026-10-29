@@ -9,6 +9,14 @@ namespace Plus.Core.FigureData;
 
 public class FigureDataManager : IFigureDataManager
 {
+    // pixelrp: custom colors. A color id from 0x1000000 to 0x1FFFFFF is in no
+    // palette - it carries its own RGB (id - 0x1000000), the color a player
+    // picked in Change Your Outfit; the client and the imager read it the same
+    // way. Hair and clothing take them; skin keeps to its palette.
+    public const int CustomColorBase = 0x1000000;
+    public const int CustomColorMax = 0x1FFFFFF;
+    private static readonly string[] CustomColorRefused = { "hd" };
+
     private readonly ICatalogManager _catalogManager;
     private readonly ILogger<FigureDataManager> _logger;
     private readonly Dictionary<int, Palette> _palettes; //pallet id, Pallet
@@ -123,12 +131,15 @@ public class FigureDataManager : IFigureDataManager
                                 if (int.TryParse(part.Split('-')[2], out colorId))
                                 {
                                     colorId = Convert.ToInt32(part.Split('-')[2]);
-                                    var palette = GetPalette(colorId);
-                                    if (palette != null && colorId != 0)
+                                    if (!AcceptsCustomColor(type, colorId))
                                     {
-                                        if (figureSet.PalletId != palette.Id) colorId = GetRandomColor(figureSet.PalletId);
+                                        var palette = GetPalette(colorId);
+                                        if (palette != null && colorId != 0)
+                                        {
+                                            if (figureSet.PalletId != palette.Id) colorId = GetRandomColor(figureSet.PalletId);
+                                        }
+                                        else if (palette == null && colorId != 0) colorId = GetRandomColor(figureSet.PalletId);
                                     }
-                                    else if (palette == null && colorId != 0) colorId = GetRandomColor(figureSet.PalletId);
                                 }
                                 else
                                     colorId = 0;
@@ -143,12 +154,15 @@ public class FigureDataManager : IFigureDataManager
                                 if (int.TryParse(part.Split('-')[3], out secondColorId))
                                 {
                                     secondColorId = Convert.ToInt32(part.Split('-')[3]);
-                                    var palette = GetPalette(secondColorId);
-                                    if (palette != null && secondColorId != 0)
+                                    if (!AcceptsCustomColor(type, secondColorId))
                                     {
-                                        if (figureSet.PalletId != palette.Id) secondColorId = GetRandomColor(figureSet.PalletId);
+                                        var palette = GetPalette(secondColorId);
+                                        if (palette != null && secondColorId != 0)
+                                        {
+                                            if (figureSet.PalletId != palette.Id) secondColorId = GetRandomColor(figureSet.PalletId);
+                                        }
+                                        else if (palette == null && secondColorId != 0) secondColorId = GetRandomColor(figureSet.PalletId);
                                     }
-                                    else if (palette == null && secondColorId != 0) secondColorId = GetRandomColor(figureSet.PalletId);
                                 }
                                 else
                                     secondColorId = 0;
@@ -226,6 +240,9 @@ public class FigureDataManager : IFigureDataManager
         }
         return rebuildFigure;
     }
+
+    private static bool AcceptsCustomColor(string type, int colorId) =>
+        colorId >= CustomColorBase && colorId <= CustomColorMax && !CustomColorRefused.Contains(type);
 
     public Palette GetPalette(int colorId)
     {
