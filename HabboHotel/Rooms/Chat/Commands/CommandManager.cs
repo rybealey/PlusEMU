@@ -157,6 +157,13 @@ public class CommandManager : ICommandManager
                 session.SendWhisper("You can't do that in jail.");
                 return true;
             }
+            // pixelrp jury: the jury stays in its seats, so it shoves nobody
+            // about either (JuryTrials).
+            if (User.Police.JuryTrials.Blocks(session, key.ToLower()))
+            {
+                session.SendWhisper("You can't do that on the jury.");
+                return true;
+            }
             // pixelrp City Panel: staff can pause fighting city-wide. Backpack
             // weapon clicks come through here as commands too.
             if (Plus.HabboHotel.CityPanel.CityWorld.CombatBlocks(key.ToLower()))

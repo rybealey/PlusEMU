@@ -395,8 +395,11 @@ public static class JailState
     /// its own, which Habbo.PrepareRoom has just refused; otherwise they are
     /// moved directly. Already in the jail room, they are simply put on the
     /// bed. With no bed they arrive at the door, which is still the jail.
+    /// <paramref name="lockOldRoom"/> is Habbo.PrepareRoom's, for a move made
+    /// off the old room's own threads (JuryTrials taking a prisoner back from
+    /// court, Twist 2026-10-29).
     /// </summary>
-    public static void SendToJail(Habbo habbo, uint jailRoomId, bool forward)
+    public static void SendToJail(Habbo habbo, uint jailRoomId, bool forward, bool lockOldRoom = false)
     {
         if (habbo?.Client == null || jailRoomId == 0)
             return;
@@ -407,7 +410,7 @@ public static class JailState
             if (forward)
                 habbo.Client.SendRoomForward(jailRoomId);
             else
-                habbo.PrepareRoom(jailRoomId, "");
+                habbo.PrepareRoom(jailRoomId, "", lockOldRoom);
             return;
         }
         var bed = PickBed(jail);
@@ -428,7 +431,7 @@ public static class JailState
         if (forward)
             habbo.Client.SendRoomForward(jailRoomId);
         else
-            habbo.PrepareRoom(jailRoomId, "");
+            habbo.PrepareRoom(jailRoomId, "", lockOldRoom);
     }
 
     // ---- sentencing and release ---------------------------------------------
@@ -574,6 +577,27 @@ public static class JailState
         PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.Send(PacketFor(habboId, sentence));
     }
 
+    /// <summary>
+    /// A request given back unheard - its turn came with too few players to
+    /// make a jury, or with the prisoner offline (Twist, 2026-10-29): the
+    /// sentence may ask again, and the card shows whatever it now can. Online
+    /// or not.
+    /// </summary>
+    public static void GiveBackTrial(int habboId)
+    {
+        using (var dbClient = PlusEnvironment.DatabaseManager.GetQueryReactor())
+        {
+            dbClient.SetQuery("UPDATE `rp_jail` SET `trial_requested_at` = 0 WHERE `user_id` = @user AND `released_at` = 0 AND `trial_result` = 0");
+            dbClient.AddParameter("user", habboId);
+            dbClient.RunQuery();
+        }
+        if (!Serving.TryGetValue(habboId, out var sentence))
+            return;
+        lock (sentence)
+            sentence.TrialAsked = false;
+        PlusEnvironment.Game.ClientManager.GetClientByUserId(habboId)?.Send(PacketFor(habboId, sentence));
+    }
+
     // ---- the session --------------------------------------------------------
 
     /// <summary>
@@ -710,6 +734,13 @@ public static class JailState
         if (!Serving.TryGetValue(user.UserId, out var sentence))
             return null;
         var now = DateTime.UtcNow;
+        // Stopped with no court holding it - a cancel that landed as they
+        // walked in: it runs again. A field read, no lock (JuryTrials.HoldsClockOf).
+        if (sentence.PausedLeft != null && !JuryTrials.HoldsClockOf(user.UserId))
+        {
+            var pausedId = user.UserId;
+            return () => Resume(pausedId);
+        }
         // Stopped in court: nothing runs out there.
         if (sentence.PausedLeft == null && now >= sentence.ReleaseAtUtc)
         {

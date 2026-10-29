@@ -21,10 +21,15 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 ///
 /// SUMMONS. Up to <see cref="MaxJurors"/> players are picked at random from
 /// everybody who could serve - online, not serving time, not knocked out, not
-/// cuffed or being escorted; police, the arresting officer, the prisoner's gang
+/// cuffed or being escorted, not staff gone :invisible, not a paramedic carrying
+/// a patient (Twist, 2026-10-29);
+/// police, the arresting officer, the prisoner's gang
 /// and sleeping players included; never a system account. Each is whispered to
 /// get to the Courthouse within two minutes, and reminded with 30 seconds
-/// left. The prisoner's clock keeps running meanwhile, in the jail.
+/// left. The prisoner's clock keeps running meanwhile, in the jail. A request
+/// whose turn comes with fewer than <see cref="MinJurors"/> who could serve,
+/// or with the prisoner offline, is given back to ask again rather than spent,
+/// and the prisoner is told (Twist, 2026-10-29).
 ///
 /// COURT starts the moment the two minutes end, with whichever picked players
 /// are in the Courthouse then and not in cuffs - one is enough; nobody, and
@@ -35,7 +40,11 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// the Courthouse (Twist, 2026-10-29) - and can't walk off them until court is
 /// out (<see cref="HeldInJuryBox"/>). Nobody else may walk onto one, trial or
 /// no trial (<see cref="IsJurySeat"/>). The jury box is sealed off, so once
-/// court is out the jury is taken to the lobby seats (<see cref="ToLobby"/>). The
+/// court is out the jury is taken to the lobby seats (<see cref="ToLobby"/>). A
+/// juror escorting somebody brings them along, into the jury box and out to the
+/// lobby, still cuffed and escorted (Twist, 2026-10-20) - an escort follows its
+/// captor's teleport on its own (PoliceState.OnWarp), and the court leaves
+/// them where they land (<see cref="KeptInJuryBox"/>). The
 /// prisoner is brought over (their clock stopping as they arrive) and the
 /// judge - whichever bot is in the Courthouse - opens the court and reads the
 /// charges, gives the defendant 15 seconds to speak, and puts it to the vote.
@@ -114,6 +123,8 @@ public static class JuryTrials
     private const string InviteWhisper = "You have been invited to attend jury duty. You have 2 minutes to head to the Courthouse.";
     private const string ReminderWhisper = "You have 30 seconds to attend jury duty.";
     private const string NoJurorsWhisper = "Your trial has been cancelled because there are no jurors in attendance.";
+    /// <summary>A request whose turn came with too few players to call a jury - given back (Twist, 2026-10-29).</summary>
+    private const string NoJuryWhisper = "Your trial has been cancelled because there were no jurors.";
     private const string CancelledWhisper = "The trial has been cancelled.";
     private const string DefendantLeftLine = "The defendant has left the court. This trial has been cancelled.";
 
@@ -165,6 +176,13 @@ public static class JuryTrials
     /// </summary>
     private static readonly ConcurrentDictionary<int, byte> JuryBox = new();
 
+    /// <summary>
+    /// The prisoner whose trial has reached court, until it is over; 0 for
+    /// none. Apart from <see cref="_active"/> so the jail's tick reads it
+    /// without the lock (<see cref="HoldsClockOf"/>).
+    /// </summary>
+    private static volatile int _courtPrisonerId;
+
     private static System.Threading.Timer? _timer;
     private static int _ticking;
     private static DateTime _nextSweepUtc = DateTime.MinValue;
@@ -204,7 +222,8 @@ public static class JuryTrials
         {
             var habbo = client?.GetHabbo();
             if (habbo == null || habbo.Id == exceptId || system.Contains(habbo.Id) || JailState.IsJailed(habbo.Id) ||
-                PoliceState.IsCuffed(habbo.Id) || PoliceState.IsBeingEscorted(habbo.Id))
+                PoliceState.IsCuffed(habbo.Id) || PoliceState.IsBeingEscorted(habbo.Id) || habbo.IsInvisible ||
+                PoliceState.IsMedicalEscort(habbo.Id))
                 continue;
             if (habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?.RpKnockedOut == true)
                 continue;
@@ -259,6 +278,14 @@ public static class JuryTrials
         lock (Lock)
             return _active is { } trial && trial.PrisonerId == prisonerId && trial.Phase >= Phase.Arriving;
     }
+
+    /// <summary>
+    /// Is court what stopped this prisoner's clock - their trial reached court
+    /// and is not over? Read by the jail's tick without the lock: a clock found
+    /// stopped with no court holding it runs again (JailState.Tick), so a
+    /// cancel landing just as the prisoner walks in cannot leave it stopped.
+    /// </summary>
+    public static bool HoldsClockOf(int prisonerId) => prisonerId != 0 && _courtPrisonerId == prisonerId;
 
     /// <summary>
     /// True from the moment the prisoner arrives in the Courthouse for their
@@ -336,21 +363,24 @@ public static class JuryTrials
             // A juror who logged out of court, back while it is still in
             // session: back on the jury - their vote while it is open, and their
             // pay - and back on their seat (Twist, 2026-10-29).
-            else if (_active is { Phase: >= Phase.Arriving and < Phase.Verdict } court && court.Sworn.Contains(habboId))
+            // Not one still knocked out: a juror is somebody not knocked out.
+            else if (_active is { Phase: >= Phase.Arriving and < Phase.Verdict } court && court.Sworn.Contains(habboId) && !user.RpKnockedOut)
             {
                 if (court.Jurors.Add(habboId))
                 {
                     JuryBox[habboId] = 0;
                     CarryOn(court, DateTime.UtcNow);
-                    if (court.Phase == Phase.Voting)
-                        SendCards(court, DateTime.UtcNow, after);
                 }
+                // Every entry, not just the first: a login enters the room
+                // twice, and a room reload sends the whole jury back in.
+                if (court.Phase == Phase.Voting)
+                    SendCards(court, DateTime.UtcNow, after);
                 after.Add(() => ReturnToSeat(court, habboId));
             }
         }
         // Anybody else on a jury seat - a juror back once court is out, or
         // after a restart - and the box is sealed: out to the lobby.
-        if (!HeldInJuryBox(habboId) && IsJurySeat(room, user.X, user.Y))
+        if (!KeptInJuryBox(habboId) && IsJurySeat(room, user.X, user.Y))
             after.Add(() => ToLobby(new List<int> { habboId }));
         Run(after);
     }
@@ -362,7 +392,9 @@ public static class JuryTrials
     /// </summary>
     public static bool HeldInCourt(int habboId, uint targetRoomId)
     {
-        if (targetRoomId == CourthouseRoomId)
+        // No trial, the usual answer, without the lock: this is asked on every
+        // room change in the hotel.
+        if (targetRoomId == CourthouseRoomId || Volatile.Read(ref _active) == null)
             return false;
         lock (Lock)
         {
@@ -373,10 +405,30 @@ public static class JuryTrials
     }
 
     /// <summary>
-    /// Is this player on the jury while court is in session, so may not walk
-    /// off the jury seats? (MoveAvatarEvent)
+    /// Is this player on the jury while court is in session, and in the
+    /// Courthouse, so may not walk off the jury seats? (MoveAvatarEvent) A
+    /// juror put out of the room some other way - a kick - walks freely where
+    /// they land.
     /// </summary>
-    public static bool HeldInJuryBox(int habboId) => JuryBox.ContainsKey(habboId);
+    public static bool HeldInJuryBox(Room room, int habboId) =>
+        room != null && room.RoomId == CourthouseRoomId && InJuryBox(habboId);
+
+    private static bool InJuryBox(int habboId) => JuryBox.ContainsKey(habboId);
+
+    /// <summary>
+    /// Is this player meant to be in the jury box - a juror, or somebody a
+    /// juror is escorting, who came in on their captor's teleport and lands on
+    /// their seat or the one in front? Nobody else is left on a jury seat.
+    /// </summary>
+    private static bool KeptInJuryBox(int habboId) =>
+        InJuryBox(habboId) || InJuryBox(PoliceState.CaptorOf(habboId));
+
+    /// <summary>The jury does not shove or drag anybody about either - it stays in its seats.</summary>
+    private static readonly HashSet<string> JurorCannot = new(StringComparer.OrdinalIgnoreCase) { "push", "spush", "pull" };
+
+    /// <summary>Whether sitting on the jury stops this command. (CommandManager, beside the cuffs' gate)</summary>
+    public static bool Blocks(GameClient session, string commandKey) =>
+        JurorCannot.Contains(commandKey) && session?.GetHabbo() is { } habbo && HeldInJuryBox(habbo.CurrentRoom, habbo.Id);
 
     /// <summary>
     /// Is this tile a jury seat, which nobody may walk onto? Only the jury sits
@@ -415,6 +467,10 @@ public static class JuryTrials
         {
             var now = DateTime.UtcNow;
             var after = new List<Action>();
+            // Read now, when it is due, so a summons never waits on the
+            // database inside the lock every room change in the hotel asks
+            // (HeldInCourt).
+            SystemAccounts();
             lock (Lock)
                 Step(now, after);
             Run(after);
@@ -447,14 +503,34 @@ public static class JuryTrials
                 var prisonerId = Waiting[0];
                 Waiting.RemoveAt(0);
                 // Let go while waiting (a staff release offline): nothing to try.
-                if (!JailState.IsJailed(prisonerId) && JailState.SecondsLeftAnywhere(prisonerId) <= 0)
+                if (!JailState.IsJailed(prisonerId) && ServedOffline(prisonerId))
                     continue;
+                // Its turn, and no jury to be had - fewer players than a trial
+                // needs, or the prisoner not online: given back to ask again,
+                // not spent (Twist, 2026-10-29).
+                if (HabboOf(prisonerId) == null || !JailState.IsJailed(prisonerId) || EligibleJurors(prisonerId).Count < MinJurors)
+                {
+                    after.Add(() => JailState.GiveBackTrial(prisonerId));
+                    Whisper(prisonerId, NoJuryWhisper, after);
+                    continue;
+                }
                 StartSummons(prisonerId, now, after);
             }
             return;
         }
 
         var trial = _active;
+        if (trial.Phase is >= Phase.Arriving and < Phase.Verdict)
+        {
+            // Knocked out in court: off the jury - no vote, no pay - so the
+            // hospital can take them (a juror is somebody not knocked out).
+            foreach (var id in trial.Jurors.Where(id => InCourt(id) && KnockedOut(id)).ToList())
+                DropJuror(trial, id, now, after);
+            // No juror in court - every one logged out, knocked out, or the
+            // room reloaded or emptied under them (a staff :unload, a kick).
+            if (trial.EmptySinceUtc == null && !trial.Jurors.Any(InCourt))
+                trial.EmptySinceUtc = now;
+        }
         // No juror in court: it stands still - no lines, no clocks - until one
         // is back or the wait is up.
         if (trial.EmptySinceUtc is { } emptySince)
@@ -544,8 +620,13 @@ public static class JuryTrials
             return;
         }
         // In cuffs as court starts: off the jury - no vote, no pay, not told
-        // (Twist, 2026-10-20).
-        var present = trial.Picked.Where(id => InCourt(id) && !PoliceState.IsCuffed(id)).ToList();
+        // (Twist, 2026-10-20). Gone :invisible since the summons, or carrying
+        // a patient, the same (Twist, 2026-10-29: neither can be a juror).
+        // Knocked out since the summons, the same: a juror is somebody not
+        // knocked out (Twist, 2026-10-19), and one held in court could not be
+        // taken to hospital.
+        var present = trial.Picked.Where(id => InCourt(id) && !PoliceState.IsCuffed(id) && HabboOf(id)?.IsInvisible != true &&
+                                               !PoliceState.IsMedicalEscort(id) && !KnockedOut(id)).ToList();
         if (present.Count == 0)
         {
             Cancel(trial, Array.Empty<int>(), NoJurorsWhisper, false, after);
@@ -561,6 +642,7 @@ public static class JuryTrials
         trial.Gender = (prisoner.Gender ?? "M").ToUpperInvariant().StartsWith("F") ? "F" : "M";
         trial.Phase = Phase.Arriving;
         trial.PhaseEndsUtc = now.AddSeconds(ArriveSeconds);
+        _courtPrisonerId = trial.PrisonerId;
         if (prisoner.CurrentRoom?.RoomId == CourthouseRoomId)
         {
             BeginCourt(trial, now, after);
@@ -592,7 +674,7 @@ public static class JuryTrials
     /// <summary>
     /// A juror is back in a court that stood empty: it carries on where it
     /// stood - the time left for the prisoner to arrive, to plead or to vote
-    /// as it was, and the judge's next line a second on.
+    /// as it was, and the judge's next line as it was too.
     /// </summary>
     private static void CarryOn(Trial trial, DateTime now)
     {
@@ -600,10 +682,53 @@ public static class JuryTrials
             return;
         trial.EmptySinceUtc = null;
         trial.PhaseEndsUtc += now - emptySince;
-        trial.NextLineUtc = now.AddSeconds(1);
+        // No later than one line's gap from now - a juror relogging over and
+        // over cannot keep pushing the judge's next line away.
+        var nextLine = trial.NextLineUtc + (now - emptySince);
+        var latest = now.AddSeconds(LineSeconds);
+        trial.NextLineUtc = nextLine < latest ? nextLine : latest;
     }
 
-    private static bool AllVoted(Trial trial) => trial.Jurors.Where(InCourt).All(trial.Votes.ContainsKey);
+    /// <summary>
+    /// Has an offline prisoner at the front of the queue been let go meanwhile?
+    /// A failed read says no and the trial is tried, rather than the request
+    /// being dropped with the card still saying Waiting for a jury.
+    /// </summary>
+    private static bool ServedOffline(int prisonerId)
+    {
+        try
+        {
+            return JailState.SecondsLeftAnywhere(prisonerId) <= 0;
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"[JuryTrials] reading prisoner {prisonerId}'s time left failed: {exception.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Every juror in court has voted - and there is one: an empty court has not voted.</summary>
+    private static bool AllVoted(Trial trial)
+    {
+        var inCourt = trial.Jurors.Where(InCourt).ToList();
+        return inCourt.Count > 0 && inCourt.All(trial.Votes.ContainsKey);
+    }
+
+    /// <summary>
+    /// Off the jury mid-court (knocked out): no vote, no pay, not held, and not
+    /// one to come back to it. Their vote card shuts and the others' count drops.
+    /// </summary>
+    private static void DropJuror(Trial trial, int habboId, DateTime now, List<Action> after)
+    {
+        trial.Jurors.Remove(habboId);
+        trial.Sworn.Remove(habboId);
+        trial.Votes.Remove(habboId);
+        JuryBox.TryRemove(habboId, out _);
+        if (trial.Phase != Phase.Voting)
+            return;
+        Send(habboId, new RpJuryVoteComposer(), after);
+        SendCards(trial, now, after);
+    }
 
     private static void Verdict(Trial trial, DateTime now, List<Action> after)
     {
@@ -635,6 +760,7 @@ public static class JuryTrials
     private static void Finish(Trial trial, List<Action> after)
     {
         _active = null;
+        _courtPrisonerId = 0;
         FreeJuryBox(after);
         var prisonerId = trial.PrisonerId;
         after.Add(() => BackToJail(prisonerId));
@@ -650,6 +776,7 @@ public static class JuryTrials
     private static void Cancel(Trial trial, IEnumerable<int> tell, string? prisonerWhisper, bool moveBack, List<Action> after, bool payJurors = false)
     {
         _active = null;
+        _courtPrisonerId = 0;
         FreeJuryBox(after);
         CloseCards(trial, after);
         foreach (var id in tell.ToList())
@@ -686,10 +813,15 @@ public static class JuryTrials
     private static void BackToJail(int prisonerId)
     {
         JailState.Resume(prisonerId);
+        // The pass into the Courthouse goes too - one who never left the jail
+        // to use it would keep it.
+        JailState.AllowSummon(prisonerId, JailState.JailRoomId());
         var habbo = HabboOf(prisonerId);
         if (habbo == null || !JailState.IsJailed(prisonerId))
             return;
-        JailState.SendToJail(habbo, JailState.JailRoomId(), forward: false);
+        // Off the Courthouse's own threads (the court's timer), so its room is
+        // locked while they leave it - as on the way over (Twist, 2026-10-29).
+        JailState.SendToJail(habbo, JailState.JailRoomId(), forward: false, lockOldRoom: true);
     }
 
     /// <summary>
@@ -782,7 +914,7 @@ public static class JuryTrials
         if (!PlusEnvironment.Game.RoomManager.TryGetRoom(CourthouseRoomId, out var room) || room == null)
             return;
         var stuck = room.GetRoomUserManager()?.GetUserList()
-            .Where(user => user != null && !user.IsBot && !HeldInJuryBox(user.UserId) && IsJurySeat(room, user.X, user.Y))
+            .Where(user => user != null && !user.IsBot && !KeptInJuryBox(user.UserId) && IsJurySeat(room, user.X, user.Y))
             .Select(user => user.UserId).ToList();
         if (stuck is { Count: > 0 })
             ToLobby(stuck);
@@ -801,7 +933,11 @@ public static class JuryTrials
     /// Each of <paramref name="habboIds"/> still in the Courthouse onto a lobby
     /// seat picked at random (Twist, 2026-10-29) - an empty one while there is
     /// one, a sofa seating two, and then any. With no lobby seats at all, the door.
-    /// Never anybody the court is holding by then - a juror back in court.
+    /// Never anybody the court is keeping in the box by then - a juror back in
+    /// court, or whoever a juror is escorting (<see cref="KeptInJuryBox"/>).
+    /// Somebody being escorted goes last, and only if their captor's move has
+    /// not already taken them out of the box with it (PoliceState.OnWarp) - a
+    /// pair is not split, but nobody is left behind either.
     /// </summary>
     private static void ToLobby(List<int> habboIds)
     {
@@ -815,10 +951,12 @@ public static class JuryTrials
         var seats = floor.Where(item => item?.Definition != null && LobbySeatItemNames.Contains(item.Definition.ItemName))
             .SelectMany(item => item.GetAffectedTiles.Values.Select(tile => (Item: item, Tile: new Point(tile.X, tile.Y))))
             .ToList();
-        foreach (var habboId in habboIds)
+        foreach (var habboId in habboIds.OrderBy(PoliceState.IsBeingEscorted))
         {
             var user = users.GetRoomUserByHabbo(habboId);
-            if (user == null || HeldInJuryBox(habboId))
+            if (user == null || KeptInJuryBox(habboId))
+                continue;
+            if (PoliceState.IsBeingEscorted(habboId) && !IsJurySeat(room, user.X, user.Y))
                 continue;
             if (seats.Count == 0)
                 map.TeleportToTile(user, map.Model.DoorX, map.Model.DoorY, map.Model.DoorZ, map.Model.DoorOrientation);
@@ -905,4 +1043,8 @@ public static class JuryTrials
         var habbo = HabboOf(habboId);
         return habbo != null && habbo.InRoom && habbo.CurrentRoom?.RoomId == CourthouseRoomId;
     }
+
+    /// <summary>Knocked out, in whatever room they are in.</summary>
+    private static bool KnockedOut(int habboId) =>
+        HabboOf(habboId) is { } habbo && habbo.CurrentRoom?.GetRoomUserManager()?.GetRoomUserByHabbo(habbo.Id)?.RpKnockedOut == true;
 }
