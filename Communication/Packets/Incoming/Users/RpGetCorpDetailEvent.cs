@@ -59,7 +59,7 @@ internal class RpGetCorpDetailEvent : IPacketEvent
                     var live = ShiftManager.LiveSessionSeconds(employee.UserId);
                     var onDuty = ShiftManager.IsOnDuty(employee.UserId);
                     return new RpCorpDetailComposer.Employee(
-                        employee.Username, employee.Figure, employee.Tier,
+                        employee.UserId, employee.Username, employee.Figure, employee.Tier,
                         _clientManager.GetClientByUserId(employee.UserId) != null,
                         onDuty,
                         employee.ShiftSeconds + live,

@@ -12,8 +12,9 @@ public class RpCorpDetailComposer : IServerPacket
     // LastOnline is a unix timestamp, 0 when the player has never logged
     // out (users.last_online is written on logout, so it is STALE for a
     // player who is online right now - the client renders "Now" off the
-    // Online flag instead of reading this).
-    public record Employee(string Username, string Figure, int Tier, bool Online, bool OnDuty, int ShiftSeconds, int ShiftSecondsWeek, int LastOnline);
+    // Online flag instead of reading this). UserId is what the employee's
+    // profile is looked up by when they are clicked.
+    public record Employee(int UserId, string Username, string Figure, int Tier, bool Online, bool OnDuty, int ShiftSeconds, int ShiftSecondsWeek, int LastOnline);
 
     public record Rank(int Id, int Order, string Name, int Pay, int Tiers, List<Employee> Employees);
 
@@ -66,5 +67,12 @@ public class RpCorpDetailComposer : IServerPacket
                 packet.WriteInteger(employee.LastOnline);
             }
         }
+        // Last, every employee's user id in the order they were listed above -
+        // appended, so a client from before it still reads everything ahead
+        // of it. Without it a profile opened from the roster had no player to
+        // look up: no partner, gang, birthday or region.
+        foreach (var rank in _ranks)
+        foreach (var employee in rank.Employees)
+            packet.WriteInteger(employee.UserId);
     }
 }
