@@ -2130,7 +2130,10 @@ public class RoomUserManager
         }
         else if (ShiftManager.IsStaffOnDuty(habbo.Id))
         {
-            if (cur != Habbo.StaffDutyEffectId && !user.IsDancing && !user.IsLying)
+            // pixelrp: a vape's puff of smoke is let through - it lasts a few
+            // seconds and puts the staff enable back itself (RpVape.Restore).
+            var puffing = (cur == Users.RpVape.EffectId) && Users.RpVape.IsPuffing(habbo.Id);
+            if (cur != Habbo.StaffDutyEffectId && !puffing && !user.IsDancing && !user.IsLying)
                 habbo.Effects.ApplyEffect(Habbo.StaffDutyEffectId);
         }
         // pixelrp :invisible: a Ghost left on someone visible - put back by an
