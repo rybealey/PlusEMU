@@ -17,6 +17,10 @@ public class FigureDataManager : IFigureDataManager
     public const int CustomColorMax = 0x1FFFFFF;
     private static readonly string[] CustomColorRefused = { "hd" };
 
+    // pixelrp: a piece takes up to three colors - a few have a third color
+    // layer (sh-300363, he-3385 ...), and Change Your Outfit sets all three.
+    private const int MaxColors = 3;
+
     private readonly ICatalogManager _catalogManager;
     private readonly ILogger<FigureDataManager> _logger;
     private readonly Dictionary<int, Palette> _palettes; //pallet id, Pallet
@@ -105,8 +109,7 @@ public class FigureDataManager : IFigureDataManager
             if (_setTypes.TryGetValue(type, out var figureSet))
             {
                 var partId = Convert.ToInt32(part.Split('-')[1]);
-                var colorId = 0;
-                var secondColorId = 0;
+                var colorIds = new int[MaxColors];
                 if (figureSet.Sets.TryGetValue(partId, out var set))
                 {
                     if (set.Gender != gender && set.Gender != "U")
@@ -117,58 +120,18 @@ public class FigureDataManager : IFigureDataManager
 
                             //Fetch the new set.
                             figureSet.Sets.TryGetValue(partId, out set);
-                            colorId = GetRandomColor(figureSet.PalletId);
+                            colorIds[0] = GetRandomColor(figureSet.PalletId);
                         }
                     }
-                    if (set.Colorable)
+                    if (set.TakesColor)
                     {
-                        //Couldn't think of a better way to split the colors, if I looped the parts I still have to remove Type-PartId, then loop color 1 & color 2. Meh
-                        var splitterCounter = part.Count(x => x == '-');
-                        if (splitterCounter == 2 || splitterCounter == 3)
+                        // One color per color layer, at most three; a part with
+                        // more than that keeps none.
+                        var colors = part.Split('-').Skip(2).ToArray();
+                        if (colors.Length >= 1 && colors.Length <= MaxColors)
                         {
-                            if (!string.IsNullOrEmpty(part.Split('-')[2]))
-                            {
-                                if (int.TryParse(part.Split('-')[2], out colorId))
-                                {
-                                    colorId = Convert.ToInt32(part.Split('-')[2]);
-                                    if (!AcceptsCustomColor(type, colorId))
-                                    {
-                                        var palette = GetPalette(colorId);
-                                        if (palette != null && colorId != 0)
-                                        {
-                                            if (figureSet.PalletId != palette.Id) colorId = GetRandomColor(figureSet.PalletId);
-                                        }
-                                        else if (palette == null && colorId != 0) colorId = GetRandomColor(figureSet.PalletId);
-                                    }
-                                }
-                                else
-                                    colorId = 0;
-                            }
-                            else
-                                colorId = 0;
-                        }
-                        if (splitterCounter == 3)
-                        {
-                            if (!string.IsNullOrEmpty(part.Split('-')[3]))
-                            {
-                                if (int.TryParse(part.Split('-')[3], out secondColorId))
-                                {
-                                    secondColorId = Convert.ToInt32(part.Split('-')[3]);
-                                    if (!AcceptsCustomColor(type, secondColorId))
-                                    {
-                                        var palette = GetPalette(secondColorId);
-                                        if (palette != null && secondColorId != 0)
-                                        {
-                                            if (figureSet.PalletId != palette.Id) secondColorId = GetRandomColor(figureSet.PalletId);
-                                        }
-                                        else if (palette == null && secondColorId != 0) secondColorId = GetRandomColor(figureSet.PalletId);
-                                    }
-                                }
-                                else
-                                    secondColorId = 0;
-                            }
-                            else
-                                secondColorId = 0;
+                            for (var i = 0; i < colors.Length; i++)
+                                colorIds[i] = ValidColor(type, figureSet, colors[i]);
                         }
                     }
                     else
@@ -176,18 +139,19 @@ public class FigureDataManager : IFigureDataManager
                         var ignore = new[] { "ca", "wa" };
                         if (ignore.Contains(type))
                             if (!string.IsNullOrEmpty(part.Split('-')[2]))
-                                colorId = Convert.ToInt32(part.Split('-')[2]);
+                                colorIds[0] = Convert.ToInt32(part.Split('-')[2]);
                     }
                     if (set.ClubLevel > 0 && !hasHabboClub)
                     {
                         partId = figureSet.Sets.FirstOrDefault(x => x.Value.Gender == gender || x.Value.Gender == "U" && x.Value.ClubLevel == 0).Value.Id;
                         figureSet.Sets.TryGetValue(partId, out set);
-                        colorId = GetRandomColor(figureSet.PalletId);
+                        colorIds[0] = GetRandomColor(figureSet.PalletId);
                     }
-                    if (secondColorId == 0)
-                        rebuildFigure = $"{rebuildFigure}{type}-{partId}-{colorId}.";
-                    else
-                        rebuildFigure = $"{rebuildFigure}{type}-{partId}-{colorId}-{secondColorId}.";
+                    // Trailing 0s are left off, the first color never is.
+                    var colorCount = MaxColors;
+                    while (colorCount > 1 && colorIds[colorCount - 1] == 0)
+                        colorCount--;
+                    rebuildFigure = $"{rebuildFigure}{type}-{partId}-{string.Join('-', colorIds.Take(colorCount))}.";
                 }
             }
         }
@@ -239,6 +203,18 @@ public class FigureDataManager : IFigureDataManager
             }
         }
         return rebuildFigure;
+    }
+
+    // A color the piece's palette has, a custom color where those are taken, or
+    // 0; any other id becomes the palette's first color.
+    private int ValidColor(string type, FigureSet figureSet, string value)
+    {
+        if (!int.TryParse(value, out var colorId) || colorId == 0)
+            return 0;
+        if (AcceptsCustomColor(type, colorId))
+            return colorId;
+        var palette = GetPalette(colorId);
+        return palette != null && palette.Id == figureSet.PalletId ? colorId : GetRandomColor(figureSet.PalletId);
     }
 
     private static bool AcceptsCustomColor(string type, int colorId) =>
