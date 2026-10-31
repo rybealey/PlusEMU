@@ -559,6 +559,14 @@ public static class ShiftManager
             (offDuty ? ", `on_duty` = 0" : "") +
             " WHERE `user_id` = @userId LIMIT 1",
             new { paySeconds, delta, userId = session.UserId });
+        // pixelrp Corporation Panel: the same seconds again under today's UK
+        // date, for the Weekly shifts grid (CorpWeek). A flush is at most a
+        // minute, so a shift running past midnight splits to the minute.
+        if (delta > 0)
+            connection.Execute(
+                "INSERT INTO `rp_corporation_shift_days` (`user_id`, `corporation_id`, `day`, `seconds`) VALUES (@userId, @corpId, @day, @delta) " +
+                "ON DUPLICATE KEY UPDATE `seconds` = `seconds` + VALUES(`seconds`)",
+                new { userId = session.UserId, corpId = session.CorpId, day = CorpWeek.DayOf(DateTimeOffset.UtcNow).ToString("yyyy-MM-dd"), delta });
     }
 
     // Sets the in-memory motto and pushes it to the infostand (self + room).

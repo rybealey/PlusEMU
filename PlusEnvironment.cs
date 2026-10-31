@@ -138,6 +138,10 @@ public class PlusEnvironment : IPlusEnvironment
             // a 15 minute interval and purges past 90 days, which is the whole
             // history behind the phone's Stocks app.
             HabboHotel.Corporations.StockLedger.Init();
+            // pixelrp: the corporation week (Corporation Panel) - runs a
+            // Sunday 11:59 PM UK reset the emulator was down for, then checks
+            // once a minute.
+            HabboHotel.Corporations.CorpWeek.Init();
             // pixelrp: Paramedic Dispatch - the beat that moves an unclaimed
             // call on to the next paramedic after 10 seconds.
             HabboHotel.Corporations.MedicalCalls.Init();

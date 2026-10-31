@@ -254,6 +254,10 @@ public static class ServerPacketHeader
     public const uint RpRealEstateComposer = 4239;
     // pixelrp: the :hotrooms window, the busiest rooms (HotRooms)
     public const uint RpHotRoomsComposer = 4241;
+    // pixelrp: the Corporation Panel (:cp) - who is looking, the Dashboard, Weekly shifts (CorpPanel)
+    public const uint RpCorpPanelComposer = 4244;
+    public const uint RpCorpPanelDashboardComposer = 4245;
+    public const uint RpCorpPanelShiftsComposer = 4246;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

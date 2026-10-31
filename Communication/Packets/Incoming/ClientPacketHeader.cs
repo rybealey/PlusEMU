@@ -632,6 +632,8 @@ public static class ClientPacketHeader
     public const uint RpApartmentSnapshotEvent = 4240;
     // pixelrp: the :hotrooms window was closed - stop sending it (HotRooms)
     public const uint RpHotRoomsCloseEvent = 4242;
+    // pixelrp: the Corporation Panel (:cp) - every action from the window (CorpPanel, 334_CorpPanel.sql)
+    public const uint RpCorpPanelActionEvent = 4243;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;
