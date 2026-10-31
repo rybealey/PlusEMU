@@ -60,7 +60,7 @@ internal static class CommandListLayout
         "sit", "stand", "lay", "stats", "bal", "showbal", "passive", "suicide", "flagme", "mutebots", "mutepets", "wd", "armour", "armor");
 
     private static readonly Group JobsAndGangs = new("Jobs & gangs", false, false,
-        "startwork", "stopwork", "hire", "fire", "quitjob", "ca", "cp", "heal", "ga", "leavegang");
+        "startwork", "stopwork", "hire", "fire", "quitjob", "promote", "demote", "ca", "cp", "heal", "ga", "leavegang");
 
     private static readonly Group Trading = new("Trading", false, false, "give", "offer", "mp");
 

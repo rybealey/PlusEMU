@@ -262,6 +262,9 @@ public static class ServerPacketHeader
     public const uint RpCorpPanelDisciplineComposer = 4248;
     public const uint RpCorpPanelEmployeeComposer = 4249;
     public const uint RpCorpPanelResultComposer = 4250;
+    // pixelrp: the Corporation Panel - the Promotions and Demotions logs, the requests (CorpRanks)
+    public const uint RpCorpPanelRankLogComposer = 4252;
+    public const uint RpCorpPanelRequestsComposer = 4253;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

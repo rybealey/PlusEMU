@@ -28,12 +28,13 @@ public class RpCorpPanelEmployeeComposer : IServerPacket
     private readonly int _firstWeekStartedAt;
     private readonly int[] _weekSeconds;
     private readonly List<CorpDiscipline.Entry> _record;
+    private readonly List<CorpRanks.Change> _rankChanges;
 
     public uint MessageId => ServerPacketHeader.RpCorpPanelEmployeeComposer;
 
     public RpCorpPanelEmployeeComposer(int userId, string username, string look, string gender, string rankName, int tier, int hiredAt, int lastOnline,
         bool onDuty, bool online, int shiftQuota, int warnings, int strikes, bool canDiscipline, int firstWeekStartedAt, int[] weekSeconds,
-        List<CorpDiscipline.Entry> record)
+        List<CorpDiscipline.Entry> record, List<CorpRanks.Change> rankChanges)
     {
         _userId = userId;
         _username = username ?? "";
@@ -52,6 +53,7 @@ public class RpCorpPanelEmployeeComposer : IServerPacket
         _firstWeekStartedAt = firstWeekStartedAt;
         _weekSeconds = weekSeconds;
         _record = record;
+        _rankChanges = rankChanges;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -77,5 +79,9 @@ public class RpCorpPanelEmployeeComposer : IServerPacket
         packet.WriteInteger(_record.Count);
         foreach (var entry in _record)
             RpCorpPanelDisciplineComposer.WriteEntry(packet, entry);
+        // slice 3: promotions and demotions, newest first
+        packet.WriteInteger(_rankChanges.Count);
+        foreach (var change in _rankChanges)
+            RpCorpPanelRankLogComposer.WriteChange(packet, change);
     }
 }

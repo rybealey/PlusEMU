@@ -25,11 +25,13 @@ public class RpCorpPanelDashboardComposer : IServerPacket
     private readonly int _warnings;
     private readonly int _strikes;
     private readonly int _reviews;
+    private readonly (int Promotions, int Demotions) _pending;
 
     public uint MessageId => ServerPacketHeader.RpCorpPanelDashboardComposer;
 
     public RpCorpPanelDashboardComposer(int weeksAgo, int weekStartedAt, int weekResetAt, int employees, int onDuty, int shiftSeconds,
-        int quotaMet, int shiftQuota, int[] daySeconds, List<Leader> leaders, int warnings, int strikes, int reviews)
+        int quotaMet, int shiftQuota, int[] daySeconds, List<Leader> leaders, int warnings, int strikes, int reviews,
+        (int Promotions, int Demotions) pending)
     {
         _weeksAgo = weeksAgo;
         _weekStartedAt = weekStartedAt;
@@ -44,6 +46,7 @@ public class RpCorpPanelDashboardComposer : IServerPacket
         _warnings = warnings;
         _strikes = strikes;
         _reviews = reviews;
+        _pending = pending;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -75,5 +78,8 @@ public class RpCorpPanelDashboardComposer : IServerPacket
         packet.WriteInteger(_warnings);
         packet.WriteInteger(_strikes);
         packet.WriteInteger(_reviews);
+        // slice 3: open promotion and demotion requests
+        packet.WriteInteger(_pending.Promotions);
+        packet.WriteInteger(_pending.Demotions);
     }
 }

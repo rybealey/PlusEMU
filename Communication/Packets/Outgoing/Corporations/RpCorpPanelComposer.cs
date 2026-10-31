@@ -18,10 +18,13 @@ public class RpCorpPanelComposer : IServerPacket
     private readonly int _shiftQuota;
     private readonly int _weekStartedAt;
     private readonly int _weekResetAt;
+    private readonly int _pendingPromotions;
+    private readonly int _pendingDemotions;
 
     public uint MessageId => ServerPacketHeader.RpCorpPanelComposer;
 
-    public RpCorpPanelComposer(int corpId, string corpName, string badge, string rankName, int capabilities, int shiftQuota, int weekStartedAt, int weekResetAt)
+    public RpCorpPanelComposer(int corpId, string corpName, string badge, string rankName, int capabilities, int shiftQuota, int weekStartedAt, int weekResetAt,
+        int pendingPromotions, int pendingDemotions)
     {
         _corpId = corpId;
         _corpName = corpName ?? "";
@@ -31,6 +34,8 @@ public class RpCorpPanelComposer : IServerPacket
         _shiftQuota = shiftQuota;
         _weekStartedAt = weekStartedAt;
         _weekResetAt = weekResetAt;
+        _pendingPromotions = pendingPromotions;
+        _pendingDemotions = pendingDemotions;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -43,5 +48,8 @@ public class RpCorpPanelComposer : IServerPacket
         packet.WriteInteger(_shiftQuota);
         packet.WriteInteger(_weekStartedAt);
         packet.WriteInteger(_weekResetAt);
+        // slice 3: open requests, for the sidebar's counts
+        packet.WriteInteger(_pendingPromotions);
+        packet.WriteInteger(_pendingDemotions);
     }
 }

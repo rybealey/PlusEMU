@@ -34,8 +34,25 @@ public static class CorpPanel
         // the week's warnings and strikes, with everyone's counts
         Discipline = 3,
         // one employee's file; the int is their user id
-        Employee = 4
+        Employee = 4,
+        // the week's promotions and demotions
+        RankLog = 5,
+        // open and recent promotion and demotion requests
+        Requests = 6
     }
+
+    /// <summary>Request actions (the first int of RpCorpPanelRankEvent).</summary>
+    public enum RankAction
+    {
+        Request = 0,
+        Approve = 1,
+        Deny = 2,
+        Withdraw = 3
+    }
+
+    // RpCorpPanelResultComposer's action for a rank action: 10 + RankAction,
+    // so the client tells them from discipline (0, 1).
+    public const int RankResultBase = 10;
 
     /// <summary>Discipline actions (the first int of RpCorpPanelDisciplineEvent).</summary>
     public enum DisciplineAction
@@ -146,7 +163,37 @@ public static class CorpPanel
                     session.Send(file);
                 return;
             }
+            case Action.RankLog:
+                session.Send(CorpRanks.BuildLog(viewer, weeksAgo));
+                return;
+            case Action.Requests:
+                session.Send(CorpRanks.BuildRequests(viewer));
+                return;
         }
+    }
+
+    /// <summary>
+    /// Request (0: the employee's user id), approve (1), deny (2) or withdraw
+    /// (3: the request's id) a promotion or demotion. Always answered with
+    /// RpCorpPanelResultComposer (action 10 + this one).
+    /// </summary>
+    public static void HandleRank(GameClient session, int action, int id, string direction, string text)
+    {
+        var viewer = Require(session, whisper: false);
+        if (viewer == null)
+        {
+            session?.Send(new Communication.Packets.Outgoing.Avatar.InClientLinkComposer("corp-panel/hide"));
+            return;
+        }
+        var result = (RankAction)action switch
+        {
+            RankAction.Request => CorpRanks.Request(session, viewer, id, direction, text),
+            RankAction.Approve => CorpRanks.Decide(session, viewer, id, approve: true, text),
+            RankAction.Deny => CorpRanks.Decide(session, viewer, id, approve: false, text),
+            RankAction.Withdraw => CorpRanks.Cancel(session, viewer, id),
+            _ => (false, "Unknown action.")
+        };
+        session.Send(new RpCorpPanelResultComposer(RankResultBase + action, result.Item1, result.Item2));
     }
 
     /// <summary>
@@ -224,14 +271,16 @@ public static class CorpPanel
         return new RpCorpPanelEmployeeComposer(row.UserId, row.Username, row.Look, row.Gender, row.RankName, row.Tier, row.HiredAt, row.LastOnline,
             ShiftManager.IsOnDuty(row.UserId), IsOnline(row.UserId), viewer.ShiftQuota, count.Warnings, count.Strikes,
             CorpDiscipline.CanDiscipline(viewer, row.UserId, row.RankOrder), CorpWeek.StartedAt(oldest), weeks,
-            CorpDiscipline.ForEmployee(viewer.CorpId, row.UserId));
+            CorpDiscipline.ForEmployee(viewer.CorpId, row.UserId), CorpRanks.ForEmployee(viewer.CorpId, row.UserId));
     }
 
     public static RpCorpPanelComposer BuildContext(Viewer viewer)
     {
         var monday = CorpWeek.WeekStart();
+        var pending = CorpRanks.PendingCounts(viewer.CorpId);
         return new RpCorpPanelComposer(viewer.CorpId, viewer.CorpName, viewer.Badge, viewer.RankName,
-            (int)CapabilitiesOf(viewer), viewer.ShiftQuota, CorpWeek.StartedAt(monday), CorpWeek.ResetAt(monday));
+            (int)CapabilitiesOf(viewer), viewer.ShiftQuota, CorpWeek.StartedAt(monday), CorpWeek.ResetAt(monday),
+            pending.Promotions, pending.Demotions);
     }
 
     public sealed class Person
@@ -344,6 +393,7 @@ public static class CorpPanel
             viewer.ShiftQuota, dayTotals, leaders,
             discipline.Values.Sum(count => count.Warnings),
             discipline.Values.Sum(count => count.Strikes),
-            discipline.Values.Count(count => count.Strikes >= CorpDiscipline.StrikesForReview));
+            discipline.Values.Count(count => count.Strikes >= CorpDiscipline.StrikesForReview),
+            CorpRanks.PendingCounts(viewer.CorpId));
     }
 }
