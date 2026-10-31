@@ -634,6 +634,8 @@ public static class ClientPacketHeader
     public const uint RpHotRoomsCloseEvent = 4242;
     // pixelrp: the Corporation Panel (:cp) - every action from the window (CorpPanel, 334_CorpPanel.sql)
     public const uint RpCorpPanelActionEvent = 4243;
+    // pixelrp: the Corporation Panel - issue or revoke a warning or strike (CorpDiscipline, 335_CorpDiscipline.sql)
+    public const uint RpCorpPanelDisciplineEvent = 4247;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

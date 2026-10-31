@@ -258,6 +258,10 @@ public static class ServerPacketHeader
     public const uint RpCorpPanelComposer = 4244;
     public const uint RpCorpPanelDashboardComposer = 4245;
     public const uint RpCorpPanelShiftsComposer = 4246;
+    // pixelrp: the Corporation Panel - Warnings and Strikes, an employee's file, the answer to a change (CorpDiscipline)
+    public const uint RpCorpPanelDisciplineComposer = 4248;
+    public const uint RpCorpPanelEmployeeComposer = 4249;
+    public const uint RpCorpPanelResultComposer = 4250;
     public const uint RpNavigatorZonesComposer = 4182;
     public const uint RpMessengerReceiptComposer = 3906;
     public const uint RpMessengerFriendTypingComposer = 3932;

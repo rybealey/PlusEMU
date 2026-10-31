@@ -22,11 +22,14 @@ public class RpCorpPanelDashboardComposer : IServerPacket
     private readonly int _shiftQuota;
     private readonly int[] _daySeconds;
     private readonly List<Leader> _leaders;
+    private readonly int _warnings;
+    private readonly int _strikes;
+    private readonly int _reviews;
 
     public uint MessageId => ServerPacketHeader.RpCorpPanelDashboardComposer;
 
     public RpCorpPanelDashboardComposer(int weeksAgo, int weekStartedAt, int weekResetAt, int employees, int onDuty, int shiftSeconds,
-        int quotaMet, int shiftQuota, int[] daySeconds, List<Leader> leaders)
+        int quotaMet, int shiftQuota, int[] daySeconds, List<Leader> leaders, int warnings, int strikes, int reviews)
     {
         _weeksAgo = weeksAgo;
         _weekStartedAt = weekStartedAt;
@@ -38,6 +41,9 @@ public class RpCorpPanelDashboardComposer : IServerPacket
         _shiftQuota = shiftQuota;
         _daySeconds = daySeconds;
         _leaders = leaders;
+        _warnings = warnings;
+        _strikes = strikes;
+        _reviews = reviews;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -64,5 +70,10 @@ public class RpCorpPanelDashboardComposer : IServerPacket
             packet.WriteBoolean(leader.Online);
             packet.WriteInteger(leader.WeekSeconds);
         }
+        // slice 2: the week's live warnings and strikes, and how many
+        // employees are up for a dismissal review
+        packet.WriteInteger(_warnings);
+        packet.WriteInteger(_strikes);
+        packet.WriteInteger(_reviews);
     }
 }
