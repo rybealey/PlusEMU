@@ -113,7 +113,7 @@ internal class BartenderBot : BotAi
                         {
                             GetBotData().ForcedMovement = false;
                             GetBotData().TargetCoordinate = new();
-                            GetRoomUser().MoveTo(GetBotData().TargetCoordinate.X, GetBotData().TargetCoordinate.Y);
+                            WalkTo(GetBotData().TargetCoordinate.X, GetBotData().TargetCoordinate.Y);
                         }
                     }
                     else if (GetBotData().ForcedUserTargetMovement > 0)
@@ -134,13 +134,13 @@ internal class BartenderBot : BotAi
                             else if (target.RotBody == 4)
                                 sq.Y++;
                             else if (target.RotBody == 6) sq.X--;
-                            GetRoomUser().MoveTo(sq);
+                            WalkTo(sq.X, sq.Y);
                         }
                     }
                     else if (GetBotData().TargetUser == 0)
                     {
                         nextCoord = GetRoom().GetGameMap().GetRandomWalkableSquare();
-                        GetRoomUser().MoveTo(nextCoord.X, nextCoord.Y);
+                        WalkTo(nextCoord.X, nextCoord.Y);
                     }
                     break;
                 case "specified_range":

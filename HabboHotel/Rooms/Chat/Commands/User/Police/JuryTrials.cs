@@ -75,8 +75,12 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// </summary>
 public static class JuryTrials
 {
-    /// <summary>Fewer players than this online who could serve, and no trial can be asked for.</summary>
-    public const int MinJurors = 3;
+    /// <summary>
+    /// Fewer players than this online who could serve, and no trial can be
+    /// asked for. 1 FOR TESTING (Twist, 2026-10-31: not 3 players online -
+    /// a prisoner and one juror is enough); back to 3 once trials are tested.
+    /// </summary>
+    public const int MinJurors = 1;
 
     /// <summary>The most players summoned to one trial.</summary>
     public const int MaxJurors = 12;
