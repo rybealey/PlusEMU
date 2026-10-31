@@ -810,6 +810,11 @@ public class RoomUser
 
     public void MoveTo(int pX, int pY, bool pOverride)
     {
+        // pixelrp jury trials: the defendant does not move off their spot while
+        // court is in session - not a step, not walked over to furni, not
+        // pulled (JuryTrials, Twist 2026-10-31).
+        if (!IsBot && Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.HeldInDock(GetRoom(), UserId))
+            return;
         if (TeleportEnabled)
         {
             // pixelrp: there is nowhere to stand off the map, and the height

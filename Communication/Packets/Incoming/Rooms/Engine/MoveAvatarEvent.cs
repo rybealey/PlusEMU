@@ -14,9 +14,11 @@ internal class MoveAvatarEvent : IPacketEvent
         var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
         if (user == null || !user.CanWalk)
             return Task.CompletedTask;
-        // pixelrp: the jury stays on the jury seats while court is in session
-        // (JuryTrials, Twist 2026-10-29).
-        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.HeldInJuryBox(room, user.UserId))
+        // pixelrp: the jury stays on the jury seats, and the defendant on their
+        // spot, while court is in session (JuryTrials, Twist 2026-10-29 and
+        // 2026-10-31).
+        if (Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.HeldInJuryBox(room, user.UserId) ||
+            Plus.HabboHotel.Rooms.Chat.Commands.User.Police.JuryTrials.HeldInDock(room, user.UserId))
             return Task.CompletedTask;
         // A player-initiated path ends any staff-forced :walk patrol or :wander.
         user.ForcedWalkAxis = null;

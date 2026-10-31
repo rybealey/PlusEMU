@@ -45,8 +45,10 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User.Police;
 /// lobby, still cuffed and escorted (Twist, 2026-10-20) - an escort follows its
 /// captor's teleport on its own (PoliceState.OnWarp), and the court leaves
 /// them where they land (<see cref="KeptInJuryBox"/>). The
-/// prisoner is brought over (their clock stopping as they arrive) and the
-/// judge - whichever bot is in the Courthouse - opens the court and reads the
+/// prisoner is brought over (their clock stopping as they arrive), straight
+/// onto their spot - the Action Point in the Courthouse - and can't move off
+/// it until court is out (<see cref="HeldInDock"/>, Twist 2026-10-31); the
+/// judge - the Courthouse's bot named <see cref="JudgeBotName"/> - opens the court and reads the
 /// charges, gives the defendant 15 seconds to speak, and puts it to the vote.
 /// The jurors and the prisoner cannot leave until it is over, short of logging
 /// out. A juror who logs back in while court is still in session is back on the
@@ -87,6 +89,16 @@ public static class JuryTrials
 
     /// <summary>The lobby seats the jury is taken to once court is out: every Arm Chair and Sofa 2 in the Courthouse (Twist, 2026-10-29).</summary>
     private static readonly string[] LobbySeatItemNames = { "belmondblaira_armchair", "belmondfolasade_loveseat" };
+
+    /// <summary>
+    /// The judge: the bot of this name in the Courthouse (Twist, 2026-10-31) -
+    /// no other bot there speaks for the court, and with none of this name the
+    /// court is silent.
+    /// </summary>
+    public const string JudgeBotName = "Judge";
+
+    /// <summary>The defendant's spot: the Action Point in the Courthouse (Twist, 2026-10-31).</summary>
+    private static readonly string[] DockItemNames = { "actionpoint", "actionpoint01" };
 
     /// <summary>What each juror still in court at the verdict (or when the prisoner logs out of it) is paid.</summary>
     public const int JuryPay = 25;
@@ -347,8 +359,9 @@ public static class JuryTrials
 
     /// <summary>
     /// Somebody came into the Courthouse. The prisoner, for their trial: court
-    /// opens. A juror back while court is in session: their seat. Anybody else
-    /// landing on a jury seat: the lobby.
+    /// opens; back in while it is in session: their spot. A juror back while
+    /// court is in session: their seat. Anybody else landing on a jury seat:
+    /// the lobby.
     /// </summary>
     public static void OnRoomEntered(Room room, RoomUser user)
     {
@@ -360,6 +373,11 @@ public static class JuryTrials
         {
             if (_active is { Phase: Phase.Arriving } trial && trial.PrisonerId == habboId)
                 BeginCourt(trial, DateTime.UtcNow, after);
+            // The defendant back in while court is in session - the room
+            // reloaded under them (:unload, a floor plan saved) and they came
+            // in at the door: back on their spot.
+            else if (_active is { Phase: >= Phase.Opening } docked && docked.PrisonerId == habboId)
+                after.Add(() => ToDock(habboId));
             // A juror who logged out of court, back while it is still in
             // session: back on the jury - their vote while it is open, and their
             // pay - and back on their seat (Twist, 2026-10-29).
@@ -414,6 +432,15 @@ public static class JuryTrials
         room != null && room.RoomId == CourthouseRoomId && InJuryBox(habboId);
 
     private static bool InJuryBox(int habboId) => JuryBox.ContainsKey(habboId);
+
+    /// <summary>
+    /// Is this the defendant, in the Courthouse while their court is in
+    /// session, so may not move at all - not a step, not walked over to furni,
+    /// not shoved or pulled (Twist, 2026-10-31)? Without the lock, as every
+    /// walk asks it. (MoveAvatarEvent, RoomUser.MoveTo)
+    /// </summary>
+    public static bool HeldInDock(Room room, int habboId) =>
+        habboId != 0 && habboId == _courtPrisonerId && room != null && room.RoomId == CourthouseRoomId;
 
     /// <summary>
     /// Is this player meant to be in the jury box - a juror, or somebody a
@@ -652,6 +679,16 @@ public static class JuryTrials
         trial.Phase = Phase.Arriving;
         trial.PhaseEndsUtc = now.AddSeconds(ArriveSeconds);
         _courtPrisonerId = trial.PrisonerId;
+        // Escorted as court starts: taken from their captor for good - the
+        // escort does not pick up again back in the jail (Twist, 2026-10-31).
+        // Ended before they leave, so it does not travel with them.
+        var escortedId = trial.PrisonerId;
+        after.Add(() =>
+        {
+            var captorId = PoliceState.CaptorOf(escortedId);
+            if (captorId != 0)
+                PoliceState.EndEscort(prisoner.CurrentRoom, captorId, null);
+        });
         if (prisoner.CurrentRoom?.RoomId == CourthouseRoomId)
         {
             BeginCourt(trial, now, after);
@@ -663,16 +700,21 @@ public static class JuryTrials
         after.Add(() =>
         {
             JailState.AllowSummon(prisonerId, CourthouseRoomId);
+            // Arriving on their spot, as the jail puts a prisoner on a bed
+            // (JailState.SendToJail) - set before the move, read as they enter.
+            if (PlusEnvironment.Game.RoomManager.TryGetRoom(CourthouseRoomId, out var court) && court != null && Dock(court) is { } dock)
+                prisoner.PendingRestore = new PendingRoomRestore(CourthouseRoomId, dock.GetX, dock.GetY, dock.Rotation);
             prisoner.PrepareRoom(CourthouseRoomId, "", lockOldRoom: true);
         });
     }
 
-    /// <summary>The prisoner is in court: their clock stops, and the judge opens it.</summary>
+    /// <summary>The prisoner is in court: their clock stops, they are on their spot, and the judge opens it.</summary>
     private static void BeginCourt(Trial trial, DateTime now, List<Action> after)
     {
         trial.Phase = Phase.Opening;
         var prisonerId = trial.PrisonerId;
         after.Add(() => JailState.Pause(prisonerId));
+        after.Add(() => ToDock(prisonerId));
         trial.Lines.Enqueue($"Court is in session. {trial.Name} is charged with the following crimes:");
         foreach (var line in JailState.ChargeLines(prisonerId))
             trial.Lines.Enqueue(line);
@@ -826,8 +868,15 @@ public static class JuryTrials
         // to use it would keep it.
         JailState.AllowSummon(prisonerId, JailState.JailRoomId());
         var habbo = HabboOf(prisonerId);
-        if (habbo == null || !JailState.IsJailed(prisonerId))
+        if (habbo == null)
             return;
+        // Not going to the jail after all - let go meanwhile, or no jail left
+        // to go to: down to the lobby, not left up on their spot.
+        if (!JailState.IsJailed(prisonerId) || JailState.JailRoomId() == 0)
+        {
+            ToLobby(new List<int> { prisonerId });
+            return;
+        }
         // Off the Courthouse's own threads (the court's timer), so its room is
         // locked while they leave it - as on the way over (Twist, 2026-10-29).
         JailState.SendToJail(habbo, JailState.JailRoomId(), forward: false, lockOldRoom: true);
@@ -898,6 +947,28 @@ public static class JuryTrials
         trial.SeatOf[habboId] = seat.Id;
         PutOnSeat(room, user, seat);
     }
+
+    /// <summary>
+    /// The defendant onto their spot (Twist, 2026-10-31) - unless they are on
+    /// it already, as they arrive from the jail. With no Action Point in the
+    /// Courthouse they stay where they are, held all the same.
+    /// </summary>
+    private static void ToDock(int prisonerId)
+    {
+        if (!PlusEnvironment.Game.RoomManager.TryGetRoom(CourthouseRoomId, out var room) || room == null)
+            return;
+        var user = room.GetRoomUserManager()?.GetRoomUserByHabbo(prisonerId);
+        var dock = Dock(room);
+        if (user == null || dock == null || (user.X == dock.GetX && user.Y == dock.GetY))
+            return;
+        PutOnSeat(room, user, dock);
+    }
+
+    /// <summary>The Courthouse's Action Point, the defendant's spot; the first placed, should there be more. Null with none.</summary>
+    private static Item? Dock(Room room) =>
+        (room.GetRoomItemHandler()?.GetFloor ?? Array.Empty<Item>())
+        .Where(item => item?.Definition != null && DockItemNames.Contains(item.Definition.ItemName))
+        .OrderBy(item => item.Id).FirstOrDefault();
 
     /// <summary>The Courthouse's jury seats, front row first.</summary>
     private static List<Item> JurySeats(Room room) =>
@@ -993,12 +1064,13 @@ public static class JuryTrials
 
     // ---- saying and sending ---------------------------------------------------
 
-    /// <summary>The judge - whichever bot is in the Courthouse - says it to the whole room, bots muted or not.</summary>
+    /// <summary>The judge - the Courthouse's bot named <see cref="JudgeBotName"/> - says it to the whole room, bots muted or not.</summary>
     private static void Say(string text, List<Action> after) => after.Add(() =>
     {
         if (!PlusEnvironment.Game.RoomManager.TryGetRoom(CourthouseRoomId, out var room) || room == null)
             return;
-        var judge = room.GetRoomUserManager()?.GetUserList().FirstOrDefault(unit => unit != null && unit.IsBot && !unit.IsPet);
+        var judge = room.GetRoomUserManager()?.GetUserList().FirstOrDefault(unit => unit != null && unit.IsBot && !unit.IsPet &&
+            string.Equals(unit.BotData?.Name, JudgeBotName, StringComparison.OrdinalIgnoreCase));
         if (judge == null)
             return;
         var bubble = judge.BotData?.ChatBubble ?? 0;
