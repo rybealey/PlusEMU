@@ -42,6 +42,8 @@ internal class SuperFireCommand : IChatCommand
         ShiftManager.InterruptForDisconnect(target.Id);
         // Asked before the row goes: afterwards nobody is an officer.
         var wasPolice = PoliceUtility.IsOfficer(target.Id);
+        // the dismissals log reads their rank, so before the row goes
+        CorpRecords.LogLeaving(target.Id, "staff", "", session.GetHabbo().Id, session.GetHabbo().Username);
 
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {

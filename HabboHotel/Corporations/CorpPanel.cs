@@ -38,8 +38,27 @@ public static class CorpPanel
         // the week's promotions and demotions
         RankLog = 5,
         // open and recent promotion and demotion requests
-        Requests = 6
+        Requests = 6,
+        // leave of absence; dismissals (the int is 30, 90 or 0 = all days); the blacklist
+        Loa = 7,
+        Dismissals = 8,
+        Blacklist = 9
     }
+
+    /// <summary>Record actions (the first int of RpCorpPanelRecordEvent).</summary>
+    public enum RecordAction
+    {
+        LogLoa = 0,
+        ApproveLoa = 1,
+        DenyLoa = 2,
+        EndLoa = 3,
+        BlacklistAdd = 4,
+        BlacklistRemove = 5,
+        BlacklistCheck = 6
+    }
+
+    // RpCorpPanelResultComposer's action for a record action: 20 + RecordAction.
+    public const int RecordResultBase = 20;
 
     /// <summary>Request actions (the first int of RpCorpPanelRankEvent).</summary>
     public enum RankAction
@@ -169,7 +188,42 @@ public static class CorpPanel
             case Action.Requests:
                 session.Send(CorpRanks.BuildRequests(viewer));
                 return;
+            case Action.Loa:
+                session.Send(CorpRecords.BuildLoa(viewer));
+                return;
+            case Action.Dismissals:
+                session.Send(CorpRecords.BuildDismissals(viewer, arg));
+                return;
+            case Action.Blacklist:
+                session.Send(CorpRecords.BuildBlacklist(session, viewer));
+                return;
         }
+    }
+
+    /// <summary>
+    /// LOA and blacklist changes (RecordAction). Always answered with
+    /// RpCorpPanelResultComposer (action 20 + this one).
+    /// </summary>
+    public static void HandleRecord(GameClient session, int action, int id, int a, int b, string text1, string text2)
+    {
+        var viewer = Require(session, whisper: false);
+        if (viewer == null)
+        {
+            session?.Send(new Communication.Packets.Outgoing.Avatar.InClientLinkComposer("corp-panel/hide"));
+            return;
+        }
+        var result = (RecordAction)action switch
+        {
+            RecordAction.LogLoa => CorpRecords.LogLoa(session, viewer, id, a, b, text2),
+            RecordAction.ApproveLoa => CorpRecords.DecideLoa(session, viewer, id, approve: true),
+            RecordAction.DenyLoa => CorpRecords.DecideLoa(session, viewer, id, approve: false),
+            RecordAction.EndLoa => CorpRecords.EndLoa(session, viewer, id),
+            RecordAction.BlacklistAdd => CorpRecords.AddToBlacklist(session, viewer, text1, text2, a),
+            RecordAction.BlacklistRemove => CorpRecords.RemoveFromBlacklist(session, viewer, id),
+            RecordAction.BlacklistCheck => CorpRecords.CheckBlacklist(viewer, text1),
+            _ => (false, "Unknown action.")
+        };
+        session.Send(new RpCorpPanelResultComposer(RecordResultBase + action, result.Item1, result.Item2));
     }
 
     /// <summary>
@@ -271,7 +325,8 @@ public static class CorpPanel
         return new RpCorpPanelEmployeeComposer(row.UserId, row.Username, row.Look, row.Gender, row.RankName, row.Tier, row.HiredAt, row.LastOnline,
             ShiftManager.IsOnDuty(row.UserId), IsOnline(row.UserId), viewer.ShiftQuota, count.Warnings, count.Strikes,
             CorpDiscipline.CanDiscipline(viewer, row.UserId, row.RankOrder), CorpWeek.StartedAt(oldest), weeks,
-            CorpDiscipline.ForEmployee(viewer.CorpId, row.UserId), CorpRanks.ForEmployee(viewer.CorpId, row.UserId));
+            CorpDiscipline.ForEmployee(viewer.CorpId, row.UserId), CorpRanks.ForEmployee(viewer.CorpId, row.UserId),
+            CorpRecords.LoaUntil(row.UserId) is { } until ? until.ToString("yyyy-MM-dd") : "");
     }
 
     public static RpCorpPanelComposer BuildContext(Viewer viewer)
@@ -280,7 +335,7 @@ public static class CorpPanel
         var pending = CorpRanks.PendingCounts(viewer.CorpId);
         return new RpCorpPanelComposer(viewer.CorpId, viewer.CorpName, viewer.Badge, viewer.RankName,
             (int)CapabilitiesOf(viewer), viewer.ShiftQuota, CorpWeek.StartedAt(monday), CorpWeek.ResetAt(monday),
-            pending.Promotions, pending.Demotions);
+            pending.Promotions, pending.Demotions, CorpRecords.LoaCounts(viewer.CorpId).Pending);
     }
 
     public sealed class Person
@@ -356,7 +411,8 @@ public static class CorpPanel
                 ShiftManager.IsOnDuty(employee.UserId), IsOnline(employee.UserId),
                 WeekSeconds(employee, week, weeksAgo), week ?? new int[7]);
         }).ToList();
-        return new RpCorpPanelShiftsComposer(weeksAgo, CorpWeek.StartedAt(monday), CorpWeek.ResetAt(monday), viewer.ShiftQuota, rows);
+        return new RpCorpPanelShiftsComposer(weeksAgo, CorpWeek.StartedAt(monday), CorpWeek.ResetAt(monday), viewer.ShiftQuota, rows,
+            CorpRecords.OnLoaInWeek(viewer.CorpId, monday));
     }
 
     public static RpCorpPanelDashboardComposer BuildDashboard(Viewer viewer, int weeksAgo)
@@ -370,6 +426,8 @@ public static class CorpPanel
             days = Days(connection, viewer.CorpId, monday);
         }
         var quotaSeconds = viewer.ShiftQuota * ShiftManager.PayIntervalSeconds;
+        // a week on leave counts as quota met
+        var onLeave = CorpRecords.OnLoaInWeek(viewer.CorpId, monday);
         var dayTotals = new int[7];
         foreach (var week in days.Values)
             for (var i = 0; i < 7; i++)
@@ -389,11 +447,11 @@ public static class CorpPanel
             employees.Count,
             employees.Count(employee => ShiftManager.IsOnDuty(employee.UserId)),
             totals.Values.Sum(),
-            quotaSeconds > 0 ? totals.Values.Count(seconds => seconds >= quotaSeconds) : 0,
+            quotaSeconds > 0 ? totals.Count(total => total.Value >= quotaSeconds || onLeave.Contains(total.Key)) : 0,
             viewer.ShiftQuota, dayTotals, leaders,
             discipline.Values.Sum(count => count.Warnings),
             discipline.Values.Sum(count => count.Strikes),
             discipline.Values.Count(count => count.Strikes >= CorpDiscipline.StrikesForReview),
-            CorpRanks.PendingCounts(viewer.CorpId));
+            CorpRanks.PendingCounts(viewer.CorpId), CorpRecords.LoaCounts(viewer.CorpId));
     }
 }

@@ -17,16 +17,18 @@ public class RpCorpPanelShiftsComposer : IServerPacket
     private readonly int _weekResetAt;
     private readonly int _shiftQuota;
     private readonly List<Row> _rows;
+    private readonly HashSet<int> _onLeave;
 
     public uint MessageId => ServerPacketHeader.RpCorpPanelShiftsComposer;
 
-    public RpCorpPanelShiftsComposer(int weeksAgo, int weekStartedAt, int weekResetAt, int shiftQuota, List<Row> rows)
+    public RpCorpPanelShiftsComposer(int weeksAgo, int weekStartedAt, int weekResetAt, int shiftQuota, List<Row> rows, HashSet<int> onLeave)
     {
         _weeksAgo = weeksAgo;
         _weekStartedAt = weekStartedAt;
         _weekResetAt = weekResetAt;
         _shiftQuota = shiftQuota;
         _rows = rows;
+        _onLeave = onLeave;
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -52,5 +54,9 @@ public class RpCorpPanelShiftsComposer : IServerPacket
             for (var i = 0; i < 7; i++)
                 packet.WriteInteger(i < row.DaySeconds.Length ? row.DaySeconds[i] : 0);
         }
+        // slice 4: who had leave that week (counts as quota met)
+        packet.WriteInteger(_onLeave.Count);
+        foreach (var userId in _onLeave)
+            packet.WriteInteger(userId);
     }
 }

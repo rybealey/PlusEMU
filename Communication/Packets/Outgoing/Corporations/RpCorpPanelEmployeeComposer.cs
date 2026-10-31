@@ -29,12 +29,13 @@ public class RpCorpPanelEmployeeComposer : IServerPacket
     private readonly int[] _weekSeconds;
     private readonly List<CorpDiscipline.Entry> _record;
     private readonly List<CorpRanks.Change> _rankChanges;
+    private readonly string _loaUntil;
 
     public uint MessageId => ServerPacketHeader.RpCorpPanelEmployeeComposer;
 
     public RpCorpPanelEmployeeComposer(int userId, string username, string look, string gender, string rankName, int tier, int hiredAt, int lastOnline,
         bool onDuty, bool online, int shiftQuota, int warnings, int strikes, bool canDiscipline, int firstWeekStartedAt, int[] weekSeconds,
-        List<CorpDiscipline.Entry> record, List<CorpRanks.Change> rankChanges)
+        List<CorpDiscipline.Entry> record, List<CorpRanks.Change> rankChanges, string loaUntil)
     {
         _userId = userId;
         _username = username ?? "";
@@ -54,6 +55,7 @@ public class RpCorpPanelEmployeeComposer : IServerPacket
         _weekSeconds = weekSeconds;
         _record = record;
         _rankChanges = rankChanges;
+        _loaUntil = loaUntil ?? "";
     }
 
     public void Compose(IOutgoingPacket packet)
@@ -83,5 +85,7 @@ public class RpCorpPanelEmployeeComposer : IServerPacket
         packet.WriteInteger(_rankChanges.Count);
         foreach (var change in _rankChanges)
             RpCorpPanelRankLogComposer.WriteChange(packet, change);
+        // slice 4: the last day of leave they're on now (UK, yyyy-MM-dd), or ""
+        packet.WriteString(_loaUntil);
     }
 }

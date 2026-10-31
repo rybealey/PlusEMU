@@ -48,6 +48,13 @@ internal class HireCommand : IChatCommand
             session.SendWhisper($"{target.GetHabbo().Username} already works for {existing.CorpName} - they must quit or be fired first.");
             return;
         }
+        // pixelrp Corporation Panel: the blacklist covers every character of the account.
+        var blacklisted = CorpRecords.BlacklistRefusal(context.CorpId, targetId, target.GetHabbo().Username);
+        if (blacklisted != null)
+        {
+            session.SendWhisper(blacklisted);
+            return;
+        }
         int rankId;
         int tier;
         using (var connection = PlusEnvironment.DatabaseManager.Connection())

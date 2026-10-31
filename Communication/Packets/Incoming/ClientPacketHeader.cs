@@ -638,6 +638,8 @@ public static class ClientPacketHeader
     public const uint RpCorpPanelDisciplineEvent = 4247;
     // pixelrp: the Corporation Panel - promotion and demotion requests (CorpRanks, 336_CorpRankChanges.sql)
     public const uint RpCorpPanelRankEvent = 4251;
+    // pixelrp: the Corporation Panel - LOA and blacklist changes (CorpRecords, 337_CorpLoaDismissalsBlacklist.sql)
+    public const uint RpCorpPanelRecordEvent = 4254;
     // 3988 appears only in the stock client's INCOMING table, which is a
     // separate namespace from this one.
     public const uint RpDropChargeEvent = 3988;

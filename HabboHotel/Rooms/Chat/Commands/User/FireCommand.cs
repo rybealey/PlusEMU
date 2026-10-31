@@ -10,14 +10,15 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 /// the actor's rank and may be offline. The employee row is deleted, so all
 /// shift data (weekly, lifetime, pay progress) dies with it - a rehire
 /// starts from zero - and the corpId-0 broadcast clears clients in
-/// real-time.
+/// real-time. An optional reason goes to the Corporation Panel's dismissals
+/// log (CorpRecords.LogLeaving), written just before the row goes.
 /// </summary>
 internal class FireCommand : IChatCommand
 {
     public string Key => "fire";
     public string PermissionRequired => "";
 
-    public string Parameters => "%username%";
+    public string Parameters => "%username% [reason]";
 
     public string Description => "Fire an employee from your corporation.";
 
@@ -25,7 +26,7 @@ internal class FireCommand : IChatCommand
     {
         if (!parameters.Any())
         {
-            session.SendWhisper("Usage: :fire <username>");
+            session.SendWhisper("Usage: :fire <username> [reason]");
             return;
         }
         var context = CorporationUtility.RequireManager(session);
@@ -66,6 +67,7 @@ internal class FireCommand : IChatCommand
             ShiftManager.InterruptForDisconnect(target.Id);
             // Asked before the row goes: afterwards nobody is an officer.
             wasPolice = PoliceUtility.IsOfficer(target.Id);
+            CorpRecords.LogLeaving(target.Id, "fired", string.Join(" ", parameters.Skip(1)), session.GetHabbo().Id, session.GetHabbo().Username);
             connection.Execute("DELETE FROM `rp_corporation_employees` WHERE `user_id` = @userId LIMIT 1", new { userId = target.Id });
         }
         CorporationUtility.BroadcastEmployment(target.Id);

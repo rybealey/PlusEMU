@@ -261,6 +261,12 @@ public static class ShiftManager
             if (Plus.HabboHotel.Rooms.KnockedOut.Refuse(client))
                 return;
         }
+        // pixelrp Corporation Panel: no clocking in on leave (CorpRecords).
+        if (CorpRecords.LoaUntil(userId) is { } leaveUntil)
+        {
+            client.SendWhisper($"You're on leave until {CorpRecords.Short(leaveUntil)}. Use :loa end to come back early.");
+            return;
+        }
         var permit = CorporationUtility.EvaluateWork(client.GetHabbo(), isStart: true);
         if (!permit.Ok)
         {

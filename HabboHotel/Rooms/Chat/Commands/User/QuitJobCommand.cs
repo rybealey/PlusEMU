@@ -34,6 +34,8 @@ internal class QuitJobCommand : IChatCommand
         ShiftManager.InterruptForDisconnect(userId);
         // Asked before the row goes: afterwards nobody is an officer.
         var wasPolice = PoliceUtility.IsOfficer(userId);
+        // the dismissals log reads their rank, so before the row goes
+        CorpRecords.LogLeaving(userId, "quit", "", userId, session.GetHabbo().Username);
         using (var connection = PlusEnvironment.DatabaseManager.Connection())
         {
             connection.Execute("DELETE FROM `rp_corporation_employees` WHERE `user_id` = @userId LIMIT 1", new { userId });
